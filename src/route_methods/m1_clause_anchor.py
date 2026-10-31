@@ -290,8 +290,10 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                 routed_path.append(next_anchor)
                 connected = True
             else:
-                # Type-directed repair: check if a candidate producer on the current clause bridges to next_anchor
-                producer = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
+                producer = None
+                if not self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                    # Type-directed repair: check if a candidate producer on the current clause bridges to next_anchor
+                    producer = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
                 if producer is not None:
                     self._trace("producer_inserted", cell=producer.cell_id, for_anchor=next_anchor.cell_id,
                                 clause_idx=getattr(next_anchor, "matched_clause_idx", None),
@@ -306,34 +308,73 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                     routed_path.extend([producer, next_anchor])
                     connected = True
                 else:
-                    # Sequential carrier continuity takes precedence over DAG-scope fallback
-                    bridges = self.find_bridge_chain(curr_cell, next_anchor, candidates, prev_path=routed_path)
-                    if bridges:
-                        for b in bridges:
-                            b.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                            b.clause_literals = getattr(next_anchor, "clause_literals", {})
-                        routed_path.extend(bridges)
-                        routed_path.append(next_anchor)
-                        connected = True
-                    elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                        self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
-                        routed_path.append(next_anchor)
-                        connected = True
+                    curr_out = getattr(curr_cell, "primary_output", None) or (
+                        list(curr_cell.outputs.values())[0] if curr_cell.outputs else None
+                    )
+                    curr_out_sig = getattr(curr_out, "signature", curr_out)
+                    c_rank = getattr(curr_out_sig, "canonical_rank", None)
+                    c_sk = str(getattr(curr_out, "structure_kind", "") or getattr(curr_out_sig, "structure_kind", "") or "").lower()
+                    c_role = str(getattr(curr_cell, "node_role", "") or "").lower()
+                    is_curr_reduction = (c_rank == 0) or (c_sk == "scalar") or (c_role == "reduction")
+
+                    next_in = getattr(next_anchor, "primary_input", None) or (
+                        list(next_anchor.inputs.values())[0] if next_anchor.inputs else None
+                    )
+                    next_in_sig = getattr(next_in, "signature", next_in)
+                    n_rank = getattr(next_in_sig, "canonical_rank", None)
+                    n_sk = str(getattr(next_in, "structure_kind", "") or getattr(next_in_sig, "structure_kind", "") or "").lower()
+                    requires_tensor = (n_rank is not None and n_rank >= 1) or (n_sk in ("tensor", "collection", "composite"))
+
+                    if is_curr_reduction and requires_tensor:
+                        # Dimensional rank reduction: curr_cell is a scalar measurement (rank 0).
+                        # The carrier tensor remains in the monoidal DAG scope.
+                        # Check if next_anchor unifies or bridges from DAG scope.
+                        if self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                            self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
+                            routed_path.append(next_anchor)
+                            connected = True
+                        else:
+                            for ancestor in reversed(routed_path[:-1]):
+                                if self.step_unifies(ancestor, next_anchor, prev_path=routed_path):
+                                    routed_path.append(next_anchor)
+                                    connected = True
+                                    break
+                                anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
+                                if anc_bridge:
+                                    anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
+                                    anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
+                                    routed_path.extend([anc_bridge, next_anchor])
+                                    connected = True
+                                    break
                     else:
-                        # In a DAG, if next_anchor does not unify directly with curr_cell,
-                        # check if next_anchor unifies or bridges from any earlier ancestor in routed_path
-                        for ancestor in reversed(routed_path[:-1]):
-                            if self.step_unifies(ancestor, next_anchor, prev_path=routed_path) or self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                                routed_path.append(next_anchor)
-                                connected = True
-                                break
-                            anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
-                            if anc_bridge:
-                                anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                                anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
-                                routed_path.extend([anc_bridge, next_anchor])
-                                connected = True
-                                break
+                        # Sequential carrier continuity takes precedence over DAG-scope fallback
+                        bridges = self.find_bridge_chain(curr_cell, next_anchor, candidates, prev_path=routed_path)
+                        if bridges:
+                            for b in bridges:
+                                b.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
+                                b.clause_literals = getattr(next_anchor, "clause_literals", {})
+                            routed_path.extend(bridges)
+                            routed_path.append(next_anchor)
+                            connected = True
+                        elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                            self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
+                            routed_path.append(next_anchor)
+                            connected = True
+                        else:
+                            # In a DAG, if next_anchor does not unify directly with curr_cell,
+                            # check if next_anchor unifies or bridges from any earlier ancestor in routed_path
+                            for ancestor in reversed(routed_path[:-1]):
+                                if self.step_unifies(ancestor, next_anchor, prev_path=routed_path) or self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                                    routed_path.append(next_anchor)
+                                    connected = True
+                                    break
+                                anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
+                                if anc_bridge:
+                                    anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
+                                    anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
+                                    routed_path.extend([anc_bridge, next_anchor])
+                                    connected = True
+                                    break
 
             if not connected:
                 cl_idx = getattr(next_anchor, "matched_clause_idx", None)

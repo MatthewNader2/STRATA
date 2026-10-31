@@ -701,15 +701,18 @@ class LatticeRouter:
             grouped_candidates.append(dict(kept))
 
         # Step 3.1: Candidate Subgraph / Idiom Group Preservation
-        # Discovered idioms represent coherent topological paths across clauses and hidden clauses.
-        # Adding each idiom as its own candidate group ensures bridging nodes survive the group-relative softmax.
+        # Discovered idioms represent coherent topological paths across clauses.
+        # Idiom cell weights are anchored to their empirical seed clause match score.
         for idiom in candidate_idioms[:3]:
             if not idiom.cells:
                 continue
             idiom_group: Dict[Cell, float] = {}
-            entry_bonus = float(_cfg("idiom_entry_bonus", 0.5))
+            base_score = float(getattr(idiom, "lexical_score", 0.0) or 0.0)
+            if base_score <= 0.0:
+                continue
+            entry_bonus = float(_cfg("idiom_entry_bonus", 0.2))
             for c in idiom.cells:
-                idiom_group[c] = 1.0 + (entry_bonus if c == idiom.entry_node else 0.0)
+                idiom_group[c] = base_score * (1.0 + (entry_bonus if c == idiom.entry_node else 0.0))
             if idiom_group:
                 grouped_candidates.append(idiom_group)
 
@@ -817,9 +820,9 @@ class LatticeRouter:
                             relevance_map.get(cell.cell_id, 0.0), self.epsilon * 2.0
                         )
 
-        # Category-Theoretic Bridge & Active Subcategory Morphism Completion:
-        # If the active tunnel contains distinct carrier types A and B,
-        # discover bridge morphisms Hom(A, B) and domain morphisms on those carriers.
+        # Category-Theoretic Bridge Morphisms are discovered dynamically during Layer 2
+        # topological routing (via find_shortest_bridge_path in the lattice graph), preserving
+        # Layer 1 semantic query-grounding purity. Zero ungrounded bridge injection in Layer 1.
         carriers_out = set()
         carriers_in = set()
         for c in final_tunnel:
@@ -830,37 +833,8 @@ class LatticeRouter:
             if in_t and in_t.lower() not in ("any", "none", "*", "top", "void"):
                 carriers_in.add(in_t)
 
+        reg = TypeRegistry.get_instance()
         if carriers_out and carriers_in:
-            bridge_cells = getattr(self.orchestrator, "bridge_cells", None)
-            if bridge_cells is None:
-                bridge_cells = [
-                    c for c in self.orchestrator.loaded_cells.values()
-                    if getattr(c, "node_role", "") == "bridge" or getattr(c, "node_type", "") == "tunnel"
-                ]
-            reg = TypeRegistry.get_instance()
-            for cell in bridge_cells:
-                c_in = str(getattr(cell.primary_input, "type_name", "") or "").lower()
-                c_out = str(getattr(cell.primary_output, "type_name", "") or "").lower()
-                if not c_in or not c_out:
-                    continue
-                in_matches = any(
-                    c_in == co.lower()
-                    or reg.is_subtype(co.lower(), c_in)
-                    or reg.is_subtype(c_in, co.lower())
-                    for co in carriers_out
-                )
-                out_matches = any(
-                    c_out == ci.lower()
-                    or reg.is_subtype(c_out, ci.lower())
-                    or reg.is_subtype(ci.lower(), c_out)
-                    for ci in carriers_in
-                )
-                if in_matches and out_matches:
-                    if cell.cell_id not in tunnel_ids:
-                        final_tunnel.append(cell)
-                        tunnel_ids.add(cell.cell_id)
-                        relevance_map[cell.cell_id] = max(relevance_map.get(cell.cell_id, 0.0), self.epsilon * 2.0)
-
             # Property & Qualifier Categorical Boundary Closure:
             # If an active producer establishes a property/qualifier (e.g. is_complex=True)
             # that conflicts with an active consumer's precondition/rejected qualifier on a
@@ -987,11 +961,11 @@ class LatticeRouter:
         # are excluded entirely, restoring the pre-macro routing distribution
         # exactly (clean A/B baseline for benchmarks).
         if not self.macros_enabled:
-            final_tunnel = [c for c in final_tunnel if not isinstance(c, MacroCell)]
+            final_tunnel = [c for c in final_tunnel if not (isinstance(c, MacroCell) or getattr(c, "is_macro_goal", False) or bool(getattr(c, "sub_cells", None)))]
             tunnel_ids = {c.cell_id for c in final_tunnel}
             relevance_map = {
                 cid: s for cid, s in relevance_map.items()
-                if not isinstance(self.orchestrator.loaded_cells.get(cid), MacroCell)
+                if cid in tunnel_ids
             }
         # Macro-goal promotion (Section 3.5): known-good composite paths.
         # When the prompt is relevant to a MacroCell (a predefined, verified
@@ -1068,7 +1042,9 @@ class LatticeRouter:
                 return int(clean)
             return 0
 
-        protected_ids = {c.cell_id for c in tunnel_cells if relevance_map.get(c.cell_id, 0.0) >= 0.05}
+        # Protect candidates whose relevance earned a genuine cutoff above the epsilon/tau noise floor
+        cutoff = max(self.epsilon * 2.0, 0.02)
+        protected_ids = {c.cell_id for c in tunnel_cells if relevance_map.get(c.cell_id, 0.0) >= cutoff}
         from collections import defaultdict
         stage_cells = defaultdict(list)
         for c in tunnel_cells:
@@ -1259,15 +1235,15 @@ class LatticeRouter:
             items = list(group.items())
             raw_scores = np.array([s for _, s in items], dtype=np.float64)
             max_s = np.max(raw_scores)
-            norm_scores = raw_scores / max(max_s, 1e-6)
-            scaled = norm_scores / max(self.gamma, 1e-5)
-            shifted = scaled - np.max(scaled)
-            exp_scores = np.exp(shifted)
-            probs = exp_scores / np.sum(exp_scores)
-            max_prob = float(np.max(probs))
-            group_size_factor = min(1.0, (len(items) / float(_cfg("group_size_divisor", 5.0))) ** 0.5)
-            calibrated_probs = probs * group_size_factor
-            cutoff = tau * max_prob * group_size_factor
+            if max_s <= 0.0:
+                continue
+            # Universal Clause-Relative Activation:
+            # Prevents group-size dilution where large candidate pools are penalized by 1/N.
+            # Relative decay from the group peak is governed by temperature gamma, anchored to peak score.
+            norm_scores = raw_scores / max_s
+            shifted = (norm_scores - 1.0) / max(self.gamma, 1e-5)
+            calibrated_probs = np.exp(shifted) * min(1.0, float(max_s))
+            cutoff = tau * min(1.0, float(max_s))
             sorted_indices = np.argsort(raw_scores)[::-1]
             top_k_guaranteed = int(_cfg("group_top_k_guaranteed", 8))
             top_indices = set(sorted_indices[:top_k_guaranteed])

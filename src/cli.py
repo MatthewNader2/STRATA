@@ -27,10 +27,13 @@ try:
     from schema import CellSchema, TreeSchema, PortSchema
     from harvester import IntelligentHarvester
     from lattice import TypeRegistry
-except ImportError:
-    from .schema import CellSchema, TreeSchema, PortSchema
-    from .harvester import IntelligentHarvester
-    from .lattice import TypeRegistry
+except ImportError as _err:
+    if __package__:
+        from .schema import CellSchema, TreeSchema, PortSchema
+        from .harvester import IntelligentHarvester
+        from .lattice import TypeRegistry
+    else:
+        raise _err
 
 ROOT_DIR = str(Path(__file__).resolve().parent.parent)
 if ROOT_DIR not in sys.path:
@@ -78,27 +81,30 @@ try:
     from macro_harvester import MacroHarvester
     from route_methods import ROUTE_METHOD_REGISTRY, get_route_method, route_method_ids, describe_route_methods
     from reranker import get_available_rerankers, LocalReranker
-except ImportError:
-    from .lattice import LatticeOrchestrator, Cell, PortSignature, AlgebraicSignature, UNRESOLVED_PORT
-    from .router import LatticeRouter, HardwareProfiler
-    from .unification import (
-        UnificationGate, UnresolvedPlaceholderError,
-        UnificationFailure, ExecutionContext, Substitution, TypeRegistry, unify,
-        Success, Failure
-    )
-    from .gevr_sandbox import GEVRSandbox
-    from .inference import ModelManager, select_optimal_embedder, select_optimal_llm
-    from .internal_rag import LocalRAG
-    from .config import MODELS_DIR, settings
-    from .utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
-    from .errors import SynthesisError
-    from .tokenizer import CellTokenizer
-    from .planner import _segment_prompt_clauses, STOPWORDS
-    from .preflight import PreflightLinter
-    from .lattice_auditor import LatticeAuditor
-    from .macro_harvester import MacroHarvester
-    from .route_methods import ROUTE_METHOD_REGISTRY, get_route_method, route_method_ids, describe_route_methods
-    from .reranker import get_available_rerankers, LocalReranker
+except ImportError as _err:
+    if __package__:
+        from .lattice import LatticeOrchestrator, Cell, PortSignature, AlgebraicSignature, UNRESOLVED_PORT
+        from .router import LatticeRouter, HardwareProfiler
+        from .unification import (
+            UnificationGate, UnresolvedPlaceholderError,
+            UnificationFailure, ExecutionContext, Substitution, TypeRegistry, unify,
+            Success, Failure
+        )
+        from .gevr_sandbox import GEVRSandbox
+        from .inference import ModelManager, select_optimal_embedder, select_optimal_llm
+        from .internal_rag import LocalRAG
+        from .config import MODELS_DIR, settings
+        from .utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
+        from .errors import SynthesisError
+        from .tokenizer import CellTokenizer
+        from .planner import _segment_prompt_clauses, STOPWORDS
+        from .preflight import PreflightLinter
+        from .lattice_auditor import LatticeAuditor
+        from .macro_harvester import MacroHarvester
+        from .route_methods import ROUTE_METHOD_REGISTRY, get_route_method, route_method_ids, describe_route_methods
+        from .reranker import get_available_rerankers, LocalReranker
+    else:
+        raise _err
 
 console = Console()
 
@@ -116,12 +122,12 @@ DEFAULT_SANDBOX_TIMEOUT: float = float(os.environ.get("NSTL_SANDBOX_TIMEOUT", se
 HIGH_TRUST_PRIORITY_THRESHOLD: int = settings.verified_priority_threshold
 DEFAULT_TRANSLATOR_PROMPT: str = (
     "You are a precise technical translator. Rewrite the user request as a "
-    "sequential pipeline specification that preserves every operation, its arguments, "
-    "all variable or column assignments, target column names, and their requested execution order. "
+    "sequential pipeline specification that preserves every computational operation, its arguments, "
+    "all variable assignments, target output names, and their requested execution order. "
     "Preserve relational causality and output definitions (e.g. writing or assigning computed results "
-    "to target columns or variables: 'write to new column Z' -> 'assign result to column Z'). "
+    "to target variables or sinks: 'write result to Z' -> 'assign result to variable Z'). "
     "Keep the natural clause boundaries of the request — one operation per clause — "
-    "without omitting, merging, or reordering steps. Do not drop column names, literals, or target outputs. "
+    "without omitting, merging, or reordering steps. Do not drop identifiers, literals, or target outputs. "
     "Output ONLY the normalized pipeline specification, no headers, no lists, no markdown formatting."
 )
 
@@ -1067,16 +1073,31 @@ class PipelineDebugger:
 
         dbg_ctx = ExecutionContext(prompt=effective_prompt)
         if intent_data and isinstance(intent_data, dict):
+            if hasattr(dbg_ctx, "blackboard") and dbg_ctx.blackboard is not None:
+                dbg_ctx.blackboard.lock_from_intent(intent_data)
+                if dbg_ctx.blackboard.locked_by_neural:
+                    if dbg_ctx.blackboard.target_sink:
+                        dbg_ctx.parameters["target_sink"] = dbg_ctx.blackboard.target_sink
             if intent_data.get("operations") and isinstance(intent_data["operations"], list):
                 dbg_ctx.operations = [str(op).replace("_", " ").strip() for op in intent_data["operations"] if str(op).strip()]
             if intent_data.get("hyperparameters") and isinstance(intent_data["hyperparameters"], dict):
                 dbg_ctx.hyperparameters = dict(intent_data["hyperparameters"])
             if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
                 dbg_ctx.llm_slots = dict(intent_data["slots"])
+                if hasattr(dbg_ctx, "sync_llm_slots"):
+                    dbg_ctx.sync_llm_slots()
+            tgt = intent_data.get("target_sink") or intent_data.get("target_key")
+            if tgt:
+                dbg_ctx.target_key = str(tgt).strip()
+                dbg_ctx.target_literals.add(str(tgt).strip().lower())
+            if intent_data.get("columns") and isinstance(intent_data["columns"], list):
+                dbg_ctx.columns = [str(c).strip() for c in intent_data["columns"]]
             if intent_data.get("parameters") and isinstance(intent_data["parameters"], dict):
                 for p_key, p_val in intent_data["parameters"].items():
                     if p_key:
                         dbg_ctx.parameters.setdefault(str(p_key), p_val)
+            if intent_data.get("by_column"):
+                dbg_ctx.parameters["by_column"] = str(intent_data["by_column"]).strip()
             if intent_data.get("source_files"):
                 dbg_ctx.parameters["source_uris"] = list(intent_data["source_files"])
             if intent_data.get("dest_files"):
@@ -1258,7 +1279,7 @@ class PipelineDebugger:
             c.print("")
 
             # Layer 5 Feedback Check for Planning Refusal
-            llm_feedback = getattr(self, "llm_feedback", False) or ModelManager.get_instance().can_feedback_check()
+            llm_feedback = getattr(self, "llm_feedback", False)
             if not cells and refusal and llm_feedback:
                 mm = ModelManager.get_instance()
                 if mm.profile and mm.can_feedback_check():
@@ -1597,7 +1618,7 @@ class PipelineDebugger:
                             c.print(f"  [dim yellow]Deterministic bridge insertion attempt encountered: {type(e).__name__}: {e}[/dim yellow]")
 
                 # Layer 5 Self-Repair for Pre-Flight Lint Violations
-                llm_feedback = getattr(self, "llm_feedback", False) or ModelManager.get_instance().can_feedback_check()
+                llm_feedback = getattr(self, "llm_feedback", False)
                 rep_dt = 0.0
                 if not lint_valid and llm_feedback and final_code:
                     mm = ModelManager.get_instance()
@@ -1772,7 +1793,7 @@ class PipelineDebugger:
         # LAYER 5: Self-Repair Cycle
         rep_dt = 0.0
         repaired = False
-        if final_code and not sandbox_res.get("success", False) and ModelManager.get_instance().can_feedback_check():
+        if final_code and not sandbox_res.get("success", False) and getattr(self, "llm_feedback", False) and ModelManager.get_instance().can_feedback_check():
             mm = ModelManager.get_instance()
             if mm.profile and mm.can_feedback_check():
                 err_msg = sandbox_res.get("error", "")
@@ -2837,8 +2858,8 @@ class NSTLInteractiveShell(cmd.Cmd):
                 for w in lint_res.warnings:
                     console.print(f"  [yellow]• {w}[/yellow]")
 
-            # Layer 5 Self-Repair for Pre-Flight Lint Violations
-            if not lint_valid and ModelManager.get_instance().can_feedback_check() and final_code:
+            # Layer 5 Self-Repair for Pre-Flight Lint Violations (Disabled in symbolic profiles 0/A/D)
+            if not lint_valid and prof not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check() and final_code:
                 mm = ModelManager.get_instance()
                 if mm.profile and mm.can_feedback_check():
                     err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_res.violations)
@@ -2881,7 +2902,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             sandbox_dt = (time.perf_counter() - t_exec_start) * 1000.0
 
         repaired = False
-        if not sandbox_res.get("success", False) and ModelManager.get_instance().can_feedback_check():
+        if not sandbox_res.get("success", False) and prof not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check():
             mm = ModelManager.get_instance()
             if mm.profile and mm.can_feedback_check():
                 error_msg = sandbox_res.get("error", "")

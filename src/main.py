@@ -422,7 +422,9 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
             logger.debug(f"Deterministic bridge insertion failed: {_bridge_err}")
 
     # Layer 5 Self-Repair for Pre-Flight Lint Violations
-    if lint_violations and ModelManager.get_instance().can_feedback_check():
+    # Strictly disabled in symbolic/retrieval profiles (0, A, D) to prevent benchmark backdoor cheating.
+    repaired_via_feedback = False
+    if lint_violations and _active_profile not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check():
         mm = ModelManager.get_instance()
         if mm.profile and mm.can_feedback_check():
             err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_violations)
@@ -433,6 +435,7 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
                     if rep_lint.is_valid:
                         code = repaired_code
                         lint_violations = []
+                        repaired_via_feedback = True
                 except Exception:
                     pass
 

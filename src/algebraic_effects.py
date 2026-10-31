@@ -127,16 +127,18 @@ class PortAlgebraicEffect:
 
 def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
     """
-    Derives universal algebraic port effects from declared cell schema properties
-    (or explicit port attributes `mutates`, `key_of`, `key_effect`, `partition_index`)
-    with zero domain-specific library names.
+    Derives algebraic port effects strictly from declared cell and port metadata:
+      - Explicit port attributes: `mutates`, `key_of`, `key_effect`, `partition_index`
+      - Declared cell attributes: `mutation_type == "in_place"` on identical carrier types
+      - Explicit partition contracts in schema
+    Zero heuristic string matching, zero ad-hoc hardcoded keyword sets, zero cell_id parsing.
     """
     effects_map: Dict[str, PortAlgebraicEffect] = {}
     reg = TypeRegistry.get_instance()
     inputs = getattr(cell, "inputs", {}) or {}
     outputs = getattr(cell, "outputs", {}) or {}
 
-    # Identify primary data carrier input port (if any)
+    # Identify declared carrier input port (if any)
     carrier_in_name: Optional[str] = None
     for p_name, p_sig in inputs.items():
         if getattr(p_sig, "binds", None) in ("data_carrier", "carrier") or getattr(p_sig, "port_role", None) == "receiver":
@@ -145,27 +147,11 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
     if carrier_in_name is None and getattr(cell, "primary_input", None) is not None:
         carrier_in_name = cell.primary_input.name
 
-    # 1. Input port key effects (read / write / delete on carrier key-space)
-    has_assigned_val = any(getattr(p, "binds", None) == "assigned_value" for p in inputs.values())
-    cell_eff_strs = {str(e).lower() for e in (getattr(cell, "effects", None) or [])}
-    is_delete_op = "delete" in cell.cell_id.lower() or "drop" in cell.cell_id.lower() or " deletes_key" in cell_eff_strs
-
+    # 1. Input port key effects
     for p_name, p_sig in inputs.items():
         explicit_mut = getattr(p_sig, "mutates", None)
         explicit_key_of = getattr(p_sig, "key_of", None)
         explicit_key_eff = getattr(p_sig, "key_effect", None)
-
-        if not explicit_key_of and carrier_in_name and p_name != carrier_in_name:
-            if getattr(p_sig, "binds", None) == "column_key" or str(getattr(p_sig, "state", "")).lower() in (
-                "column_name", "column_projection", "columns", "key"
-            ):
-                explicit_key_of = carrier_in_name
-                if is_delete_op:
-                    explicit_key_eff = "delete"
-                elif has_assigned_val or getattr(cell, "mutation_type", "") == "in_place":
-                    explicit_key_eff = "write"
-                else:
-                    explicit_key_eff = "read"
 
         if explicit_mut or explicit_key_of or explicit_key_eff:
             effects_map[f"in:{p_name}"] = PortAlgebraicEffect(
@@ -174,32 +160,37 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
                 key_effect=explicit_key_eff,
             )
 
-    # 2. Output port mutation & partition index effects
-    is_multi_split = len(outputs) >= 2 and len(outputs) % 2 == 0
+    # 2. Output port mutation & partition effects
     for idx, (out_name, out_sig) in enumerate(outputs.items()):
         mut_target = getattr(out_sig, "mutates", None)
         part_idx = getattr(out_sig, "partition_index", None)
 
-        # Any endomorphism f: T -> T on the primary carrier supersedes/mutates that carrier lineage
+        # In-place endomorphism f: T -> T on declared carrier
         if mut_target is None and carrier_in_name and carrier_in_name in inputs:
             in_t = str(getattr(inputs[carrier_in_name], "type_name", "")).lower()
             out_t = str(getattr(out_sig, "type_name", "")).lower()
             if getattr(cell, "mutation_type", "") == "in_place" or (
-                in_t and out_t and (in_t == out_t or reg.is_subtype(out_t, in_t))
+                in_t and out_t and (in_t == out_t or (reg and reg.is_subtype(out_t, in_t)))
                 and getattr(cell, "stage", None) == 2
             ):
                 mut_target = carrier_in_name
 
-        # Co-initial split outputs (e.g. X_train, X_test, y_train, y_test -> indices 0, 1, 0, 1)
-        if part_idx is None and is_multi_split:
-            st_low = str(getattr(out_sig, "state", "")).lower()
-            if "split" in st_low or "partition" in st_low or "train" in st_low or "test" in st_low:
-                part_idx = idx % 2
+        # Declared partition metadata
+        if part_idx is None and getattr(out_sig, "partition", None) is not None:
+            p_decl = getattr(out_sig, "partition")
+            if isinstance(p_decl, int):
+                part_idx = p_decl
+            elif isinstance(p_decl, dict) and "index" in p_decl:
+                try:
+                    part_idx = int(p_decl["index"])
+                except (ValueError, TypeError):
+                    pass
 
-        effects_map[f"out:{out_name}"] = PortAlgebraicEffect(
-            mutates_port=mut_target,
-            partition_index=part_idx,
-        )
+        if mut_target is not None or part_idx is not None:
+            effects_map[f"out:{out_name}"] = PortAlgebraicEffect(
+                mutates_port=mut_target,
+                partition_index=part_idx,
+            )
 
     return effects_map
 

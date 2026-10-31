@@ -499,12 +499,15 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                             try:
                                 from node_resolver import DynamicNodeResolver
                                 dyn_brg = DynamicNodeResolver.synthesize_adapter(c_prev, nxt, orch, rag=kwargs.get("rag"))
-                                can_c_prev = self.step_unifies(c_prev, dyn_brg, prev_path=verified) or self.step_unifies_dag(dyn_brg, verified, ctx=ctx)
-                                can_dyn_nxt = self.step_unifies(dyn_brg, nxt, prev_path=verified + [dyn_brg]) or self.step_unifies_dag(nxt, verified + [dyn_brg], ctx=ctx)
-                                if dyn_brg and can_c_prev and can_dyn_nxt:
-                                    verified.extend([dyn_brg, nxt])
+                                if dyn_brg is not None:
+                                    can_c_prev = self.step_unifies(c_prev, dyn_brg, prev_path=verified) or self.step_unifies_dag(dyn_brg, verified, ctx=ctx)
+                                    can_dyn_nxt = self.step_unifies(dyn_brg, nxt, prev_path=verified + [dyn_brg]) or self.step_unifies_dag(nxt, verified + [dyn_brg], ctx=ctx)
+                                    if can_c_prev and can_dyn_nxt:
+                                        verified.extend([dyn_brg, nxt])
+                                    else:
+                                        return _fallback(f"synthesized adapter between {c_prev.cell_id} and {nxt.cell_id} does not unify")
                                 else:
-                                    return _fallback(f"synthesized adapter between {c_prev.cell_id} and {nxt.cell_id} does not unify")
+                                    return _fallback(f"could not synthesize adapter between {c_prev.cell_id} and {nxt.cell_id}")
                             except Exception as _brg_err:
                                 return _fallback(f"adapter synthesis raised {type(_brg_err).__name__}: {_brg_err}")
             path = verified

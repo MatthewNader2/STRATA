@@ -1143,6 +1143,8 @@ def is_edge_valid(
         out_fmts = {str(f).lower().lstrip(".") for f in (_get_p_field(p_out, "supported_formats", []) or []) if f != "*"} - protocols
         if in_fmts and out_fmts and not (in_fmts & out_fmts):
             return False
+        if hasattr(out_sig_o, "unifies_with") and not out_sig_o.unifies_with(in_sig_o):
+            return False
     elif hasattr(out_sig_o, "unifies_with"):
         if not out_sig_o.unifies_with(in_sig_o):
             out_tn = str(getattr(out_sig_o, "type_name", "") or "")
@@ -2707,11 +2709,11 @@ class ExecutionContext:
             return []
 
         try:
-            from lattice import LatticeOrchestrator
+            from lattice import LatticeOrchestrator, TypeRegistry
             if LatticeOrchestrator.get_active_instance() is None:
                 LatticeOrchestrator(auto_load=False)
         except Exception:
-            pass
+            from lattice import TypeRegistry
 
         spans: List[Tuple[int, str, str]] = []
         n = len(prompt)
@@ -2843,11 +2845,11 @@ class ExecutionContext:
 
     @staticmethod
     def _is_bare_identifier_token(w: str) -> bool:
-        """
-        Unconditionally returns False. Bare unquoted words in natural language
-        prompts are prose tokens, never formal code literals.
-        """
-        return False
+        """Domain-agnostic check if token is syntactically a bare code identifier."""
+        if not w:
+            return False
+        clean = str(w).strip(" \t\n\r\"'.,;:()[]{}")
+        return bool(clean and clean.isidentifier() and not keyword.iskeyword(clean.lower()))
 
     @staticmethod
     def extract_identifier_groups(prompt: str) -> List[IdentifierGroup]:
@@ -2856,7 +2858,11 @@ class ExecutionContext:
 
     @staticmethod
     def _build_identifier_role_map(prompt: str) -> Dict[int, FrozenSet[str]]:
-        """Universal stub: zero prompt-based role mapping heuristics; resolved by LLM in neural profiles."""
+        """
+        Universal stub: domain-agnostic role mapping.
+        Pure symbolic profiles do not guess roles from prose;
+        neural profiles inject formal roles via IntentCompiler slots in Layer 0.
+        """
         return {}
 
     def sync_llm_slots(self) -> None:
@@ -2872,22 +2878,18 @@ class ExecutionContext:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
         col_tokens = reg.get_column_projection_tokens()
-        reg_types = reg.get_registered_types()
+        reg_types = set(reg.get_registered_types())
+        reg_stopwords = set(reg.get_stopwords())
+
+        # Only process formal variables extracted by the Intent Compiler
+        raw_vars = self.llm_slots.get("variables") or []
+        if isinstance(raw_vars, (str, bytes)):
+            raw_vars = [raw_vars]
 
         candidate_symbols = set()
-        for k, v in self.llm_slots.items():
-            if isinstance(k, str) and k.strip():
-                candidate_symbols.add(k.strip())
+        for v in raw_vars:
             if isinstance(v, str) and v.strip():
                 candidate_symbols.add(v.strip())
-            elif isinstance(v, (list, tuple, set)):
-                for item in v:
-                    if isinstance(item, str) and item.strip():
-                        candidate_symbols.add(item.strip())
-            elif isinstance(v, dict):
-                for sub_k, sub_v in v.items():
-                    if sub_k.lower() in ("name", "path", "column", "target", "field", "feature", "key") and isinstance(sub_v, str) and sub_v.strip():
-                        candidate_symbols.add(sub_v.strip())
 
         if getattr(self, "target_key", None):
             candidate_symbols.add(str(self.target_key).strip())
@@ -2895,11 +2897,10 @@ class ExecutionContext:
         filtered_symbols = set()
         for sym in candidate_symbols:
             s_low = sym.lower()
-            if keyword.iskeyword(s_low) or s_low in reg_types:
+            if keyword.iskeyword(s_low) or s_low in reg_types or s_low in reg_stopwords:
                 continue
-            if s_low in ("true", "false", "none", "null", "generic", "data", "dataset", "table", "file"):
-                continue
-            filtered_symbols.add(sym)
+            if sym.isidentifier():
+                filtered_symbols.add(sym)
 
         if not filtered_symbols:
             return
@@ -4773,8 +4774,6 @@ class UnificationGate:
 
             bound_producer = False
 
-            # Grounded LLM Dataflow Binding: In supported profiles (C, D, E, S),
-            # evaluate LLM-proposed variable bindings against the typestate lattice.
             step_key = str(idx)
             step_llm_bindings = (
                 llm_pipeline_bindings.get(step_key)
@@ -4991,6 +4990,7 @@ class UnificationGate:
             bound_producer = bool(bound_producer)
 
             if len(multi_ports) > 1 and len(ctx.variables) >= 2:
+                reg = TypeRegistry.get_instance()
                 # Deterministic O(P * V) role-based matching with zero itertools.permutations
                 # Restricts mutually exclusive roles declared by domain trees from cross-binding,
                 # preventing reversed argument bugs like fit(y, X).
@@ -5507,23 +5507,70 @@ class UnificationGate:
                         accumulated_sigma.bind(p_name, enum_val)
                         continue
 
-                # E. Unresolved REQUIRED port: check for targeted LLM resolution before failing
-                if p_sig.required and (p_name not in cell_bindings or cell_bindings[p_name] in (None, UNRESOLVED_PORT)):
-                    try:
-                        from .inference import ModelManager
-                        can_synth = ModelManager.get_instance().can_synthesize()
-                    except Exception:
+                # E. Unresolved port fallback: check grounded LLM pipeline bindings or targeted LLM synthesis
+                if p_name not in cell_bindings or cell_bindings[p_name] in (None, UNRESOLVED_PORT):
+                    if p_name in step_llm_bindings:
+                        cand_val = step_llm_bindings[p_name]
+                        if cand_val is not None:
+                            cand_str = str(cand_val).strip()
+                            if cand_str:
+                                try:
+                                    parsed_ast = ast.parse(cand_str, mode="eval")
+                                    var_names = {node.id for node in ast.walk(parsed_ast) if isinstance(node, ast.Name)}
+                                    valid_cand = True
+                                    if not var_names:
+                                        valid_nums = {v for _, k, v in getattr(ctx, "ordered_literals", []) if k in ("int_literal", "float_literal")}
+                                        if isinstance(cand_val, (int, float)) and not isinstance(cand_val, bool):
+                                            val_str = str(int(cand_val)) if int(cand_val) == cand_val else str(cand_val)
+                                            if val_str not in valid_nums:
+                                                valid_cand = False
+                                        elif isinstance(cand_val, str) and cand_val not in ("True", "False", "None"):
+                                            valid_strs = {v.lower() for _, k, v in getattr(ctx, "ordered_literals", []) if k in ("quoted_str", "identifier", "file_asset")}
+                                            if cand_val.lower() not in valid_strs:
+                                                valid_cand = False
+                                    if valid_cand and all(v in ctx.variables for v in var_names if not keyword.iskeyword(v)):
+                                        if cand_str in ctx.variables:
+                                            v_sig, _ = ctx.variables[cand_str]
+                                            if _shape_compatible(v_sig, concrete_sig):
+                                                u_cand = unify(v_sig.signature, concrete_sig.signature, accumulated_sigma)
+                                                if u_cand is not None:
+                                                    cell_bindings[p_name] = cand_str
+                                                    accumulated_sigma = u_cand
+                                                    continue
+                                        else:
+                                            rec = resolve_typed_binding_record(
+                                                cell=cell,
+                                                port_name=p_name,
+                                                bound_val=cand_str,
+                                                port_sig=concrete_sig,
+                                                var_signatures={v: s[0] if isinstance(s, tuple) else s for v, s in ctx.variables.items()},
+                                                expected_sig=concrete_sig,
+                                            )
+                                            if rec and rec.resulting_signature:
+                                                u_cand = unify(rec.resulting_signature, concrete_sig.signature, accumulated_sigma)
+                                                if u_cand is not None:
+                                                    cell_bindings[p_name] = cand_str
+                                                    accumulated_sigma = u_cand
+                                                    continue
+                                except Exception as _exc:
+                                    logger.debug("[UNIFICATION DIAGNOSTIC] Suppressed exception: %s", _exc, exc_info=True)
+
+                    if p_sig.required:
                         try:
-                            from inference import ModelManager
+                            from .inference import ModelManager
                             can_synth = ModelManager.get_instance().can_synthesize()
                         except Exception:
-                            can_synth = False
-                    if can_synth:
-                        fallback_expr = self._synthesize_single_port_binding_with_llm(cell, p_name, p_sig, concrete_sig, ctx)
-                        if fallback_expr is not None:
-                            cell_bindings[p_name] = fallback_expr
-                            accumulated_sigma.bind(p_name, fallback_expr)
-                            continue
+                            try:
+                                from inference import ModelManager
+                                can_synth = ModelManager.get_instance().can_synthesize()
+                            except Exception:
+                                can_synth = False
+                        if can_synth:
+                            fallback_expr = self._synthesize_single_port_binding_with_llm(cell, p_name, p_sig, concrete_sig, ctx)
+                            if fallback_expr is not None:
+                                cell_bindings[p_name] = fallback_expr
+                                accumulated_sigma.bind(p_name, fallback_expr)
+                                continue
 
                 # E.2 Unresolved REQUIRED port: fail loudly if still ungrounded
                 if p_sig.required:
@@ -6313,13 +6360,15 @@ class UnificationGate:
         if isinstance(cells[0], tuple):
             pipeline_bindings = cells
             # Autonomous Missing Parameter Resolution under --llm-feedback for pre-bound tuples
+            # Strictly disabled in symbolic/retrieval profiles (0, A, D)
             if getattr(ctx, "unresolved_ports", None) and (extract_llm_slots or os.environ.get("NSTL_LLM_FEEDBACK") == "1"):
                 try:
                     from inference import ModelManager
                 except (ImportError, ValueError):
                     from .inference import ModelManager
                 mm = ModelManager.get_instance()
-                if mm.profile and (mm.can_synthesize() or mm.can_feedback_check()):
+                p_name_cur = getattr(mm, "current_profile_name", "")
+                if mm.profile and p_name_cur not in ("0", "A", "D") and mm.can_synthesize():
                     prompt_txt = getattr(ctx, "_prompt", "") or getattr(self.context, "_prompt", "")
                     resolved_any = False
                     rem_unres = []
@@ -6333,7 +6382,7 @@ class UnificationGate:
                             f"Missing Parameter Required:\n"
                             f"Node: {cid}\n"
                             f"Parameter Port: {p_name} ({p_desc})\n"
-                            f"Extract the exact argument value (e.g. column name, threshold, file path, mode) from the prompt for this port.\n"
+                            f"Extract the exact argument value (e.g. identifier, threshold, asset path, configuration mode) from the prompt for this port.\n"
                             f"Return JSON: {{\"value\": <extracted_value>}}"
                         )
                         try:
@@ -6385,13 +6434,15 @@ class UnificationGate:
             self.last_runtime_aliases = dict(getattr(ctx_run, "runtime_aliases", {}) or {})
 
             # Autonomous Missing Parameter Resolution under --llm-feedback
+            # Strictly disabled in symbolic/retrieval profiles (0, A, D)
             if getattr(ctx_run, "unresolved_ports", None) and (extract_llm_slots or os.environ.get("NSTL_LLM_FEEDBACK") == "1"):
                 try:
                     from inference import ModelManager
                 except (ImportError, ValueError):
                     from .inference import ModelManager
                 mm = ModelManager.get_instance()
-                if mm.profile and (mm.can_synthesize() or mm.can_feedback_check()):
+                p_name_cur = getattr(mm, "current_profile_name", "")
+                if mm.profile and p_name_cur not in ("0", "A", "D") and mm.can_synthesize():
                     prompt_txt = getattr(ctx_run, "_prompt", "") or getattr(self.context, "_prompt", "")
                     resolved_any = False
                     rem_unres = []
@@ -6404,7 +6455,7 @@ class UnificationGate:
                             f"Missing Parameter Required:\n"
                             f"Node: {cid}\n"
                             f"Parameter Port: {p_name} ({p_desc})\n"
-                            f"Extract the exact argument value (e.g. column name, threshold, file path, mode) from the prompt for this port.\n"
+                            f"Extract the exact argument value (e.g. identifier, threshold, asset path, configuration mode) from the prompt for this port.\n"
                             f"Return JSON: {{\"value\": <extracted_value>}}"
                         )
                         try:

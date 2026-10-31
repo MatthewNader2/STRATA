@@ -493,6 +493,12 @@ class RouteMethod(ABC):
         if self.step_unifies(src_cell, dst_cell):
             return []
         orch = self.orchestrator
+        if prev_path:
+            single = self.find_bridge(src_cell, dst_cell, candidates or [], orchestrator=orch, prev_path=prev_path)
+            if single:
+                b_cloned = single.clone() if hasattr(single, "clone") else copy.copy(single)
+                b_cloned.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+                return [b_cloned]
         if orch and hasattr(orch, "find_shortest_bridge_path"):
             chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=max_hops, candidate_pool=candidates)
             if chain:
@@ -520,12 +526,6 @@ class RouteMethod(ABC):
         Returns a cloned instance parameter-grounded to dst_cell's clause literals.
         """
         orch = orchestrator or self.orchestrator
-        if orch and hasattr(orch, "find_shortest_bridge_path"):
-            chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=3, candidate_pool=candidates)
-            if chain:
-                b = chain[0].clone() if hasattr(chain[0], "clone") else chain[0]
-                b.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
-                return b
         best_b: Optional[Cell] = None
         best_score = -1.0
         current_scope = prev_path if prev_path else [src_cell]
@@ -634,6 +634,13 @@ class RouteMethod(ABC):
             b_inst.clause_literals = getattr(dst_cell, "clause_literals", None)
             b_inst.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
             return b_inst
+
+        if orch and hasattr(orch, "find_shortest_bridge_path"):
+            chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=3, candidate_pool=candidates)
+            if chain:
+                b = chain[0].clone() if hasattr(chain[0], "clone") else chain[0]
+                b.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+                return b
 
         # Open-World Continuum (Issue 5): If no pre-harvested bridge exists in the lattice,
         # instantiate a TypedHoleCell(tau_src -> tau_dst) when synthesis is available and allowed.
@@ -815,15 +822,8 @@ class RouteMethod(ABC):
     def segment_prompt_clauses(cls, prompt: str, ctx: Optional[Any] = None) -> List[str]:
         """
         Partitions user prompt into sequential procedural clauses.
-        For suitable profiles with a semantic compiler (e.g. Profile E/S),
-        unifies intent by adopting the fine-grained atomic operations in ctx.operations.
-        For profiles without a neural compiler (e.g. Profile 0/A), delegates strictly
-        to the syntactic punctuation-based segmenter.
+        Syntactic punctuation and coordination segmentation grounded directly in the user specification.
         """
-        if ctx is not None and getattr(ctx, "operations", None):
-            ops = [str(op).strip() for op in ctx.operations if str(op).strip()]
-            if ops:
-                return ops
         try:
             from .planner import _segment_prompt_clauses
         except (ImportError, ValueError):

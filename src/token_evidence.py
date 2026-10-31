@@ -202,14 +202,41 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
             min_recall = settings.secondary_anchor_min_recall
             min_f = settings.secondary_anchor_min_f
             f_ratio = settings.secondary_anchor_f_ratio
-            ok = residual["hit"] > 0.0 and (
-                residual["recall"] >= min_recall
-                or residual["f"] >= min_f
-                or residual["f"] >= (primary_f * f_ratio if primary_f else 0.0)
+            min_name_prec = getattr(settings, "secondary_anchor_min_name_precision", 0.20)
+            ok = residual["hit"] > 0.0 and residual["recall"] >= min_recall and residual["name_precision"] >= min_name_prec and (
+                residual["f"] >= min_f
+                or (primary_f is not None and residual["f"] >= primary_f * f_ratio)
             )
-            why = "secondary: residual hit=%.3f, recall=%.3f, F=%.3f %s" % (
-                residual["hit"], residual["recall"], residual["f"], "accepted" if ok else "rejected"
-            )
+            if ok and accepted:
+                # Category-theoretic reachability: a secondary anchor in the same clause
+                # must compose with or share a carrier with an accepted anchor in the clause,
+                # preventing spurious linguistic homonyms from pulling in disconnected domains.
+                orch = ev.orch
+                prim_cell = accepted[0][0]
+                try:
+                    from unification import is_edge_valid
+                except (ImportError, ValueError):
+                    from .unification import is_edge_valid
+
+                f12 = any(is_edge_valid(out_p, in_p, prim_cell, c) for out_p in prim_cell.outputs.values() for in_p in c.inputs.values())
+                f21 = any(is_edge_valid(out_p, in_p, c, prim_cell) for out_p in c.outputs.values() for in_p in prim_cell.inputs.values())
+                t1 = {getattr(getattr(p, "signature", p), "type_name", "") for p in prim_cell.inputs.values()}
+                t2 = {getattr(getattr(p, "signature", p), "type_name", "") for p in c.inputs.values()}
+                share_in = bool(t1 & t2)
+
+                is_ing = (getattr(c, "stage", None) == 1 or getattr(c, "node_role", "") == "ingress") and (clause_idx is not None and clause_idx > 0)
+
+                if not (f12 or f21 or share_in) or is_ing:
+                    ok = False
+                    why = "secondary: no categorical composition with primary anchor %s" % prim_cell.cell_id
+                else:
+                    why = "secondary: residual hit=%.3f, recall=%.3f, name_prec=%.3f, F=%.3f accepted" % (
+                        residual["hit"], residual["recall"], residual["name_precision"], residual["f"]
+                    )
+            else:
+                why = "secondary: residual hit=%.3f, recall=%.3f, F=%.3f %s" % (
+                    residual["hit"], residual["recall"], residual["f"], "accepted" if ok else "rejected"
+                )
             if ok:
                 covered |= set(residual["tokens"])
         if on_event is not None:

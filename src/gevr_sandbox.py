@@ -367,7 +367,7 @@ class TerminalIntentRegistry:
                 has_shape = hasattr(output, "shape")
                 if not (has_len or has_shape):
                     return IntentVerificationResult(valid=False, reason="Output lacks dimension or sequence protocol")
-                return IntentVerificationResult(valid=True, reason="Structured tabular contract verified")
+                return IntentVerificationResult(valid=True, reason="Structured carrier contract verified")
 
         class VisualArtifactVerifier(BaseIntentVerifier):
             def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
@@ -381,6 +381,7 @@ class TerminalIntentRegistry:
                 return IntentVerificationResult(valid=False, reason="Object lacks visual artifact rendering protocol")
 
         self.register("model_fit_split", PartitionIntentVerifier())
+        self.register("structured_carrier_egress", StructuredDataVerifier())
         self.register("tabular_egress", StructuredDataVerifier())
         self.register("image_annotation_egress", StructuredDataVerifier())
         self.register("visualization_egress", VisualArtifactVerifier())
@@ -424,9 +425,10 @@ def _enforce_posix_resource_limits(max_memory_mb: int = 16384, max_cpu_seconds: 
             except ValueError:
                 pass
         mem_bytes = int(max_memory_mb) * 1024 * 1024
+        as_bytes = max(32768, int(max_memory_mb)) * 1024 * 1024
         if hasattr(_resource, "RLIMIT_AS"):
             _, hard_as = _resource.getrlimit(_resource.RLIMIT_AS)
-            target_as = mem_bytes if hard_as == _resource.RLIM_INFINITY else min(mem_bytes, hard_as)
+            target_as = as_bytes if hard_as == _resource.RLIM_INFINITY else min(as_bytes, hard_as)
             _resource.setrlimit(_resource.RLIMIT_AS, (target_as, target_as))
         if hasattr(_resource, "RLIMIT_DATA"):
             _, hard_data = _resource.getrlimit(_resource.RLIMIT_DATA)
@@ -1083,9 +1085,9 @@ class GEVRSandbox:
         Execute code in a separate resource- and filesystem-confined process.
         """
         missing_inputs: List[str] = []
+        egress_set: Set[str] = {str(p).strip() for p in (egress_paths or []) if p}
         try:
             parsed_ast = ast.parse(code)
-            egress_set = {str(p).strip() for p in (egress_paths or []) if p}
 
             # Incorporate any egress/sink bindings from pipeline_bindings
             for b in kwargs.get("pipeline_bindings") or []:

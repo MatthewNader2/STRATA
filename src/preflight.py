@@ -40,27 +40,27 @@ except (ImportError, ValueError):
 
 @dataclass
 class VariableSchema:
-    """Tracks active and invalidated component/column schemas per variable (R5-3)."""
-    known_columns: Optional[Set[str]] = None
-    removed_columns: Set[str] = field(default_factory=set)
-    added_columns: Set[str] = field(default_factory=set)
+    """Tracks active and invalidated composite component schemas per variable (R5-3)."""
+    known_components: Optional[Set[str]] = None
+    removed_components: Set[str] = field(default_factory=set)
+    added_components: Set[str] = field(default_factory=set)
     removed_by: Dict[str, str] = field(default_factory=dict)
 
     @property
-    def known_components(self) -> Optional[Set[str]]:
-        return self.known_columns
+    def known_columns(self) -> Optional[Set[str]]:
+        return self.known_components
 
-    @known_components.setter
-    def known_components(self, val: Optional[Set[str]]) -> None:
-        self.known_columns = val
-
-    @property
-    def removed_components(self) -> Set[str]:
-        return self.removed_columns
+    @known_columns.setter
+    def known_columns(self, val: Optional[Set[str]]) -> None:
+        self.known_components = val
 
     @property
-    def added_components(self) -> Set[str]:
-        return self.added_columns
+    def removed_columns(self) -> Set[str]:
+        return self.removed_components
+
+    @property
+    def added_columns(self) -> Set[str]:
+        return self.added_components
 
 
 
@@ -778,15 +778,18 @@ class PreflightLinter:
         # Check 4: Monotonic Clause Ordering & Dependency Inversion (R5-2)
         # -----------------------------------------------------------------
         if prompt:
+            path_cells = [c for c, _ in pipeline_bindings]
             try:
-                from .route_methods.base import RouteMethod
-                RouteMethod.tag_cells_with_clause_indices([c for c, _ in pipeline_bindings], prompt)
-            except Exception:
                 try:
+                    from .route_methods.base import RouteMethod
+                except (ImportError, ValueError):
                     from route_methods.base import RouteMethod
-                    RouteMethod.tag_cells_with_clause_indices([c for c, _ in pipeline_bindings], prompt)
-                except Exception:
-                    pass
+                RouteMethod.tag_cells_with_clause_indices(path_cells, prompt, orchestrator=orchestrator)
+                for idx, c in enumerate(path_cells):
+                    if pipeline_bindings[idx][0] is not c:
+                        pipeline_bindings[idx] = (c, pipeline_bindings[idx][1])
+            except Exception:
+                pass
 
         # Track which variables each cell produces and consumes
         cell_producers: Dict[str, Tuple[int, Any]] = {}  # var_name -> (step_idx, cell)
@@ -1128,19 +1131,19 @@ class PreflightLinter:
                 _add_violation("syntax_error", msg, details={"error": str(e)})
 
         # -----------------------------------------------------------------
-        # Check 10: Row-set lineage. A value computed on one row set must not be
-        # written into a table living on another (tree-declared row_set_effects).
+        # Check 10: Extent domain lineage. A value computed on one carrier extent must not be
+        # written into a composite carrier living on another (tree-declared extent effects).
         # -----------------------------------------------------------------
         try:
             for _ri in cls._verify_carrier_extent_epochs(pipeline_bindings):
                 _add_violation(
-                    "row_misalignment",
-                    f"Cell '{_ri['cell']}' writes {_ri['value_vars']} (row epoch {_ri['value_epoch']}) into table "
-                    f"{_ri['table_vars']} (row epoch {_ri['table_epoch']}): the value was computed before/after a "
-                    f"row-changing step the table has (or has not) been through, so the lengths differ at runtime.",
+                    "carrier_extent_misalignment",
+                    f"Cell '{_ri['cell']}' writes {_ri['value_vars']} (extent epoch {_ri['value_epoch']}) into carrier "
+                    f"{_ri['table_vars']} (extent epoch {_ri['table_epoch']}): the value was computed across a "
+                    f"dimension/extent-altering morphism, resulting in mismatched bounds at runtime.",
                     cell_id=_ri["cell"], details=_ri)
         except Exception as _row_err:
-            warnings.append(f"row lineage analysis unavailable: {type(_row_err).__name__}: {_row_err}")
+            warnings.append(f"carrier extent analysis unavailable: {type(_row_err).__name__}: {_row_err}")
 
 
         # -----------------------------------------------------------------

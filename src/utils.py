@@ -261,8 +261,15 @@ def ensure_comprehensive_prompt(prompt: str, candidate_prompt: Optional[str]) ->
         # If the original prompt is rich, ensure candidate does not discard majority of intent
         if len(p_content) >= 3:
             recall = len(p_content & c_content) / len(p_content)
-            if recall < 0.50:
-                logger.info(f"[PromptProtection] Candidate prompt dropped key intent (recall {recall:.2f} < 0.50); reverting to original.")
+            if recall < 0.85:
+                logger.info(f"[PromptProtection] Candidate prompt dropped key intent (recall {recall:.2f} < 0.85); reverting to original.")
+                return p_clean
+
+        # Precision protection against additive hallucinations
+        if len(c_content) >= 3 and len(p_content) >= 3:
+            precision = len(p_content & c_content) / len(c_content)
+            if precision < 0.60:
+                logger.info(f"[PromptProtection] Candidate prompt introduced extraneous hallucinations (precision {precision:.2f} < 0.60); reverting to original.")
                 return p_clean
 
         # Clause count protection for compound queries

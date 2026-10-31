@@ -935,39 +935,8 @@ def _segment_prompt_clauses(prompt: str) -> List[str]:
         if not p_clean: continue
         p_toks = CellTokenizer.tokenize_prompt(p_clean)
         if not p_toks: continue
-        # Preserve natural clause boundaries without hardcoded sink-directive mergers.
-        # Clauses separated by top-level punctuation are distinct sub-goals.
+        # Preserve full specification integrity: clauses are never dropped or mutated.
         merged.append(p_clean)
-
-    # Drop fragments that no cell in the tree could ever cover.
-    try:
-        from lattice import LatticeOrchestrator, TypeRegistry
-        orch = LatticeOrchestrator.get_active_instance()
-    except ImportError:
-        orch = None
-        TypeRegistry = None
-
-    if orch is not None and len(getattr(orch, "loaded_cells", {})) > 0:
-        op_vocab = set()
-        for c in orch.loaded_cells.values():
-            for tag in getattr(c, "semantic_tags", []) or []:
-                t = str(tag).lower().strip()
-                if len(t) > 2 and " " not in t: op_vocab.add(t)
-            for kw in getattr(c, "keywords", []) or []:
-                k = str(kw).lower().strip()
-                if len(k) > 2 and " " not in k: op_vocab.add(k)
-        try:
-            aliases = TypeRegistry.get_instance().get_all_aliases()
-        except Exception:
-            aliases = {}
-        filtered = []
-        for p in merged:
-            toks = CellTokenizer.tokenize_prompt(p)
-            content = {t for t in toks if len(t) > 2 and t not in aliases}
-            if content & op_vocab:
-                filtered.append(p)
-        if filtered:
-            return filtered
 
     return merged or [prompt.strip()]
 

@@ -2116,7 +2116,8 @@ class AlgebraicSignature:
             ):
                 pass
             elif is_path_port(self) and is_path_port(other_sig):
-                pass
+                if m_c and m_p and not is_generic_match:
+                    return False
             else:
                 return False
 
@@ -3492,7 +3493,7 @@ def build_cell_from_raw(c_dict: Dict[str, Any], domain: str = "generic", default
         or node_type.startswith("macro_")
         or node_role.startswith("macro_")
         or top in ("traced_loop", "coproduct_branch", "state_loop", "context_manager")
-        or has_slots
+        or bool(c_dict.get("sub_cells"))
     )
     cell_cls = MacroCell if is_macro else MicroCell
     cell_instance = cell_cls(
@@ -4027,6 +4028,7 @@ class LatticeOrchestrator:
                                     slots_val = json.loads(slots_json)
                                 except Exception as e:
                                     slots_val = {}
+                            sub_cells_val = cfg.get("sub_cells", [])
 
                             in_sig = AlgebraicSignature(type_name=in_type or "any", state=in_state or "any")
                             out_sig = AlgebraicSignature(type_name=out_type or "None", state=out_state or "any")
@@ -4117,7 +4119,7 @@ class LatticeOrchestrator:
                                 or str(node_type).lower().startswith("macro_")
                                 or str(node_role).lower().startswith("macro_")
                                 or top_val in ("traced_loop", "coproduct_branch", "state_loop", "context_manager")
-                                or bool(slots_val)
+                                or bool(sub_cells_val)
                             )
                             cls = MacroCell if is_macro else MicroCell
                             cell = cls(

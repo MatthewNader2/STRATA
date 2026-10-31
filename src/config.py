@@ -148,6 +148,12 @@ class NSTLSettings(BaseSettings):
         le=1.0,
         description="Minimum F-score threshold for secondary clause anchors.",
     )
+    secondary_anchor_min_name_precision: float = Field(
+        default=0.20,
+        ge=0.0,
+        le=1.0,
+        description="Minimum name-precision threshold for secondary clause anchors against residual clause tokens.",
+    )
     secondary_anchor_f_ratio: float = Field(
         default=0.25,
         ge=0.0,

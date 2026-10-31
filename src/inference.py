@@ -264,7 +264,13 @@ def select_optimal_llm(requested_name: str = "") -> str:
             if req.lower() in cand.lower():
                 return cand
 
-    # Default to 0.5b model when available
+    # Prioritize 0.8B (Qwen3.5-0.8B), then 0.6B (Qwen3-0.6B), then 0.5B (Qwen2.5-0.5B)
+    m_08b = next((m for m in available if "0.8b" in m.lower()), None)
+    if m_08b is not None:
+        return m_08b
+    m_06b = next((m for m in available if "0.6b" in m.lower()), None)
+    if m_06b is not None:
+        return m_06b
     m_05b = next((m for m in available if "0.5b" in m.lower()), None)
     if m_05b is not None:
         return m_05b
@@ -619,6 +625,8 @@ class BenchmarkProfile_C(InferenceProfile):
             "max_tokens": max_tokens,
             "temperature": settings.llm_temperature,
             "top_p": settings.llm_top_p,
+            "repeat_penalty": 1.15,
+            "stop": ["<|im_end|>", "<|endoftext|>"],
         }
         if schema:
             kwargs["response_format"] = {"type": "json_object", "schema": schema}
@@ -661,12 +669,29 @@ class BenchmarkProfile_C(InferenceProfile):
             "properties": {
                 "task": {"type": "string"},
                 "domain": {"type": "string"},
-                "inputs": {"type": "array", "items": {"type": "string"}},
-                "outputs": {"type": "array", "items": {"type": "string"}},
+                "deliverable": {
+                    "type": "string",
+                    "description": "The primary terminal entity, variable, model, or metric requested by the user."
+                },
+                "inputs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Explicit input file names, asset paths, or external sources mentioned in the specification."
+                },
+                "outputs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Explicit output file names or destination paths mentioned in the specification (empty list if deliverable is in-memory)."
+                },
                 "operations": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Strictly ordered sequence of atomic, irreducible computational morphisms. Each step must represent a single discrete transformation or calculation."
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "All explicit variable, column, feature, channel, and symbol identifiers mentioned in the specification."
                 },
                 "parameters": {
                     "type": "object",
@@ -678,16 +703,25 @@ class BenchmarkProfile_C(InferenceProfile):
                 },
                 "effective_prompt": {"type": "string"},
             },
-            "required": ["task", "domain", "operations", "parameters", "slots"]
+            "required": ["task", "domain", "deliverable", "operations", "variables", "inputs"]
         }
 
         target_system_prompt = system_prompt or (
-            "You are a formal semantic compiler for category-theoretic computational pipelines and algorithmic graphs. "
-            "Given a user specification, decompose it into a strictly ordered sequence of atomic, irreducible computational morphisms ('operations'). "
-            "Each operation must represent a single, discrete transformation or calculation preserving its targets and parameters. "
-            "Never combine multiple transformations into a single operation: decompose compound instructions into their constituent sequential steps. "
-            "Extract all variable and symbol slot bindings (into 'slots'), parameter constraints, configurations, and input/output artifacts (into 'parameters'). "
-            "Output ONLY valid JSON."
+            "You are a formal semantic compiler for computational pipelines.\n"
+            "Analyze the given natural language user specification and decompose it strictly into a JSON object adhering to the schema:\n"
+            "- task: high-level intent.\n"
+            "- domain: problem domain.\n"
+            "- deliverable: the primary terminal entity, variable, model, or metric requested.\n"
+            "- operations: strictly ordered sequence of atomic, single-step computational morphisms representing each sequential transformation. "
+            "You MUST exhaustively include every operation from the prompt up to and including the terminal deliverable (e.g. data loading, transformations, aggregations, feature extraction, model training, evaluation, predictions, or persistence).\n"
+            "- variables: exhaustively list all distinct column names, variable names, target variables, features, and symbols explicitly mentioned in the user specification (both feature columns and target/predicted columns, e.g. for 'X column', 'Y column', 'column called Z', and 'predict Z', extract ['X', 'Y', 'Z']). Never omit the target or predicted variable. Never append artificial suffixes like '_col' or '_column' unless written verbatim in the text.\n"
+            "- inputs: explicit input file names, asset paths, or data sources mentioned in the text (empty list if none).\n"
+            "- outputs: explicit destination file paths mentioned in the text (empty list if deliverable is in-memory).\n\n"
+            "Guidelines:\n"
+            "1. Exhaustive Coverage: operations must NEVER be truncated or omitted; every sequential clause in the prompt must have its corresponding atomic step in operations.\n"
+            "2. Extract ALL variables, identifiers, and files that are explicitly mentioned in the user specification without omitting any column or target variable.\n"
+            "3. Do not invent or hallucinate placeholder names or suffixes (e.g. use 'X', not 'X_col').\n"
+            "4. Output valid JSON only."
         )
 
         try:
@@ -702,13 +736,33 @@ class BenchmarkProfile_C(InferenceProfile):
                 except Exception:
                     pass
             if isinstance(data, dict):
-                # Ensure backward-compatible aliases for legacy consumers
+                # Strict literal grounding: destination files must be grounded in prompt text
+                raw_outs = data.get("outputs") or []
+                valid_outs = []
+                prompt_lower = prompt.lower()
+                for out_f in raw_outs:
+                    if isinstance(out_f, str) and out_f.strip():
+                        clean_out = out_f.strip()
+                        if clean_out.lower() in prompt_lower:
+                            valid_outs.append(clean_out)
+                        else:
+                            try:
+                                from unification import ExecutionContext
+                                if any(clean_out.lower() in lit_val.lower() for _, lit_k, lit_val in ExecutionContext._extract_universal_literals(prompt)):
+                                    valid_outs.append(clean_out)
+                            except Exception:
+                                pass
+                data["outputs"] = valid_outs
+                data["dest_files"] = list(valid_outs)
+
                 if "inputs" in data and "source_files" not in data:
                     data["source_files"] = data["inputs"]
-                if "outputs" in data and "dest_files" not in data:
-                    data["dest_files"] = data["outputs"]
                 if "parameters" in data and "hyperparameters" not in data:
                     data["hyperparameters"] = data["parameters"]
+                if "variables" in data and isinstance(data["variables"], list):
+                    if "slots" not in data or not isinstance(data["slots"], dict):
+                        data["slots"] = {}
+                    data["slots"]["variables"] = [str(v).strip() for v in data["variables"] if str(v).strip()]
                 if "effective_prompt" not in data or not data["effective_prompt"]:
                     data["effective_prompt"] = prompt
                 else:
