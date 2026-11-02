@@ -2028,7 +2028,7 @@ class NSTLInteractiveShell(cmd.Cmd):
 
         header_table.add_row(prof_text, models_text, hardware_text)
 
-        title_text = Text("🧬 STRATA NEURO-SYMBOLIC TOPOLOGICAL LATTICE STUDIO", justify="center", style="bold white on blue")
+        title_text = Text("🧬 STRATA: SYMBOLIC TOPOLOGICAL ROUTING ARCHITECTURE FOR TYPED AUTOMATA", justify="center", style="bold white on blue")
         _short_label = {"0": "Symbolic", "A": "Embedder", "C": "Neuro-Symbolic", "D": "Routing", "E": "Translator", "S": "Semantic-Compiler"}
         _quick_line = "  ".join(f"[{k}] {v}:{_short_label.get(v, v)}" for k, v in QUICK_PROFILE_SHORTCUTS)
         quick_shortcuts = Text(
@@ -3305,7 +3305,7 @@ def cmd_precompute_rag(args):
 # =====================================================================
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the CLI argument parser with all subcommands and global debug flags."""
-    parser = argparse.ArgumentParser(prog="python -m src.cli", description="STRATA Toolchain CLI & Interactive Studio")
+    parser = argparse.ArgumentParser(prog="python -m src.cli", description="STRATA (Symbolic Topological Routing Architecture for Typed Automata) Toolchain CLI & Studio")
     parser.add_argument("--debug", "-d", action="store_true", help="Enable verbose debug mode across all pipeline layers")
     subparsers = parser.add_subparsers(dest="command", required=False)
 

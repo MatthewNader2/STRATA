@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-strata_cli.py - Root entry point for STRATA Toolchain CLI
+strata_cli.py - Root entry point for STRATA (Symbolic Topological Routing Architecture for Typed Automata) Toolchain CLI
 """
 import sys
 from pathlib import Path

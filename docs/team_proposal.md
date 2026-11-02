@@ -1,4 +1,4 @@
-# Project Proposal: STRATA (Neuro-Symbolic Topological Lattice)
+# Project Proposal: STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 **Course / University Deliverable 1: Project Proposal Document**  
 **Due Date:** 31/Oct/2026 | **Target Deliverable:** Team##_Proposal_Document.pdf (Max 2 Pages)  
 **System Status:** Profile E with Route Method M1 Verified End-to-End
@@ -9,7 +9,7 @@
 
 Modern software engineering is undergoing a generational shift driven by generative artificial intelligence and Large Language Models (LLMs). While state-of-the-art neural code generators demonstrate impressive fluency, their foundational architecture—probabilistic autoregressive token sampling—renders them fundamentally incapable of guaranteeing semantic correctness, type safety, or algorithmic termination. In mission-critical environments such as aerospace, medical diagnostics, quantitative finance, and automated industrial infrastructure, unverified probabilistic code generation introduces unacceptable risks of catastrophic software failure, subtle logical hallucinations, and zero-day vulnerabilities. 
 
-The **STRATA** (Neuro-Symbolic Topological Lattice) project is inspired by the mathematical synergy between neural semantic retrieval and formal constructive logic (specifically, Category Theory, Curry-Howard isomorphism, and Monadic Type Theory). STRATA bridges this divide by restricting neural networks to what they do best—probabilistic semantic extraction and intent embedding—while delegating all program composition, topological routing, type propagation, and code emission to a deterministic, mathematically verifiable category-theoretic compiler. By framing code synthesis as pathfinding over a precomputed monoidal lattice of typed morphism cells, STRATA guarantees that any synthesized program is mathematically sound by construction before a single line of target code is compiled or executed.
+The **STRATA** (**S**ymbolic **T**opological **R**outing **A**rchitecture for **T**yped **A**utomata) project is inspired by the mathematical synergy between neural semantic retrieval and formal constructive logic (specifically, Category Theory, Curry-Howard isomorphism, and Monadic Type Theory). STRATA bridges this divide by restricting neural networks to what they do best—probabilistic semantic extraction and intent embedding—while delegating all program composition, topological routing, type propagation, and code emission to a deterministic, mathematically verifiable category-theoretic compiler. By framing code synthesis as pathfinding over a precomputed monoidal lattice of typed morphism cells, STRATA guarantees that any synthesized program is mathematically sound by construction before a single line of target code is compiled or executed.
 
 ---
 

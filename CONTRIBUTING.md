@@ -1,6 +1,6 @@
 # Contributing to STRATA
 
-Welcome to the **STRATA** (Neuro-Symbolic Topological Lattice) project! We follow a disciplined, lightweight Git workflow to ensure reliability, mathematical correctness, and seamless collaboration.
+Welcome to the **STRATA** (**S**ymbolic **T**opological **R**outing **A**rchitecture for **T**yped **A**utomata) project! We follow a disciplined, lightweight Git workflow to ensure reliability, mathematical correctness, and seamless collaboration.
 
 ---
 

@@ -1,4 +1,4 @@
-# STRATA - Team Development Guide
+# STRATA (Symbolic Topological Routing Architecture for Typed Automata) - Team Development Guide
 
 This guide outlines the development environment setup, coding conventions, testing protocols, and Git collaboration workflows for the STRATA project team.
 

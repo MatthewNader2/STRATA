@@ -1,5 +1,5 @@
 """
-src/config.py - Centralized Configuration for STRATA
+src/config.py - Centralized Configuration for STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Uses Pydantic BaseSettings for validated, type-safe configuration with .env file support.
 """
 import json

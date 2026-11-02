@@ -1,11 +1,11 @@
-# STRATA: Neuro-Symbolic Topological Lattice
+# STRATA: Symbolic Topological Routing Architecture for Typed Automata
 
 [![CI](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Category Theory](https://img.shields.io/badge/foundations-category--theory-purple.svg)]()
 [![Type Soundness](https://img.shields.io/badge/verification-Robinson%20Unifier-brightgreen.svg)]()
 
-**STRATA** is a category-theoretic neuro-symbolic program synthesis engine. It translates natural language user specifications into provably type-sound, executable, multi-domain Python code pipelines by combining continuous neural semantic intent extraction with constructive category-theoretic compiler passes over a precomputed monoidal lattice of typed morphism cells.
+**STRATA** (**S**ymbolic **T**opological **R**outing **A**rchitecture for **T**yped **A**utomata) is a category-theoretic neuro-symbolic program synthesis engine. It translates natural language user specifications into provably type-sound, executable, multi-domain Python code pipelines by combining continuous neural semantic intent extraction with constructive category-theoretic compiler passes over a precomputed monoidal lattice of typed morphism cells.
 
 ---
 

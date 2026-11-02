@@ -500,7 +500,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="STRATA Neuro-Symbolic Topological Lattice API",
+    title="STRATA: Symbolic Topological Routing Architecture for Typed Automata API",
     description="High-throughput REST API for real-time neuro-symbolic program synthesis.",
     version="1.0.0",
     lifespan=lifespan

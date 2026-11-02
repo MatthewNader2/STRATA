@@ -1,6 +1,6 @@
 # STRATA Model Provisioning & Specifications
 
-This document details the recommended, tested, and supported AI models for the **STRATA** (Neuro-Symbolic Topological Lattice) synthesis engine, where each model belongs in the directory layout, and how to download and configure them.
+This document details the recommended, tested, and supported AI models for the **STRATA** (**S**ymbolic **T**opological **R**outing **A**rchitecture for **T**yped **A**utomata) synthesis engine, where each model belongs in the directory layout, and how to download and configure them.
 
 ---
 
