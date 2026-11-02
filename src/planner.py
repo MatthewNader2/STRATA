@@ -1,8 +1,8 @@
 """
-src/planner.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/planner.py - STRATA (Neuro-Symbolic Topological Lattice)
 Topological Pathfinding, Multi-Stage Progression, and Formal Type-Monadic Verification.
 
-Conforms strictly to Sections 3.1, 3.2, and 3.4 of the NSTL paper:
+Conforms strictly to Sections 3.1, 3.2, and 3.4 of the STRATA paper:
   A path through the lattice is a sequence of monadic binds. Any step that
   would produce bottom is rejected the moment it is proposed.
   Finds maximum-likelihood type-valid composition paths inside the semantic tunnel T.
@@ -1466,7 +1466,7 @@ class LatticePlanner:
         """
         Plans a type-valid compositional pipeline:
           [Entry (Stage 1)] -> [Transforms / Bridges (Stage 2)]* -> [Terminal (Stage 3)]
-        Conforms strictly to Sections 3.1, 3.2, and 3.4 of the NSTL paper:
+        Conforms strictly to Sections 3.1, 3.2, and 3.4 of the STRATA paper:
         Viterbi Trellis Dynamic Programming over the typed category G|_T.
         Monadic Unification Gate rejects any invalid edge proposals.
 

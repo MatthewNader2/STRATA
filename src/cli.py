@@ -326,7 +326,7 @@ def cmd_harvest(args):
 
 
 def init_sqlite_db(db_path: Path, clean: bool = False) -> None:
-    """Initializes standard NSTL SQLite schema without destroying existing data unless clean=True."""
+    """Initializes standard STRATA SQLite schema without destroying existing data unless clean=True."""
     if clean and db_path.exists():
         os.remove(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -753,7 +753,7 @@ def _get_available_rerankers() -> List[str]:
 # Pipeline Diagnostics & Tracer
 # =====================================================================
 class PipelineDebugger:
-    """Diagnostic tracer and rich visualizer for NSTL pipeline layers."""
+    """Diagnostic tracer and rich visualizer for STRATA pipeline layers."""
 
     def __init__(
         self,
@@ -810,7 +810,7 @@ class PipelineDebugger:
 
         c.print(Panel(
             header_table,
-            title="[bold white on blue] 🔬 NSTL FULL-PIPELINE DEBUG TRACE [/bold white on blue]",
+            title="[bold white on blue] 🔬 STRATA FULL-PIPELINE DEBUG TRACE [/bold white on blue]",
             subtitle=f"[dim cyan]Prompt: \"{prompt_clean}\"[/dim cyan]",
             border_style="blue",
             padding=(0, 1)
@@ -1891,12 +1891,12 @@ class PipelineDebugger:
 # =====================================================================
 class NSTLInteractiveShell(cmd.Cmd):
     """
-    Rich Terminal User Interface (TUI) Studio for NSTL Neuro-Symbolic Synthesis.
+    Rich Terminal User Interface (TUI) Studio for STRATA Neuro-Symbolic Synthesis.
     Provides a visual, interactive CLI workspace with instant profile switching,
     model exploration, real-time latency diagnostics, and self-repair cycles.
     """
 
-    prompt = "\033[1;36mNSTL [Profile 0: Symbolic]\033[0m > "
+    prompt = "\033[1;36mSTRATA [Profile 0: Symbolic]\033[0m > "
 
     def emptyline(self):
         """Do nothing on empty line (prevents re-running lastcmd)."""
@@ -1978,7 +1978,7 @@ class NSTLInteractiveShell(cmd.Cmd):
         self.topology_mode = settings.topology_mode
 
         if interactive:
-            console.print("\n[bold cyan][*] Initializing NSTL Neuro-Symbolic Engine...[/bold cyan]")
+            console.print("\n[bold cyan][*] Initializing STRATA Neuro-Symbolic Engine...[/bold cyan]")
         t0 = time.perf_counter()
 
         trees_dir = settings.trees_dir or Path(db_path).parent
@@ -2028,7 +2028,7 @@ class NSTLInteractiveShell(cmd.Cmd):
 
         header_table.add_row(prof_text, models_text, hardware_text)
 
-        title_text = Text("🧬 NSTL NEURO-SYMBOLIC TOPOLOGICAL LATTICE STUDIO", justify="center", style="bold white on blue")
+        title_text = Text("🧬 STRATA NEURO-SYMBOLIC TOPOLOGICAL LATTICE STUDIO", justify="center", style="bold white on blue")
         _short_label = {"0": "Symbolic", "A": "Embedder", "C": "Neuro-Symbolic", "D": "Routing", "E": "Translator", "S": "Semantic-Compiler"}
         _quick_line = "  ".join(f"[{k}] {v}:{_short_label.get(v, v)}" for k, v in QUICK_PROFILE_SHORTCUTS)
         quick_shortcuts = Text(
@@ -2094,7 +2094,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             prof_label = "0: Symbolic"
         method_label = f" | {self.route_method}" if self.route_method else ""
         dbg_label = " \033[1;33m[DEBUG]\033[0m" if self.debug else ""
-        self.prompt = f"\033[1;36mNSTL [Profile {prof_label}{method_label}]\033[0m{dbg_label} > "
+        self.prompt = f"\033[1;36mSTRATA [Profile {prof_label}{method_label}]\033[0m{dbg_label} > "
 
     def do_debug(self, arg: str):
         """Toggle or configure debug mode across all pipeline layers. Usage: /debug [on|off]"""
@@ -2266,7 +2266,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             table.add_column("Key", style="bold yellow")
             table.add_column("Layer Profile", style="bold white")
             table.add_column("Target Latency", style="bold green")
-            table.add_column("Role in NSTL Paper / Architecture", style="dim")
+            table.add_column("Role in STRATA Paper / Architecture", style="dim")
 
             table.add_row("0 / symbolic", "Profile 0 (Pure Symbolic)", "< 15 ms", "Deterministic A* graph search (zero neural models)")
             table.add_row("A", "Profile A (Dense Embeddings RAG)", "~50–100 ms", "Vector embeddings (SentenceTransformer / FAISS HNSW search)")
@@ -3006,8 +3006,8 @@ class NSTLInteractiveShell(cmd.Cmd):
         })
 
     def do_exit(self, line):
-        """Exit the NSTL Interactive Studio."""
-        console.print("\n[bold cyan]Exiting NSTL Studio. Goodbye![/bold cyan]\n")
+        """Exit the STRATA Interactive Studio."""
+        console.print("\n[bold cyan]Exiting STRATA Studio. Goodbye![/bold cyan]\n")
         return True
 
     def do_quit(self, line):
@@ -3260,7 +3260,7 @@ def cmd_benchmark(args):
         ret = pytest.main(["-s", "tests/test_reference_benchmark_bank.py"])
         sys.exit(ret)
     else:
-        print("[*] Running NSTL Phase 5 Evaluation Matrix (all registered RouteMethods)...")
+        print("[*] Running STRATA Phase 5 Evaluation Matrix (all registered RouteMethods)...")
         import pytest
         ret = pytest.main(["-s", "tests/test_evaluation_matrix.py"])
         sys.exit(ret)
@@ -3305,7 +3305,7 @@ def cmd_precompute_rag(args):
 # =====================================================================
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the CLI argument parser with all subcommands and global debug flags."""
-    parser = argparse.ArgumentParser(prog="python -m src.cli", description="NSTL Toolchain CLI & Interactive Studio")
+    parser = argparse.ArgumentParser(prog="python -m src.cli", description="STRATA Toolchain CLI & Interactive Studio")
     parser.add_argument("--debug", "-d", action="store_true", help="Enable verbose debug mode across all pipeline layers")
     subparsers = parser.add_subparsers(dest="command", required=False)
 
@@ -3342,7 +3342,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_macro.add_argument("--trees-dir", type=str, default="trees", help="Directory for domain tree JSON files")
     p_macro.set_defaults(func=cmd_macro)
 
-    p_bench = subparsers.add_parser("benchmark", help="Run NSTL empirical benchmarks")
+    p_bench = subparsers.add_parser("benchmark", help="Run STRATA empirical benchmarks")
     p_bench.add_argument("--type", choices=["reference", "matrix"], default="matrix", help="Benchmark type (default: matrix)")
     p_bench.add_argument("--output", type=str, default="evaluation_results.json", help="Path to write evaluation results JSON")
     p_bench.add_argument("--db", type=str, default="trees/lattice.db", help="Path to SQLite database")
@@ -3540,6 +3540,10 @@ def main():
             reranker=None,
             reranker_model=None
         ))
+
+
+# Backward-compatible alias
+STRATAInteractiveShell = NSTLInteractiveShell
 
 
 if __name__ == "__main__":

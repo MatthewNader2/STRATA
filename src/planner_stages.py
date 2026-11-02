@@ -1,5 +1,5 @@
 """
-src/planner_stages.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/planner_stages.py - STRATA (Neuro-Symbolic Topological Lattice)
 Track 2.1: Four-Phase Compositional Planner Pipeline.
 
 Decomposes `LatticePlanner.plan()` into four modular, inspectable phases:

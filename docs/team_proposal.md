@@ -1,4 +1,4 @@
-# Project Proposal: Neuro-Symbolic Topological Lattice (NSTL)
+# Project Proposal: STRATA (Neuro-Symbolic Topological Lattice)
 **Course / University Deliverable 1: Project Proposal Document**  
 **Due Date:** 31/Oct/2026 | **Target Deliverable:** Team##_Proposal_Document.pdf (Max 2 Pages)  
 **System Status:** Profile E with Route Method M1 Verified End-to-End
@@ -9,7 +9,7 @@
 
 Modern software engineering is undergoing a generational shift driven by generative artificial intelligence and Large Language Models (LLMs). While state-of-the-art neural code generators demonstrate impressive fluency, their foundational architecture—probabilistic autoregressive token sampling—renders them fundamentally incapable of guaranteeing semantic correctness, type safety, or algorithmic termination. In mission-critical environments such as aerospace, medical diagnostics, quantitative finance, and automated industrial infrastructure, unverified probabilistic code generation introduces unacceptable risks of catastrophic software failure, subtle logical hallucinations, and zero-day vulnerabilities. 
 
-The **Neuro-Symbolic Topological Lattice (NSTL)** project is inspired by the mathematical synergy between neural semantic retrieval and formal constructive logic (specifically, Category Theory, Curry-Howard isomorphism, and Monadic Type Theory). NSTL bridges this divide by restricting neural networks to what they do best—probabilistic semantic extraction and intent embedding—while delegating all program composition, topological routing, type propagation, and code emission to a deterministic, mathematically verifiable category-theoretic compiler. By framing code synthesis as pathfinding over a precomputed monoidal lattice of typed morphism cells, NSTL guarantees that any synthesized program is mathematically sound by construction before a single line of target code is compiled or executed.
+The **STRATA** (Neuro-Symbolic Topological Lattice) project is inspired by the mathematical synergy between neural semantic retrieval and formal constructive logic (specifically, Category Theory, Curry-Howard isomorphism, and Monadic Type Theory). STRATA bridges this divide by restricting neural networks to what they do best—probabilistic semantic extraction and intent embedding—while delegating all program composition, topological routing, type propagation, and code emission to a deterministic, mathematically verifiable category-theoretic compiler. By framing code synthesis as pathfinding over a precomputed monoidal lattice of typed morphism cells, STRATA guarantees that any synthesized program is mathematically sound by construction before a single line of target code is compiled or executed.
 
 ---
 
@@ -20,7 +20,7 @@ Current automated code synthesis systems suffer from three fundamental deficienc
 2. **Combinatorial Explosion of Search Spaces**: Pure symbolic program synthesis (e.g., SMT-based synthesis or exhaustive deductive search) guarantees correctness but suffers from exponential time complexity, rendering it entirely impractical for real-world pipelines that span hundreds of multi-domain libraries.
 3. **Absence of Provable Typestate Invariants**: Traditional type systems check static representations (e.g., `int`, `ndarray`) but fail to model fine-grained dynamic typestates (e.g., an array containing raw color values versus frequency domain FFT coefficients, or an unnormalized versus normalized dataset).
 
-NSTL formally solves this problem by defining a hybrid **Neuro-Symbolic Topological Lattice**. The system maps natural language requirements into a bounded topological search tunnel over a category of typed computational cells. In this category, types form objects in a partially ordered set (poset), computational operations form morphisms, and program assembly corresponds to computing a valid commutative diagram via Robinson first-order typestate unification. If a compositional path cannot be proven sound within the lattice, the system deterministically refuses code emission, eliminating silent runtime failures.
+STRATA formally solves this problem by defining a hybrid **Neuro-Symbolic Topological Lattice**. The system maps natural language requirements into a bounded topological search tunnel over a category of typed computational cells. In this category, types form objects in a partially ordered set (poset), computational operations form morphisms, and program assembly corresponds to computing a valid commutative diagram via Robinson first-order typestate unification. If a compositional path cannot be proven sound within the lattice, the system deterministically refuses code emission, eliminating silent runtime failures.
 
 ---
 
@@ -42,7 +42,7 @@ NSTL formally solves this problem by defining a hybrid **Neuro-Symbolic Topologi
 
 ## 4. System Architecture
 
-NSTL implements a rigorous 5-layer feed-forward synthesis pipeline:
+STRATA implements a rigorous 5-layer feed-forward synthesis pipeline:
 
 ```
 [ Natural Language Specification ]
@@ -88,7 +88,7 @@ The AI-assisted software development and automated program synthesis market is e
 * **Data Science & ML Engineering Teams**: Automated data wrangling, feature engineering, and statistical modeling pipelines requiring zero-error guarantees across tabular, signal, and vision domains.
 
 ### 5.3 Global & Economic Impact
-By eliminating the cycle of iterative debugging, runtime testing failures, and silent code corruptions, NSTL reduces development overhead by an estimated 40–60% in data pipeline engineering. Crucially, it provides a mathematical foundation for **Zero-Defect Software Synthesis**, mitigating the global cost of software bugs—currently estimated by the Consortium for Information & Software Quality (CISQ) at over **\$2.41 trillion annually** in the US alone.
+By eliminating the cycle of iterative debugging, runtime testing failures, and silent code corruptions, STRATA reduces development overhead by an estimated 40–60% in data pipeline engineering. Crucially, it provides a mathematical foundation for **Zero-Defect Software Synthesis**, mitigating the global cost of software bugs—currently estimated by the Consortium for Information & Software Quality (CISQ) at over **\$2.41 trillion annually** in the US alone.
 
 ---
 
@@ -97,14 +97,14 @@ By eliminating the cycle of iterative debugging, runtime testing failures, and s
 To ensure software safety, reliability, and academic rigor, the project is designed in strict compliance with international engineering standards:
 
 1. **IEEE Standard 1012-2016 (Standard for System, Software, and Hardware Verification and Validation)**:
-   - *Application*: NSTL adheres to IEEE 1012 V&V integrity levels. Layer 3 (Robinson Unification Gate) and Layer 4 (GEVR Sandbox & Pre-Flight Static Linter) implement formal verification contracts to mathematically prove that input-output state invariants are satisfied prior to code execution.
+   - *Application*: STRATA adheres to IEEE 1012 V&V integrity levels. Layer 3 (Robinson Unification Gate) and Layer 4 (GEVR Sandbox & Pre-Flight Static Linter) implement formal verification contracts to mathematically prove that input-output state invariants are satisfied prior to code execution.
 2. **ISO/IEC 25010:2023 (Systems and Software Engineering — Systems and software Quality Requirements and Evaluation, SQuaRE)**:
-   - *Application*: Governs software product quality characteristics. NSTL specifically targets:
+   - *Application*: Governs software product quality characteristics. STRATA specifically targets:
      - *Functional Suitability*: Ensuring 100% functional completeness and correctness of synthesized pipelines.
      - *Reliability & Fault Tolerance*: Eliminating unhandled runtime exceptions through monoidal type-state checking.
      - *Security*: Restricting untrusted execution via POSIX resource limits, capability gating, and AST security validation.
 3. **ISO/IEC 5055:2021 (Information Technology — Software Measurement — Software Quality Measurement — Automated Source Code Quality Measures)**:
-   - *Application*: Enforces objective measures of code maintainability, reliability, and security at the AST synthesis level. NSTL’s code emitter is designed to generate clean, minimal, cyclomatically bounded Python code free from dead stores, uninitialized variables, or vulnerable primitives.
+   - *Application*: Enforces objective measures of code maintainability, reliability, and security at the AST synthesis level. STRATA’s code emitter is designed to generate clean, minimal, cyclomatically bounded Python code free from dead stores, uninitialized variables, or vulnerable primitives.
 
 ---
 

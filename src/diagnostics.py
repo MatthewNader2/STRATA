@@ -1,5 +1,5 @@
 """
-src/diagnostics.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/diagnostics.py - STRATA (Neuro-Symbolic Topological Lattice)
 Track 3: Diagnostic Telemetry & Failure Surface Collector.
 
 Records caught exceptions, unification refusals, and fallback invocations across

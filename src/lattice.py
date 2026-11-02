@@ -1,8 +1,8 @@
 """
-src/lattice.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/lattice.py - STRATA (Neuro-Symbolic Topological Lattice)
 Domain-Agnostic Typed Lattice, Algebraic Signatures, and Modular Graph Topology.
 
-Conforms strictly to Sections 3.1-3.2 of the NSTL paper:
+Conforms strictly to Sections 3.1-3.2 of the STRATA paper:
   Every primitive is represented as a node v = (f, tau_in, tau_out).
   Nodes are organized into a lattice (directed graph) where an edge from
   node u to node v exists iff unify(tau_out(u), tau_in(v)) != bottom.
@@ -1981,7 +1981,7 @@ def _normalize_qualifiers(raw_qualifiers: Any) -> FrozenSet[Tuple[str, ...]]:
 class AlgebraicSignature:
     """
     Formal typestate signature: tau = (type_name, state, qualifiers, abstract_type, accepted_states, parent_state).
-    Conforms to Section 3.1 of the NSTL paper.
+    Conforms to Section 3.1 of the STRATA paper.
     """
     type_name: str = "any"
     state: str = "any"

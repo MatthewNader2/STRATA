@@ -1,5 +1,5 @@
 """
-tests/test_golden_prompt.py - Neuro-Symbolic Topological Lattice (NSTL)
+tests/test_golden_prompt.py - STRATA (Neuro-Symbolic Topological Lattice)
 Golden benchmark test for the 7-clause benchmark prompt (offline; no models required).
 
   "load a csv file named \"input.csv\", normalize X column, drop null values,

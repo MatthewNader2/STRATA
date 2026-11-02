@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/sweep.py - Neuro-Symbolic Topological Lattice (NSTL)
+scripts/sweep.py - STRATA (Neuro-Symbolic Topological Lattice)
 Multi-Profile & Multi-Method Sweep Runner for Benchmark Evaluation.
 
 Runs the benchmark prompt across:
@@ -227,7 +227,7 @@ _nstl_slm.LinearRegression.fit = _traced_lr_fit
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="NSTL Multi-Profile & Multi-Method Sweep Runner")
+    parser = argparse.ArgumentParser(description="STRATA Multi-Profile & Multi-Method Sweep Runner")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--no-reranker", action="store_true", help="Disable neural reranker")
     parser.add_argument("--exec", dest="execute_sandbox", action="store_true", default=True, help="Execute sandbox")

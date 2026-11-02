@@ -1,5 +1,5 @@
 """
-src/route_methods/m9_llm_milestones.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m9_llm_milestones.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 M9: LLM Milestone Anchor & Topological Pathfinder.
 
@@ -15,7 +15,7 @@ M9 decomposes the problem into two distinct phases:
    carrier conversions or intermediate adapter/bridge cells.
 
 2. Topological Path Synthesis (Robinson Unification & Multi-Hop Bridging):
-   NSTL connects consecutive milestone pairs (M_i -> M_{i+1}) using:
+   STRATA connects consecutive milestone pairs (M_i -> M_{i+1}) using:
    - Direct edge if step_unifies(M_i, M_{i+1})
    - 1-step bridge cell via find_bridge(M_i, M_{i+1})
    - Multi-step BFS search through the candidate lattice if a 2-hop adapter

@@ -1,5 +1,5 @@
 """
-src/tokenizer.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/tokenizer.py - STRATA (Neuro-Symbolic Topological Lattice)
 Domain-Agnostic Sub-Word and Identifier Tokenizer.
 
 Deterministic, mathematically formal character-level transition scanner.

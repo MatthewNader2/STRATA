@@ -1,8 +1,8 @@
 """
-src/unification.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/unification.py - STRATA (Neuro-Symbolic Topological Lattice)
 Formal Type-Monadic Unification Gate and Deterministic Composition Synthesizer.
 
-Conforms strictly to Section 3.2 of the NSTL paper:
+Conforms strictly to Section 3.2 of the STRATA paper:
   M_T(A) = { (a, sigma) : a in A, sigma a type substitution } U { bottom }
   bind(m, k) = k(a) with sigma_new if sigma_new = unify(tau_out of m, tau_in of k) succeeds;
                otherwise bottom.
@@ -3364,8 +3364,8 @@ class ExecutionContext:
                     # An optional numeric port must only bind if the intersection with context contains
                     # discriminative evidence (high clause IDF or specific port identifier match).
                     all_clause_toks = [
-                        {t.lower() for t in CellTokenizer.tokenize_prompt(self.prompt[s:e])}
-                        for s, e in spans if self.prompt[s:e].strip()
+                        {t.lower() for t in CellTokenizer.tokenize_prompt(cl)}
+                        for cl in clauses if cl.strip()
                     ]
                     num_clauses = len(all_clause_toks)
                     if num_clauses > 1:
@@ -7264,7 +7264,7 @@ class EmissionLivenessError(UnificationFailure):
 
 
 def types_unify(tau_expected: str, tau_actual: str) -> bool:
-    """Verifies whether two types unify under the NSTL poset type system."""
+    """Verifies whether two types unify under the STRATA poset type system."""
     term1 = TypeTerm.from_string(tau_expected)
     term2 = TypeTerm.from_string(tau_actual)
     return unify(term1, term2) is not None

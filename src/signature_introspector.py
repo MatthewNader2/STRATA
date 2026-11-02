@@ -1,5 +1,5 @@
 """
-src/signature_introspector.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/signature_introspector.py - STRATA (Neuro-Symbolic Topological Lattice)
 Multi-Tiered Universal Signature & Parameter Introspector.
 
 Architecture:
@@ -502,7 +502,7 @@ def infer_abstract_carrier(anno: Any, param_name: str = "") -> Optional[str]:
 
 
 def extract_param_kind(param: inspect.Parameter) -> str:
-    """Maps inspect.Parameter.kind to NSTL calling convention literal."""
+    """Maps inspect.Parameter.kind to STRATA calling convention literal."""
     if param.kind is inspect.Parameter.POSITIONAL_ONLY:
         return "positional_only"
     elif param.kind is inspect.Parameter.KEYWORD_ONLY:

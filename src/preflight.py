@@ -1,5 +1,5 @@
 """
-src/preflight.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/preflight.py - STRATA (Neuro-Symbolic Topological Lattice)
 Static Pre-Flight Linter before GEVR Sandbox Execution.
 
 Structural invariants enforced post-binding:

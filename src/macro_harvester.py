@@ -1,5 +1,5 @@
 """
-src/macro_harvester.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/macro_harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
 Dynamic Macro Harvesting, Port Composition & Monadic Code Synthesis (Phase 4 / T4.3).
 """
 

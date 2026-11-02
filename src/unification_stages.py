@@ -1,5 +1,5 @@
 """
-src/unification_stages.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/unification_stages.py - STRATA (Neuro-Symbolic Topological Lattice)
 Track 2.2: Modular Unification Pipeline Stages.
 
 Decomposes `UnificationGate.unify_pipeline()` and `emit_code()` into four

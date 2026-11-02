@@ -13749,7 +13749,7 @@
           "element_type": "string",
           "supported_formats": [],
           "port_role": "column_projection",
-          "default_value": null
+          "default_value": ""
         }
       },
       "outputs": {

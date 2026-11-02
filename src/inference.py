@@ -1,16 +1,17 @@
 """
-src/inference.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/inference.py - STRATA (Neuro-Symbolic Topological Lattice)
 Multi-Profile Inference Engine with Dynamic Hardware Introspection,
 Agnostic Semantic Compilation, and Thread-Safe Generation.
 """
 
 from __future__ import annotations
 import gc
+import hashlib
 import json
 import os
 import threading
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 
 try:
     from utils import is_split_gguf_shard

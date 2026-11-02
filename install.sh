@@ -1,48 +1,40 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================
-#  NSTL - Installation & Model Setup Script
-#  Run this once after cloning to download required models.
+#  STRATA - Installation & Setup Script
+#  Installs dependencies, provisions default local AI models,
+#  and compiles the domain knowledge lattice.
 # ============================================================
 
 set -e
 
 echo ""
 echo "======================================"
-echo "   NSTL Model & Dependency Installer  "
+echo "        STRATA Setup & Install        "
 echo "======================================"
 echo ""
 
-# --- 1. Python deps ---
-echo "[1/4] Installing Python dependencies..."
+# --- 1. Python dependencies ---
+echo "[1/3] Installing core Python dependencies..."
 pip install -r requirements.txt
 
-# --- 2. Install huggingface_hub CLI ---
-echo "[2/4] Ensuring huggingface-cli is available..."
-pip install -q "huggingface_hub[cli]>=0.23"
+# --- 2. Download default models ---
+echo "[2/3] Downloading default models (Jina Embedder Nano + Qwen 0.5B Coder GGUF)..."
+python scripts/download_model.py --tier default
 
-# --- 3. Download GGUF LLM (Qwen 7B) ---
-echo "[3/4] Downloading Qwen2.5-Coder-7B-Instruct GGUF model (~4.5 GB)..."
-echo "      This may take a while depending on your connection speed."
-mkdir -p models/llms/Qwen2.5-Coder-7B-Instruct-GGUF
-huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct-GGUF \
-    qwen2.5-coder-7b-instruct-q4_k_m.gguf \
-    --local-dir models/llms/Qwen2.5-Coder-7B-Instruct-GGUF \
-    --local-dir-use-symlinks False
-
-# --- 4. Download Embedder (Jina v5 Nano) ---
-echo "[4/4] Downloading Jina Embeddings v5 Nano (~400 MB)..."
-mkdir -p models/embeddings/jina-embeddings-v5-text-nano
-huggingface-cli download jinaai/jina-embeddings-v5-text-nano \
-    --local-dir models/embeddings/jina-embeddings-v5-text-nano \
-    --local-dir-use-symlinks False
+# --- 3. Compile domain lattice ---
+echo "[3/3] Compiling canonical domain trees into SQLite lattice..."
+python nstl_cli.py compile
+python nstl_cli.py validate
 
 echo ""
 echo "======================================"
-echo "   All models downloaded successfully!"
-echo ""
-echo "   To start NSTL, run:"
+echo "   Installation & Setup Complete!"
+echo "======================================"
+echo "   To start the REST API:"
 echo "     python src/main.py"
-echo "   or on Windows:"
-echo "     run_nstl.bat"
+echo "   To launch the interactive TUI shell:"
+echo "     python nstl_cli.py shell"
+echo "   To synthesize code directly:"
+echo "     python nstl_cli.py run \"load a csv file named input.csv and compute mean\""
 echo "======================================"
 echo ""

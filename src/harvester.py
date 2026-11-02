@@ -1,5 +1,5 @@
 """
-src/harvester.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
 Universal Harvester Module.
 Eliminates redundant subclass shims and delegates category-theoretic reflection
 directly to UniversalHarvester using native domain_name resolution.

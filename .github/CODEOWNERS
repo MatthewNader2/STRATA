@@ -1,0 +1,14 @@
+# STRATA Code Ownership Rules
+# Enforces mandatory codeowner review for protected releases into main
+
+# Global repository ownership
+* @MatthewNader2
+
+# Critical category-theoretic engine components
+/src/lattice.py @MatthewNader2
+/src/planner.py @MatthewNader2
+/src/unification.py @MatthewNader2
+/src/algebraic_effects.py @MatthewNader2
+
+# GitHub workflows and project governance
+/.github/ @MatthewNader2

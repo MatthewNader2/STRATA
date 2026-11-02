@@ -1,5 +1,5 @@
 """
-tests/test_verification.py - Neuro-Symbolic Topological Lattice (NSTL)
+tests/test_verification.py - STRATA (Neuro-Symbolic Topological Lattice)
 Round 5 Offline Verification Suite (PR-1 Core Correctness).
 
 Tests Probes 1 to 6:

@@ -1,6 +1,6 @@
 # src/main.py
 """
-src/main.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/main.py - STRATA (Neuro-Symbolic Topological Lattice)
 Production REST API Server and Core Engine Lifecycle Manager.
 Provides real-time endpoints for health monitoring, domain metadata,
 multi-profile engine initialization, program synthesis, and benchmark automation.
@@ -115,7 +115,7 @@ def _ensure_base_engine_loaded():
     if _orchestrator is None:
         with _engine_lock:
             if _orchestrator is None:
-                logger.info(f"[*] Preloading NSTL Lattice Database from '{DB_PATH}'...")
+                logger.info(f"[*] Preloading STRATA Lattice Database from '{DB_PATH}'...")
                 t0 = time.perf_counter()
                 orch = LatticeOrchestrator()
                 orch.load_from_database(DB_PATH)
@@ -200,7 +200,7 @@ def initialize_engine(
     trees_storage: str = "ram"
 ) -> Dict[str, Any]:
     """
-    Initializes or reconfigures the NSTL synthesis engine for a specific profile.
+    Initializes or reconfigures the STRATA synthesis engine for a specific profile.
     Can be called directly in-process or via REST endpoint.
     """
     global _orchestrator, _router, _gate, _sandbox, _internal_rag
@@ -238,7 +238,7 @@ def initialize_engine(
             _router = LatticeRouter(orchestrator=_orchestrator, internal_rag=None)
             _gate = UnificationGate(orchestrator=_orchestrator)
             _engine_ready = True
-            logger.info("[✓] NSTL Engine configured for Profile 0 (Pure Symbolic).")
+            logger.info("[✓] STRATA Engine configured for Profile 0 (Pure Symbolic).")
             return {
                 "status": "ready",
                 "profile": "0",
@@ -278,7 +278,7 @@ def initialize_engine(
         _active_profile = p_norm
         _engine_ready = True
 
-        logger.info(f"[✓] NSTL Engine configured for Profile {p_norm} (Embedder: {optimal_emb}, LLM: {_active_llm}).")
+        logger.info(f"[✓] STRATA Engine configured for Profile {p_norm} (Embedder: {optimal_emb}, LLM: {_active_llm}).")
         return {
             "status": "ready",
             "profile": p_norm,
@@ -489,18 +489,18 @@ async def lifespan(app: FastAPI):
     _ensure_base_engine_loaded()
     initialize_engine("0")
     yield
-    logger.info("[*] Shutting down NSTL engine...")
+    logger.info("[*] Shutting down STRATA engine...")
     if _sandbox and hasattr(_sandbox, "_pool") and _sandbox._pool is not None:
         try:
             _sandbox._pool.terminate()
             _sandbox._pool.join(timeout=3)
         except Exception:
             pass
-    logger.info("[✓] NSTL engine shutdown complete.")
+    logger.info("[✓] STRATA engine shutdown complete.")
 
 
 app = FastAPI(
-    title="NSTL Neuro-Symbolic Topological Lattice API",
+    title="STRATA Neuro-Symbolic Topological Lattice API",
     description="High-throughput REST API for real-time neuro-symbolic program synthesis.",
     version="1.0.0",
     lifespan=lifespan
@@ -681,5 +681,5 @@ if __name__ == "__main__":
     import uvicorn
     host = settings.api_host
     port = int(os.environ.get("PORT", settings.api_port))
-    logger.info(f"[*] Starting NSTL API Server on {host}:{port}...")
+    logger.info(f"[*] Starting STRATA API Server on {host}:{port}...")
     uvicorn.run("main:app", host=host, port=port, reload=False)

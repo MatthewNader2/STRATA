@@ -1,5 +1,5 @@
 """
-src/cli_helpers.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/cli_helpers.py - STRATA (Neuro-Symbolic Topological Lattice)
 Track 2.3 & Track 3.3: Extracted CLI Diagnostics, Failure Surface Summary,
 and Environment/Database Sync Helpers.
 """

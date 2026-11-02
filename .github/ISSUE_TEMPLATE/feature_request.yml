@@ -1,0 +1,34 @@
+name: Feature Request
+description: Propose a new feature, route method, domain tree, or engine enhancement
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest an idea or new capability for STRATA.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: Is your feature request related to a specific limitation or requirement?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution & Architectural Impact
+      description: Describe what should be implemented and how it fits into the 5-layer pipeline.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What verifiable criteria determine that this task is complete?
+      placeholder: |
+        - [ ] Add domain cells to trees/...
+        - [ ] Pass compile and validate gates
+        - [ ] Add regression tests in tests/...
+    validations:
+      required: true

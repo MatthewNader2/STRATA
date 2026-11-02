@@ -1,5 +1,5 @@
 """
-src/route_methods/m10_monte_carlo.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m10_monte_carlo.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 M10: verifier-guided Monte Carlo Tree Search over plan structure.
 

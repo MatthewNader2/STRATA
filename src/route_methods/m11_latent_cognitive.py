@@ -1,5 +1,5 @@
 """
-src/route_methods/m11_latent_cognitive.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m11_latent_cognitive.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 M11: Cognitive Latent Pathfinding over Lattice DAG.
 Combines category-theoretic type-unification constraints with continuous

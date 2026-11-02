@@ -1,5 +1,5 @@
 """
-src/utils.py - Shared utilities for NSTL
+src/utils.py - Shared utilities for STRATA
 Extracts common patterns to eliminate code duplication.
 """
 

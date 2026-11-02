@@ -1,5 +1,5 @@
 """
-src/debug_panels.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/debug_panels.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 `--debug` / `/debug on` diagnostics that explain WHY a pipeline looks the way it
 does, instead of only showing what it is. Every panel is built from telemetry the

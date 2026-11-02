@@ -1,0 +1,56 @@
+name: STRATA CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  lint-and-validate:
+    name: Lint, Compile & Validate Lattice
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install CI dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install pydantic pydantic-settings rich
+
+      - name: Static Analysis & Undefined Names Gate
+        run: |
+          python scripts/check_static.py
+
+      - name: Domain Tree Schema & Integrity Linting
+        run: |
+          python scripts/lint_trees.py
+
+      - name: Compile Domain Trees to SQLite Lattice
+        run: |
+          python strata_cli.py compile
+
+      - name: Validate Compiled Lattice AST Nodes
+        run: |
+          python strata_cli.py validate
+
+      - name: Audit Lattice Topological Connectivity
+        run: |
+          python strata_cli.py audit
+
+      - name: Run Core Symbolic & Topological Unit Tests
+        run: |
+          pytest tests/test_soundness_topology.py

@@ -1,7 +1,7 @@
 """
 tests/test_unknown_tree.py - Pure Universal, Domain-Agnostic Engine Verification
 
-Verifies that the NSTL engine can compile, route, unify, and execute arbitrary,
+Verifies that the STRATA engine can compile, route, unify, and execute arbitrary,
 unseen non-tabular domain trees with:
 - ZERO tabular bias (no DataFrame, Series, pandas, or column fallbacks)
 - ZERO hardcoded stage gates (supports 2-stage and 5-stage topologies)
@@ -405,7 +405,7 @@ NET_SEC_TREE: Dict[str, Any] = {
 
 
 class TestUnknownDomainTrees(unittest.TestCase):
-    """Verifies that NSTL handles arbitrary, unseen non-tabular trees without heuristics."""
+    """Verifies that STRATA handles arbitrary, unseen non-tabular trees without heuristics."""
 
     @classmethod
     def setUpClass(cls):

@@ -1,5 +1,5 @@
 """
-src/runtime_poset.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/runtime_poset.py - STRATA (Neuro-Symbolic Topological Lattice)
 Foundational Host Runtime Poset & Protocol Reflection Engine.
 
 Operates strictly at the lowest level of computation:

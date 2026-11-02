@@ -2,7 +2,7 @@
 """
 tools/lint_trees.py
 
-Continuous Integration (CI) linter for NSTL domain trees:
+Continuous Integration (CI) linter for STRATA domain trees:
   1. Validates each JSON file in trees/*.json against TreeSchema.
   2. Ensures shape_contract is unified into canonical ShapeContractSchema (no raw strings).
   3. Enforces Pillow RGB/RGBA rank 3 and grayscale rank 2 conventions.

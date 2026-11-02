@@ -1,5 +1,5 @@
 """
-src/synthesis.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/synthesis.py - STRATA (Neuro-Symbolic Topological Lattice)
 Dynamic MicroCell Synthesizer & Capability-Sandboxed Inductive Kernel Generator.
 """
 
@@ -309,7 +309,7 @@ class ASTCapabilityValidator(ast.NodeVisitor):
 def import_stmt_for(qualified_name: str) -> str:
     """
     Derives an import statement from a qualified symbol or module name, verified live.
-    Conforms to Section 3.4 of the NSTL paper.
+    Conforms to Section 3.4 of the STRATA paper.
     """
     module = qualified_name.rsplit(".", 1)[0] if "." in qualified_name else qualified_name
     try:

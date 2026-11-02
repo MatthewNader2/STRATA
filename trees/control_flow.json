@@ -1,6 +1,6 @@
 {
   "domain": "control_flow",
-  "description": "Higher-Order Lattice Combinators (Cartesian Closed Category morphisms) for modular, language-agnostic control flow synthesis in NSTL.",
+  "description": "Higher-Order Lattice Combinators (Cartesian Closed Category morphisms) for modular, language-agnostic control flow synthesis in STRATA.",
   "version": "1.0.0",
   "verification_semantics": {
     "fold_loop_topologies": [

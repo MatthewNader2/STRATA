@@ -1,7 +1,7 @@
 """
 src/semantic_repair_engine.py
 
-General dynamic semantic validation and repair engine for NSTL cells.
+General dynamic semantic validation and repair engine for STRATA cells.
 Contains ZERO hardcoded library checks or cell-name checks.
 """
 

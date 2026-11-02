@@ -1,5 +1,5 @@
 """
-src/route_methods/__init__.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/__init__.py - STRATA (Neuro-Symbolic Topological Lattice)
 Pluggable RouteMethods registry and factory (M0 - M10).
 """
 

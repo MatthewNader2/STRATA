@@ -1,5 +1,5 @@
 """
-src/route_methods/base.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/base.py - STRATA (Neuro-Symbolic Topological Lattice)
 Abstract base class and shared utilities for pluggable RouteMethods (M0 - M6).
 """
 
@@ -142,7 +142,7 @@ def is_intermediate_transform(cell: Any, orch: Optional[Any] = None) -> bool:
 
 class RouteMethod(ABC):
     """
-    Abstract base class for all NSTL RouteMethods (M0 - M6).
+    Abstract base class for all STRATA RouteMethods (M0 - M6).
     """
     name: str = "base"
 

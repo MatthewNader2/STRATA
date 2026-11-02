@@ -1,5 +1,5 @@
 """
-src/token_evidence.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/token_evidence.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 Single, corpus-derived source of lexical evidence. Every consumer that asks
 "how strongly does this clause point at this cell?" (router, route methods,

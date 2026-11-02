@@ -1,5 +1,5 @@
 """
-src/dag_plan.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/dag_plan.py - STRATA (Neuro-Symbolic Topological Lattice)
 Solves Issue 2 (First-Class DAGPlan), Issue 3 (SemanticBlackboard), and Issue 5 (TypedHoleCell).
 """
 

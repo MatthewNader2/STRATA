@@ -1,5 +1,5 @@
 """
-src/route_methods/m1_clause_anchor.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m1_clause_anchor.py - STRATA (Neuro-Symbolic Topological Lattice)
 M1: Clause-Anchored Insertion.
 Anchors key morphisms for each linguistic clause in the prompt and bridges type gaps.
 """

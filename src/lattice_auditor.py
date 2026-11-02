@@ -1,5 +1,5 @@
 """
-src/lattice_auditor.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/lattice_auditor.py - STRATA (Neuro-Symbolic Topological Lattice)
 Static Reachability, Dead-End, and Disconnected Node Auditor (Phase 3 / T3.3).
 """
 

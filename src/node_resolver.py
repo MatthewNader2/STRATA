@@ -1,5 +1,5 @@
 """
-src/node_resolver.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/node_resolver.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 Dynamic Node Resolution and Self-Expanding Architecture:
 1. When an LLM router or pathfinder proposes a node that was not in the RAG top-k:
@@ -150,9 +150,9 @@ CELL_SYNTHESIS_SCHEMA = {
 }
 
 SYSTEM_PROMPT_SYNTHESIS = (
-    "You are an expert compiler and runtime engineer for the Neuro-Symbolic Topological Lattice (NSTL).\n"
+    "You are an expert compiler and runtime engineer for the STRATA (Neuro-Symbolic Topological Lattice).\n"
     "Your task is to synthesize a valid typed MicroCell definition for a missing operation requested by a pipeline.\n"
-    "The cell must adhere strictly to the NSTL schema:\n"
+    "The cell must adhere strictly to the STRATA schema:\n"
     "- cell_id: lowercase snake_case functional identifier representing the operation (e.g. '<verb>_<noun>')\n"
     "- stage: integer stage index (1: source/reader/ingest, 2: transform/compute/model, 3: sink/writer/output)\n"
     "- domain_name: string identifier denoting the operational domain or subsystem\n"

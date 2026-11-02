@@ -1,5 +1,5 @@
 """
-src/route_methods/m7_llm_pathfinder.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m7_llm_pathfinder.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 M7: LLM Full-Context Pathfinder.
 

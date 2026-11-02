@@ -1,5 +1,5 @@
 """
-src/mcts.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/mcts.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 A real, domain-agnostic Monte Carlo Tree Search (UCT) engine.
 

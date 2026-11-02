@@ -1,5 +1,5 @@
 """
-src/universal_harvester.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/universal_harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
 Unified Harvest Pipeline over adaptive library adapters.
 
 Architecture:
@@ -340,7 +340,7 @@ def _harvest_constant_cell(
 def _safe_getattr(obj: Any, attr_name: str) -> Optional[Any]:
     """
     Safely retrieves an attribute. If accessing the attribute triggers a
-    DeprecationWarning or FutureWarning, returns None so NSTL skips the
+    DeprecationWarning or FutureWarning, returns None so STRATA skips the
     deprecated alias and only harvests the canonical version.
     """
     with warnings.catch_warnings(record=True) as caught:
@@ -2148,7 +2148,7 @@ if __name__ == "__main__":
     for c in tree.cells:
         k = f"Stage {c.stage} | Type: {c.node_type} | Role: {c.node_role}"
         by_archetype[k] = by_archetype.get(k, 0) + 1
-    print(f"\n[NSTL Universal Harvester] Completed harvest of '{lib}':")
+    print(f"\n[STRATA Universal Harvester] Completed harvest of '{lib}':")
     print(f"Adapter chain: {harvester.adapter.describe()}")
     print(f"Discovered Domain Types: {sorted(list(harvester.domain_types))[:10]}... ({len(harvester.domain_types)} total)")
     print(f"Total cells generated: {len(tree.cells)}")

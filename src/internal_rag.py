@@ -1,5 +1,5 @@
 """
-src/internal_rag.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/internal_rag.py - STRATA (Neuro-Symbolic Topological Lattice)
 Local Vector Index (FAISS) and Incremental Embedding Cache.
 """
 

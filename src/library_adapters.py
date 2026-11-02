@@ -1,5 +1,5 @@
 """
-src/library_adapters.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/library_adapters.py - STRATA (Neuro-Symbolic Topological Lattice)
 Universal Domain-Agnostic Library Adapters.
 
 Zero hardcoded library names, types, enums, or function names.

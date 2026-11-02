@@ -1,5 +1,5 @@
 """
-src/tree_merger.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/tree_merger.py - STRATA (Neuro-Symbolic Topological Lattice)
 Universal Knowledge Tree Merger & Schema Reconciler.
 
 Merges newly harvested ground-truth types, states, ports, and bridge roles

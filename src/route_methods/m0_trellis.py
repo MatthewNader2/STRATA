@@ -1,5 +1,5 @@
 """
-src/route_methods/m0_trellis.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m0_trellis.py - STRATA (Neuro-Symbolic Topological Lattice)
 M0: Classical Viterbi / Trellis dynamic programming over the semantic tunnel.
 """
 

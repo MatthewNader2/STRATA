@@ -1,12 +1,12 @@
 """
-src/errors.py - NSTL Structured Error Hierarchy
+src/errors.py - STRATA Structured Error Hierarchy
 Provides typed exceptions for clear error propagation instead of silent `except: pass`.
 """
 from typing import Any, Dict, Optional
 
 
-class NSTLError(Exception):
-    """Base exception for all NSTL errors with structured metadata support."""
+class STRATAError(Exception):
+    """Base exception for all STRATA errors with structured metadata support."""
 
     def __init__(
         self,
@@ -28,8 +28,12 @@ class NSTLError(Exception):
         return f"{self.__class__.__name__}(message={self.message!r}, details={self.details!r})"
 
 
+# Backward compatibility alias
+NSTLError = STRATAError
+
+
 # === Routing Errors ===
-class RoutingError(NSTLError):
+class RoutingError(STRATAError):
     """Failed to find a valid path through the lattice."""
     pass
 
@@ -153,6 +157,7 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "STRATAError",
     "NSTLError",
     "RoutingError",
     "SynthesisError",

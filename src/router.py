@@ -1,8 +1,8 @@
 """
-src/router.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/router.py - STRATA (Neuro-Symbolic Topological Lattice)
 Semantic Tunneling Router based on Dense Vector Embeddings and Softmax Temperature.
 
-Conforms strictly to Section 3.3 of the NSTL paper:
+Conforms strictly to Section 3.3 of the STRATA paper:
   e_x = Embed(prompt)
   P(C_k | e_x) = softmax_k( cos(e_x, mu_k) / gamma )
   Tunnel T = { v in V | P(v | e_x) >= epsilon }

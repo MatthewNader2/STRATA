@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-nstl_cli.py - Root entry point for NSTL Toolchain CLI
+nstl_cli.py - Root entry point for STRATA Toolchain CLI (backward compatibility alias)
 """
 import sys
 from pathlib import Path

@@ -1,5 +1,5 @@
 """
-src/experiments.py - NSTL Neuro-Symbolic Experimental Lab & Frontier Algorithms.
+src/experiments.py - STRATA Neuro-Symbolic Experimental Lab & Frontier Algorithms.
 
 Provides toggleable experimental engines for empirical tinkering and ablation studies:
   1. EarlyExitLatentProbe   : Sub-layer residual stream extraction (early-exit) + ZCA Whitening.
@@ -28,7 +28,7 @@ logger = get_logger("experiments")
 
 @dataclass
 class ExperimentConfig:
-    """Runtime toggles for tinkering with NSTL neuro-symbolic algorithms."""
+    """Runtime toggles for tinkering with STRATA neuro-symbolic algorithms."""
     # 1. Partial-layer LLM / Embedder residual stream extraction
     early_exit_layer: Optional[int] = None       # e.g. 6 (extracts layer 6 instead of final layer; saves compute & sharpens types)
     use_zca_whitening: bool = True               # Removes transformer anisotropy cone via ZCA whitening

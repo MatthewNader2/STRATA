@@ -1,7 +1,7 @@
 """
 src/template_wiring.py
 
-Core shared functions for maintaining and repairing the NSTL template wiring invariant:
+Core shared functions for maintaining and repairing the STRATA template wiring invariant:
 1. Every {placeholder} in `code_template` must have a matching key in `inputs`
    (except `output_var`).
 2. Every declared input in `inputs` must be referenced in `code_template`.

@@ -1,5 +1,5 @@
 """
-src/config.py - Centralized Configuration for NSTL
+src/config.py - Centralized Configuration for STRATA
 Uses Pydantic BaseSettings for validated, type-safe configuration with .env file support.
 """
 import json
@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class NSTLSettings(BaseSettings):
-    """All NSTL configuration values, resolved from environment variables with NSTL_ prefix."""
+    """All STRATA configuration values, resolved from environment variables with NSTL_ prefix."""
 
     model_config = SettingsConfigDict(
         env_prefix="NSTL_",
@@ -238,6 +238,7 @@ class NSTLSettings(BaseSettings):
 
 # Singleton instance — importable as `from config import settings`
 settings = NSTLSettings()
+STRATASettings = NSTLSettings
 
 # Backward-compatible aliases (preserves existing import contracts)
 PROJECT_ROOT = settings.project_root

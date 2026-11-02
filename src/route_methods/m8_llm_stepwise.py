@@ -1,5 +1,5 @@
 """
-src/route_methods/m8_llm_stepwise.py - Neuro-Symbolic Topological Lattice (NSTL)
+src/route_methods/m8_llm_stepwise.py - STRATA (Neuro-Symbolic Topological Lattice)
 
 M8: LLM Stepwise Edge Pathfinder.
 

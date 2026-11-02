@@ -1,5 +1,5 @@
 """
-NSTL Centralized Logging Configuration
+STRATA Centralized Logging Configuration
 Provides structured logging with flexible formatting, configurable file + console output,
 and per-component loggers for deterministic debugging and telemetry.
 """
@@ -47,7 +47,7 @@ def setup_logging(
     force: bool = False,
 ) -> None:
     """
-    Initialize the NSTL logging system.
+    Initialize the STRATA logging system.
     Call once at application startup.
 
     Resolves paths, log levels, formats, and silenced third-party modules
@@ -141,17 +141,19 @@ def setup_logging(
 
     _INITIALIZED = True
 
-    init_msg = f"NSTL logging initialized (level={logging.getLevelName(level)})"
+    init_msg = f"STRATA logging initialized (level={logging.getLevelName(level)})"
     if resolved_log_path:
         init_msg += f", File: {resolved_log_path}"
-    logging.getLogger("nstl").info(init_msg)
+    logging.getLogger("strata").info(init_msg)
 
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Returns a namespaced NSTL logger.
-    Usage: logger = get_logger("router") -> creates logger "nstl.router"
+    Returns a namespaced STRATA logger.
+    Usage: logger = get_logger("router") -> creates logger "strata.router"
     """
+    if name.startswith("strata."):
+        return logging.getLogger(name)
     if name.startswith("nstl."):
         return logging.getLogger(name)
-    return logging.getLogger(f"nstl.{name}")
+    return logging.getLogger(f"strata.{name}")

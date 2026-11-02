@@ -1,99 +1,207 @@
-# Neuro-Symbolic Topological Lattice (NSTL)
+# STRATA: Neuro-Symbolic Topological Lattice
 
-A category-theoretic neuro-symbolic program synthesis engine. NSTL synthesizes deterministic, verifiable, multi-domain code pipelines from natural language prompts using stage-stratified semantic tunneling, FAISS vector indexing, and formal monadic typestate unification over domain morphism trees.
+[![CI](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Category Theory](https://img.shields.io/badge/foundations-category--theory-purple.svg)]()
+[![Type Soundness](https://img.shields.io/badge/verification-Robinson%20Unifier-brightgreen.svg)]()
 
----
-
-## Architecture Overview
-
-```
-Natural Language Specification
-              │
-              ▼
-   [ Semantic Routing ] ── Stage-Stratified Softmax Tunneling (T = T₁ ∪ T₂ ∪ T₃)
-              │
-              ▼
-    [ Lattice Planner ] ── Monadic Morphism Composition & Curation Priority
-              │
-              ▼
-   [ Robinson Unifier ] ── Dual Port Typestate Unification (τ_out ⊓ τ_in ≠ ⊥)
-              │
-              ▼
-  [ Synthesizer & GEVR ] ── AST Assembly & Isolated Sandbox Execution
-```
-
-### Core Components (`src/`)
-
-- **`src/lattice.py`**: Category-theoretic lattice representation, poset type hierarchy, and SQLite orchestrator.
-- **`src/router.py`**: Semantic routing engine computing the active topological search tunnel $T$ via dense sentence embeddings and stage stratification.
-- **`src/planner.py`**: Monadic composition planner constructing verified morphism chains with universal category-theoretic fitness.
-- **`src/unification.py`**: Robinson first-order unification gate enforcing algebraic typestates, qualifier polarity projection, and in-scope variable resolution.
-- **`src/synthesis.py`**: Deterministic Python code generation, import resolution, and AST variable renaming.
-- **`src/gevr_sandbox.py`**: Isolated sandbox execution runtime validating pipeline output correctness.
-- **`src/main.py`**: High-performance FastAPI REST server for programmatic pipeline synthesis.
+**STRATA** is a category-theoretic neuro-symbolic program synthesis engine. It translates natural language user specifications into provably type-sound, executable, multi-domain Python code pipelines by combining continuous neural semantic intent extraction with constructive category-theoretic compiler passes over a precomputed monoidal lattice of typed morphism cells.
 
 ---
 
-## Directory Layout
+## 1. System Architecture
+
+STRATA frames program synthesis as pathfinding and diagrammatic composition over a category of typed computational morphisms:
 
 ```
-nstl_prototype/
-├── benchmarks/         # Benchmark suites, stress evaluators, and evaluation reports
-│   └── reports/        # Benchmark result JSONs and summary audit reports
-├── nstl_enrichment/    # LLM-guided domain enrichment checkpoints and progress logs
-│   └── checkpoints/    # Enriched domain tree JSON checkpoints
-├── packaging/          # PyInstaller specifications and application assets
-├── scripts/            # Environment setup and launch automation
-├── src/                # Core NSTL engine source code
-├── tests/              # Unit tests, property tests, and end-to-end integration tests
-│   └── fixtures/       # Test fixtures and reference datasets
-├── tools/              # Tree compilation, sanitization, auditing, and repair utilities
-├── trees/              # Canonical domain trees (*.json) and compiled SQLite lattice
-├── run_phase0_smoke.py # Hardened end-to-end sandbox verification test suite
-└── pytest.ini          # Pytest configuration
+[ Natural Language Specification ]
+               │
+               ▼
+   [ Layer 1: Semantic Routing ] ──────── Dense Sentence Embeddings & Stage-Stratified Tunneling
+               │
+               ▼
+   [ Layer 2: Lattice Planner ] ───────── Monadic Morphism Composition & Curation Priority
+               │
+               ▼
+   [ Layer 3: Robinson Unifier ] ──────── Dual-Port Typestate Unification (τ_out ⊓ τ_in ≠ ⊥)
+               │
+               ▼
+   [ Layer 4: AST Synthesizer ] ───────── Deterministic Python Emission, Scope & Lens Rewiring
+               │
+               ▼
+   [ Layer 5: GEVR Sandbox ] ──────────── Multi-Process Isolated Execution & Output Verification
+```
+
+### Core Engine Layers (`src/`)
+
+- **`src/lattice.py`**: Category-theoretic lattice orchestrator, partially ordered set (poset) type hierarchy, and high-performance SQLite storage.
+- **`src/router.py`**: Stage-stratified semantic routing engine computing the active topological search tunnel $T = T_1 \cup T_2 \cup T_3$ via dense embedding similarity.
+- **`src/planner.py`**: Category-theoretic planner constructing valid morphism paths with universal multi-clause coverage and bridge insertion.
+- **`src/unification.py`**: Robinson first-order unification gate enforcing algebraic typestates, bracketed container structures, qualifier polarities, and in-scope variable bindings.
+- **`src/synthesis.py`**: Deterministic Python Abstract Syntax Tree (AST) code emission, import resolution, and variable hygiene.
+- **`src/gevr_sandbox.py`**: Process-isolated sandbox runtime enforcing CPU, memory, and timeout bounds during execution.
+- **`src/main.py`**: Production FastAPI REST server with real-time endpoints for health monitoring, synthesis, and interactive visualization.
+- **`strata_cli.py` / `src/cli.py`**: Unified command-line interface for harvesting, compilation, validation, auditing, and interactive synthesis (aliased as `nstl_cli.py`).
+
+---
+
+## 2. Repository Layout
+
+```
+STRATA/
+├── .github/
+│   ├── workflows/ci.yml         # Automated GitHub Actions CI workflow
+│   ├── ISSUE_TEMPLATE/          # Structured Bug & Feature request forms
+│   ├── CODEOWNERS               # Required code ownership review rules
+│   └── pull_request_template.md # Standardized PR review checklist
+├── docs/
+│   ├── development.md           # Team setup, conventions, and Git workflow
+│   ├── models.md                # Comprehensive model specifications & download guide
+│   └── team_proposal.md         # Project academic proposal and theoretical foundations
+├── scripts/
+│   ├── download_model.py        # Automated Hugging Face model downloader
+│   ├── lint_trees.py            # CI schema & integrity validator for domain trees
+│   ├── check_static.py          # Undefined names and static syntax gate
+│   └── setup_llama_server.py    # Local llama.cpp inference server setup
+├── src/                         # Core STRATA engine source code
+├── tests/                       # Unit, regression, and topological test suites
+├── trees/                       # 18 canonical domain trees (*.json) & SQLite lattice
+├── .env.example                 # Environment configuration template
+├── .gitignore                   # Cleaned and categorized Git exclusion rules
+├── CONTRIBUTING.md              # Contributor guide and branch conventions
+├── install.sh                   # Automated one-step setup script
+├── nstl_cli.py                  # Official root CLI entry point
+├── pytest.ini                   # Pytest path and runner configuration
+├── requirements.txt             # Core runtime dependencies
+└── requirements-dev.txt         # Lightweight development, linting, and CI dependencies
 ```
 
 ---
 
-## Domain Knowledge Trees (`trees/`)
+## 3. Recommended & Tested Models
 
-The repository contains 9 domain trees (~600 verified cells, compiling to morphisms and topological edges after sanitize):
-- **`control_flow.json`**: Control flow and branching primitives.
-- **`cv2.json`**: Computer vision primitives (filtering, color space conversion, edge detection, I/O).
-- **`macros.json`**: Reusable macro pipelines and composite operations.
-- **`matplotlib.json`**: Data visualization, figure management, plotting, and image export.
-- **`numpy.json`**: Array algebra, linear algebra, FFT, and tensor transformations.
-- **`pandas.json`**: Tabular data manipulation, aggregation, cleaning, and export.
-- **`pillow.json`**: Image processing, format conversions, filters, and drawing.
-- **`seaborn.json`**: Statistical data visualization and theme/palette configuration.
-- **`sklearn.json`**: Preprocessing, classification, regression, clustering, and model metrics.
+STRATA's neuro-symbolic design allows lightweight models to excel: the neural layer extracts semantic intent, while the category-theoretic engine guarantees 100% type soundness and program termination.
 
-To compile domain JSONs into the fast query database:
+### Model Catalog
+
+| Role | Model Identifier | Hugging Face Source | Local Destination Path | Footprint |
+| :--- | :--- | :--- | :--- | :--- |
+| **Default Embedder** | `jina-embeddings-v5-text-nano` | [`jinaai/jina-embeddings-v5-text-nano`](https://huggingface.co/jinaai/jina-embeddings-v5-text-nano) | `models/embeddings/jina-embeddings-v5-text-nano/` | ~350 MB |
+| **Default LLM** *(Recommended)* | `qwen2.5-coder-0.5b-instruct` | [`Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF) | `models/llms/qwen2.5-coder-0.5b-instruct/` | ~398 MB |
+| **Medium LLM** | `qwen2.5-coder-1.5b-instruct` | [`Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF) | `models/llms/qwen2.5-coder-1.5b-instruct/` | ~986 MB |
+| **Heavy LLM** | `Qwen2.5-Coder-7B-Instruct-GGUF` | [`Qwen/Qwen2.5-Coder-7B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF) | `models/llms/Qwen2.5-Coder-7B-Instruct-GGUF/` | ~4.68 GB |
+| **Optional Reranker** | `jina-reranker-v3.5` | [`jinaai/jina-reranker-v3.5`](https://huggingface.co/jinaai/jina-reranker-v3.5) | `models/rerankers/jina-reranker-v3.5/` | ~500 MB |
+
+> [!TIP]
+> The **Default** tier (`0.5B LLM` + `Nano Embedder`) requires less than 1 GB of memory, runs in real-time (< 1.5s/query) on modern CPUs and modest laptops, and is fully sufficient for end-to-end synthesis.
+
+For complete specifications, manual download links, and hardware recommendations, see [docs/models.md](docs/models.md).
+
+---
+
+## 4. Quickstart & Installation
+
+### Step 1: Clone and Set Up Virtual Environment
+
 ```bash
-python3 tools/compile_trees.py
-python3 tools/sanitize_lattice_db.py
+git clone https://github.com/MatthewNader2/STRATA.git
+cd STRATA
+
+# Create and activate Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate    # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+### Step 2: Provision AI Models
+
+Download the tested default models (`0.5B Coder GGUF` + `Jina Embedder Nano` ~750 MB total) with one command:
+
+```bash
+python scripts/download_model.py --tier default
+```
+
+*(Alternatively, run `python scripts/download_model.py --tier heavy` if you want the 7B model for GPU evaluations).*
+
+### Step 3: Compile the Domain Knowledge Lattice
+
+Compile the 18 canonical domain trees into the high-speed SQLite graph database:
+
+```bash
+python strata_cli.py compile
+python strata_cli.py validate
 ```
 
 ---
 
-## Verification & Testing
+## 5. CLI Usage & Capabilities
 
-### 1. Phase 0 Hardened End-to-End Smoke Test
-Executes real sandbox execution across Tabular, Vision, Algorithmic (Dijkstra), and Multi-Port Sort pipelines:
+STRATA provides a unified command-line toolchain via `strata_cli.py` (with `nstl_cli.py` supported as a backward-compatible alias):
+
+### 1. Interactive Synthesis Studio (TUI)
+Launch the interactive terminal studio to synthesize, inspect DAG plans, and execute pipelines in real time:
 ```bash
-python3 run_phase0_smoke.py
+python strata_cli.py shell
 ```
 
-### 2. Full Pytest Suite
+### 2. Direct Pipeline Synthesis
+Synthesize and execute verified code directly from natural language:
 ```bash
-pytest tests/test_mathematical_monadic_unification.py \
-       tests/test_type_propagation_soundness.py \
-       tests/test_phase0_fixes.py \
-       tests/test_code_cleanliness.py \
-       tests/test_api_server.py
+python strata_cli.py run "load a csv file named input.csv, normalize X column, drop null values, and compute the mean of Y"
 ```
 
-### 3. Tree Structural QA Audit
+### 3. Domain Knowledge Management
+- **Compile Trees**: `python strata_cli.py compile` (compiles `trees/*.json` into `trees/lattice.db`)
+- **Validate Nodes**: `python strata_cli.py validate` (performs dry-run AST and schema validation over all nodes)
+- **Topological Audit**: `python strata_cli.py audit` (analyzes reachability, dead ends, and cross-domain bridges)
+
+### 4. REST API Server
+Start the high-performance FastAPI synthesis server:
 ```bash
-python3 tools/audit_trees.py trees/*.json
+python src/main.py
 ```
+API documentation will be available at `http://127.0.0.1:58102/docs`.
+
+---
+
+## 6. Domain Knowledge Trees (`trees/`)
+
+STRATA includes 18 canonical domain trees compiling to **1,004 verified morphism cells** and over **34,000 dynamic topological edges**:
+
+- **Core Analytics & Data**: `numpy.json`, `pandas.json`, `scikit-learn.json` (`sklearn.json`), `scipy` (core).
+- **Visualization**: `matplotlib.json`, `seaborn.json`.
+- **Media & Perception**: `cv2.json` (OpenCV), `pillow.json`, `audio.json`.
+- **Specialized Domains**: `bio.json`, `cryptography.json`, `graph.json`, `nlp.json`, `pygame.json`, `requests.json`, `sqlite3.json`.
+- **Control & Primitives**: `control_flow.json`, `python_core.json`, `pathlib.json`.
+
+---
+
+## 7. Development, Testing & CI/CD
+
+### Pre-PR Quality Gates
+Run our automated verification scripts before opening a PR:
+
+```bash
+# 1. Tree schema & integrity linter (0 violations required)
+python scripts/lint_trees.py
+
+# 2. Static syntax & undefined names check
+python scripts/check_static.py
+
+# 3. Lattice compilation & AST validation
+python strata_cli.py compile
+python strata_cli.py validate
+
+# 4. Topological and symbolic unit tests
+pytest tests/test_soundness_topology.py
+```
+
+### Team Git Workflow
+- **`main`**: Protected, release-ready code only. Changes require a PR from `dev`, codeowner approval, and passing CI checks.
+- **`dev`**: Active integration branch where team members merge feature PRs.
+- **`feat/*`, `fix/*`, `docs/*`**: Isolated task branches. Always target PRs to `dev`.
+
+For full development details, please review [docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
