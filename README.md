@@ -1,6 +1,7 @@
 # STRATA: Symbolic Topological Routing Architecture for Typed Automata
 
 [![CI](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthewNader2/STRATA/actions/workflows/ci.yml)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Category Theory](https://img.shields.io/badge/foundations-category--theory-purple.svg)]()
 [![Type Soundness](https://img.shields.io/badge/verification-Robinson%20Unifier-brightgreen.svg)]()
@@ -205,3 +206,27 @@ pytest tests/test_soundness_topology.py
 - **`feat/*`, `fix/*`, `docs/*`**: Isolated task branches. Always target PRs to `dev`.
 
 For full development details, please review [docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## 8. License & Academic Citation
+
+STRATA is released under the **Source-Available Research and Non-Commercial License (incorporating PolyForm Noncommercial 1.0.0)**.
+
+- **Research & Non-Commercial Use**: Free for academic, scientific, and educational research, personal evaluation, and non-commercial tool development.
+- **Commercial Use Restriction**: Any commercial use, proprietary incorporation, cloud hosting (SaaS), or monetization is strictly prohibited without prior written consent and an explicit commercial license.
+- **Commercial Inquiries**: Contact Matthew Nader at `matthewnader2@gmail.com`.
+
+If you use STRATA in your research or as a tool in your experiments, please cite:
+
+```bibtex
+@software{strata2026,
+  author = {Nader, Matthew and Contributors},
+  title = {{STRATA}: Symbolic Topological Routing Architecture for Typed Automata},
+  year = {2026},
+  url = {https://github.com/MatthewNader2/STRATA},
+  note = {Category-theoretic neuro-symbolic program synthesis engine}
+}
+```
+
+See the full terms in [LICENSE](LICENSE).

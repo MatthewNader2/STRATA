@@ -1,0 +1,87 @@
+# STRATA Source-Available Research & Non-Commercial License
+# (Incorporating PolyForm Noncommercial License 1.0.0)
+
+Copyright (c) 2026 Matthew Nader and the STRATA Project Contributors.
+All rights reserved.
+
+================================================================================
+PART I: RESEARCH, ACADEMIC & TOOL PERMISSION
+================================================================================
+
+Permission is hereby granted, free of charge, to any person or institution 
+obtaining a copy of this software and associated documentation files (the 
+"Software"), to inspect, execute, evaluate, benchmark, reproduce, modify, 
+and develop upon the Software solely for:
+
+1. Academic, educational, scientific, and scholarly research.
+2. Personal study, reproducible experiments, and open-source non-commercial tool usage.
+3. Peer-reviewed evaluation, benchmarking, and comparative scientific analysis.
+
+Any publication, academic paper, technical report, thesis, benchmark, or public
+demonstration that makes use of the Software must cite STRATA as detailed in PART IV.
+
+================================================================================
+PART II: POLYFORM NONCOMMERCIAL LICENSE 1.0.0
+================================================================================
+
+<https://polyformproject.org/licenses/noncommercial/1.0.0>
+
+### 1. Acceptance
+In order to receive this license, you must agree to its rules. The rules of this
+license are both terms of the agreement between you and the licensor and conditions
+to your license. You are not licensed to use software under this license if you do
+not agree to its rules.
+
+### 2. Copyright License
+The licensor grants you a copyright license for the software to do everything you
+might do with the software that would otherwise infringe the licensor's copyright
+in it, for any noncommercial purpose.
+
+### 3. Notices
+You must ensure that everyone who gets a copy of any part of this software from you
+also gets a copy of this license and preserves all copyright and authorship notices.
+
+### 4. Noncommercial Purpose
+A noncommercial purpose is a purpose that is not a commercial purpose. A commercial
+purpose is a purpose primarily intended for or directed towards commercial advantage
+or monetary compensation, including:
+  a. Selling, leasing, sublicensing, or distributing the software or services derived
+     thereof for a fee.
+  b. Offering the software as a paid cloud service, API, or managed platform (SaaS).
+  c. Incorporating the software into proprietary, commercial, or enterprise products.
+  d. Using the software in internal commercial operations directed toward revenue generation.
+
+### 5. Commercial Licensing (Permission Required)
+Any commercial use, integration, deployment, or distribution is STRICTLY PROHIBITED
+without the prior express written consent and commercial license agreement from the
+copyright holder(s).
+
+To request commercial licensing terms, enterprise permissions, or bespoke commercial
+partnerships, please contact:
+  Matthew Nader: matthewnader2@gmail.com
+
+================================================================================
+PART III: DISCLAIMER OF WARRANTY & LIMITATION OF LIABILITY
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+PART IV: CITATION
+================================================================================
+
+If you use STRATA in your research or as a tool in your academic work, please
+cite it as follows:
+
+    @software{strata2026,
+      author = {Nader, Matthew and Contributors},
+      title = {{STRATA}: Symbolic Topological Routing Architecture for Typed Automata},
+      year = {2026},
+      url = {https://github.com/MatthewNader2/STRATA},
+      note = {Category-theoretic neuro-symbolic program synthesis engine}
+    }
