@@ -1,5 +1,5 @@
 """
-src/runtime_poset.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/runtime_poset.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Foundational Host Runtime Poset & Protocol Reflection Engine.
 
 Operates strictly at the lowest level of computation:

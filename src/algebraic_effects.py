@@ -1,5 +1,5 @@
 """
-src/algebraic_effects.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/algebraic_effects.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Solves Issue 1, Issue 4 & Proposal 4.B:
   1. Compositional Property Meet-Semilattice (Heyting Property Algebra) unifying
      atomic string typestates and postcondition predicates.

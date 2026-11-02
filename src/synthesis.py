@@ -1,5 +1,5 @@
 """
-src/synthesis.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/synthesis.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Dynamic MicroCell Synthesizer & Capability-Sandboxed Inductive Kernel Generator.
 """
 

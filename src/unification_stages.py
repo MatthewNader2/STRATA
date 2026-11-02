@@ -1,5 +1,5 @@
 """
-src/unification_stages.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/unification_stages.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Track 2.2: Modular Unification Pipeline Stages.
 
 Decomposes `UnificationGate.unify_pipeline()` and `emit_code()` into four

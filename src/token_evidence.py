@@ -1,5 +1,5 @@
 """
-src/token_evidence.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/token_evidence.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 Single, corpus-derived source of lexical evidence. Every consumer that asks
 "how strongly does this clause point at this cell?" (router, route methods,

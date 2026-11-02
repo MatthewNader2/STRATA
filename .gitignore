@@ -60,7 +60,8 @@ test_report.md
 total*.log
 
 # --- Historical Backups, Patches & One-Time Scripts ---
-tools/
+# Exclude llama-cpp local binary builds and temporary tools artifacts
+tools/llama-cpp*/
 *.bak*
 *.patch
 *.diff

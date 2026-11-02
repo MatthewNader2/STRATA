@@ -1,5 +1,5 @@
 """
-src/diagnostics.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/diagnostics.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Track 3: Diagnostic Telemetry & Failure Surface Collector.
 
 Records caught exceptions, unification refusals, and fallback invocations across

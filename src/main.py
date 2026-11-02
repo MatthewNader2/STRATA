@@ -1,6 +1,6 @@
 # src/main.py
 """
-src/main.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/main.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Production REST API Server and Core Engine Lifecycle Manager.
 Provides real-time endpoints for health monitoring, domain metadata,
 multi-profile engine initialization, program synthesis, and benchmark automation.

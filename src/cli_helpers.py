@@ -1,5 +1,5 @@
 """
-src/cli_helpers.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/cli_helpers.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Track 2.3 & Track 3.3: Extracted CLI Diagnostics, Failure Surface Summary,
 and Environment/Database Sync Helpers.
 """

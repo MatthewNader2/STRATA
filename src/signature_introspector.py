@@ -1,5 +1,5 @@
 """
-src/signature_introspector.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/signature_introspector.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Multi-Tiered Universal Signature & Parameter Introspector.
 
 Architecture:

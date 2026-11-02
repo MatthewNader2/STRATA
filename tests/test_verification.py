@@ -1,5 +1,5 @@
 """
-tests/test_verification.py - STRATA (Neuro-Symbolic Topological Lattice)
+tests/test_verification.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Round 5 Offline Verification Suite (PR-1 Core Correctness).
 
 Tests Probes 1 to 6:

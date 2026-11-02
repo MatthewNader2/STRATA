@@ -1,5 +1,5 @@
 """
-src/dag_plan.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/dag_plan.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Solves Issue 2 (First-Class DAGPlan), Issue 3 (SemanticBlackboard), and Issue 5 (TypedHoleCell).
 """
 

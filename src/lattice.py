@@ -1,5 +1,5 @@
 """
-src/lattice.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/lattice.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Domain-Agnostic Typed Lattice, Algebraic Signatures, and Modular Graph Topology.
 
 Conforms strictly to Sections 3.1-3.2 of the STRATA paper:

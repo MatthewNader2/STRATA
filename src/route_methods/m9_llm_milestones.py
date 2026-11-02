@@ -1,5 +1,5 @@
 """
-src/route_methods/m9_llm_milestones.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m9_llm_milestones.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 M9: LLM Milestone Anchor & Topological Pathfinder.
 

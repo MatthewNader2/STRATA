@@ -1,5 +1,5 @@
 """
-src/planner.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/planner.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Topological Pathfinding, Multi-Stage Progression, and Formal Type-Monadic Verification.
 
 Conforms strictly to Sections 3.1, 3.2, and 3.4 of the STRATA paper:

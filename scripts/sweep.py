@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/sweep.py - STRATA (Neuro-Symbolic Topological Lattice)
+scripts/sweep.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Multi-Profile & Multi-Method Sweep Runner for Benchmark Evaluation.
 
 Runs the benchmark prompt across:

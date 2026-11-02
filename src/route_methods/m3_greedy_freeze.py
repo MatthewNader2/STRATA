@@ -1,5 +1,5 @@
 """
-src/route_methods/m3_greedy_freeze.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m3_greedy_freeze.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 M3: Forward Greedy Beam with Frozen Committed Prefixes.
 Greedily commits the best next morphism at each step without backtracking.
 """

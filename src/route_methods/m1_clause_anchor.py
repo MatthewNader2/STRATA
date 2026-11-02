@@ -1,5 +1,5 @@
 """
-src/route_methods/m1_clause_anchor.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m1_clause_anchor.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 M1: Clause-Anchored Insertion.
 Anchors key morphisms for each linguistic clause in the prompt and bridges type gaps.
 """

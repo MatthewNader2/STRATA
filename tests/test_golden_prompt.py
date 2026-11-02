@@ -1,5 +1,5 @@
 """
-tests/test_golden_prompt.py - STRATA (Neuro-Symbolic Topological Lattice)
+tests/test_golden_prompt.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Golden benchmark test for the 7-clause benchmark prompt (offline; no models required).
 
   "load a csv file named \"input.csv\", normalize X column, drop null values,

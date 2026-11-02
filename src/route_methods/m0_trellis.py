@@ -1,5 +1,5 @@
 """
-src/route_methods/m0_trellis.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m0_trellis.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 M0: Classical Viterbi / Trellis dynamic programming over the semantic tunnel.
 """
 

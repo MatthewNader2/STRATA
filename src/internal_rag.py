@@ -1,5 +1,5 @@
 """
-src/internal_rag.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/internal_rag.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Local Vector Index (FAISS) and Incremental Embedding Cache.
 """
 

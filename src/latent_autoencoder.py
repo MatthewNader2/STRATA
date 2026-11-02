@@ -1,5 +1,5 @@
 """
-src/latent_autoencoder.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/latent_autoencoder.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Self-Supervised Structural Transition Autoencoder (TransE / Koopman Manifold).
 
 Learns a continuous vector manifold where typestates tau are mapped to points z_tau in R^d

@@ -1,5 +1,5 @@
 """
-src/universal_harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/universal_harvester.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Unified Harvest Pipeline over adaptive library adapters.
 
 Architecture:

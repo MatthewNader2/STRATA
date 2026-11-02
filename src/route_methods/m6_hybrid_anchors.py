@@ -1,5 +1,5 @@
 """
-src/route_methods/m6_hybrid_anchors.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m6_hybrid_anchors.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 M6: Flagship Hybrid — Clause Anchors + Endpoint Anchors + Beam Bridging + Pre-Flight Linting.
 """
 

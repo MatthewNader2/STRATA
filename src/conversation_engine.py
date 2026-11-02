@@ -1,5 +1,5 @@
 """
-src/conversation_engine.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/conversation_engine.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Track 9: Conversational State & Surgical Graph Delta Morphisms (Chat Engine).
 
 Maintains the active verified DAG G_{t-1}, variable bindings, and emitted

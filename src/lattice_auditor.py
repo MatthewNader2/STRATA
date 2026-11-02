@@ -1,5 +1,5 @@
 """
-src/lattice_auditor.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/lattice_auditor.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Static Reachability, Dead-End, and Disconnected Node Auditor (Phase 3 / T3.3).
 """
 

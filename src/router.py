@@ -1,5 +1,5 @@
 """
-src/router.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/router.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Semantic Tunneling Router based on Dense Vector Embeddings and Softmax Temperature.
 
 Conforms strictly to Section 3.3 of the STRATA paper:

@@ -1,5 +1,5 @@
 """
-src/tree_merger.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/tree_merger.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Universal Knowledge Tree Merger & Schema Reconciler.
 
 Merges newly harvested ground-truth types, states, ports, and bridge roles

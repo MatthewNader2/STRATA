@@ -1,5 +1,5 @@
 """
-src/macro_harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/macro_harvester.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Dynamic Macro Harvesting, Port Composition & Monadic Code Synthesis (Phase 4 / T4.3).
 """
 

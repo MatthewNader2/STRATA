@@ -1,5 +1,5 @@
 """
-src/route_methods/m8_llm_stepwise.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m8_llm_stepwise.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 M8: LLM Stepwise Edge Pathfinder.
 

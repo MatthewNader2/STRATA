@@ -1,5 +1,5 @@
 """
-src/route_methods/m7_llm_pathfinder.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m7_llm_pathfinder.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 M7: LLM Full-Context Pathfinder.
 

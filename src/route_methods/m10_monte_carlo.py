@@ -1,5 +1,5 @@
 """
-src/route_methods/m10_monte_carlo.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m10_monte_carlo.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 M10: verifier-guided Monte Carlo Tree Search over plan structure.
 

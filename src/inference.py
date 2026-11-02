@@ -1,5 +1,5 @@
 """
-src/inference.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/inference.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Multi-Profile Inference Engine with Dynamic Hardware Introspection,
 Agnostic Semantic Compilation, and Thread-Safe Generation.
 """

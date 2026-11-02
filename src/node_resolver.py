@@ -1,5 +1,5 @@
 """
-src/node_resolver.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/node_resolver.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 Dynamic Node Resolution and Self-Expanding Architecture:
 1. When an LLM router or pathfinder proposes a node that was not in the RAG top-k:
@@ -150,7 +150,7 @@ CELL_SYNTHESIS_SCHEMA = {
 }
 
 SYSTEM_PROMPT_SYNTHESIS = (
-    "You are an expert compiler and runtime engineer for the STRATA (Neuro-Symbolic Topological Lattice).\n"
+    "You are an expert compiler and runtime engineer for the STRATA (Symbolic Topological Routing Architecture for Typed Automata).\n"
     "Your task is to synthesize a valid typed MicroCell definition for a missing operation requested by a pipeline.\n"
     "The cell must adhere strictly to the STRATA schema:\n"
     "- cell_id: lowercase snake_case functional identifier representing the operation (e.g. '<verb>_<noun>')\n"

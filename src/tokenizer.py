@@ -1,5 +1,5 @@
 """
-src/tokenizer.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/tokenizer.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Domain-Agnostic Sub-Word and Identifier Tokenizer.
 
 Deterministic, mathematically formal character-level transition scanner.

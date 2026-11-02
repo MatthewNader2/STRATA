@@ -1,5 +1,5 @@
 """
-src/library_adapters.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/library_adapters.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Universal Domain-Agnostic Library Adapters.
 
 Zero hardcoded library names, types, enums, or function names.

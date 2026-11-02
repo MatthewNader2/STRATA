@@ -1,5 +1,5 @@
 """
-src/route_methods/m4_llm_stepwise.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m4_llm_stepwise.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 DEPRECATED: M4 (bare-name stepwise) has been superseded by M8 (type-aware stepwise pathfinder).
 M4LLMStepwiseRouteMethod is maintained as a backwards-compatible alias to M8LLMStepwisePathfinderRouteMethod.

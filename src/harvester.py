@@ -1,5 +1,5 @@
 """
-src/harvester.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/harvester.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Universal Harvester Module.
 Eliminates redundant subclass shims and delegates category-theoretic reflection
 directly to UniversalHarvester using native domain_name resolution.

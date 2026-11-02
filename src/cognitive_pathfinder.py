@@ -1,5 +1,5 @@
 """
-src/cognitive_pathfinder.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/cognitive_pathfinder.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Pillar 3: Cognitive Latent Pathfinding.
 
 Extracts continuous latent representations from local sub-1B models

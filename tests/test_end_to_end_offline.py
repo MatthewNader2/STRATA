@@ -1,5 +1,5 @@
 """
-tests/test_end_to_end_offline.py - STRATA (Neuro-Symbolic Topological Lattice)
+tests/test_end_to_end_offline.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Round 6 (R6-3): offline end-to-end synthesis tests. No models required.
 
 Builds FIXED cell lists from the loaded lattice (case-insensitive cell_id lookup)

@@ -1,5 +1,5 @@
 """
-src/unification.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/unification.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Formal Type-Monadic Unification Gate and Deterministic Composition Synthesizer.
 
 Conforms strictly to Section 3.2 of the STRATA paper:

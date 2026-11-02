@@ -1,5 +1,5 @@
 """
-src/preflight.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/preflight.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Static Pre-Flight Linter before GEVR Sandbox Execution.
 
 Structural invariants enforced post-binding:

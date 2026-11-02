@@ -1,5 +1,5 @@
 """
-src/mcts.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/mcts.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 
 A real, domain-agnostic Monte Carlo Tree Search (UCT) engine.
 

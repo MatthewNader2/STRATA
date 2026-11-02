@@ -1,5 +1,5 @@
 """
-src/route_methods/__init__.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/__init__.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Pluggable RouteMethods registry and factory (M0 - M10).
 """
 

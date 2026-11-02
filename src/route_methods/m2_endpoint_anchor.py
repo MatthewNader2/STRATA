@@ -1,5 +1,5 @@
 """
-src/route_methods/m2_endpoint_anchor.py - STRATA (Neuro-Symbolic Topological Lattice)
+src/route_methods/m2_endpoint_anchor.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 M2: Endpoint-Anchored Coverage (Bidirectional).
 Anchors source entry and sink exit morphisms and searches bidirectionally.
 """
