@@ -609,7 +609,8 @@ def _sandbox_worker_exec(
     # Step 0: Configure headless environment for GUI, Audio, and Plotting
     try:
         from lattice import TypeRegistry
-        env_specs = TypeRegistry.get_instance().get_verification_semantics("headless_environment")
+        reg = TypeRegistry.get_instance()
+        env_specs = list(reg.get_capabilities().get("headless_environment", []) or []) + list(reg.get_verification_semantics("headless_environment"))
         for spec in env_specs:
             if "=" in spec:
                 k, v = spec.split("=", 1)

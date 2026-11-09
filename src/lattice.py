@@ -39,7 +39,7 @@ except (ImportError, ValueError):
 
 logger = get_logger('lattice')
 
-TREE_SEARCH_DIRS: Tuple[str, ...] = ("trees", "new_trees")
+TREE_SEARCH_DIRS: Tuple[str, ...] = ("trees",)
 
 
 # Type variables are data-driven: populated from tree JSON `type_vars` fields
@@ -325,6 +325,8 @@ class TypeRegistry:
         self._carrier_roles: Dict[str, Tuple[str, ...]] = {}
         self._identifier_root_states: Set[str] = set()
         self._egress_exclusion_tokens: Set[str] = set()
+        self._type_defaults: Dict[str, Any] = {}
+        self._capabilities: Dict[str, Any] = {}
         # Subtype memo: per-instance, invalidated by bumping a generation counter
         # so a result computed against a stale poset can never be cached.
         self._subtype_cache: Dict[Tuple[Any, Any], bool] = {}
@@ -332,6 +334,60 @@ class TypeRegistry:
         self._bootstrap_carrier_hierarchy()
         self._bootstrap_state_hierarchy()
         self._bootstrap_plugin_types()
+
+    @property
+    def _parents_lower(self) -> Dict[str, Set[str]]:
+        return self._parents
+
+    @_locked
+    def register_type_default(self, type_name: str, default_value: Any, domain: Optional[str] = None) -> None:
+        """Registers a Pointed Monoidal Default eta_tau : 1 -> tau for a type."""
+        k = str(type_name or "").strip().lower()
+        if not k:
+            return
+        if domain:
+            d = str(domain).strip().lower()
+            self._type_defaults[f"{d}:{k}"] = default_value
+        self._type_defaults[k] = default_value
+
+    def get_type_default(self, type_name: str, domain: Optional[str] = None) -> Any:
+        """Resolves the Pointed Monoidal Default eta_tau : 1 -> tau via poset reachability."""
+        k = str(type_name or "").strip().lower()
+        if not k:
+            return None
+        d = str(domain or "").strip().lower() if domain else ""
+        if d and f"{d}:{k}" in self._type_defaults:
+            return self._type_defaults[f"{d}:{k}"]
+        if k in self._type_defaults:
+            return self._type_defaults[k]
+        # Walk supertype poset via BFS
+        visited = {k}
+        queue = deque(self._parents.get(k, ()))
+        while queue:
+            curr = queue.popleft()
+            if curr in visited:
+                continue
+            visited.add(curr)
+            if d and f"{d}:{curr}" in self._type_defaults:
+                return self._type_defaults[f"{d}:{curr}"]
+            if curr in self._type_defaults:
+                return self._type_defaults[curr]
+            for p in self._parents.get(curr, ()):
+                if p not in visited:
+                    queue.append(p)
+        return None
+
+    @_locked
+    def register_capabilities(self, caps: Dict[str, Any]) -> None:
+        if isinstance(caps, dict):
+            for k, v in caps.items():
+                if isinstance(v, list) and isinstance(self._capabilities.get(k), list):
+                    self._capabilities[k] = list(dict.fromkeys(self._capabilities[k] + v))
+                else:
+                    self._capabilities[k] = v
+
+    def get_capabilities(self) -> Dict[str, Any]:
+        return dict(self._capabilities)
 
     def _bootstrap_carrier_hierarchy(self):
         """Track 10: Dynamically bootstraps language-level poset & POS categories via runtime reflection."""
@@ -359,24 +415,15 @@ class TypeRegistry:
 
     @_locked
     def _bootstrap_plugin_types(self):
-        """Dynamically ingests domain plugin types from trees/*.json without engine hardcoding.
-
-        Tree discovery is cwd-independent: in addition to the relative search
-        dirs, it resolves the trees directory next to the package root and the
-        configured settings.trees_dir, so registry declarations (mock probes,
-        flag patterns, polarity hints, port hints, ...) are available in every
-        session — including ones that only load the compiled SQLite lattice.
-        """
+        """Dynamically ingests domain plugin types and structural poset declarations from trees/*.json."""
         import glob, json
         search_dirs: List[str] = list(TREE_SEARCH_DIRS)
-        # Repo-root relative (this file lives in <root>/src).
         try:
             root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             for rel in TREE_SEARCH_DIRS:
                 search_dirs.append(os.path.join(root_dir, rel))
         except Exception:
             pass
-        # Config-resolved trees directory.
         try:
             try:
                 from .config import settings as _settings
@@ -397,7 +444,6 @@ class TypeRegistry:
                     with open(p, "r", encoding="utf-8") as f:
                         data = json.load(f)
                     if isinstance(data, dict):
-                        # Structural declarations first so they govern this file's own types.
                         if isinstance(data.get("top_level_carriers"), list):
                             self.register_top_level_carriers(data["top_level_carriers"])
                         if isinstance(data.get("path_port_tokens"), list):
@@ -410,12 +456,19 @@ class TypeRegistry:
                             self.register_carrier_roles(data["carrier_roles"])
                         if isinstance(data.get("identifier_root_states"), list):
                             self.register_identifier_root_states(data["identifier_root_states"])
-                        if isinstance(data.get("egress_exclusion_tokens"), list):
-                            self.register_egress_exclusion_tokens(data["egress_exclusion_tokens"])
+                        if isinstance(data.get("capabilities"), dict):
+                            self.register_capabilities(data["capabilities"])
+                        if isinstance(data.get("pointed_defaults"), dict):
+                            for td_k, td_v in data["pointed_defaults"].items():
+                                self.register_type_default(td_k, td_v)
                         if "types" in data and isinstance(data["types"], dict):
                             for t_name, t_meta in data["types"].items():
                                 if isinstance(t_meta, dict):
                                     parents = t_meta.get("parents") or ([t_meta["parent"]] if t_meta.get("parent") else [])
+                                    if "default_value" in t_meta:
+                                        self.register_type_default(t_name, t_meta["default_value"])
+                                    elif "pointed_default" in t_meta:
+                                        self.register_type_default(t_name, t_meta["pointed_default"])
                                 else:
                                     parents = [str(t_meta)]
                                 for parent in parents:
@@ -442,13 +495,8 @@ class TypeRegistry:
                                         parts = str(r).replace(":", ".").rsplit(".", 1)
                                         if len(parts) == 2:
                                             self.register_artifact_reader(cat, parts[0], parts[1])
-                        if "egress_intent_tokens" in data and isinstance(data["egress_intent_tokens"], list):
-                            self.register_egress_tokens(data["egress_intent_tokens"])
                         if "materialization_states" in data and isinstance(data["materialization_states"], list):
                             self.register_materialization_states(data["materialization_states"])
-                        if "polarity_hints" in data and isinstance(data["polarity_hints"], dict):
-                            for d_k, d_v in data["polarity_hints"].items():
-                                self.register_polarity_hints(d_k, d_v)
                         if "cells" in data and isinstance(data["cells"], list):
                             for c in data["cells"]:
                                 if isinstance(c, dict):
@@ -468,7 +516,6 @@ class TypeRegistry:
                                     s_carrier = s_entry.get("carrier_type")
                                     props = s_entry.get("properties") or {}
                                     self.register_state(s_name, s_parent, carrier_type=s_carrier, properties=props)
-                        # --- New data-driven structural fields ---
                         if "advisory_qualifiers" in data and isinstance(data["advisory_qualifiers"], list):
                             self.register_advisory_qualifiers(data["advisory_qualifiers"])
                         if "abstract_carriers" in data and isinstance(data["abstract_carriers"], list):
@@ -481,46 +528,6 @@ class TypeRegistry:
                             self.register_source_port_tokens(data["source_port_tokens"])
                         if "data_bearing_roles" in data and isinstance(data["data_bearing_roles"], list):
                             self.register_data_bearing_roles(data["data_bearing_roles"])
-                        if "estimator_verbs" in data and isinstance(data["estimator_verbs"], list):
-                            self.register_estimator_verbs(data["estimator_verbs"])
-                        if "projection_tokens" in data and isinstance(data["projection_tokens"], list):
-                            self.register_projection_tokens(data["projection_tokens"])
-                        elif "column_projection_tokens" in data and isinstance(data["column_projection_tokens"], list):
-                            self.register_projection_tokens(data["column_projection_tokens"])
-                        if "stopwords" in data and isinstance(data["stopwords"], list):
-                            self.register_stopwords(data["stopwords"])
-                        if "preposition_triggers" in data and isinstance(data["preposition_triggers"], list):
-                            self.register_preposition_triggers(data["preposition_triggers"])
-                        if "generic_prepositions" in data and isinstance(data["generic_prepositions"], list):
-                            self.register_generic_prepositions(data["generic_prepositions"])
-                        if "sentence_connectives" in data and isinstance(data["sentence_connectives"], list):
-                            self.register_sentence_connectives(data["sentence_connectives"])
-                        if "coordinating_conjunctions" in data and isinstance(data["coordinating_conjunctions"], list):
-                            self.register_coordinating_conjunctions(data["coordinating_conjunctions"])
-                        if "sequencing_connectives" in data and isinstance(data["sequencing_connectives"], list):
-                            self.register_sequencing_connectives(data["sequencing_connectives"])
-                        if "filter_context_tokens" in data and isinstance(data["filter_context_tokens"], list):
-                            self.register_filter_context_tokens(data["filter_context_tokens"])
-                        if "prompt_filler_tokens" in data and isinstance(data["prompt_filler_tokens"], list):
-                            self.register_prompt_filler_tokens(data["prompt_filler_tokens"])
-                        if "verification_semantics" in data and isinstance(data["verification_semantics"], dict):
-                            self.register_verification_semantics(data["verification_semantics"])
-                        if "asset_placeholders" in data and isinstance(data["asset_placeholders"], dict):
-                            self.register_asset_placeholders(data["asset_placeholders"])
-                        if "default_asset_placeholders" in data and isinstance(data["default_asset_placeholders"], dict):
-                            self.register_asset_placeholders(data["default_asset_placeholders"])
-                        if "output_placeholders" in data and isinstance(data["output_placeholders"], dict):
-                            self.register_output_asset_placeholders(data["output_placeholders"])
-                        if "default_output_placeholders" in data and isinstance(data["default_output_placeholders"], dict):
-                            self.register_output_asset_placeholders(data["default_output_placeholders"])
-                        if "action_verbs" in data and isinstance(data["action_verbs"], list):
-                            self.register_operation_tokens(data["action_verbs"])
-                        if "operation_tokens" in data and isinstance(data["operation_tokens"], list):
-                            self.register_operation_tokens(data["operation_tokens"])
-                        # Data-driven extension registries (domain data lives in
-                        # trees, never in engine code)
-                        if "semantic_flag_patterns" in data and isinstance(data["semantic_flag_patterns"], list):
-                            self.register_semantic_flag_patterns(data["semantic_flag_patterns"])
                         if "enum_constant_rules" in data and isinstance(data["enum_constant_rules"], list):
                             self.register_enum_constant_rules(data["enum_constant_rules"])
                         probes = data.get("mock_probes")
@@ -531,18 +538,6 @@ class TypeRegistry:
                                     break
                         if isinstance(probes, list):
                             self.register_mock_probes(probes)
-                        if "port_name_type_hints" in data and isinstance(data["port_name_type_hints"], dict):
-                            self.register_port_name_type_hints(data["port_name_type_hints"])
-                        if "port_name_morphology_hints" in data and isinstance(data["port_name_morphology_hints"], list):
-                            self.register_port_name_morphology_hints(data["port_name_morphology_hints"])
-                        if "enum_citation_triggers" in data and isinstance(data["enum_citation_triggers"], list):
-                            self.register_enum_citation_triggers(data["enum_citation_triggers"])
-                        if "excluded_module_tokens" in data and isinstance(data["excluded_module_tokens"], list):
-                            self.register_excluded_module_tokens(data["excluded_module_tokens"])
-                        if "enum_suffixes" in data and isinstance(data["enum_suffixes"], list):
-                            self.register_enum_suffixes(data["enum_suffixes"])
-                        if "symbol_stopwords" in data and isinstance(data["symbol_stopwords"], list):
-                            self.register_symbol_stopwords(data["symbol_stopwords"])
                 except Exception as e:
                     logger.debug("suppressed: %s", e, exc_info=False)
 
@@ -825,6 +820,18 @@ class TypeRegistry:
     def is_abstract_carrier(self, name: str) -> bool:
         return str(name).strip().lower() in self._abstract_carriers
 
+    def is_carrier(self, name: str) -> bool:
+        """Determines if a type or abstract type represents a carrier."""
+        if not name:
+            return False
+        s = str(name).strip().lower()
+        return (
+            self.is_abstract_carrier(s)
+            or self.is_composite_carrier(s)
+            or s in self.get_top_level_carriers()
+            or bool(self.get_abstract_carrier(s))
+        )
+
     def is_composite_carrier(self, name: str) -> bool:
         """Determines if a type represents a composite, stateful, or non-scalar carrier."""
         if not name:
@@ -842,6 +849,8 @@ class TypeRegistry:
         for tc in getattr(self, "_top_level_carriers", ()):
             if not any(self.is_subtype(tc, root) for root in atomic_roots) and self.is_subtype(s, tc):
                 return True
+        if s not in self.get_registered_types():
+            return False
         return not any(self.is_subtype(s, root) for root in atomic_roots)
 
     # --- Abstract carrier mapping (type name -> abstract category) ---
@@ -1388,6 +1397,8 @@ class TypeRegistry:
             return True
         return False
 
+    is_registered = is_known_type_name
+
     @_locked
     def register_alias(self, alias: str, canonical: str):
         self._aliases[alias.strip().lower()] = canonical.strip()
@@ -1468,27 +1479,6 @@ class TypeRegistry:
         the registry (mirrors the guard used by ``is_subtype``'s own cache)."""
         return self._generation
 
-    def is_known_type_name(self, name: str) -> bool:
-        """Checks if a string matches any registered type, alias, or carrier in the Poset."""
-        if not name:
-            return False
-        t_low = str(name).strip().lower()
-        if t_low in {str(p).lower() for p in self._parents}:
-            return True
-        if t_low in {str(a).lower() for a in self._aliases}:
-            return True
-        if t_low in {str(c).lower() for c in self._state_carriers.values()}:
-            return True
-        if t_low in {str(ac).lower() for ac in self._abstract_carriers}:
-            return True
-        if t_low in {str(tc).lower() for tc in self._top_level_carriers}:
-            return True
-        if t_low in {str(rc).lower() for rc in self._role_carriers}:
-            return True
-        return False
-
-    is_registered = is_known_type_name
-
     def is_subtype(self, sub: str, super_: str) -> bool:
         """Memoised poset query. The cache is per-instance and generation-guarded:
         a result computed while a mutation was in flight is returned but never stored."""
@@ -1547,7 +1537,13 @@ class TypeRegistry:
             return True
 
         if "_or_" in sub_l:
-            if any(self._atomic_is_subtype(part, super_c) for part in sub_l.split("_or_")):
+            parts = [p for p in sub_l.split("_or_") if p]
+            if parts and all(self._atomic_is_subtype(part, super_c) for part in parts):
+                return True
+
+        if "_or_" in super_l:
+            parts = [p for p in super_l.split("_or_") if p]
+            if parts and any(self._atomic_is_subtype(sub_c, part) for part in parts):
                 return True
 
         sub_key = sub_l.rsplit(".", 1)[-1] if sub_l not in self._parents and "." in sub_l else sub_l
@@ -1754,10 +1750,8 @@ class TypeRegistry:
         if p_state and p_state == c_state:
             return not self.has_property_conflict(p_state, c_state)
 
-        # 4. Accepted states match
+        # 4. Accepted states match (consumer declares accepted producer states)
         if p_state and p_state in c_acc:
-            return True
-        if c_state and c_state in p_acc:
             return True
 
         # 5. Covariant substate compatibility: walks declared state ancestry
@@ -2259,7 +2253,8 @@ class PortSignature:
         "rejected_qualifiers",
         "accepted_states", "parent_state", "port_role", "_cached_term", "_cached_col_proj",
         "_cached_derived_role", "_cached_is_path_port", "_cached_ndim", "binds",
-        "structure_kind", "rank", "element_type", "supported_formats", "owner_cell"
+        "structure_kind", "rank", "element_type", "supported_formats", "owner_cell",
+        "complement_of_port", "disjoint_from_port", "key_from_upstream_role"
     ]
 
     def __init__(
@@ -2284,6 +2279,9 @@ class PortSignature:
         rank: Optional[int] = None,
         element_type: Optional[str] = None,
         supported_formats: Optional[List[str]] = None,
+        complement_of_port: Optional[str] = None,
+        disjoint_from_port: Optional[str] = None,
+        key_from_upstream_role: Optional[str] = None,
         **kwargs
     ):
         self.name = str(name)
@@ -2299,6 +2297,9 @@ class PortSignature:
         self.rank = rank if rank is not None else kwargs.get("rank")
         self.element_type = element_type or kwargs.get("element_type") or None
         self.supported_formats = list(supported_formats or kwargs.get("supported_formats") or [])
+        self.complement_of_port = complement_of_port or kwargs.get("complement_of_port") or None
+        self.disjoint_from_port = disjoint_from_port or kwargs.get("disjoint_from_port") or None
+        self.key_from_upstream_role = key_from_upstream_role or kwargs.get("key_from_upstream_role") or None
         if self.supported_formats:
             try:
                 TypeRegistry.get_instance().register_supported_formats(self.supported_formats)
@@ -2542,7 +2543,8 @@ class Cell(ABC):
         "_primary_input", "_primary_output", "_token_set", "_token_count",
         "_identity_tokens", "bound_parent_ids", "matched_clause_idx",
         "clause_literals", "fixture_needs", "projection", "typed_bindings",
-        "planned_port_wires", "is_typed_hole", "task_description"
+        "planned_port_wires", "is_typed_hole", "task_description",
+        "optic_role", "container_port", "key_port", "focus_port"
     ]
 
     def __init__(
@@ -2585,6 +2587,10 @@ class Cell(ABC):
         primary_out: Optional[str] = None,
         fixture_needs: Optional[List[str]] = None,
         projection: Optional[str] = None,
+        optic_role: Optional[str] = None,
+        container_port: Optional[str] = None,
+        key_port: Optional[str] = None,
+        focus_port: Optional[str] = None,
         **kwargs
     ):
         self.cell_id = cell_id
@@ -2644,6 +2650,11 @@ class Cell(ABC):
         self.primary_out = primary_out if primary_out is not None else kwargs.get("primary_out")
         self.fixture_needs = list(fixture_needs or kwargs.get("fixture_needs", []))
         self.projection = str(projection).strip().lower() if projection else (str(kwargs.get("projection")).strip().lower() if kwargs.get("projection") else None)
+        raw_optic = optic_role if optic_role is not None else kwargs.get("optic_role")
+        self.optic_role = str(raw_optic).strip().lower() if raw_optic else None
+        self.container_port = container_port if container_port is not None else kwargs.get("container_port")
+        self.key_port = key_port if key_port is not None else kwargs.get("key_port")
+        self.focus_port = focus_port if focus_port is not None else kwargs.get("focus_port")
 
         # For-each multiplicity expansion: a replica is a runtime copy of a
         # planned cell that re-consumes its receiver from the environment and
@@ -2767,6 +2778,9 @@ class Cell(ABC):
                     rank=v.get("rank"),
                     element_type=v.get("element_type"),
                     supported_formats=v.get("supported_formats"),
+                    complement_of_port=v.get("complement_of_port"),
+                    disjoint_from_port=v.get("disjoint_from_port"),
+                    key_from_upstream_role=v.get("key_from_upstream_role"),
                 )
             else:
                 port_sig = PortSignature(name=k, signature=AlgebraicSignature("any", "any"))
@@ -2839,6 +2853,9 @@ class Cell(ABC):
                     rank=v.get("rank"),
                     element_type=v.get("element_type"),
                     supported_formats=v.get("supported_formats"),
+                    complement_of_port=v.get("complement_of_port"),
+                    disjoint_from_port=v.get("disjoint_from_port"),
+                    key_from_upstream_role=v.get("key_from_upstream_role"),
                 )
             else:
                 self.outputs[k] = PortSignature(name=k, signature=AlgebraicSignature("any", "any"))
@@ -2992,58 +3009,67 @@ class Cell(ABC):
     @property
     def is_endable(self) -> bool:
         """
-        Determines whether this node can validly terminate an execution pipeline:
+        Determines whether this node can validly terminate an execution pipeline
+        purely from its structural morphism signature f : A -> 1 / terminal sink:
         - Explicit node-level endable override if declared.
-        - Terminal/egress/sink/consumer/evaluator nodes.
-        - Display/visualization/cleanup/destructor nodes.
-        - Otherwise, intermediate data transformers require downstream closure.
+        - Stage 3 or declared terminal/egress/sink/evaluator node_role.
+        - Empty outputs or codomain tau_out in {1, None, NoneType, void, unit, Effect[IO]}.
+        - Output state in declared terminal_states or materialization_states.
         """
         if self.endable is not None:
             return bool(self.endable)
-        reg = TypeRegistry.get_instance()
-        term_roles = set(r.lower() for r in reg.get_verification_semantics("terminal_roles"))
-        term_roles.update(r.lower() for r in reg.get_verification_semantics("sink_roles"))
-        t_role = str(self.node_role or "").lower()
-        if t_role and t_role in term_roles:
+        if self.stage == 3:
             return True
-        try:
-            from .planner import _active_vocab
-            vocab = _active_vocab()
-            if vocab is not None:
-                if vocab.is_terminal(self):
-                    return True
-                if vocab.terminal_stage is not None and self.stage == vocab.terminal_stage:
-                    return True
-                if t_role and t_role in vocab.terminal_roles:
-                    return True
-        except Exception:
-            pass
+        t_role = str(self.node_role or "").lower()
+        if t_role in ("egress", "sink", "terminal", "io_egress", "evaluator", "export", "consumer"):
+            return True
         if not self.outputs:
+            return True
+        reg = TypeRegistry.get_instance()
+        term_states = reg.get_terminal_states() | reg.get_materialization_states()
+        for out_p in self.outputs.values():
+            out_tn = str(getattr(getattr(out_p, "signature", out_p), "type_name", "") or "").strip().lower()
+            out_st = str(getattr(getattr(out_p, "signature", out_p), "state", "") or "").strip().lower()
+            if out_tn in ("none", "nonetype", "void", "unit", "1", "effect[io]", ""):
+                return True
+            if out_st and out_st in term_states:
+                return True
+        try:
+            from .runtime_poset import classify_cell_structural_role
+        except (ImportError, ValueError):
+            from runtime_poset import classify_cell_structural_role
+        if classify_cell_structural_role(self, reg) == "sink":
             return True
         return False
 
     @property
+    def is_egress(self) -> bool:
+        return self.is_endable
+
+    @property
     def is_ingress(self) -> bool:
-        """Determines whether this node is an ingress/source morphism."""
-        try:
-            from .planner import _active_vocab
-            vocab = _active_vocab()
-            if vocab is not None and vocab.is_ingress(self):
-                return True
-        except Exception:
-            pass
-        reg = TypeRegistry.get_instance()
-        ing_roles = set(r.lower() for r in reg.get_verification_semantics("ingress_roles"))
-        ing_roles.update(r.lower() for r in reg.get_verification_semantics("source_roles"))
+        """
+        Determines whether this node is an ingress/source morphism f : 1 -> A
+        purely from its structural signature and port types.
+        """
+        if self.stage == 1:
+            return True
         i_role = str(self.node_role or "").lower()
-        if i_role and i_role in ing_roles:
+        if i_role in ("ingress", "source", "io_ingress", "generator", "constructor"):
+            return True
+        reg = TypeRegistry.get_instance()
+        try:
+            from .runtime_poset import classify_cell_structural_role
+        except (ImportError, ValueError):
+            from runtime_poset import classify_cell_structural_role
+        if classify_cell_structural_role(self, reg) == "source":
             return True
         ins = self.inputs or {}
         req_data = [
             p for p in ins.values()
-            if p.required and getattr(p, "structure_kind", None) != "scalar"
+            if p.required and getattr(p, "structure_kind", None) != "scalar" and not is_path_port(p)
         ]
-        return not req_data
+        return bool(self.outputs) and not req_data
 
     @property
     def role(self) -> str:
@@ -3526,6 +3552,10 @@ def build_cell_from_raw(c_dict: Dict[str, Any], domain: str = "generic", default
         primary_out=c_dict.get("primary_out"),
         fixture_needs=c_dict.get("fixture_needs", []),
         projection=c_dict.get("projection"),
+        optic_role=c_dict.get("optic_role"),
+        container_port=c_dict.get("container_port"),
+        key_port=c_dict.get("key_port"),
+        focus_port=c_dict.get("focus_port"),
         sub_cells=c_dict.get("sub_cells", []),
         algorithmic_steps=c_dict.get("algorithmic_steps", []),
         internal_topology=c_dict.get("internal_topology", {}),
@@ -3559,8 +3589,6 @@ class LatticeOrchestrator:
     def __init__(self, trees_directory: str = "trees", active_domain: str = "all", db_path: Optional[str] = None, auto_load: bool = True):
         with LatticeOrchestrator._instance_lock:
             LatticeOrchestrator._active_instance = self
-        if not os.path.exists(trees_directory) and os.path.exists("new_trees"):
-            trees_directory = "new_trees"
         self.trees_directory = trees_directory
         self.db_path = db_path if db_path is not None else os.path.join(trees_directory, "lattice.db")
         self.active_domain = active_domain
@@ -3641,6 +3669,11 @@ class LatticeOrchestrator:
                 domain = data.get("domain", "generic")
                 raw_cells = data.get("cells", [])
                 reg = TypeRegistry.get_instance()
+                if isinstance(data.get("capabilities"), dict):
+                    reg.register_capabilities(data["capabilities"])
+                if isinstance(data.get("pointed_defaults"), dict):
+                    for td_k, td_v in data["pointed_defaults"].items():
+                        reg.register_type_default(td_k, td_v)
                 if "type_vars" in data and isinstance(data["type_vars"], list):
                     reg.register_type_vars(data["type_vars"])
                 if "aliases" in data and isinstance(data["aliases"], dict):
@@ -3655,11 +3688,6 @@ class LatticeOrchestrator:
                 if "product_constructors" in data and isinstance(data["product_constructors"], list):
                     for p_ctor in data["product_constructors"]:
                         reg.register_product_constructor(p_ctor)
-                if "egress_intent_tokens" in data and isinstance(data["egress_intent_tokens"], list):
-                    reg.register_egress_tokens(data["egress_intent_tokens"])
-                if "polarity_hints" in data and isinstance(data["polarity_hints"], dict):
-                    for d_k, d_v in data["polarity_hints"].items():
-                        reg.register_polarity_hints(d_k, d_v)
                 if "artifact_readers" in data and isinstance(data["artifact_readers"], dict):
                     for cat, readers in data["artifact_readers"].items():
                         if isinstance(readers, list):
@@ -3671,6 +3699,10 @@ class LatticeOrchestrator:
                     for t_name, t_meta in data["types"].items():
                         if isinstance(t_meta, dict):
                             parents = t_meta.get("parents") or ([t_meta["parent"]] if t_meta.get("parent") else [])
+                            if "default_value" in t_meta:
+                                reg.register_type_default(t_name, t_meta["default_value"])
+                            elif "pointed_default" in t_meta:
+                                reg.register_type_default(t_name, t_meta["pointed_default"])
                         else:
                             parents = [str(t_meta)]
                         for parent in parents:
@@ -3705,41 +3737,6 @@ class LatticeOrchestrator:
                     reg.register_dest_port_tokens(data["dest_port_tokens"])
                 if "data_bearing_roles" in data and isinstance(data["data_bearing_roles"], list):
                     reg.register_data_bearing_roles(data["data_bearing_roles"])
-                if "estimator_verbs" in data and isinstance(data["estimator_verbs"], list):
-                    reg.register_estimator_verbs(data["estimator_verbs"])
-                if "projection_tokens" in data and isinstance(data["projection_tokens"], list):
-                    reg.register_projection_tokens(data["projection_tokens"])
-                elif "column_projection_tokens" in data and isinstance(data["column_projection_tokens"], list):
-                    reg.register_projection_tokens(data["column_projection_tokens"])
-                if "stopwords" in data and isinstance(data["stopwords"], list):
-                    reg.register_stopwords(data["stopwords"])
-                if "preposition_triggers" in data and isinstance(data["preposition_triggers"], list):
-                    reg.register_preposition_triggers(data["preposition_triggers"])
-                if "coordinating_conjunctions" in data and isinstance(data["coordinating_conjunctions"], list):
-                    reg.register_coordinating_conjunctions(data["coordinating_conjunctions"])
-                if "sequencing_connectives" in data and isinstance(data["sequencing_connectives"], list):
-                    reg.register_sequencing_connectives(data["sequencing_connectives"])
-                if "filter_context_tokens" in data and isinstance(data["filter_context_tokens"], list):
-                    reg.register_filter_context_tokens(data["filter_context_tokens"])
-                if "prompt_filler_tokens" in data and isinstance(data["prompt_filler_tokens"], list):
-                    reg.register_prompt_filler_tokens(data["prompt_filler_tokens"])
-                if "verification_semantics" in data and isinstance(data["verification_semantics"], dict):
-                    reg.register_verification_semantics(data["verification_semantics"])
-                if "asset_placeholders" in data and isinstance(data["asset_placeholders"], dict):
-                    reg.register_asset_placeholders(data["asset_placeholders"])
-                if "default_asset_placeholders" in data and isinstance(data["default_asset_placeholders"], dict):
-                    reg.register_asset_placeholders(data["default_asset_placeholders"])
-                if "output_placeholders" in data and isinstance(data["output_placeholders"], dict):
-                    reg.register_output_asset_placeholders(data["output_placeholders"])
-                if "default_output_placeholders" in data and isinstance(data["default_output_placeholders"], dict):
-                    reg.register_output_asset_placeholders(data["default_output_placeholders"])
-                if "action_verbs" in data and isinstance(data["action_verbs"], list):
-                    reg.register_operation_tokens(data["action_verbs"])
-                if "operation_tokens" in data and isinstance(data["operation_tokens"], list):
-                    reg.register_operation_tokens(data["operation_tokens"])
-                # Data-driven extension registries (domain data lives in trees)
-                if "semantic_flag_patterns" in data and isinstance(data["semantic_flag_patterns"], list):
-                    reg.register_semantic_flag_patterns(data["semantic_flag_patterns"])
                 if "enum_constant_rules" in data and isinstance(data["enum_constant_rules"], list):
                     reg.register_enum_constant_rules(data["enum_constant_rules"])
                 probes = data.get("mock_probes")
@@ -3750,18 +3747,6 @@ class LatticeOrchestrator:
                             break
                 if isinstance(probes, list):
                     reg.register_mock_probes(probes)
-                if "port_name_type_hints" in data and isinstance(data["port_name_type_hints"], dict):
-                    reg.register_port_name_type_hints(data["port_name_type_hints"])
-                if "port_name_morphology_hints" in data and isinstance(data["port_name_morphology_hints"], list):
-                    reg.register_port_name_morphology_hints(data["port_name_morphology_hints"])
-                if "enum_citation_triggers" in data and isinstance(data["enum_citation_triggers"], list):
-                    reg.register_enum_citation_triggers(data["enum_citation_triggers"])
-                if "excluded_module_tokens" in data and isinstance(data["excluded_module_tokens"], list):
-                    reg.register_excluded_module_tokens(data["excluded_module_tokens"])
-                if "enum_suffixes" in data and isinstance(data["enum_suffixes"], list):
-                    reg.register_enum_suffixes(data["enum_suffixes"])
-                if "symbol_stopwords" in data and isinstance(data["symbol_stopwords"], list):
-                    reg.register_symbol_stopwords(data["symbol_stopwords"])
 
             for c_dict in raw_cells:
                 if isinstance(c_dict, dict) and "type_vars" in c_dict and c_dict["type_vars"]:
@@ -3918,51 +3903,28 @@ class LatticeOrchestrator:
                                 reg.register_dest_port_tokens([item])
                             elif cat == 'data_bearing_role':
                                 reg.register_data_bearing_roles([item])
-                            elif cat == 'estimator_verb':
-                                reg.register_estimator_verbs([item])
-                            elif cat in ('projection_token', 'column_projection_token'):
-                                reg.register_projection_tokens([item])
                             elif cat == 'type_var':
                                 reg.register_type_vars([item])
                             elif cat == 'top_type':
                                 reg.register_top(item)
                             elif cat == 'product_constructor':
                                 reg.register_product_constructor(item)
-                            elif cat == 'egress_intent_token':
-                                reg.register_egress_tokens([item])
                             elif cat == 'materialization_state':
                                 reg.register_materialization_states([item])
                             elif cat == 'terminal_state':
                                 reg.register_terminal_states([item])
-                            elif cat == 'polarity_hint':
-                                reg.register_polarity_hints(item, [extra])
                             elif cat == 'role_carrier':
                                 reg.register_role_carrier(item)
-                            elif cat == 'stopword':
-                                reg.register_stopwords([item])
-                            elif cat == 'preposition_trigger':
-                                reg.register_preposition_triggers([item])
-                            elif cat == 'sentence_connective':
-                                reg.register_sentence_connectives([item])
-                            elif cat == 'asset_placeholder':
-                                reg.register_asset_placeholders({item: extra})
-                            elif cat == 'output_asset_placeholder':
-                                reg.register_output_asset_placeholders({item: extra})
-                            elif cat == 'coordinating_conjunction':
-                                reg.register_coordinating_conjunctions([item])
-                            elif cat == 'sequencing_connective':
-                                reg.register_sequencing_connectives([item])
-                            elif cat == 'filter_context_token':
-                                reg.register_filter_context_tokens([item])
-                            elif cat == 'prompt_filler_token':
-                                reg.register_prompt_filler_tokens([item])
-                            elif cat == 'verification_semantics':
+                            elif cat == 'type_default':
                                 try:
-                                    reg.register_verification_semantics({item: json.loads(extra)})
+                                    reg.register_type_default(item, json.loads(extra))
                                 except Exception:
                                     pass
-                            elif cat in ('action_verb', 'operation_token'):
-                                reg.register_operation_tokens([item])
+                            elif cat == 'capability':
+                                try:
+                                    reg.register_capabilities({item: json.loads(extra)})
+                                except Exception:
+                                    pass
 
                     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('nodes', 'cells')")
                     tables = [row[0] for row in cursor.fetchall()]
@@ -4071,6 +4033,9 @@ class LatticeOrchestrator:
                                             rank=p_val.get("rank"),
                                             element_type=p_val.get("element_type"),
                                             supported_formats=p_val.get("supported_formats"),
+                                            complement_of_port=p_val.get("complement_of_port"),
+                                            disjoint_from_port=p_val.get("disjoint_from_port"),
+                                            key_from_upstream_role=p_val.get("key_from_upstream_role"),
                                         )
                                 for p_name, p_val in cfg.get("outputs", {}).items():
                                     if isinstance(p_val, dict):
@@ -4105,6 +4070,9 @@ class LatticeOrchestrator:
                                             rank=p_val.get("rank"),
                                             element_type=p_val.get("element_type"),
                                             supported_formats=p_val.get("supported_formats"),
+                                            complement_of_port=p_val.get("complement_of_port"),
+                                            disjoint_from_port=p_val.get("disjoint_from_port"),
+                                            key_from_upstream_role=p_val.get("key_from_upstream_role"),
                                         )
 
                             if not inputs and (not isinstance(cfg, dict) or "inputs" not in cfg):
@@ -4159,6 +4127,10 @@ class LatticeOrchestrator:
                                 algorithmic_steps=cfg.get("algorithmic_steps", []),
                                 internal_topology=cfg.get("internal_topology", {}),
                                 projection=cfg.get("projection"),
+                                optic_role=cfg.get("optic_role"),
+                                container_port=cfg.get("container_port"),
+                                key_port=cfg.get("key_port"),
+                                focus_port=cfg.get("focus_port"),
                             )
                             self.loaded_cells[cell.cell_id] = cell
 
@@ -4333,44 +4305,24 @@ class LatticeOrchestrator:
                             if sid in self.loaded_cells
                         }
 
-            # Derive function words dynamically from corpus docs
-            docs = [c.docstring for c in all_cells if getattr(c, "docstring", None)] + [
-                " ".join(c.keywords) for c in all_cells if getattr(c, "keywords", None)
-            ]
             reg = TypeRegistry.get_instance()
-            if docs:
-                reg.derive_function_words(docs)
 
-            # Register operation tokens derived from loaded cell keywords and identifiers
+            # Register formal operation tokens derived strictly from canonical cell_id identifiers
             for c in all_cells:
-                if getattr(c, "keywords", None):
-                    for kw in c.keywords:
-                        reg.register_operation_tokens(CellTokenizer.tokenize_identifier(str(kw)))
                 reg.register_operation_tokens(CellTokenizer.tokenize_identifier(c.cell_id))
 
-            # Harvest egress tokens, materialization states, terminal states from stage-3/sink cells
+            # Harvest structural materialization states, terminal states, and port roles from cell signatures
             for c in all_cells:
                 is_egress = getattr(c, "stage", None) == 3 or str(getattr(c, "node_role", "")).lower() in ("egress", "sink", "terminal") or str(getattr(c, "mutation_type", "")).lower() in ("io", "sink")
                 if is_egress:
-                    if getattr(c, "keywords", None):
-                        src_toks = reg.get_source_port_tokens()
-                        excl_toks = reg.get_egress_exclusion_tokens()
-                        valid_kw = [
-                            kw for kw in c.keywords
-                            if kw not in src_toks and kw not in excl_toks
-                        ]
-                        reg.register_egress_tokens(valid_kw)
                     for p in getattr(c, "outputs", {}).values():
                         p_st = getattr(getattr(p, "signature", p), "state", None)
                         if p_st and str(p_st).lower() not in ("any", "unknown", "*"):
                             reg.register_materialization_states([str(p_st)])
                             reg.register_terminal_states([str(p_st)])
 
-                # Harvest ingress tokens and identifier root states from stage-1/ingress/source cells
                 is_ingress = getattr(c, "stage", None) == 1 or str(getattr(c, "node_role", "")).lower() in ("ingress", "source") or str(getattr(c, "mutation_type", "")).lower() in ("io", "source", "ingress")
                 if is_ingress:
-                    if getattr(c, "keywords", None):
-                        reg.register_source_port_tokens(c.keywords)
                     for p in getattr(c, "inputs", {}).values():
                         p_name = getattr(p, "name", "")
                         if p_name:
@@ -4395,16 +4347,6 @@ class LatticeOrchestrator:
                     role = getattr(p, "port_role", None) or getattr(p, "role", None)
                     if role:
                         reg.register_dest_port_tokens([str(role)])
-
-                # Harvest polarity hints from order_flag ports
-                for p_name, p in getattr(c, "inputs", {}).items():
-                    p_st = str(getattr(getattr(p, "signature", p), "state", "")).lower()
-                    p_role = str(getattr(p, "port_role", "") or getattr(p, "role", "")).lower()
-                    p_pol = str(getattr(p, "polarity", "")).lower()
-                    if p_pol in ("ascending", "descending"):
-                        reg.register_polarity_hints(p_pol, [p_name])
-                    if "order" in p_st or "order" in p_role or p_name in ("ascending", "descending"):
-                        pass
 
             # Dynamic Advisory Qualifier Harvesting (Zero-Hardcode Compliant):
             # Collect all qualifiers declared on input ports across all loaded cells

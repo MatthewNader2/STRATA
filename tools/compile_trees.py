@@ -402,49 +402,60 @@ def compute_structural_edge(producer: dict, consumer: dict, p_out: dict, p_in: d
 
 
 def synthesize_dynamic_edges(all_cells: List[Tuple[str, dict]]) -> Dict[str, List[dict]]:
-    """Synthesizes dynamic transition edges between compatible cells based on structural type unification."""
-    edges_by_cell: Dict[str, List[dict]] = {node["cell_id"]: [] for _, node in all_cells if isinstance(node, dict) and "cell_id" in node}
-    consumers = []
+    """Synthesizes dynamic transition edges between compatible cells using carrier-bucketed indexing."""
+    from lattice import TypeRegistry, build_cell_from_raw, _apply_method_owner_qualification
+    from experiments import build_indexed_topology
+
+    edges_by_cell: Dict[str, List[dict]] = {
+        node["cell_id"]: [] for _, node in all_cells if isinstance(node, dict) and "cell_id" in node
+    }
+    loaded_cells: Dict[str, Any] = {}
+    raw_by_id: Dict[str, Tuple[str, dict]] = {}
     for domain, c in all_cells:
         if not isinstance(c, dict) or "cell_id" not in c:
             continue
-        c_id = c["cell_id"]
+        cid = c["cell_id"]
         c_domain = c.get("domain_name") or domain
-        ins = c.get("inputs", {})
-        if not ins or not isinstance(ins, dict):
-            continue
-        prim_in_name = c.get("primary_in")
-        p_in = ins.get(prim_in_name) if prim_in_name and prim_in_name in ins else next(iter(ins.values()))
-        if isinstance(p_in, dict):
-            c_copy = dict(c)
-            c_copy["domain"] = c_domain
-            consumers.append((c_id, c_copy, p_in))
+        raw_by_id[cid] = (c_domain, c)
+        try:
+            cell_obj = build_cell_from_raw(c, domain=c_domain)
+            _apply_method_owner_qualification(cell_obj)
+            loaded_cells[cid] = cell_obj
+        except Exception:
+            pass
 
-    for domain, c in all_cells:
-        if not isinstance(c, dict) or "cell_id" not in c:
-            continue
-        c_id = c["cell_id"]
-        c_domain = c.get("domain_name") or domain
-        outs = c.get("outputs", {})
-        if not outs or not isinstance(outs, dict):
-            continue
-        prim_out_name = c.get("primary_out")
-        p_out = outs.get(prim_out_name) if prim_out_name and prim_out_name in outs else next(iter(outs.values()))
-        if not isinstance(p_out, dict):
-            continue
+    reg = TypeRegistry.get_instance()
+    adjacency, _ = build_indexed_topology(list(loaded_cells.values()), loaded_cells, reg)
 
-        c_copy = dict(c)
-        c_copy["domain"] = c_domain
+    for u_id, target_ids in adjacency.items():
+        if u_id not in raw_by_id:
+            continue
+        u_domain, u_raw = raw_by_id[u_id]
+        u_out_type, u_out_state = _primary_port_sig(u_raw, "outputs")
+        u_out_t_low = u_out_type.lower()
+        u_out_s_low = u_out_state.lower()
         c_edges = []
-        for target_id, target_cell, p_in in consumers:
-            if target_id == c_id:
+        for v_id in target_ids:
+            if v_id == u_id or v_id not in raw_by_id:
                 continue
-            edge = compute_structural_edge(c_copy, target_cell, p_out, p_in)
-            if edge:
-                c_edges.append(edge)
-                
+            v_domain, v_raw = raw_by_id[v_id]
+            v_in_type, v_in_state = _primary_port_sig(v_raw, "inputs")
+            score = 0.70
+            if u_domain == v_domain:
+                score += 0.15
+            if u_out_t_low and u_out_t_low == v_in_type.lower() and u_out_t_low != "any":
+                score += 0.10
+            if u_out_s_low and u_out_s_low == v_in_state.lower() and u_out_s_low != "any":
+                score += 0.05
+            score = max(0.1, min(1.0, round(score, 3)))
+            c_edges.append({
+                "target_cell_id": v_id,
+                "affinity_score": score,
+                "bridging_precondition": "true",
+                "score_provenance": "structural_unification",
+            })
         c_edges.sort(key=lambda x: x["affinity_score"], reverse=True)
-        edges_by_cell[c_id] = c_edges
+        edges_by_cell[u_id] = c_edges
 
     return edges_by_cell
 
@@ -493,6 +504,10 @@ def extract_node_data(node: dict, domain: str, dynamic_edges: Optional[List[dict
         "algorithmic_steps": node.get("algorithmic_steps", []) or [],
         "internal_topology": node.get("internal_topology", {}) or {},
         "projection": node.get("projection"),
+        "optic_role": node.get("optic_role"),
+        "container_port": node.get("container_port"),
+        "key_port": node.get("key_port"),
+        "focus_port": node.get("focus_port"),
     }
 
     return (
@@ -576,13 +591,10 @@ def _resolve_tree_files(
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
-    """Create the ``nodes`` table if missing; add any new columns.
-
-    Note: this does NOT migrate an older ``morphisms`` table. If you compiled
-    with a previous version of this script, delete the DB and recompile:
-        rm -f trees/lattice.db*
-    """
+    """Create the ``nodes`` table if missing; add any new columns."""
     cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS types;")
+    cur.execute("DROP TABLE IF EXISTS structural_metadata;")
     cur.execute(_CREATE_TABLE_SQL)
     cur.execute(_CREATE_TYPES_TABLE_SQL)
     cur.execute(_CREATE_TYPESTATES_TABLE_SQL)
@@ -598,8 +610,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
 
 _CREATE_TYPES_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS types (
-    type_name   TEXT PRIMARY KEY,
-    parent_type TEXT
+    type_name   TEXT NOT NULL,
+    parent_type TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (type_name, parent_type)
 );
 """
 
@@ -673,19 +686,13 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
             written += 1
 
         mappings = [
-            ("estimator_verbs", "estimator_verb"),
-            ("preposition_triggers", "preposition_trigger"),
-            ("prompt_filler_tokens", "prompt_filler_token"),
-            ("sentence_connectives", "sentence_connective"),
-            ("coordinating_conjunctions", "coordinating_conjunction"),
-            ("sequencing_connectives", "sequencing_connective"),
-            ("filter_context_tokens", "filter_context_token"),
-            ("column_projection_tokens", "column_projection_token"),
             ("dest_port_tokens", "dest_port_token"),
             ("data_bearing_roles", "data_bearing_role"),
-            ("egress_intent_tokens", "egress_intent_token"),
-            ("stopwords", "stopword"),
             ("abstract_carriers", "abstract_carrier"),
+            ("type_vars", "type_var"),
+            ("top_types", "top_type"),
+            ("product_constructors", "product_constructor"),
+            ("materialization_states", "materialization_state"),
         ]
         for key, cat in mappings:
             items = data.get(key)
@@ -693,37 +700,20 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
                 for item in items:
                     _insert(cat, item)
 
-        vs = data.get("verification_semantics")
-        if isinstance(vs, dict):
-            for k, val in vs.items():
-                _insert("verification_semantics", k, json.dumps(val))
-                if k in ("estimator_verbs", "target_verbs") and isinstance(val, list):
-                    for v in val:
-                        _insert("estimator_verb", v)
-                elif k == "preposition_triggers" and isinstance(val, list):
-                    for p in val:
-                        _insert("preposition_trigger", p)
-                elif k in ("destination_roles", "dest_port_tokens") and isinstance(val, list):
-                    for d in val:
-                        _insert("dest_port_token", d)
-                elif k in ("terminal_states",) and isinstance(val, list):
-                    for s in val:
-                        _insert("terminal_state", s)
-                elif k in ("materialization_states",) and isinstance(val, list):
-                    for s in val:
-                        _insert("materialization_state", s)
-                elif k in ("bridge_roles",) and isinstance(val, list):
-                    for r in val:
-                        _insert("role_carrier", r)
+        acm = data.get("abstract_carrier_mapping")
+        if isinstance(acm, dict):
+            for k, val in acm.items():
+                _insert("abstract_carrier_mapping", k, str(val))
 
-        ap = data.get("asset_placeholders")
-        if isinstance(ap, dict):
-            for k, val in ap.items():
-                _insert("asset_placeholder", k, str(val))
-        oap = data.get("output_asset_placeholders")
-        if isinstance(oap, dict):
-            for k, val in oap.items():
-                _insert("output_asset_placeholder", k, str(val))
+        pdefs = data.get("pointed_defaults")
+        if isinstance(pdefs, dict):
+            for k, val in pdefs.items():
+                _insert("type_default", k, json.dumps(val))
+
+        caps = data.get("capabilities")
+        if isinstance(caps, dict):
+            for k, val in caps.items():
+                _insert("capability", k, json.dumps(val))
 
     conn.commit()
     return written
@@ -732,11 +722,8 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
 def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
     """Persists per-tree ``types`` hierarchies into the ``types`` table.
 
-    The loader (LatticeOrchestrator.load_from_database) reads this table to
-    restore the type poset in SQLite mode; without it, subtype relations
-    declared in tree JSONs were silently lost on compilation.
-    Accepts both list-form entries ("Name" or {"name": ..., "parent": ...})
-    and dict-mappings {name: parent}.
+    Properly extracts multi-parent DAG edges when ``types[child]`` is a dict
+    with ``parent`` or ``parents`` (never stringifying the dict itself).
     """
     cur = conn.cursor()
     written = 0
@@ -749,19 +736,51 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
         if not isinstance(data, dict):
             continue
 
-        entries: List[Tuple[str, Optional[str]]] = []
+        entries: List[Tuple[str, str]] = []
         raw_types = data.get("types")
         if isinstance(raw_types, list):
             for item in raw_types:
                 if isinstance(item, str):
-                    entries.append((item, None))
+                    entries.append((item, ""))
                 elif isinstance(item, dict):
                     name = item.get("name") or item.get("type_name")
-                    if name:
-                        entries.append((str(name), item.get("parent") or item.get("parent_type")))
+                    if not name:
+                        continue
+                    parents = item.get("parents")
+                    if isinstance(parents, list) and parents:
+                        for p in parents:
+                            if p:
+                                entries.append((str(name), str(p)))
+                    else:
+                        p = item.get("parent") or item.get("parent_type") or ""
+                        entries.append((str(name), str(p)))
         elif isinstance(raw_types, dict):
-            for name, parent in raw_types.items():
-                entries.append((str(name), str(parent) if parent else None))
+            for name, meta in raw_types.items():
+                if isinstance(meta, dict):
+                    if "default_value" in meta:
+                        cur.execute(
+                            "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                            ("type_default", str(name), json.dumps(meta["default_value"])),
+                        )
+                    elif "pointed_default" in meta:
+                        cur.execute(
+                            "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                            ("type_default", str(name), json.dumps(meta["pointed_default"])),
+                        )
+                    parents = meta.get("parents")
+                    if isinstance(parents, list) and parents:
+                        for p in parents:
+                            if p:
+                                entries.append((str(name), str(p)))
+                    else:
+                        p = meta.get("parent") or meta.get("parent_type") or ""
+                        entries.append((str(name), str(p)))
+                elif isinstance(meta, list):
+                    for p in meta:
+                        if p:
+                            entries.append((str(name), str(p)))
+                else:
+                    entries.append((str(name), str(meta) if meta else ""))
 
         for name, parent in entries:
             cur.execute(

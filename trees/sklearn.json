@@ -42,102 +42,6 @@
       "tensor"
     ]
   },
-  "verification_semantics": {
-    "feature_roles": [
-      "feature_input",
-      "features",
-      "feature"
-    ],
-    "target_roles": [
-      "target_input",
-      "target"
-    ],
-    "strict_roles": [
-      "model_input",
-      "estimator",
-      "model",
-      "model_sink"
-    ],
-    "dataflow_roles": [
-      "model_input",
-      "model_sink",
-      "model",
-      "estimator",
-      "feature_input",
-      "features",
-      "target_input",
-      "target"
-    ],
-    "projective_roles": [
-      "feature_input",
-      "target_input",
-      "features",
-      "target"
-    ],
-    "mutually_exclusive_roles": [
-      "regressor",
-      "classifier",
-      "clusterer"
-    ],
-    "mutually_exclusive_role_pairs": [
-      [
-        "feature_input",
-        "target_input"
-      ],
-      [
-        "feature_input",
-        "model_input"
-      ],
-      [
-        "target_input",
-        "model_input"
-      ],
-      [
-        "features",
-        "target"
-      ],
-      [
-        "feature",
-        "target"
-      ],
-      [
-        "prediction_input",
-        "target_input"
-      ],
-      [
-        "prediction_output",
-        "target_input"
-      ],
-      [
-        "prediction_output",
-        "target"
-      ]
-    ],
-    "paired_morphism_ranks": {
-      "feature": 2,
-      "target": 1
-    },
-    "instance_sink_roles": [
-      "model_sink"
-    ],
-    "stateful_instance_roots": [
-      "model"
-    ],
-    "instance_consumer_roles": [
-      "model_input",
-      "model",
-      "estimator",
-      "receiver"
-    ],
-    "state_precondition_properties": [
-      "is_fitted"
-    ],
-    "dependent_terminal_input_roles": {
-      "prediction_input": [
-        "prediction_output"
-      ]
-    }
-  },
   "typestates": {
     "domain": "sklearn",
     "states": [
@@ -1588,7 +1492,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -1623,7 +1529,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "test_size": {
           "name": "test_size",
@@ -3657,7 +3564,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -3692,7 +3601,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "k": {
           "name": "k",
@@ -3872,7 +3782,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -3907,7 +3819,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "C": {
           "name": "C",
@@ -4450,7 +4363,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -4485,7 +4400,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_estimators": {
           "name": "n_estimators",
@@ -4677,7 +4593,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -4712,7 +4630,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "C": {
           "name": "C",
@@ -4911,7 +4830,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -4949,7 +4870,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         }
       },
       "outputs": {
@@ -5260,7 +5182,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -5298,7 +5222,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "alpha": {
           "name": "alpha",
@@ -5467,7 +5392,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -5502,7 +5429,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "alpha": {
           "name": "alpha",
@@ -5672,7 +5600,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -5707,7 +5637,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_estimators": {
           "name": "n_estimators",
@@ -6485,7 +6416,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -6520,7 +6453,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         }
       },
       "outputs": {
@@ -6732,7 +6666,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -6767,7 +6703,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         }
       },
       "outputs": {
@@ -6935,7 +6872,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -6970,7 +6909,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "cv": {
           "name": "cv",
@@ -9322,7 +9262,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -9357,7 +9299,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_splits": {
           "name": "n_splits",
@@ -11877,7 +11820,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -11912,7 +11857,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_components": {
           "name": "n_components",
@@ -12492,7 +12438,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -12527,7 +12475,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_features_to_select": {
           "name": "n_features_to_select",
@@ -12706,7 +12655,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -12741,7 +12692,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "max_depth": {
           "name": "max_depth",
@@ -12933,7 +12885,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -12968,7 +12922,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_estimators": {
           "name": "n_estimators",
@@ -13182,7 +13137,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -13217,7 +13174,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_neighbors": {
           "name": "n_neighbors",
@@ -13386,7 +13344,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -13421,7 +13381,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         }
       },
       "outputs": {
@@ -13568,7 +13529,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -13603,7 +13566,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "loss": {
           "name": "loss",
@@ -13824,7 +13788,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -13859,7 +13825,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "hidden_layer_sizes": {
           "name": "hidden_layer_sizes",
@@ -14071,7 +14038,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -14106,7 +14075,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "max_depth": {
           "name": "max_depth",
@@ -14297,7 +14267,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -14332,7 +14304,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_estimators": {
           "name": "n_estimators",
@@ -14546,7 +14519,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -14581,7 +14556,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "alpha": {
           "name": "alpha",
@@ -14797,7 +14773,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -14832,7 +14810,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "C": {
           "name": "C",
@@ -15026,7 +15005,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -15061,7 +15042,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "n_neighbors": {
           "name": "n_neighbors",
@@ -16062,7 +16044,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -16097,7 +16081,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         }
       },
       "outputs": {
@@ -16264,7 +16249,9 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "y",
+          "complement_of_port": "y"
         },
         "y": {
           "name": "y",
@@ -16299,7 +16286,8 @@
           "structure_kind": "tensor",
           "rank": 1,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "disjoint_from_port": "X"
         },
         "cv": {
           "name": "cv",
@@ -17684,6 +17672,2939 @@
       "edges": [],
       "primary_in": "file_obj",
       "primary_out": "model"
+    },
+    {
+      "cell_id": "sklearn.preprocessing.MinMaxScaler.transform",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Scale features of X according to feature range using already fitted MinMaxScaler parameters.",
+      "dependencies": [
+        "sklearn.preprocessing"
+      ],
+      "semantic_tags": [
+        "normalization",
+        "out_of_sample",
+        "transform"
+      ],
+      "keywords": [
+        "minmax",
+        "transform",
+        "range"
+      ],
+      "code_template": "{output_var} = {scaler}.transform({X})",
+      "slots": [
+        "output_var",
+        "scaler",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError",
+        "ValueError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "scaler": {
+          "name": "scaler",
+          "type_name": "BaseEstimator",
+          "state": "fit_transformer",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted MinMaxScaler instance.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "unscaled_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Feature matrix to normalize.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "name": "output_var",
+          "type_name": "ndarray",
+          "state": "scaled_features",
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Normalized feature matrix bounded to fitted range.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "scaler",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(scaler, 'data_min_')",
+          "description": "MinMaxScaler must have learned dataset minimum bounds."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "output_var",
+          "property": "ndim",
+          "operator": "==",
+          "value": 2,
+          "expression": "output_var.ndim == 2",
+          "description": "Output maintains matrix rank."
+        }
+      ],
+      "effects": [
+        "applies_learned_minmax_mapping"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.decomposition.FastICA.fit_transform",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.tree.DecisionTreeClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict class value for X samples using fitted decision tree.",
+      "dependencies": [
+        "sklearn.tree"
+      ],
+      "semantic_tags": [
+        "inference",
+        "tree_prediction",
+        "classes"
+      ],
+      "keywords": [
+        "predict",
+        "tree",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted DecisionTreeClassifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Holdout test features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted class labels.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'tree_')",
+          "description": "Decision tree must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Output is a 1D vector."
+        }
+      ],
+      "effects": [
+        "traverses_tree_leaves"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.precision_score",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        },
+        {
+          "target_cell_id": "sklearn.metrics.recall_score",
+          "affinity_score": 0.5,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        },
+        {
+          "target_cell_id": "sklearn.metrics.classification_report",
+          "affinity_score": 0.2,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.ensemble.GradientBoostingClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict classes for X using trained GradientBoostingClassifier.",
+      "dependencies": [
+        "sklearn.ensemble"
+      ],
+      "semantic_tags": [
+        "inference",
+        "boosting_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "gradient_boost",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted boosting model.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Features to evaluate.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted discrete class indices.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'estimators_')",
+          "description": "Boosting model must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1D."
+        }
+      ],
+      "effects": [
+        "aggregates_staged_decision_stumps"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.classification_report",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        },
+        {
+          "target_cell_id": "sklearn.metrics.precision_score",
+          "affinity_score": 0.5,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.neighbors.KNeighborsClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict the class labels for the provided data using voting among k neighbors.",
+      "dependencies": [
+        "sklearn.neighbors"
+      ],
+      "semantic_tags": [
+        "inference",
+        "knn_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "knn",
+        "neighbors"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted KNeighborsClassifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted majority class label per query sample.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, '_fit_X')",
+          "description": "KNN index must exist."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1-dimensional."
+        }
+      ],
+      "effects": [
+        "queries_nearest_metric_neighbors"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.precision_score",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        },
+        {
+          "target_cell_id": "sklearn.metrics.recall_score",
+          "affinity_score": 0.5,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.naive_bayes.GaussianNB.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Perform classification on an array of test vectors X using Gaussian Naive Bayes.",
+      "dependencies": [
+        "sklearn.naive_bayes"
+      ],
+      "semantic_tags": [
+        "inference",
+        "bayes_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "naive_bayes",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted GaussianNB model.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Maximum a posteriori class predictions.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'theta_')",
+          "description": "Model parameters must be populated."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions form a 1D vector."
+        }
+      ],
+      "effects": [
+        "computes_map_classification"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.classification_report",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.linear_model.SGDClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict class labels for samples in X using trained SGD model.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "inference",
+        "sgd_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "sgd",
+        "linear"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted SGDClassifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted discrete labels.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'coef_')",
+          "description": "SGD weights must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Prediction output is a 1D vector."
+        }
+      ],
+      "effects": [
+        "computes_linear_hyperplane_projections"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.classification_report",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.neural_network.MLPClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict using the multi-layer perceptron classifier.",
+      "dependencies": [
+        "sklearn.neural_network"
+      ],
+      "semantic_tags": [
+        "inference",
+        "mlp_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "mlp",
+        "forward_pass"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted MLPClassifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Holdout test features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted categorical labels from forward activations.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'coefs_')",
+          "description": "Neural net weights must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predicted labels output as 1D array."
+        }
+      ],
+      "effects": [
+        "executes_neural_forward_pass"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.classification_report",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.tree.DecisionTreeRegressor.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous value for X using fitted regression tree.",
+      "dependencies": [
+        "sklearn.tree"
+      ],
+      "semantic_tags": [
+        "inference",
+        "regression_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "tree",
+        "continuous"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted DecisionTreeRegressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Estimated target values.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'tree_')",
+          "description": "Regression tree must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1-dimensional."
+        }
+      ],
+      "effects": [
+        "evaluates_regression_leaf_averages"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.mean_absolute_error",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.ensemble.GradientBoostingRegressor.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous values for X using trained GradientBoostingRegressor.",
+      "dependencies": [
+        "sklearn.ensemble"
+      ],
+      "semantic_tags": [
+        "inference",
+        "boosting_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "gradient_boost",
+        "continuous"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted GradientBoostingRegressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Continuous scalar estimations.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'estimators_')",
+          "description": "Estimator must have staged trees."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1-dimensional."
+        }
+      ],
+      "effects": [
+        "aggregates_boosting_residual_estimators"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.mean_absolute_error",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.linear_model.ElasticNet.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict using ElasticNet linear model.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "inference",
+        "elasticnet_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "elasticnet",
+        "continuous"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted ElasticNet regressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Continuous scalar estimations.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'coef_')",
+          "description": "ElasticNet coefficients must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1-dimensional."
+        }
+      ],
+      "effects": [
+        "computes_regularized_linear_dot_product"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.mean_absolute_error",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.svm.SVR.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous value for X using fitted SVR model.",
+      "dependencies": [
+        "sklearn.svm"
+      ],
+      "semantic_tags": [
+        "inference",
+        "svr_prediction"
+      ],
+      "keywords": [
+        "predict",
+        "svr",
+        "kernel"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted SVR instance.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Continuous scalar estimations.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, 'support_vectors_')",
+          "description": "Support vectors must exist."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1D."
+        }
+      ],
+      "effects": [
+        "evaluates_kernel_inner_products"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.mean_absolute_error",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.neighbors.KNeighborsRegressor.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous values for X using local average of neighbors.",
+      "dependencies": [
+        "sklearn.neighbors"
+      ],
+      "semantic_tags": [
+        "inference",
+        "knn_regression"
+      ],
+      "keywords": [
+        "predict",
+        "knn",
+        "continuous"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted KNeighborsRegressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": null
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Evaluation features.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Continuous scalar estimations.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "enum_values": null,
+          "param_kind": "positional_or_keyword",
+          "value_constraints": null,
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [
+        {
+          "target": "model",
+          "property": "is_fitted",
+          "operator": "==",
+          "value": true,
+          "expression": "hasattr(model, '_fit_X')",
+          "description": "Continuous lookup tree must be fitted."
+        }
+      ],
+      "postconditions": [
+        {
+          "target": "y_pred",
+          "property": "ndim",
+          "operator": "==",
+          "value": 1,
+          "expression": "y_pred.ndim == 1",
+          "description": "Predictions vector is 1-dimensional."
+        }
+      ],
+      "effects": [
+        "averages_local_metric_targets"
+      ],
+      "edges": [
+        {
+          "target_cell_id": "sklearn.metrics.mean_absolute_error",
+          "affinity_score": 0.8,
+          "score_provenance": "llm_seed",
+          "bridging_precondition": null,
+          "metadata": {},
+          "needs_mining": true
+        }
+      ]
+    },
+    {
+      "cell_id": "sklearn.ensemble.RandomForestClassifier.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict class for X using fitted RandomForestClassifier.",
+      "dependencies": [
+        "sklearn.ensemble"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Classifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.ensemble.RandomForestRegressor.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict regression target for X using fitted RandomForestRegressor.",
+      "dependencies": [
+        "sklearn.ensemble"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Regressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.linear_model.Ridge.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous target values using fitted Ridge regressor.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Regressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.linear_model.Lasso.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict continuous target values using fitted Lasso regressor.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Regressor",
+          "state": "fit_regressor",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Regressor.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_values",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.svm.SVC.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Perform classification on samples in X using fitted SVC.",
+      "dependencies": [
+        "sklearn.svm"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Classifier",
+          "state": "fit_classifier",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Classifier.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.cluster.KMeans.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Predict the closest cluster each sample in X belongs to.",
+      "dependencies": [
+        "sklearn.cluster"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Clusterer",
+          "state": "fit_clusterer",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Clusterer.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "cluster_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.model_selection.GridSearchCV.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Call predict on the estimator with the best found parameters.",
+      "dependencies": [
+        "sklearn.model_selection"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Estimator",
+          "state": "fit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.model_selection.RandomizedSearchCV.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Call predict on the estimator with the best found parameters.",
+      "dependencies": [
+        "sklearn.model_selection"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Estimator",
+          "state": "fit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.pipeline.Pipeline.predict",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "pure",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Transform the data, and apply predict with the final estimator.",
+      "dependencies": [
+        "sklearn.pipeline"
+      ],
+      "semantic_tags": [
+        "inference",
+        "prediction"
+      ],
+      "keywords": [
+        "predict",
+        "inference"
+      ],
+      "code_template": "{y_pred} = {model}.predict({X})",
+      "slots": [
+        "y_pred",
+        "model",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "NotFittedError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "model": {
+          "name": "model",
+          "type_name": "Pipeline",
+          "state": "fit_pipeline",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted Pipeline.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_input",
+          "param_kind": "positional_or_keyword"
+        },
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "split_test_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "scaled_features",
+            "pca_components"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Input features for prediction.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "y_pred": {
+          "name": "y_pred",
+          "type_name": "ndarray",
+          "state": "predicted_labels",
+          "qualifiers": [
+            "vector"
+          ],
+          "default_value": null,
+          "description": "Predicted output vector.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "prediction_output",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples,)"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "inference"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.preprocessing.StandardScaler.fit",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Fit StandardScaler to compute mean and std for later scaling.",
+      "dependencies": [
+        "sklearn.preprocessing"
+      ],
+      "semantic_tags": [
+        "fit",
+        "transformer"
+      ],
+      "keywords": [
+        "fit",
+        "standardscaler"
+      ],
+      "code_template": "{scaler} = StandardScaler().fit({X})",
+      "slots": [
+        "scaler",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "ValueError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "unscaled_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "split_train_features"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Training data to fit transformer.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "scaler": {
+          "name": "scaler",
+          "type_name": "Transformer",
+          "state": "fit_transformer",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted StandardScaler instance.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "fits_transformer"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.preprocessing.MinMaxScaler.fit",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Fit MinMaxScaler to compute min and max for later scaling.",
+      "dependencies": [
+        "sklearn.preprocessing"
+      ],
+      "semantic_tags": [
+        "fit",
+        "transformer"
+      ],
+      "keywords": [
+        "fit",
+        "minmaxscaler"
+      ],
+      "code_template": "{scaler} = MinMaxScaler().fit({X})",
+      "slots": [
+        "scaler",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "ValueError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "unscaled_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "split_train_features"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Training data to fit transformer.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "scaler": {
+          "name": "scaler",
+          "type_name": "Transformer",
+          "state": "fit_transformer",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted MinMaxScaler instance.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "fits_transformer"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.decomposition.PCA.fit",
+      "stage": 2,
+      "topology_type": "linear",
+      "node_type": "method",
+      "node_role": "transformer",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Fit the PCA model with X.",
+      "dependencies": [
+        "sklearn.decomposition"
+      ],
+      "semantic_tags": [
+        "fit",
+        "transformer"
+      ],
+      "keywords": [
+        "fit",
+        "pca"
+      ],
+      "code_template": "{pca} = PCA().fit({X})",
+      "slots": [
+        "pca",
+        "X"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [
+        "ValueError"
+      ],
+      "type_vars": [],
+      "inputs": {
+        "X": {
+          "name": "X",
+          "type_name": "ndarray",
+          "state": "unscaled_features",
+          "accepted_states": [
+            "ndarray_generic",
+            "dataframe_2d_generic",
+            "split_train_features"
+          ],
+          "qualifiers": [
+            "matrix"
+          ],
+          "default_value": null,
+          "description": "Training data to fit transformer.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "tensor",
+          "port_role": "feature_input",
+          "param_kind": "positional_or_keyword",
+          "shape_contract": "(n_samples, n_features)"
+        }
+      },
+      "outputs": {
+        "pca": {
+          "name": "pca",
+          "type_name": "Transformer",
+          "state": "fit_transformer",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Fitted PCA instance.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [
+        "fits_transformer"
+      ],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.ensemble.RandomForestClassifier.init",
+      "stage": 1,
+      "topology_type": "linear",
+      "node_type": "function",
+      "node_role": "source",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Instantiate an unfitted RandomForestClassifier.",
+      "dependencies": [
+        "sklearn.ensemble"
+      ],
+      "semantic_tags": [
+        "estimator",
+        "init"
+      ],
+      "keywords": [
+        "randomforestclassifier",
+        "estimator"
+      ],
+      "code_template": "{estimator} = RandomForestClassifier()",
+      "slots": [
+        "estimator"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [],
+      "type_vars": [],
+      "inputs": {},
+      "outputs": {
+        "estimator": {
+          "name": "estimator",
+          "type_name": "Estimator",
+          "state": "unfit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Unfitted RandomForestClassifier estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.linear_model.LogisticRegression.init",
+      "stage": 1,
+      "topology_type": "linear",
+      "node_type": "function",
+      "node_role": "source",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Instantiate an unfitted LogisticRegression estimator.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "estimator",
+        "init"
+      ],
+      "keywords": [
+        "logisticregression",
+        "estimator"
+      ],
+      "code_template": "{estimator} = LogisticRegression()",
+      "slots": [
+        "estimator"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [],
+      "type_vars": [],
+      "inputs": {},
+      "outputs": {
+        "estimator": {
+          "name": "estimator",
+          "type_name": "Estimator",
+          "state": "unfit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Unfitted LogisticRegression estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.svm.SVC.init",
+      "stage": 1,
+      "topology_type": "linear",
+      "node_type": "function",
+      "node_role": "source",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Instantiate an unfitted SVC estimator.",
+      "dependencies": [
+        "sklearn.svm"
+      ],
+      "semantic_tags": [
+        "estimator",
+        "init"
+      ],
+      "keywords": [
+        "svc",
+        "estimator"
+      ],
+      "code_template": "{estimator} = SVC()",
+      "slots": [
+        "estimator"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [],
+      "type_vars": [],
+      "inputs": {},
+      "outputs": {
+        "estimator": {
+          "name": "estimator",
+          "type_name": "Estimator",
+          "state": "unfit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Unfitted SVC estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [],
+      "edges": []
+    },
+    {
+      "cell_id": "sklearn.linear_model.Ridge.init",
+      "stage": 1,
+      "topology_type": "linear",
+      "node_type": "function",
+      "node_role": "source",
+      "mutation_type": "stateful_allocation",
+      "is_context_manager": false,
+      "verified": true,
+      "source_priority": 1,
+      "is_public": true,
+      "docstring": "Instantiate an unfitted Ridge estimator.",
+      "dependencies": [
+        "sklearn.linear_model"
+      ],
+      "semantic_tags": [
+        "estimator",
+        "init"
+      ],
+      "keywords": [
+        "ridge",
+        "estimator"
+      ],
+      "code_template": "{estimator} = Ridge()",
+      "slots": [
+        "estimator"
+      ],
+      "bound_slots": {},
+      "feedback_state_type": null,
+      "raises": [],
+      "type_vars": [],
+      "inputs": {},
+      "outputs": {
+        "estimator": {
+          "name": "estimator",
+          "type_name": "Estimator",
+          "state": "unfit_estimator",
+          "qualifiers": [
+            "estimator"
+          ],
+          "default_value": null,
+          "description": "Unfitted Ridge estimator.",
+          "domain": "sklearn",
+          "required": true,
+          "abstract_type": "collection",
+          "port_role": "model_sink",
+          "param_kind": "positional_or_keyword"
+        }
+      },
+      "preconditions": [],
+      "postconditions": [],
+      "effects": [],
+      "edges": []
     }
   ],
   "types": {
@@ -17718,13 +20639,6 @@
       "parent": "format"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [
@@ -17739,5 +20653,11 @@
       ],
       "template": "class _MockModel_{var_name}:\n    def fit(self, *a, **k): return self\n    def predict(self, *a, **k): return [0, 1]\n    def transform(self, *a, **k): return a[0] if a else []\n    def evaluate(self, *a, **k): return {'metric': 1.0}\n{var_name} = _MockModel_{var_name}()"
     }
-  ]
+  ],
+  "pointed_defaults": {
+    "int": 1,
+    "float": 1.0,
+    "bool": false,
+    "str": "'l2'"
+  }
 }

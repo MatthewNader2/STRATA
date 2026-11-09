@@ -22,37 +22,6 @@
     "ndarray_generic",
     "nd_tensor"
   ],
-  "verification_semantics": {
-    "tensor_context_tokens": [
-      "array",
-      "tensor",
-      "ndarray",
-      "matrix",
-      "vector",
-      "grid",
-      "volume",
-      "signal",
-      "dim",
-      "dims",
-      "dimension",
-      "ndim"
-    ],
-    "array_types": [
-      "ndarray",
-      "tensor",
-      "matrix",
-      "array"
-    ],
-    "bridge_tokens": [
-      "array_bridge"
-    ]
-  },
-  "asset_placeholders": {
-    "array": "input_array.npy"
-  },
-  "output_placeholders": {
-    "array": "output_array.npy"
-  },
   "artifact_readers": {
     "array": [
       "numpy.load"
@@ -12288,13 +12257,6 @@
       "parent": "tensor"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [

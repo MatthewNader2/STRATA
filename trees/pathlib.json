@@ -34,77 +34,6 @@
       "target_path"
     ]
   },
-  "verification_semantics": {
-    "path_consumer_roles": [
-      "source_data"
-    ],
-    "path_abstract_types": [
-      "path"
-    ],
-    "path_roles": [
-      "path",
-      "file",
-      "filepath",
-      "filename",
-      "pathlike",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier"
-    ],
-    "path_type_names": [
-      "path",
-      "filepath",
-      "uri",
-      "url",
-      "file",
-      "pathlike"
-    ],
-    "path_port_tokens": [
-      "path",
-      "filepath",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier",
-      "uri",
-      "url",
-      "file",
-      "pathlike"
-    ],
-    "source_roles": [
-      "source",
-      "ingress"
-    ],
-    "ingress_roles": [
-      "source",
-      "ingress"
-    ],
-    "sink_roles": [
-      "sink",
-      "terminal",
-      "egress"
-    ],
-    "terminal_roles": [
-      "sink",
-      "model_sink",
-      "evaluator",
-      "export",
-      "terminal",
-      "output"
-    ],
-    "bridge_roles": [
-      "bridge",
-      "tunnel",
-      "adapter",
-      "cast",
-      "coercion"
-    ],
-    "dataflow_roles": [
-      "carrier",
-      "data_input"
-    ]
-  },
   "types": [
     {
       "name": "object",
@@ -3062,6 +2991,19 @@
             "channel_axis": null,
             "len": null
           }
+        },
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
         }
       },
       "outputs": {

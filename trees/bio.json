@@ -2,8 +2,160 @@
   "domain": "bio",
   "version": "1.0",
   "description": "Pluggable bioinformatics domain extension: fixtures and hints only.",
-  "types": {},
-  "cells": [],
+  "types": {
+    "Sequence": {
+      "parent": "str"
+    },
+    "DNASequence": {
+      "parent": "Sequence"
+    },
+    "RNASequence": {
+      "parent": "Sequence"
+    },
+    "ProteinSequence": {
+      "parent": "Sequence"
+    }
+  },
+  "cells": [
+    {
+      "cell_id": "BIO_TRANSCRIBE_DNA_TO_RNA",
+      "stage": 2,
+      "domain_name": "bio",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Transcribe a DNA nucleotide sequence into an RNA sequence by replacing thymine (T) with uracil (U).",
+      "keywords": [
+        "transcribe",
+        "dna",
+        "rna",
+        "nucleotide",
+        "sequence"
+      ],
+      "inputs": {
+        "dna_seq": {
+          "name": "dna_seq",
+          "type_name": "DNASequence",
+          "state": "raw_dna",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "outputs": {
+        "rna_seq": {
+          "name": "rna_seq",
+          "type_name": "RNASequence",
+          "state": "transcribed_rna",
+          "required": true,
+          "port_role": "data_output",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "code_template": "{rna_seq} = str({dna_seq}).upper().replace('T', 'U')",
+      "slots": [
+        "rna_seq",
+        "dna_seq"
+      ],
+      "verified": true
+    },
+    {
+      "cell_id": "BIO_REVERSE_COMPLEMENT",
+      "stage": 2,
+      "domain_name": "bio",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Compute the reverse complement of a DNA sequence.",
+      "keywords": [
+        "reverse_complement",
+        "complement",
+        "dna",
+        "sequence"
+      ],
+      "inputs": {
+        "dna_seq": {
+          "name": "dna_seq",
+          "type_name": "DNASequence",
+          "state": "raw_dna",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "outputs": {
+        "rev_comp": {
+          "name": "rev_comp",
+          "type_name": "DNASequence",
+          "state": "complement_dna",
+          "required": true,
+          "port_role": "data_output",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "code_template": "{rev_comp} = str({dna_seq}).upper().translate(str.maketrans('ATCG', 'TAGC'))[::-1]",
+      "slots": [
+        "rev_comp",
+        "dna_seq"
+      ],
+      "verified": true
+    },
+    {
+      "cell_id": "BIO_GC_CONTENT",
+      "stage": 3,
+      "domain_name": "bio",
+      "node_type": "function",
+      "node_role": "sink",
+      "docstring": "Calculate fractional GC content of a nucleotide sequence.",
+      "keywords": [
+        "gc_content",
+        "gc",
+        "fraction",
+        "nucleotide"
+      ],
+      "inputs": {
+        "seq": {
+          "name": "seq",
+          "type_name": "Sequence",
+          "state": "raw_dna",
+          "accepted_states": [
+            "complement_dna",
+            "transcribed_rna"
+          ],
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "outputs": {
+        "gc_ratio": {
+          "name": "gc_ratio",
+          "type_name": "float",
+          "state": "gc_metric",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "float64"
+        }
+      },
+      "code_template": "_s = str({seq}).upper()\n{gc_ratio} = (_s.count('G') + _s.count('C')) / max(len(_s), 1)",
+      "slots": [
+        "gc_ratio",
+        "seq"
+      ],
+      "endable": true,
+      "verified": true
+    }
+  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [
@@ -25,9 +177,45 @@
   "supported_formats": [],
   "typestates": {
     "domain": "bio",
-    "states": [],
+    "states": [
+      {
+        "name": "raw_dna",
+        "parent_state": null,
+        "carrier_type": "DNASequence",
+        "description": "Raw DNA sequence",
+        "properties": {}
+      },
+      {
+        "name": "complement_dna",
+        "parent_state": "raw_dna",
+        "carrier_type": "DNASequence",
+        "description": "Reverse-complemented DNA sequence",
+        "properties": {}
+      },
+      {
+        "name": "transcribed_rna",
+        "parent_state": null,
+        "carrier_type": "RNASequence",
+        "description": "Transcribed RNA sequence",
+        "properties": {}
+      },
+      {
+        "name": "gc_metric",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "GC content ratio",
+        "properties": {}
+      }
+    ],
     "transitions": [],
-    "initial_state": null,
-    "terminal_states": []
+    "initial_state": "raw_dna",
+    "terminal_states": [
+      "gc_metric"
+    ]
+  },
+  "pointed_defaults": {
+    "DNASequence": "''",
+    "RNASequence": "''",
+    "ProteinSequence": "''"
   }
 }

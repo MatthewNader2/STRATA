@@ -43,7 +43,7 @@
           "type_name": "dict",
           "state": "adjacency_dict",
           "required": false,
-          "default_value": "{'A': {'B': 1, 'C': 4}, 'B': {'C': 2, 'D': 5}, 'C': {'D': 1}, 'D': {}}",
+          "default_value": "{}",
           "port_role": "data_input",
           "structure_kind": "composite",
           "rank": 0,
@@ -54,7 +54,7 @@
           "type_name": "str",
           "state": "source_node",
           "required": false,
-          "default_value": "'A'",
+          "default_value": "''",
           "port_role": "literal_parameter",
           "structure_kind": "scalar",
           "rank": 0,
@@ -73,7 +73,7 @@
           "supported_formats": []
         }
       },
-      "code_template": "import heapq\n\ndef dijkstra(graph, start):\n    distances = {node: float(\"inf\") for node in graph}\n    distances[start] = 0\n    pq = [(0, start)]\n    while pq:\n        curr_dist, curr_node = heapq.heappop(pq)\n        if curr_dist > distances[curr_node]:\n            continue\n        for neighbor, weight in graph.get(curr_node, {}).items():\n            dist = curr_dist + weight\n            if dist < distances[neighbor]:\n                distances[neighbor] = dist\n                heapq.heappush(pq, (dist, neighbor))\n    return distances\n\n{output_var} = dijkstra({graph}, {start})",
+      "code_template": "import heapq\n\ndef dijkstra(graph, start):\n    distances = dict.fromkeys(graph, float('inf'))\n    if start in distances:\n        distances[start] = 0\n    pq = [(0, start)] if start in distances else []\n    while pq:\n        curr_dist, curr_node = heapq.heappop(pq)\n        if curr_dist > distances.get(curr_node, float('inf')):\n            continue\n        for neighbor, weight in graph.get(curr_node, {}).items():\n            dist = curr_dist + weight\n            if dist < distances.get(neighbor, float('inf')):\n                distances[neighbor] = dist\n                heapq.heappush(pq, (dist, neighbor))\n    return distances\n\n{output_var} = dijkstra({graph}, {start})",
       "primary_in": "graph",
       "primary_out": "output_var",
       "dependencies": [
@@ -110,7 +110,7 @@
           "type_name": "list",
           "state": "sorted_list",
           "required": false,
-          "default_value": "[1, 3, 5, 7, 9]",
+          "default_value": "[]",
           "port_role": "data_input",
           "structure_kind": "collection",
           "rank": 1,
@@ -132,7 +132,7 @@
           "type_name": "int",
           "state": "query",
           "required": false,
-          "default_value": "5",
+          "default_value": "0",
           "port_role": "literal_parameter",
           "structure_kind": "scalar",
           "rank": 0,
@@ -185,7 +185,7 @@
           "type_name": "list",
           "state": "raw_list",
           "required": false,
-          "default_value": "[5, 2, 8, 1, 9]",
+          "default_value": "[]",
           "port_role": "data_input",
           "structure_kind": "collection",
           "rank": 1,
@@ -235,6 +235,243 @@
       "slots": [
         "data",
         "output_var"
+      ],
+      "endable": true
+    },
+    {
+      "cell_id": "PYTHON_DICT_INIT",
+      "stage": 1,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "source",
+      "docstring": "Initialize a Python dictionary state container.",
+      "keywords": [
+        "dict",
+        "dictionary",
+        "state",
+        "init",
+        "map"
+      ],
+      "inputs": {},
+      "outputs": {
+        "output_var": {
+          "type_name": "dict",
+          "state": "initialized_dict",
+          "required": true,
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record",
+          "supported_formats": []
+        }
+      },
+      "code_template": "{output_var} = {}",
+      "primary_in": null,
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "source_priority": 100,
+      "slots": [
+        "output_var"
+      ],
+      "endable": false
+    },
+    {
+      "cell_id": "PYTHON_DICT_GET",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "optic_role": "getter",
+      "container_port": "mapping",
+      "key_port": "key",
+      "focus_port": "output_var",
+      "docstring": "Project a value from a dictionary by key (Categorial Lens Getter).",
+      "keywords": [
+        "dict_get",
+        "get",
+        "lookup",
+        "project_key"
+      ],
+      "inputs": {
+        "mapping": {
+          "type_name": "dict",
+          "state": "initialized_dict",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record",
+          "supported_formats": []
+        },
+        "key": {
+          "type_name": "str",
+          "state": "key_name",
+          "required": true,
+          "default_value": "''",
+          "port_role": "key_selector",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "object",
+          "state": "extracted_value",
+          "required": true,
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "any",
+          "supported_formats": []
+        }
+      },
+      "code_template": "{output_var} = {mapping}.get({key})",
+      "primary_in": "mapping",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "source_priority": 100,
+      "slots": [
+        "output_var",
+        "mapping",
+        "key"
+      ],
+      "endable": true
+    },
+    {
+      "cell_id": "PYTHON_DICT_SET",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "optic_role": "setter",
+      "container_port": "mapping",
+      "key_port": "key",
+      "focus_port": "value",
+      "docstring": "Update a key in a dictionary with a new value (Categorical Lens Setter).",
+      "keywords": [
+        "dict_set",
+        "set_key",
+        "update_dict",
+        "assign_key"
+      ],
+      "inputs": {
+        "mapping": {
+          "type_name": "dict",
+          "state": "initialized_dict",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record",
+          "supported_formats": []
+        },
+        "key": {
+          "type_name": "str",
+          "state": "key_name",
+          "required": true,
+          "default_value": "''",
+          "port_role": "key_selector",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
+        },
+        "value": {
+          "type_name": "object",
+          "state": "extracted_value",
+          "required": true,
+          "port_role": "assigned_value",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "any",
+          "supported_formats": []
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "dict",
+          "state": "initialized_dict",
+          "required": true,
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record",
+          "supported_formats": []
+        }
+      },
+      "code_template": "{output_var} = dict({mapping})\n{output_var}[{key}] = {value}",
+      "primary_in": "mapping",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "source_priority": 100,
+      "slots": [
+        "output_var",
+        "mapping",
+        "key",
+        "value"
+      ],
+      "endable": true
+    },
+    {
+      "cell_id": "PYTHON_LIST_APPEND",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Append an element to a list and return the updated list.",
+      "keywords": [
+        "append",
+        "list_append",
+        "push",
+        "add_element"
+      ],
+      "inputs": {
+        "items": {
+          "type_name": "list",
+          "state": "raw_list",
+          "required": true,
+          "default_value": "[]",
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "any",
+          "supported_formats": []
+        },
+        "element": {
+          "type_name": "object",
+          "state": "extracted_value",
+          "required": true,
+          "default_value": "None",
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "any",
+          "supported_formats": []
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "list",
+          "state": "raw_list",
+          "required": true,
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "any",
+          "supported_formats": []
+        }
+      },
+      "code_template": "{output_var} = list({items}) + [{element}]",
+      "primary_in": "items",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "source_priority": 100,
+      "slots": [
+        "output_var",
+        "items",
+        "element"
       ],
       "endable": true
     }
@@ -291,10 +528,39 @@
         "carrier_type": "str",
         "description": "source_node typestate",
         "properties": {}
+      },
+      {
+        "name": "initialized_dict",
+        "parent_state": null,
+        "carrier_type": "dict",
+        "description": "initialized_dict typestate",
+        "properties": {}
+      },
+      {
+        "name": "key_name",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "key_name typestate",
+        "properties": {}
+      },
+      {
+        "name": "extracted_value",
+        "parent_state": null,
+        "carrier_type": "object",
+        "description": "extracted_value typestate",
+        "properties": {}
       }
     ],
     "transitions": [],
     "initial_state": null,
     "terminal_states": []
+  },
+  "pointed_defaults": {
+    "dict": "{}",
+    "list": "[]",
+    "int": 0,
+    "float": 0.0,
+    "str": "''",
+    "bool": false
   }
 }

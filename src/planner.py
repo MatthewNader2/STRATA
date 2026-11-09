@@ -2940,7 +2940,7 @@ class LatticePlanner:
                                 st = str(getattr(p_sig.signature, "state", "")).lower()
                                 proj_port_tokens |= set(CellTokenizer.tokenize_identifier(st))
                                 proj_port_tokens |= {t for t in CellTokenizer.tokenize_identifier(str(getattr(c, "cell_id", "")).lower())}
-                    raw_proj_tokens = TypeRegistry.get_instance().get_column_projection_tokens()
+                    raw_proj_tokens = TypeRegistry.get_instance().get_projection_tokens()
                     proj_port_tokens |= set(raw_proj_tokens)
                     proj_port_tokens |= {normalize_token(t) for t in raw_proj_tokens}
                 # Declared relational-trigger ports: a port NAMED for the

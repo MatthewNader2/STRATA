@@ -333,12 +333,28 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
 
     req_ctx = ExecutionContext(prompt=effective_prompt)
     if intent_data and isinstance(intent_data, dict):
+        req_ctx.intent_data = dict(intent_data)
+        if hasattr(req_ctx, "blackboard") and req_ctx.blackboard is not None:
+            req_ctx.blackboard.lock_from_intent(intent_data)
+            if req_ctx.blackboard.locked_by_neural:
+                if req_ctx.blackboard.target_sink:
+                    req_ctx.parameters["target_sink"] = req_ctx.blackboard.target_sink
         if intent_data.get("operations") and isinstance(intent_data["operations"], list):
             req_ctx.operations = [str(op).replace("_", " ").strip() for op in intent_data["operations"] if str(op).strip()]
         if intent_data.get("hyperparameters") and isinstance(intent_data["hyperparameters"], dict):
             req_ctx.hyperparameters = dict(intent_data["hyperparameters"])
         if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
             req_ctx.llm_slots = dict(intent_data["slots"])
+        if intent_data.get("variables") and isinstance(intent_data["variables"], list):
+            req_ctx.variables_spec = [str(v).strip() for v in intent_data["variables"] if str(v).strip()]
+            req_ctx.llm_slots.setdefault("variables", req_ctx.variables_spec)
+        if hasattr(req_ctx, "sync_llm_slots"):
+            req_ctx.sync_llm_slots()
+        tgt = intent_data.get("target_sink") or intent_data.get("target_key") or intent_data.get("deliverable")
+        if tgt:
+            req_ctx.target_key = str(tgt).strip()
+            req_ctx.target_literals.add(req_ctx.target_key)
+            req_ctx.parameters["target_sink"] = req_ctx.target_key
         if intent_data.get("parameters") and isinstance(intent_data["parameters"], dict):
             for p_key, p_val in intent_data["parameters"].items():
                 if p_key:

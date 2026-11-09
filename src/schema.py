@@ -256,6 +256,9 @@ class PortSchema(BaseModel):
     rank: Optional[int] = None
     element_type: Optional[str] = None
     supported_formats: List[str] = Field(default_factory=list)
+    complement_of_port: Optional[str] = None
+    disjoint_from_port: Optional[str] = None
+    key_from_upstream_role: Optional[str] = None
 
     def model_post_init(self, __context: Any) -> None:
         if self.role and not self.port_role:
@@ -329,6 +332,10 @@ class CellSchema(BaseModel):
     primary_in: Optional[str] = None
     primary_out: Optional[str] = None
     projection: Optional[str] = None
+    optic_role: Optional[Literal["getter", "setter", "complement", "lens"]] = None
+    container_port: Optional[str] = None
+    key_port: Optional[str] = None
+    focus_port: Optional[str] = None
 
     # --- Macro Node Pipeline ---
     sub_cells: List[str] = Field(default_factory=list)
@@ -588,21 +595,13 @@ class TreeSchema(BaseModel):
     top_types: List[str] = Field(default_factory=list)
     top: Optional[Union[bool, List[str]]] = None
     product_constructors: List[str] = Field(default_factory=list)
-    egress_intent_tokens: List[str] = Field(default_factory=list)
-    polarity_hints: Dict[str, List[str]] = Field(default_factory=dict)
     artifact_readers: Dict[str, List[str]] = Field(default_factory=dict)
     advisory_qualifiers: List[List[str]] = Field(default_factory=list)
     abstract_carriers: List[str] = Field(default_factory=list)
     abstract_carrier_mapping: Dict[str, str] = Field(default_factory=dict)
     dest_port_tokens: List[str] = Field(default_factory=list)
     data_bearing_roles: List[str] = Field(default_factory=list)
-    estimator_verbs: List[str] = Field(default_factory=list)
-    column_projection_tokens: List[str] = Field(default_factory=list)
-    asset_placeholders: Dict[str, str] = Field(default_factory=dict)
-    output_placeholders: Dict[str, str] = Field(default_factory=dict)
-    default_asset_placeholders: Dict[str, str] = Field(default_factory=dict)
-    stopwords: List[str] = Field(default_factory=list)
-    preposition_triggers: List[str] = Field(default_factory=list)
+    pointed_defaults: Dict[str, Any] = Field(default_factory=dict)
     supported_formats: List[str] = Field(default_factory=list)
     capabilities: Dict[str, Any] = Field(default_factory=dict)
 

@@ -4,20 +4,9 @@
   "aliases": {
     "cv2": "cv2"
   },
-  "asset_placeholders": {
-    "image": "input_image.png"
-  },
-  "output_placeholders": {
-    "image": "output_image.png"
-  },
   "artifact_readers": {
     "image": [
       "cv2.imread"
-    ]
-  },
-  "verification_semantics": {
-    "headless_environment": [
-      "QT_QPA_PLATFORM=offscreen"
     ]
   },
   "typestates": {
@@ -15192,13 +15181,6 @@
       "parent": "format"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
   "enum_constant_rules": [
     {
       "placeholder_names": [
@@ -15240,5 +15222,10 @@
     "bmp",
     "tiff",
     "webp"
-  ]
+  ],
+  "capabilities": {
+    "headless_environment": [
+      "QT_QPA_PLATFORM=offscreen"
+    ]
+  }
 }

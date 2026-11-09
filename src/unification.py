@@ -59,14 +59,14 @@ try:
     from .lattice import (
         AlgebraicSignature, PortSignature, Cell, MacroCell, TypeRegistry,
         ABSTRACT_CARRIERS, UNRESOLVED_PORT, GENERIC_TYPE_VARIABLE_NAMES,
-        is_path_port as _lattice_is_path_port,
+        is_path_port as _lattice_is_path_port, _normalize_qualifiers,
     )
     from .tokenizer import CellTokenizer, normalize_token
 except (ImportError, ValueError):
     from lattice import (
         AlgebraicSignature, PortSignature, Cell, MacroCell, TypeRegistry,
         ABSTRACT_CARRIERS, UNRESOLVED_PORT, GENERIC_TYPE_VARIABLE_NAMES,
-        is_path_port as _lattice_is_path_port,
+        is_path_port as _lattice_is_path_port, _normalize_qualifiers,
     )
     from tokenizer import CellTokenizer, normalize_token
 
@@ -493,7 +493,9 @@ def _wire_rejection(cell: Any, p_name: str, port: Any, v_name: str, ctx: Any, re
         v_sig = v_entry[0] if isinstance(v_entry, tuple) else v_entry
         v_actual_sig = getattr(v_sig, "signature", v_sig)
         p_actual_sig = getattr(port, "signature", port)
-        if not _shape_compatible(v_actual_sig, port):
+        prod_cell = getattr(ctx, "var_sources", {}).get(v_name) if hasattr(ctx, "var_sources") else None
+
+        if not _shape_compatible(v_sig, port, producer_cell=prod_cell, consumer_cell=cell):
             return ("shape_incompatible", {"v_name": v_name, "port": p_name, "rejected_sig": str(v_actual_sig)})
         res = unify(v_actual_sig, p_actual_sig)
         if res is None:
@@ -783,6 +785,309 @@ def _get_p_field(p: Any, field_name: str, default: Any = None) -> Any:
     return getattr(p, field_name, default)
 
 
+def _enrich_port_signature_qualifiers(port_sig: Any, extra_quals: Set[str]) -> Any:
+    """Enriches a PortSignature or AlgebraicSignature with additional propagated qualifiers."""
+    if not extra_quals or port_sig is None:
+        return port_sig
+    old_sig = getattr(port_sig, "signature", port_sig)
+    existing_quals = set()
+    raw_old = _get_p_field(port_sig, "qualifiers", None) or getattr(old_sig, "qualifiers", None) or ()
+    for q in raw_old:
+        if isinstance(q, (tuple, list, set, frozenset)):
+            existing_quals.update(str(x).lower() for x in q)
+        else:
+            existing_quals.add(str(q).lower())
+
+    combined = existing_quals | {str(x).lower() for x in extra_quals}
+    new_norm = _normalize_qualifiers(combined)
+
+    new_alg_sig = AlgebraicSignature(
+        type_name=getattr(old_sig, "type_name", "any"),
+        state=getattr(old_sig, "state", "any"),
+        qualifiers=new_norm,
+        abstract_type=getattr(old_sig, "abstract_type", ""),
+        accepted_states=getattr(old_sig, "accepted_states", frozenset()),
+        parent_state=getattr(old_sig, "parent_state", None),
+    )
+    if isinstance(port_sig, PortSignature):
+        return PortSignature(
+            name=port_sig.name,
+            signature=new_alg_sig,
+            required=port_sig.required,
+            default_value=port_sig.default_value,
+            doc=port_sig.doc,
+            domain=port_sig.domain,
+            abstract_type=port_sig.abstract_type,
+            enum_values=port_sig.enum_values,
+            param_kind=port_sig.param_kind,
+            value_constraints=port_sig.value_constraints,
+            shape_contract=port_sig.shape_contract,
+            rejected_qualifiers=port_sig.rejected_qualifiers,
+            accepted_states=port_sig.accepted_states,
+            parent_state=port_sig.parent_state,
+            port_role=port_sig.port_role,
+            binds=port_sig.binds,
+            structure_kind=port_sig.structure_kind,
+            rank=port_sig.rank,
+            element_type=port_sig.element_type,
+            supported_formats=port_sig.supported_formats,
+            owner_cell=port_sig.owner_cell,
+        )
+    return new_alg_sig
+
+
+
+def _collect_propagated_qualifiers(cell: Any, bindings: Dict[str, Any], var_sigs: Dict[str, Any]) -> Set[str]:
+    """
+    Functorial qualifier propagation:
+    Collects monadic qualifiers (e.g. 'complex', 'tainted') from incoming bound variables
+    across container mutators, element-wise transforms, and container extractions,
+    unless the cell declares an explicit elimination/bridge for that qualifier.
+    """
+    bound_in_quals: Set[str] = set()
+    for inp_name, inp_sig in getattr(cell, "inputs", {}).items():
+        v_in = bindings.get(inp_name)
+        if isinstance(v_in, str) and v_in in var_sigs:
+            v_sig = var_sigs[v_in]
+            q_set = _get_p_field(v_sig, "qualifiers", None) or getattr(getattr(v_sig, "signature", None), "qualifiers", None) or frozenset()
+            for q in q_set:
+                if isinstance(q, (tuple, list, set, frozenset)):
+                    for q_el in q:
+                        bound_in_quals.add(str(q_el).lower())
+                else:
+                    bound_in_quals.add(str(q).lower())
+
+    if not bound_in_quals:
+        return set()
+
+    eliminated_quals: Set[str] = set()
+    node_role = getattr(cell, "node_role", "")
+    prim_out = getattr(cell, "primary_output", None)
+    out_quals = set()
+    if prim_out:
+        q_raw = _get_p_field(prim_out, "qualifiers", None) or getattr(getattr(prim_out, "signature", None), "qualifiers", None) or ()
+        for q in q_raw:
+            if isinstance(q, (tuple, list, set, frozenset)):
+                out_quals.update(str(x).lower() for x in q)
+            else:
+                out_quals.add(str(q).lower())
+
+    # Carrier conversion detection:
+    # A morphism F: C1 -> C2 between distinct container carrier categories (e.g. Table -> Tensor)
+    # is a carrier functor that preserves value-level monadic qualifiers.
+    prim_in = getattr(cell, "primary_input", None) or (next(iter(cell.inputs.values())) if getattr(cell, "inputs", None) else None)
+    in_carrier = str(getattr(getattr(prim_in, "signature", prim_in), "type_name", "") or getattr(prim_in, "type_name", "")).lower() if prim_in else ""
+    out_carrier = str(getattr(getattr(prim_out, "signature", prim_out), "type_name", "") or getattr(prim_out, "type_name", "")).lower() if prim_out else ""
+    
+    try:
+        from lattice import TypeRegistry
+        reg = TypeRegistry.get_instance()
+    except Exception:
+        reg = None
+
+    def _is_carrier_type(t_name: str) -> bool:
+        if not t_name or reg is None:
+            return False
+        t_low = str(t_name).strip().lower()
+        if hasattr(reg, "is_carrier"):
+            return reg.is_carrier(t_low)
+        return (
+            reg.is_composite_carrier(t_low)
+            or reg.is_abstract_carrier(t_low)
+            or t_low in reg.get_top_level_carriers()
+            or bool(reg.get_abstract_carrier(t_low))
+        )
+
+    is_in_carrier = _is_carrier_type(in_carrier)
+    is_out_carrier = _is_carrier_type(out_carrier)
+    is_carrier_bridge = bool(is_in_carrier and is_out_carrier and in_carrier != out_carrier)
+    in_ports = list(getattr(cell, "inputs", {}).values())
+
+    for q in bound_in_quals:
+        if is_carrier_bridge:
+            # Functorial preservation across carrier changes: F(Carrier1[q]) = Carrier2[q]
+            continue
+        is_eliminated = False
+        # 1. Postcondition check: cell explicitly asserts that property is_{q} or has_{q} or {q} is False
+        for post in (getattr(cell, "postconditions", None) or []):
+            prop = str(post.get("property", "") if isinstance(post, dict) else getattr(post, "property", "")).lower()
+            val = post.get("value") if isinstance(post, dict) else getattr(post, "value", None)
+            if (prop in (f"is_{q}", f"has_{q}", q)) and val is False:
+                is_eliminated = True
+                break
+        # 2. Effects check: cell explicitly declares an elimination effect
+        if not is_eliminated:
+            for eff in (getattr(cell, "effects", None) or []):
+                eff_str = str(eff).lower()
+                if eff_str in (f"eliminates:{q}", f"removes:{q}"):
+                    is_eliminated = True
+                    break
+        # 3. Explicit qualifier-eliminating input state/qualifier transition:
+        # input port primary state or qualifiers explicitly require q, and output does not carry q
+        if not is_eliminated and q not in out_quals:
+            for p_in in in_ports:
+                p_in_quals = [str(x).lower() for x in (getattr(p_in, "qualifiers", None) or ())]
+                p_in_state = str(getattr(getattr(p_in, "signature", p_in), "state", "") or "").lower()
+                p_in_toks = set(p_in_quals) | set(CellTokenizer.tokenize_identifier(p_in_state))
+                if str(q).lower() in p_in_toks:
+                    is_eliminated = True
+                    break
+        if is_eliminated:
+            eliminated_quals.add(q)
+
+    return bound_in_quals - eliminated_quals
+
+
+def _port_declares_acceptance(p_sig: Any, wanted_quals: Set[str]) -> bool:
+    """True when port declared state/accepted_states/qualifiers vocab mentions any wanted qualifier."""
+    declared: List[str] = list(getattr(p_sig, "qualifiers", None) or ())
+    sig_inner = getattr(p_sig, "signature", None)
+    declared.append(str(getattr(sig_inner, "state", "") or ""))
+    declared.extend(str(s) for s in (getattr(sig_inner, "accepted_states", None) or frozenset()))
+    declared_toks: Set[str] = set()
+    for d in declared:
+        declared_toks.update(CellTokenizer.tokenize_identifier(d.lower()))
+    return any(str(q).lower() in declared_toks for q in wanted_quals)
+
+
+def _extract_rejected_qualifiers(p_in: Any, consumer_cell: Optional[Any] = None) -> Set[str]:
+    """Extracts qualifiers rejected by input port `p_in` from both its `rejected_qualifiers`
+    declaration and any negating preconditions (`is_<q> == False`) on `consumer_cell` or `p_in`."""
+    if p_in is None:
+        return set()
+    in_sig_o = getattr(p_in, "signature", p_in)
+    if consumer_cell is None:
+        consumer_cell = _get_p_field(p_in, "owner_cell") or getattr(in_sig_o, "owner_cell", None)
+    rej_raw = (
+        _get_p_field(p_in, "rejected_qualifiers", None)
+        or getattr(in_sig_o, "rejected_qualifiers", None)
+        or ()
+    )
+    flat_rejs: Set[str] = set()
+    for r in rej_raw:
+        if isinstance(r, (tuple, list, set, frozenset)):
+            flat_rejs.update(str(x).lower() for x in r if str(x).strip())
+        elif str(r).strip():
+            flat_rejs.add(str(r).strip().lower())
+
+    p_name = _get_p_field(p_in, "name", None)
+    preconds = []
+    if consumer_cell is not None:
+        preconds.extend(_get_p_field(consumer_cell, "preconditions", []) or [])
+    preconds.extend(_get_p_field(p_in, "preconditions", []) or [])
+    for pre in preconds:
+        if not isinstance(pre, dict):
+            continue
+        target = pre.get("target")
+        if target and p_name and str(target) != str(p_name):
+            continue
+        prop = str(pre.get("property") or "").strip().lower()
+        op = str(pre.get("operator", "==") or "==").strip()
+        val = pre.get("value")
+        if (op == "==" and val is False) or (op == "!=" and val is True):
+            if prop.startswith("is_") and len(prop) > 3:
+                flat_rejs.add(prop[3:])
+            elif prop.startswith("has_") and len(prop) > 4:
+                flat_rejs.add(prop[4:])
+            elif prop:
+                flat_rejs.add(prop)
+    return flat_rejs
+
+
+def _instantiate_bridge_output_signature(
+    b_cell: Any,
+    b_out: Any,
+    v_sig: Any,
+    b_in_name: str = "x",
+    v_name: str = "_v",
+) -> Any:
+    """
+    Instantiates the concrete output PortSignature of an eliminator bridge `b_cell`
+    applied to input `v_sig`:
+      1. Propagates non-eliminated qualifiers from `v_sig` via `_collect_propagated_qualifiers`.
+      2. If `b_out.shape_contract` is None (rank-polymorphic bridge), inherits `shape_contract`
+         and `rank` (`canonical_rank`) from `v_sig`.
+    """
+    if b_out is None:
+        return None
+    prop_quals = _collect_propagated_qualifiers(b_cell, {b_in_name: v_name}, {v_name: v_sig})
+    out_sig = _enrich_port_signature_qualifiers(b_out, prop_quals)
+    if isinstance(out_sig, PortSignature):
+        v_sc = _get_p_field(v_sig, "shape_contract", None)
+        v_rank = getattr(v_sig, "canonical_rank", None)
+        if v_rank is None:
+            v_rank = _get_p_field(v_sig, "rank", None)
+        if out_sig.shape_contract is None and (v_sc is not None or v_rank is not None):
+            out_sig = copy.copy(out_sig)
+            if v_sc is not None:
+                out_sig.shape_contract = copy.deepcopy(v_sc) if isinstance(v_sc, dict) else v_sc
+            elif v_rank is not None:
+                out_sig.shape_contract = {"ndim": v_rank, "rank": v_rank}
+            if v_rank is not None:
+                out_sig.rank = v_rank
+            out_sig._cached_ndim = None
+    return out_sig
+
+
+def _find_bridge_for_qualifier_conflict(
+    orch: Any,
+    v_sig: Any,
+    p_sig: Any,
+    conflict: Set[str],
+    rej_quals: Set[str],
+    consumer_cell: Optional[Any] = None,
+) -> Optional[Cell]:
+    """
+    Universal lattice lookup for an eliminator bridge:
+    Searches loaded cells for a transformer/bridge whose input accepts the conflicting
+    monadic qualifier(s) and whose output does NOT carry any rejected qualifier,
+    unifying from the input carrier v_sig and unifying into the downstream target port p_sig.
+    """
+    if orch is None:
+        try:
+            from lattice import LatticeOrchestrator
+            orch = LatticeOrchestrator.get_active_instance()
+        except Exception:
+            orch = None
+    if orch is None or not hasattr(orch, "loaded_cells"):
+        return None
+
+    for b_cand in orch.loaded_cells.values():
+        cand_role = str(getattr(b_cand, "node_role", "") or getattr(b_cand, "role", "") or "").lower()
+        if cand_role not in ("bridge", "transformer", "adapter", "coercion"):
+            continue
+        b_out = getattr(b_cand, "primary_output", None) or (next(iter(b_cand.outputs.values())) if getattr(b_cand, "outputs", None) else None)
+        if b_out is None:
+            continue
+
+        if not any(_port_declares_acceptance(p_in, conflict) for p_in in b_cand.inputs.values()):
+            continue
+
+        b_in = getattr(b_cand, "primary_input", None) or (next(iter(b_cand.inputs.values())) if getattr(b_cand, "inputs", None) else None)
+        if b_in is not None and not _shape_compatible(v_sig, b_in, consumer_cell=b_cand):
+            continue
+
+        b_in_name = getattr(b_in, "name", "x") if b_in is not None else "x"
+        b_out_concrete = _instantiate_bridge_output_signature(b_cand, b_out, v_sig, b_in_name=b_in_name)
+
+        b_out_quals = set()
+        raw_out_q = _get_p_field(b_out_concrete, "qualifiers", None) or getattr(getattr(b_out_concrete, "signature", None), "qualifiers", None) or ()
+        for q in raw_out_q:
+            if isinstance(q, (tuple, list, set, frozenset)):
+                b_out_quals.update(str(x).lower() for x in q)
+            else:
+                b_out_quals.add(str(q).lower())
+        if b_out_quals & (rej_quals | conflict):
+            continue
+
+        if not _shape_compatible(b_out_concrete, p_sig, producer_cell=b_cand, consumer_cell=consumer_cell):
+            continue
+
+        return b_cand
+
+    return None
+
+
 def _extract_ndim(sc: Any) -> Optional[int]:
     if sc is None:
         return None
@@ -977,26 +1282,22 @@ def is_edge_valid(
         return False
 
     # 3. Rejected Qualifiers
-    rej_quals = (
-        _get_p_field(p_in, "rejected_qualifiers", None)
-        or getattr(in_sig_o, "rejected_qualifiers", None)
+    out_quals = (
+        _get_p_field(p_out, "qualifiers", None)
+        or getattr(out_sig_o, "qualifiers", None)
         or frozenset()
     )
-    if rej_quals:
-        out_quals = (
-            _get_p_field(p_out, "qualifiers", None)
-            or getattr(out_sig_o, "qualifiers", None)
-            or frozenset()
-        )
-        flat_out_quals = set()
-        for q in out_quals:
-            if isinstance(q, (tuple, list, set, frozenset)):
-                for q_el in q:
-                    flat_out_quals.add(str(q_el).lower())
-            else:
-                flat_out_quals.add(str(q).lower())
-        if any(str(rq).lower() in flat_out_quals for rq in rej_quals):
-            return False
+    flat_out_quals: Set[str] = set()
+    for q in out_quals:
+        if isinstance(q, (tuple, list, set, frozenset)):
+            for q_el in q:
+                flat_out_quals.add(str(q_el).lower())
+        else:
+            flat_out_quals.add(str(q).lower())
+
+    rej_quals = _extract_rejected_qualifiers(p_in, consumer_cell=consumer_cell)
+    if rej_quals and (flat_out_quals & rej_quals):
+        return False
 
     # 4. Shape Contract & Rank Compatibility
     out_sc = _get_p_field(p_out, "shape_contract", None) or getattr(out_sig_o, "shape_contract", None)
@@ -1097,6 +1398,10 @@ def is_edge_valid(
         producer_props["ndim"] = r_out
     if out_state and out_state not in ("any", "*"):
         producer_props["state"] = out_state
+    for q in flat_out_quals:
+        producer_props.setdefault(f"is_{q}", True)
+        producer_props.setdefault(f"has_{q}", True)
+        producer_props.setdefault(q, True)
 
     out_p_name = _get_p_field(p_out, "name", None)
     if producer_cell is not None:
@@ -1180,8 +1485,8 @@ def is_edge_valid(
     return True
 
 
-def _shape_compatible(p_out: Any, p_in: Any) -> bool:
-    return is_edge_valid(p_out, p_in)
+def _shape_compatible(p_out: Any, p_in: Any, producer_cell: Optional[Any] = None, consumer_cell: Optional[Any] = None) -> bool:
+    return is_edge_valid(p_out, p_in, producer_cell=producer_cell, consumer_cell=consumer_cell)
 
 
 @functools.lru_cache(maxsize=4096)
@@ -2013,9 +2318,16 @@ def substitute_generics(
             param_kind=target.param_kind,
             value_constraints=target.value_constraints,
             shape_contract=target.shape_contract,
+            rejected_qualifiers=getattr(target, "rejected_qualifiers", frozenset()),
             accepted_states=getattr(target, "accepted_states", frozenset()),
             parent_state=getattr(target, "parent_state", None),
-            port_role=getattr(target, "port_role", None)
+            port_role=getattr(target, "port_role", None),
+            binds=getattr(target, "binds", None),
+            structure_kind=getattr(target, "structure_kind", None),
+            rank=getattr(target, "rank", None),
+            element_type=getattr(target, "element_type", None),
+            supported_formats=getattr(target, "supported_formats", None),
+            owner_cell=getattr(target, "owner_cell", None),
         )
 
     if isinstance(target, AlgebraicSignature):
@@ -2440,7 +2752,7 @@ class ExecutionContext:
 
     @staticmethod
     def _extract_target_sink(prompt: str) -> Optional[str]:
-        """Target sink extraction: in symbolic profiles, returns None; resolved by LLM in neural profiles."""
+        """Target sink extraction: in symbolic profiles, returns None; resolved by LLM/intent in neural profiles."""
         return None
 
     def declare_runtime_alias(self, alias_name: str, source_var: str) -> None:
@@ -2474,6 +2786,7 @@ class ExecutionContext:
         if t_sink:
             self.target_key = str(t_sink).strip()
             self.target_literals.add(self.target_key)
+            self.target_literals.add(self.target_key.lower())
         self.current_cell_clause_idx = None
         self.unresolved_ports = []
         self.unbindable_count = 0
@@ -2516,6 +2829,10 @@ class ExecutionContext:
         new_ctx.llm_slots = {k: dict(v) if isinstance(v, dict) else v for k, v in self.llm_slots.items()}
         new_ctx.hyperparameters = dict(self.hyperparameters)
         new_ctx.runtime_aliases = dict(getattr(self, "runtime_aliases", {}) or {})
+        new_ctx.intent_data = dict(getattr(self, "intent_data", {}) or {})
+        new_ctx.target_key = getattr(self, "target_key", None)
+        new_ctx.variables_spec = list(getattr(self, "variables_spec", []))
+        new_ctx.operations = list(getattr(self, "operations", []))
         new_ctx.diagnostics = self.diagnostics
         if new_ctx.llm_slots:
             new_ctx.sync_llm_slots()
@@ -2877,9 +3194,8 @@ class ExecutionContext:
 
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        col_tokens = reg.get_column_projection_tokens()
+        proj_tokens = reg.get_projection_tokens()
         reg_types = set(reg.get_registered_types())
-        reg_stopwords = set(reg.get_stopwords())
 
         # Only process formal variables extracted by the Intent Compiler
         raw_vars = self.llm_slots.get("variables") or []
@@ -2897,7 +3213,7 @@ class ExecutionContext:
         filtered_symbols = set()
         for sym in candidate_symbols:
             s_low = sym.lower()
-            if keyword.iskeyword(s_low) or s_low in reg_types or s_low in reg_stopwords:
+            if keyword.iskeyword(s_low) or s_low in reg_types:
                 continue
             if sym.isidentifier():
                 filtered_symbols.add(sym)
@@ -2940,7 +3256,7 @@ class ExecutionContext:
                     existing_spans.add(key)
                     span = LiteralSpan(w_pos, "identifier", w_clean, end_pos=w_pos + len(w_clean))
                     new_spans.append(span)
-                    self.identifier_roles[w_pos] = frozenset(col_tokens)
+                    self.identifier_roles[w_pos] = frozenset(proj_tokens)
                     if getattr(self, "target_key", None) and w_clean.lower() == str(self.target_key).strip().lower():
                         self.target_literals.add(w_clean.lower())
 
@@ -3638,9 +3954,9 @@ class ExecutionContext:
             p_state = str(getattr(port_sig, "state", "") or "").lower()
             p_role = str(getattr(port_sig, "port_role", "") or getattr(port_sig, "derived_role", "") or "").lower()
             reg = TypeRegistry.get_instance()
-            col_tokens = reg.get_column_projection_tokens()
+            proj_tokens = reg.get_projection_tokens()
             reg_types = reg.get_registered_types()
-            is_col_port = (
+            is_proj_port = (
                 p_role in _declared_role_semantics("projection_port_roles")
                 or p_role in _declared_role_semantics("projective_roles")
                 or p_state in _declared_role_semantics("projection_port_states")
@@ -3652,8 +3968,8 @@ class ExecutionContext:
                 # 1. Unconsumed literals in the current clause
                 cand_indices.extend([i for i in range(len(self.ordered_literals))
                                      if i not in self.used_indices and self.literal_clause_map.get(i) == self.current_cell_clause_idx])
-                # 2. Reusable identifiers from the same clause (e.g. select and set on the same column in a transform)
-                if is_col_port:
+                # 2. Reusable identifiers from the same clause (e.g. select and set on the same key/symbol in a transform)
+                if is_proj_port:
                     cand_indices.extend([i for i in range(len(self.ordered_literals))
                                          if i in self.used_indices and self.literal_clause_map.get(i) == self.current_cell_clause_idx
                                          and getattr(self.ordered_literals[i], "kind", self.ordered_literals[i][1]) in ("identifier", "quoted_str")])
@@ -3666,14 +3982,14 @@ class ExecutionContext:
 
             for idx in cand_indices:
                 lit_pos, kind, val = self.ordered_literals[idx]
-                if idx in self.used_indices and not (is_col_port and self.current_cell_clause_idx is not None and self.literal_clause_map.get(idx) == self.current_cell_clause_idx and kind in ("identifier", "quoted_str")):
+                if idx in self.used_indices and not (is_proj_port and self.current_cell_clause_idx is not None and self.literal_clause_map.get(idx) == self.current_cell_clause_idx and kind in ("identifier", "quoted_str")):
                     continue
                 if kind not in ("quoted_str", "identifier"):
                     continue
                 val_str = str(val).strip()
                 val_low = val_str.lower()
                 # Target protection: operational parameters must not steal the target sink variable
-                # UNLESS this cell/port is a setter morphism that introduces/writes the target column or key
+                # UNLESS this cell/port is a setter morphism that introduces/writes the target symbol or key
                 is_setter_port = (
                     p_role in _declared_role_semantics("projective_roles")
                     or p_role in _declared_role_semantics("destination_roles")
@@ -3689,19 +4005,19 @@ class ExecutionContext:
                 if enum_vals is not None:
                     if val_low not in enum_vals:
                         continue
-                # Exclude Python keywords and registered types from being bound as column names
-                if is_col_port and (keyword.iskeyword(val_low) or val_low in reg_types):
+                # Exclude Python keywords and registered types from being bound as projection symbols
+                if is_proj_port and (keyword.iskeyword(val_low) or val_low in reg_types):
                     continue
-                # Column & target protection: non-column parameter ports must not steal data columns
+                # Variable symbol & target protection: non-projection parameter ports must not steal variable symbols
                 roles = self.identifier_roles.get(lit_pos, frozenset())
-                is_data_col = (
-                    bool(roles & col_tokens)
+                is_var_symbol = (
+                    bool(roles & proj_tokens)
                     or (kind == "quoted_str" and not ExecutionContext._is_path_string(val_str))
-                    or (is_setter_port and bool(roles & (col_tokens | reg.get_dest_port_tokens() | reg.get_egress_tokens())))
+                    or (is_setter_port and bool(roles & (proj_tokens | reg.get_dest_port_tokens() | reg.get_egress_tokens())))
                 )
-                if is_data_col and not is_col_port:
+                if is_var_symbol and not is_proj_port:
                     continue
-                if is_col_port and not is_data_col:
+                if is_proj_port and not is_var_symbol:
                     continue
                 # Optional parameters without explicit enum match require lexical evidence
                 if not port_sig.required and enum_vals is None:
@@ -3761,10 +4077,25 @@ class ExecutionContext:
 
         # 6c. Multi-identifier collection / list projection (e.g. list for selection or projection)
         _t_name_concrete = bool(t_name) and not registry.is_type_variable(t_name) and t_name in registry.get_registered_types()
-        is_collection = (
+        _sig_carrier = getattr(getattr(port_sig, "signature", None), "carrier", None) or getattr(port_sig, "abstract_type", "") or t_name
+        _elem_type = str(getattr(port_sig, "element_type", "") or "").lower()
+        _struct_kind = str(getattr(port_sig, "structure_kind", "") or "").lower()
+        _sig_struct_kind = str(getattr(getattr(port_sig, "signature", None), "structure_kind", "") or "").lower()
+        _is_numeric_tensor = (
+            (registry is not None and registry.is_subtype(_elem_type, "number"))
+            or _struct_kind in ("tensor", "matrix")
+            or _sig_struct_kind in ("tensor", "matrix")
+            or (registry is not None and (registry.is_subtype(t_name, "tensor") or registry.is_subtype(t_name, "matrix") or registry.is_subtype(t_name, "number")))
+            or (registry is not None and (registry.is_subtype(str(_sig_carrier).lower(), "tensor") or registry.is_subtype(str(_sig_carrier).lower(), "matrix")))
+        )
+        is_collection = (not _is_numeric_tensor) and (
             getattr(port_sig, "structure_kind", None) == "collection"
-            or (getattr(port_sig, "canonical_rank", None) is not None and getattr(port_sig, "canonical_rank", None) > 0)
-            or (registry is not None and (registry.is_subtype(t_name, "collection") or registry.is_subtype(t_name, "sequence")))
+            or (
+                getattr(port_sig, "canonical_rank", None) is not None
+                and getattr(port_sig, "canonical_rank", None) > 0
+                and not (registry is not None and (registry.is_subtype(t_name, "tensor") or registry.is_subtype(t_name, "matrix") or registry.is_subtype(t_name, "number")))
+            )
+            or (registry is not None and (registry.is_subtype(t_name, "collection") or registry.is_subtype(t_name, "sequence")) and not registry.is_subtype(t_name, "tensor"))
             or (
                 not _t_name_concrete
                 and (
@@ -3779,11 +4110,10 @@ class ExecutionContext:
                 pass  # Fall through to Step 7 (port default value)
             else:
                 _state_tokens = CellTokenizer.tokenize_identifier(_raw_state) if _raw_state.lower() not in ("any", "default", "") else set()
-                _proj_tokens = TypeRegistry.get_instance().get_column_projection_tokens()
+                _proj_tokens = TypeRegistry.get_instance().get_projection_tokens()
                 _identity_scope: Set[str] = set(cell_tokens or set()) | _state_tokens | _proj_tokens
                 egress_tokens = TypeRegistry.get_instance().get_egress_tokens() | TypeRegistry.get_instance().get_dest_port_tokens()
                 registered_types = TypeRegistry.get_instance().get_registered_types()
-                stopwords = TypeRegistry.get_instance().get_stopwords()
 
                 matched_indices = []
                 matched_vals = []
@@ -3806,7 +4136,7 @@ class ExecutionContext:
                     pos, kind, val = self.ordered_literals[idx]
                     val_str = str(val).strip()
                     val_low = val_str.lower()
-                    if val_low in target_lits or keyword.iskeyword(val_low) or val_low in registered_types or val_low in stopwords:
+                    if val_low in target_lits or keyword.iskeyword(val_low) or val_low in registered_types:
                         continue
                     role_tokens = self.identifier_roles.get(pos, frozenset())
                     if role_tokens and (role_tokens & egress_tokens):
@@ -4197,12 +4527,12 @@ class UnificationGate:
             toks = CellTokenizer.tokenize_identifier(port_name)
             state = str(getattr(getattr(port_sig, "signature", port_sig), "state", "") or "")
             toks |= CellTokenizer.tokenize_identifier(state)
-            col_proj_tokens = (
-                set(registry.get_column_projection_tokens())
+            proj_tokens = (
+                set(registry.get_projection_tokens())
                 | set(registry.get_verification_semantics("projection_port_names") or ())
             )
             for key, rendered in literal_bindings.items():
-                if (CellTokenizer.tokenize_identifier(key) & toks) or (key in col_proj_tokens and (toks & col_proj_tokens)):
+                if (CellTokenizer.tokenize_identifier(key) & toks) or (key in proj_tokens and (toks & proj_tokens)):
                     return rendered, key
             if not getattr(port_sig, "required", True):
                 default_val = getattr(port_sig, "default_value", None)
@@ -4221,14 +4551,14 @@ class UnificationGate:
         if not literal_bindings and _dst_accepts(src_type):
             return str(src_var)
 
-        col_proj_tokens = (
-            set(registry.get_column_projection_tokens())
-            | set(registry.get_verification_semantics("projection_port_names"))
+        proj_tokens = (
+            set(registry.get_projection_tokens())
+            | set(registry.get_verification_semantics("projection_port_names") or ())
         )
         has_proj_lit = bool(
             literal_bindings
             and any(
-                CellTokenizer.tokenize_identifier(k) & col_proj_tokens
+                CellTokenizer.tokenize_identifier(k) & proj_tokens
                 for k in literal_bindings
             )
         )
@@ -4506,6 +4836,7 @@ class UnificationGate:
         if not prefix.isidentifier() or keyword.iskeyword(prefix):
             prefix = f"v_{prefix}"
         return f"{prefix}_{counter}"
+
 
     def unify_pipeline(
         self,
@@ -5126,7 +5457,7 @@ class UnificationGate:
                 if prim_in is not None and prim_in.name in cell.inputs:
                     prod_sig, _ = ctx.variables.get(producer_var, (None, None))
                     if prod_sig is not None and not _is_product(prod_sig):
-                        if not col_mismatch and _shape_compatible(prod_sig, prim_in):
+                        if not col_mismatch and _shape_compatible(prod_sig, prim_in, consumer_cell=cell):
                             u_sub = unify(prod_sig.signature, prim_in.signature, accumulated_sigma)
                             if u_sub is not None:
                                 cell_bindings[prim_in.name] = producer_var
@@ -5142,7 +5473,7 @@ class UnificationGate:
                     req_unbound = [(k, v) for k, v in cell.inputs.items() if v.required and k not in cell_bindings]
                     cand_ports = req_unbound if req_unbound else [(k, v) for k, v in cell.inputs.items() if k not in cell_bindings]
                     for p_name, p_sig in cand_ports:
-                        if not _shape_compatible(prod_sig, p_sig):
+                        if not _shape_compatible(prod_sig, p_sig, consumer_cell=cell):
                             continue
                         u_sub = unify(prod_sig.signature, p_sig.signature, accumulated_sigma)
                         if u_sub is not None:
@@ -5160,7 +5491,7 @@ class UnificationGate:
                 c_sig, _ = ctx.variables.get(carrier_candidate, (None, None))
                 if c_sig is not None and not _is_product(c_sig):
                     prim_in = cell.primary_input
-                    if prim_in is not None and prim_in.name in cell.inputs and _shape_compatible(c_sig, prim_in):
+                    if prim_in is not None and prim_in.name in cell.inputs and _shape_compatible(c_sig, prim_in, consumer_cell=cell):
                         u_sub = unify(c_sig.signature, prim_in.signature, accumulated_sigma)
                         if u_sub is not None:
                             cell_bindings[prim_in.name] = carrier_candidate
@@ -5170,7 +5501,7 @@ class UnificationGate:
                         req_unbound = [(k, v) for k, v in cell.inputs.items() if v.required and k not in cell_bindings]
                         cand_ports = req_unbound if req_unbound else [(k, v) for k, v in cell.inputs.items() if k not in cell_bindings]
                         for p_name, p_sig in cand_ports:
-                            if not _shape_compatible(c_sig, p_sig):
+                            if not _shape_compatible(c_sig, p_sig, consumer_cell=cell):
                                 continue
                             u_sub = unify(c_sig.signature, p_sig.signature, accumulated_sigma)
                             if u_sub is not None:
@@ -5207,13 +5538,17 @@ class UnificationGate:
                     for v_name, (v_sig, _) in reversed(list(ctx.variables.items())):
                         if _is_product(v_sig) or v_name in cell_bindings.values():
                             continue
-                        if not _shape_compatible(v_sig, concrete_sig):
+                        if not _shape_compatible(v_sig, concrete_sig, consumer_cell=cell):
                             continue
                         u_v = unify(v_sig.signature, concrete_sig.signature, accumulated_sigma)
                         if u_v is not None:
                             prod_cell = ctx.var_sources.get(v_name)
-                            is_planned = bool(prod_cell and prod_cell.cell_id in planned_parents)
-                            candidate_vars.append((is_planned, v_name, u_v))
+                            is_immediate_pred = bool(idx > 0 and prod_cell is cells[idx - 1])
+                            is_superseded = v_name in getattr(ctx, "superseded_vars", set())
+                            is_planned_name = bool(prod_cell and prod_cell.cell_id in planned_parents)
+                            is_planned_score = 2 if is_immediate_pred else (1 if (is_planned_name and not is_superseded) else 0)
+                            not_superseded_score = 0 if is_superseded else 1
+                            candidate_vars.append(((is_planned_score, not_superseded_score), v_name, u_v))
                     if candidate_vars:
                         candidate_vars.sort(key=lambda x: x[0], reverse=True)
                         _, scoped_var, accumulated_sigma = candidate_vars[0]
@@ -5339,6 +5674,13 @@ class UnificationGate:
                     or str(p_name).lower() in val_port_names
                 )
 
+                target_lits = getattr(ctx, "target_literals", set())
+                var_origins_map = getattr(ctx, "var_origins", {})
+                any_var_has_target = bool(target_lits and any(
+                    any(str(orig).lower() in target_lits for orig in var_origins_map.get(vn, set()))
+                    for vn in ctx.variables.keys()
+                ))
+
                 for v_name, (v_sig, _) in reversed(list(ctx.variables.items())):
                     # Heterogeneous products project member-wise; the whole container
                     # is never wired into a single data port.
@@ -5346,7 +5688,8 @@ class UnificationGate:
                         continue
                     if v_name in already_bound_vars:
                         continue
-                    if not _shape_compatible(v_sig, concrete_sig):
+                    prod_cell_cand = ctx.var_sources.get(v_name) if hasattr(ctx, "var_sources") else None
+                    if not _shape_compatible(v_sig, concrete_sig, producer_cell=prod_cell_cand, consumer_cell=cell):
                         continue
 
                     # Role-gating in scope resolution: conflict-based role rules
@@ -5363,11 +5706,15 @@ class UnificationGate:
                     u_v = unify(v_sig.signature, concrete_sig.signature, accumulated_sigma)
                     if u_v is not None:
                         prod_cell = ctx.var_sources.get(v_name)
-                        is_planned = bool(prod_cell and prod_cell.cell_id in planned_parents)
+                        is_immediate_pred = bool(idx > 0 and prod_cell is cells[idx - 1])
+                        is_superseded = v_name in getattr(ctx, "superseded_vars", set())
+                        is_planned_name = bool(prod_cell and prod_cell.cell_id in planned_parents)
+                        is_planned_score = 2 if is_immediate_pred else (1 if (is_planned_name and not is_superseded) else 0)
+                        not_superseded_score = 0 if is_superseded else 1
+
                         c_clause = getattr(cell, "matched_clause_idx", None)
                         prod_clause = getattr(prod_cell, "matched_clause_idx", None) if prod_cell else None
 
-                        is_planned_score = 1 if is_planned else 0
                         clause_causality = 0.0
                         if c_clause is not None and prod_clause is not None:
                             if prod_clause == c_clause:
@@ -5410,11 +5757,11 @@ class UnificationGate:
                         if has_target_origin:
                             target_affinity = 1.0 if is_target_port else -1.0
                         elif is_target_port:
-                            target_affinity = -0.5
+                            target_affinity = -0.5 if any_var_has_target else 0.0
 
                         is_unconsumed = 1 if v_name not in getattr(ctx, "consumed_vars", set()) else 0
 
-                        prio = (is_planned_score, target_affinity, is_unconsumed, clause_causality, recency_idx)
+                        prio = (is_planned_score, not_superseded_score, target_affinity, is_unconsumed, clause_causality, recency_idx)
                         candidate_vars.append((prio, v_name, u_v))
 
                 if candidate_vars:
@@ -5572,6 +5919,81 @@ class UnificationGate:
                                 accumulated_sigma.bind(p_name, fallback_expr)
                                 continue
 
+                # E.1.8 Dynamic Pre-Unification Qualifier Bridge Insertion
+                # If a required port is still ungrounded, query the lattice for an eliminator bridge
+                # that adapts an in-scope variable carrying conflicting qualifiers (e.g. complex -> real).
+                if p_sig.required and p_name not in cell_bindings:
+                    flat_p_rejs = (
+                        _extract_rejected_qualifiers(p_sig, consumer_cell=cell)
+                        | _extract_rejected_qualifiers(concrete_sig, consumer_cell=cell)
+                    )
+
+                    if flat_p_rejs:
+                        bridged_bound = False
+                        for v_name, (v_sig, _) in reversed(list(ctx.variables.items())):
+                            if _is_product(v_sig) or v_name in already_bound_vars:
+                                continue
+                            v_quals = _get_p_field(v_sig, "qualifiers", None) or getattr(getattr(v_sig, "signature", None), "qualifiers", None) or ()
+                            flat_v_quals = set()
+                            for q in v_quals:
+                                if isinstance(q, (tuple, list, set, frozenset)):
+                                    flat_v_quals.update(str(x).lower() for x in q)
+                                else:
+                                    flat_v_quals.add(str(q).lower())
+
+                            conflict = flat_v_quals & flat_p_rejs
+                            if not conflict:
+                                continue
+
+                            b_cand = _find_bridge_for_qualifier_conflict(
+                                getattr(self, "orchestrator", None),
+                                v_sig,
+                                concrete_sig,
+                                conflict,
+                                flat_p_rejs,
+                                consumer_cell=cell,
+                            )
+                            if b_cand is not None:
+                                b_cell = b_cand.clone() if hasattr(b_cand, "clone") else copy.copy(b_cand)
+                                b_cell.matched_clause_idx = getattr(cell, "matched_clause_idx", None)
+                                b_in = getattr(b_cell, "primary_input", None) or next(iter(b_cell.inputs.values()))
+                                b_out = getattr(b_cell, "primary_output", None) or (next(iter(b_cell.outputs.values())) if getattr(b_cell, "outputs", None) else None)
+                                b_in_name = b_in.name if b_in is not None else "x"
+                                b_out_concrete = _instantiate_bridge_output_signature(b_cell, b_out, v_sig, b_in_name=b_in_name, v_name=v_name)
+                                var_counter += 1
+                                ctx.var_counter = var_counter
+                                bridged_var = _semantic_var_name(b_cell, var_counter, port_name=b_out.name if b_out else "output_var", out_sig=b_out_concrete or b_out)
+                                b_bindings = {b_in.name: v_name}
+                                if b_out:
+                                    b_bindings[b_out.name] = bridged_var
+                                if "output_var" not in b_bindings:
+                                    b_bindings["output_var"] = bridged_var
+
+                                if b_out_concrete is not None and b_out is not None:
+                                    b_cell.outputs[b_out.name] = b_out_concrete
+                                    ctx.declare_variable(bridged_var, b_out_concrete, bridged_var, cell=b_cell)
+                                    _update_variable_provenance(ctx, bridged_var, b_cell, b_bindings)
+                                elif b_out:
+                                    ctx.declare_variable(bridged_var, b_out, bridged_var, cell=b_cell)
+                                    _update_variable_provenance(ctx, bridged_var, b_cell, b_bindings)
+                                try:
+                                    self.scope_stage.finalize_cell_scope(b_cell, b_bindings, ctx, accumulated_sigma)
+                                except Exception:
+                                    pass
+                                pipeline_bindings.append((b_cell, b_bindings))
+                                cell_bindings[p_name] = bridged_var
+                                already_bound_vars.add(v_name)
+                                already_bound_vars.add(bridged_var)
+                                if hasattr(ctx, "consumed_vars"):
+                                    ctx.consumed_vars.add(v_name)
+                                    ctx.consumed_vars.add(bridged_var)
+                                ctx.trace_binding("qualifier_bridge_inserted", cell=cell.cell_id, port=p_name, bridge=b_cell.cell_id, var=bridged_var, source_var=v_name)
+                                bridged_bound = True
+                                break
+                        if bridged_bound:
+                            continue
+
+
                 # E.2 Unresolved REQUIRED port: fail loudly if still ungrounded
                 if p_sig.required:
                     ctx.unresolved_ports.append((cell.cell_id, p_name))
@@ -5585,6 +6007,7 @@ class UnificationGate:
             # strings that are variables in scope count (matches the semantics the
             # pre-R5 refactor code had at both of its former definition sites).
             bound_in_vars = [v for v in cell_bindings.values() if isinstance(v, str) and v in ctx.variables]
+            prop_quals = _collect_propagated_qualifiers(cell, cell_bindings, {k: v[0] for k, v in ctx.variables.items()})
 
             # Register output port(s) in context for future steps
             if len(cell.outputs) > 1:
@@ -5609,6 +6032,8 @@ class UnificationGate:
                         cell_port_vars[(id(cell), out_name)] = out_var
 
                         concrete_out = substitute_generics(out_sig, accumulated_sigma)
+                        if prop_quals:
+                            concrete_out = _enrich_port_signature_qualifiers(concrete_out, prop_quals)
                         ctx.declare_variable(out_var, concrete_out, out_var, cell=cell)
                         _update_variable_provenance(ctx, out_var, cell, cell_bindings)
                         if prim_out and out_name == prim_out.name:
@@ -5635,6 +6060,8 @@ class UnificationGate:
                         cell_bindings[cell.primary_output.name] = None
                 else:
                     concrete_out = substitute_generics(cell.primary_output, accumulated_sigma)
+                    if prop_quals:
+                        concrete_out = _enrich_port_signature_qualifiers(concrete_out, prop_quals)
                     # If the cell performs in-place mutation on a receiver, alias the output
                     # to the receiver: the receiver is the cell's declared receiver-role port,
                     # falling back to the primary input binding (declared-first, name-last).
@@ -7084,21 +7511,31 @@ class UnificationGate:
                 intent_data = None
 
         if intent_data and isinstance(intent_data, dict):
+            self.context.intent_data = dict(intent_data)
             if hasattr(self.context, "blackboard") and self.context.blackboard is not None:
                 self.context.blackboard.lock_from_intent(intent_data)
                 if self.context.blackboard.locked_by_neural:
                     if self.context.blackboard.target_sink:
                         self.context.parameters["target_sink"] = self.context.blackboard.target_sink
+            if intent_data.get("operations") and isinstance(intent_data["operations"], list):
+                self.context.operations = [str(op).replace("_", " ").strip() for op in intent_data["operations"] if str(op).strip()]
             if intent_data.get("hyperparameters") and isinstance(intent_data["hyperparameters"], dict):
                 self.context.hyperparameters = dict(intent_data["hyperparameters"])
             if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
                 self.context.llm_slots = dict(intent_data["slots"])
-                if hasattr(self.context, "sync_llm_slots"):
-                    self.context.sync_llm_slots()
-            tgt = intent_data.get("target_sink") or intent_data.get("target_key")
+            if intent_data.get("variables") and isinstance(intent_data["variables"], list):
+                self.context.variables_spec = [str(v).strip() for v in intent_data["variables"] if str(v).strip()]
+                self.context.llm_slots.setdefault("variables", self.context.variables_spec)
+            if hasattr(self.context, "sync_llm_slots"):
+                self.context.sync_llm_slots()
+            tgt = intent_data.get("target_sink") or intent_data.get("target_key") or intent_data.get("deliverable")
             if tgt:
-                self.context.target_key = str(tgt).strip()
-                self.context.target_literals.add(str(tgt).strip().lower())
+                tgt_clean = str(tgt).strip()
+                if tgt_clean:
+                    self.context.target_key = tgt_clean
+                    self.context.target_literals.add(tgt_clean.lower())
+                    self.context.target_literals.add(tgt_clean)
+                    self.context.parameters["target_sink"] = tgt_clean
             # Profile S (Semantic Compiler): literals extracted by the typed
             # IR compiler become declared context parameters — deterministic
             # binding without re-scanning the prompt.
@@ -7106,8 +7543,6 @@ class UnificationGate:
                 for p_key, p_val in intent_data["parameters"].items():
                     if p_key:
                         self.context.parameters.setdefault(str(p_key), p_val)
-            if intent_data.get("by_column"):
-                self.context.parameters["by_column"] = str(intent_data["by_column"]).strip()
             if intent_data.get("source_files"):
                 self.context.parameters["source_uris"] = list(intent_data["source_files"])
             if intent_data.get("dest_files"):
@@ -7604,8 +8039,6 @@ class ExtractedSlots:
             "dest_uris": self.outputs,
             "input_files": self.inputs,
             "output_files": self.outputs,
-            "columns": self.named_identifiers,
-            "by_column": self.named_identifiers[0] if self.named_identifiers else None,
         }
 
 
@@ -7688,14 +8121,14 @@ def resolve_node_slots(template: str, extracted_params: Dict[str, Any]) -> Dict[
     placeholders = sorted(extract_template_placeholders(template))
     src_uris = extracted_params.get("source_uris", []) or extracted_params.get("input_files", []) or extracted_params.get("inputs", [])
     dst_uris = extracted_params.get("dest_uris", []) or extracted_params.get("output_files", []) or extracted_params.get("outputs", [])
-    by_key = extracted_params.get("key") or extracted_params.get("by_column") or (extracted_params.get("named_identifiers", [None])[0] if extracted_params.get("named_identifiers") else None)
+    by_key = extracted_params.get("key") or (extracted_params.get("named_identifiers", [None])[0] if extracted_params.get("named_identifiers") else None)
     flags = extracted_params.get("operational_flags", {})
 
     try:
         _reg = TypeRegistry.get_instance()
         _path_toks = {"filename", "pathname", "uri"} | set(_reg.get_path_port_tokens())
         _dest_toks = set(_reg.get_dest_port_tokens()) | set(_reg.get_egress_tokens())
-        _proj_toks = set(_reg.get_column_projection_tokens()) | set(_reg.get_preposition_triggers())
+        _proj_toks = set(_reg.get_projection_tokens()) | set(_reg.get_preposition_triggers())
         _flag_defaults: Dict[str, bool] = {}
         _flag_names = set()
         for _p in _reg.get_semantic_flag_patterns():

@@ -2,8 +2,73 @@
   "domain": "graph",
   "version": "1.0",
   "description": "Pluggable graph/network domain extension: fixtures and hints only.",
-  "types": {},
-  "cells": [],
+  "types": {
+    "AdjacencyGraph": {
+      "parent": "dict"
+    },
+    "NodeList": {
+      "parent": "list"
+    }
+  },
+  "cells": [
+    {
+      "cell_id": "GRAPH_BFS_TRAVERSAL",
+      "stage": 2,
+      "domain_name": "graph",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Breadth-first traversal order from a source vertex in an adjacency graph.",
+      "keywords": [
+        "bfs",
+        "breadth_first_search",
+        "graph_traversal",
+        "neighbors"
+      ],
+      "inputs": {
+        "graph": {
+          "name": "graph",
+          "type_name": "AdjacencyGraph",
+          "state": "graph_ready",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record"
+        },
+        "source": {
+          "name": "source",
+          "type_name": "object",
+          "state": "vertex_id",
+          "required": false,
+          "default_value": "0",
+          "port_role": "configuration",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "any"
+        }
+      },
+      "outputs": {
+        "visited_order": {
+          "name": "visited_order",
+          "type_name": "NodeList",
+          "state": "traversal_order",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "any"
+        }
+      },
+      "code_template": "from collections import deque as _deque\n_adj = {graph} if isinstance({graph}, dict) else getattr({graph}, 'adj', {{}})\n_q = _deque([{source}]) if {source} in _adj else _deque(list(_adj.keys())[:1])\n_seen = []\nwhile _q:\n    _u = _q.popleft()\n    if _u not in _seen:\n        _seen.append(_u)\n        _q.extend(n for n in _adj.get(_u, []) if n not in _seen)\n{visited_order} = _seen",
+      "slots": [
+        "visited_order",
+        "graph",
+        "source"
+      ],
+      "endable": true,
+      "verified": true
+    }
+  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [
@@ -22,9 +87,36 @@
   "supported_formats": [],
   "typestates": {
     "domain": "graph",
-    "states": [],
+    "states": [
+      {
+        "name": "graph_ready",
+        "parent_state": null,
+        "carrier_type": "AdjacencyGraph",
+        "description": "Adjacency graph structure",
+        "properties": {}
+      },
+      {
+        "name": "vertex_id",
+        "parent_state": null,
+        "carrier_type": "object",
+        "description": "Graph vertex identifier",
+        "properties": {}
+      },
+      {
+        "name": "traversal_order",
+        "parent_state": null,
+        "carrier_type": "NodeList",
+        "description": "Ordered list of visited nodes",
+        "properties": {}
+      }
+    ],
     "transitions": [],
-    "initial_state": null,
-    "terminal_states": []
+    "initial_state": "graph_ready",
+    "terminal_states": [
+      "traversal_order"
+    ]
+  },
+  "pointed_defaults": {
+    "AdjacencyGraph": "{}"
   }
 }

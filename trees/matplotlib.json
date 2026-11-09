@@ -12,11 +12,6 @@
     "svg",
     "eps"
   ],
-  "verification_semantics": {
-    "headless_environment": [
-      "MPLBACKEND=Agg"
-    ]
-  },
   "typestates": {
     "domain": "matplotlib",
     "states": [
@@ -10538,11 +10533,9 @@
       "parent": "object"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ]
+  "capabilities": {
+    "headless_environment": [
+      "MPLBACKEND=Agg"
+    ]
+  }
 }

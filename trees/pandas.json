@@ -21,98 +21,6 @@
       "DataFrame"
     ]
   },
-  "verification_semantics": {
-    "forbidden_side_effect_methods": [
-      "to_pickle",
-      "read_pickle"
-    ],
-    "row_set_effects": [
-      "cleans_missing",
-      "drops_rows",
-      "filters_rows",
-      "row_filter",
-      "extent_mutating"
-    ],
-    "extent_mutating_effects": [
-      "cleans_missing",
-      "drops_rows",
-      "filters_rows",
-      "row_filter",
-      "extent_mutating"
-    ],
-    "component_transform_effects": [
-      "normalizes_column",
-      "transforms_column",
-      "encodes_column",
-      "scales_column",
-      "component_transform"
-    ],
-    "column_transform_effects": [
-      "normalizes_column",
-      "transforms_column",
-      "encodes_column",
-      "scales_column",
-      "component_transform"
-    ],
-    "projection_port_names": [
-      "column",
-      "columns",
-      "key",
-      "keys",
-      "field",
-      "fields",
-      "subset",
-      "features"
-    ],
-    "projection_port_roles": [
-      "column_projection",
-      "columns"
-    ],
-    "projective_roles": [
-      "column_projection",
-      "columns",
-      "projection",
-      "feature_projection",
-      "target_projection"
-    ],
-    "projection_port_states": [
-      "column_projection",
-      "columns",
-      "columns_list",
-      "feature_names",
-      "column_name",
-      "target_name",
-      "subset"
-    ],
-    "destructive_effects": [
-      "removes_columns",
-      "drops_columns"
-    ],
-    "assigned_value_roles": [
-      "assigned_value",
-      "column_value",
-      "field_value",
-      "value"
-    ],
-    "assigned_value_port_names": [
-      "value",
-      "val",
-      "values",
-      "new_column"
-    ],
-    "projection_roles": [
-      "column_projection"
-    ],
-    "string_like_types": [
-      "column_identifier"
-    ]
-  },
-  "asset_placeholders": {
-    "table": "input_data.csv"
-  },
-  "output_placeholders": {
-    "table": "output_data.csv"
-  },
   "artifact_readers": {
     "table": [
       "pandas.read_csv"
@@ -5350,7 +5258,11 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "optic_role": "getter",
+      "container_port": "port_0",
+      "key_port": "port_1",
+      "focus_port": "port_0"
     },
     {
       "cell_id": "PD_DROP_COLUMNS",
@@ -5439,7 +5351,8 @@
           "rank": 1,
           "element_type": "composite_record",
           "supported_formats": [],
-          "port_role": "column_projection"
+          "port_role": "column_projection",
+          "complement_of_port": "target"
         }
       },
       "outputs": {
@@ -5467,7 +5380,11 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "optic_role": "complement",
+      "container_port": "port_0",
+      "key_port": "port_1",
+      "focus_port": "port_0"
     },
     {
       "cell_id": "PD_RENAME_COLUMNS",
@@ -6341,7 +6258,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "port_role": "column_projection"
+          "port_role": "groupby_key"
         },
         "port_2": {
           "type_name": "bool",
@@ -6463,7 +6380,7 @@
           "rank": 0,
           "element_type": "composite_record",
           "supported_formats": [],
-          "port_role": "configuration"
+          "port_role": "groupby_key"
         }
       },
       "outputs": {
@@ -6564,7 +6481,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "port_role": "configuration",
+          "port_role": "groupby_key",
           "role": "configuration"
         }
       },
@@ -9156,7 +9073,8 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "port_role": "column_projection"
+          "port_role": "column_projection",
+          "key_from_upstream_role": "groupby_key"
         },
         "port_3": {
           "type_name": "str",
@@ -9488,7 +9406,8 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "key_from_upstream_role": "groupby_key"
         },
         "port_3": {
           "type_name": "str",
@@ -9946,7 +9865,8 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "port_role": "column_projection"
+          "port_role": "column_projection",
+          "key_from_upstream_role": "groupby_key"
         },
         "port_3": {
           "type_name": "str",
@@ -13210,7 +13130,11 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "optic_role": "getter",
+      "container_port": "port_0",
+      "key_port": "port_1",
+      "focus_port": "port_0"
     },
     {
       "cell_id": "PD_SET_COLUMN",
@@ -13378,7 +13302,11 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "optic_role": "setter",
+      "container_port": "port_0",
+      "key_port": "port_1",
+      "focus_port": "port_2"
     },
     {
       "cell_id": "PD_SERIES_MEAN",
@@ -13762,7 +13690,11 @@
           "element_type": "composite_record",
           "supported_formats": []
         }
-      }
+      },
+      "optic_role": "getter",
+      "container_port": "table",
+      "key_port": "column",
+      "focus_port": "output_var"
     }
   ],
   "types": {
@@ -13802,13 +13734,6 @@
       "parent": "object"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [
@@ -13831,28 +13756,6 @@
       "template": "try:\n    import pandas as pd\n    {var_name} = pd.Series([1.0, 2.0, 3.0])\nexcept ImportError:\n    {var_name} = [1.0, 2.0, 3.0]"
     }
   ],
-  "port_name_type_hints": {
-    "df": "DataFrame",
-    "frame": "DataFrame",
-    "dataframe": "DataFrame",
-    "data": "DataFrame",
-    "dataset": "DataFrame",
-    "table": "DataFrame",
-    "rows": "DataFrame",
-    "records": "DataFrame"
-  },
-  "port_name_morphology_hints": [
-    {
-      "affix": "suffix",
-      "token": "_df",
-      "type_name": "DataFrame"
-    },
-    {
-      "affix": "prefix",
-      "token": "df_",
-      "type_name": "DataFrame"
-    }
-  ],
   "supported_formats": [
     "csv",
     "tsv",
@@ -13863,5 +13766,15 @@
     "hdf",
     "h5",
     "sql"
-  ]
+  ],
+  "pointed_defaults": {
+    "DataFrame": "pd.DataFrame()",
+    "Series": "pd.Series(dtype=float)",
+    "str": "''",
+    "int": 0,
+    "float": 0.0,
+    "bool": false,
+    "list": "[]",
+    "dict": "{}"
+  }
 }

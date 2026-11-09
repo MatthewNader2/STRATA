@@ -13210,19 +13210,6 @@
       "parent": "format"
     }
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
-  "asset_placeholders": {
-    "image": "input_image.png"
-  },
-  "output_placeholders": {
-    "image": "output_image.png"
-  },
   "supported_formats": [
     "jpg",
     "jpeg",

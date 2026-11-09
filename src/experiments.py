@@ -378,13 +378,15 @@ def build_indexed_topology(
             continue
 
         canon_out = registry.canonical_name(out_tn).lower()
-        # Collect all poset supertypes of canon_out via BFS on registry._parents
+        # Collect all poset supertypes of canon_out via BFS on registry._parents_lower
         candidate_buckets: Set[str] = {canon_out}
         queue = [canon_out]
+        parents_lower = getattr(registry, "_parents_lower", {}) or {}
         while queue:
             curr = queue.pop(0)
-            for parent in registry.poset.get(curr, ()):
-                p_low = parent.lower()
+            parent_iter = tuple(parents_lower.get(curr, ())) + tuple(registry.poset.get(curr, ()))
+            for parent in parent_iter:
+                p_low = str(parent).lower()
                 if p_low not in candidate_buckets:
                     candidate_buckets.add(p_low)
                     queue.append(p_low)

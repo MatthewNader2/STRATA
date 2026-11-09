@@ -11,16 +11,6 @@
     "ogg",
     "mp3"
   ],
-  "verification_semantics": {
-    "headless_environment": [
-      "SDL_VIDEODRIVER=dummy",
-      "SDL_AUDIODRIVER=dummy",
-      "PYGAME_HIDE_SUPPORT_PROMPT=1"
-    ],
-    "smoke_test_loop_bound": [
-      "5"
-    ]
-  },
   "types": [
     {
       "name": "object",
@@ -3292,6 +3282,19 @@
           "element_type": "bool",
           "supported_formats": [],
           "role": "data_input"
+        },
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
         }
       },
       "outputs": {
@@ -3335,7 +3338,21 @@
         "iter_events",
         "main_loop"
       ],
-      "inputs": {},
+      "inputs": {
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
+        }
+      },
       "outputs": {
         "event": {
           "type_name": "event",
@@ -6030,6 +6047,19 @@
           "element_type": "float64",
           "supported_formats": [],
           "default_value": 0.0
+        },
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
         }
       },
       "outputs": {
@@ -6052,5 +6082,15 @@
       "primary_in": "accumulator",
       "primary_out": "final_accumulator"
     }
-  ]
+  ],
+  "capabilities": {
+    "headless_environment": [
+      "SDL_VIDEODRIVER=dummy",
+      "SDL_AUDIODRIVER=dummy",
+      "PYGAME_HIDE_SUPPORT_PROMPT=1"
+    ],
+    "smoke_test_loop_bound": [
+      "5"
+    ]
+  }
 }

@@ -602,7 +602,53 @@ class RouteMethod(ABC):
                             resolves_property_mismatch = True
                             break
 
-            if not is_declared_bridge and not resolves_property_mismatch:
+            resolves_qualifier_mismatch = False
+            dst_rejs = set()
+            for inp in dst_cell.inputs.values():
+                r_raw = getattr(inp, "rejected_qualifiers", None) or ()
+                sig_inner = getattr(inp, "signature", None)
+                if sig_inner:
+                    r_raw = r_raw or getattr(sig_inner, "rejected_qualifiers", None) or ()
+                for r in r_raw:
+                    if isinstance(r, (tuple, list, set, frozenset)):
+                        dst_rejs.update(str(x).lower() for x in r)
+                    else:
+                        dst_rejs.add(str(r).lower())
+
+            if dst_rejs:
+                src_quals = set()
+                for scope_c in (current_scope or [src_cell]):
+                    for o in getattr(scope_c, "outputs", {}).values():
+                        q_raw = getattr(o, "qualifiers", None) or getattr(getattr(o, "signature", None), "qualifiers", None) or ()
+                        for q in q_raw:
+                            if isinstance(q, (tuple, list, set, frozenset)):
+                                src_quals.update(str(x).lower() for x in q)
+                            else:
+                                src_quals.add(str(q).lower())
+                conflict = src_quals & dst_rejs
+                if conflict:
+                    c_out = getattr(cand, "primary_output", None) or (next(iter(cand.outputs.values())) if getattr(cand, "outputs", None) else None)
+                    if c_out is not None:
+                        c_out_quals = set()
+                        raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
+                        for q in raw_co:
+                            if isinstance(q, (tuple, list, set, frozenset)):
+                                c_out_quals.update(str(x).lower() for x in q)
+                            else:
+                                c_out_quals.add(str(q).lower())
+                        if not (c_out_quals & dst_rejs):
+                            for p_in in cand.inputs.values():
+                                in_acc = set()
+                                raw_acc = getattr(p_in, "accepted_states", None) or getattr(getattr(p_in, "signature", None), "accepted_states", None) or ()
+                                in_st = str(getattr(p_in, "state", "") or getattr(getattr(p_in, "signature", None), "state", "") or "")
+                                for a in raw_acc:
+                                    in_acc.update(CellTokenizer.tokenize_identifier(str(a).lower()))
+                                in_acc.update(CellTokenizer.tokenize_identifier(in_st.lower()))
+                                if in_acc & conflict:
+                                    resolves_qualifier_mismatch = True
+                                    break
+
+            if not is_declared_bridge and not resolves_property_mismatch and not resolves_qualifier_mismatch:
                 continue
             from unification import is_edge_valid
             can_src_to_cand = self.step_unifies(src_cell, cand, prev_path=current_scope) or self.step_unifies_dag(cand, current_scope)

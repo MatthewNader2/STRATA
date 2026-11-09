@@ -1473,7 +1473,21 @@
         "connection_pool",
         "with_session"
       ],
-      "inputs": {},
+      "inputs": {
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": []
+        }
+      },
       "outputs": {
         "session": {
           "type_name": "session",

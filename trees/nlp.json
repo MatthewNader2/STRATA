@@ -2,8 +2,108 @@
   "domain": "nlp",
   "version": "1.0",
   "description": "Pluggable natural-language domain extension: fixtures and hints only.",
-  "types": {},
-  "cells": [],
+  "types": {
+    "DocumentText": {
+      "parent": "str"
+    },
+    "TokenSequence": {
+      "parent": "list"
+    },
+    "TokenFrequencies": {
+      "parent": "dict"
+    }
+  },
+  "cells": [
+    {
+      "cell_id": "NLP_TOKENIZE_WHITESPACE",
+      "stage": 2,
+      "domain_name": "nlp",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Normalize and split document text into lowercase word tokens.",
+      "keywords": [
+        "tokenize",
+        "tokens",
+        "words",
+        "split_text"
+      ],
+      "inputs": {
+        "text": {
+          "name": "text",
+          "type_name": "DocumentText",
+          "state": "raw_document",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string"
+        }
+      },
+      "outputs": {
+        "tokens": {
+          "name": "tokens",
+          "type_name": "TokenSequence",
+          "state": "tokenized_sequence",
+          "required": true,
+          "port_role": "data_output",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "string"
+        }
+      },
+      "code_template": "{tokens} = [w.strip('.,!?;:()[]') for w in str({text}).lower().split() if w.strip('.,!?;:()[]')]",
+      "slots": [
+        "tokens",
+        "text"
+      ],
+      "verified": true
+    },
+    {
+      "cell_id": "NLP_WORD_FREQUENCIES",
+      "stage": 3,
+      "domain_name": "nlp",
+      "node_type": "function",
+      "node_role": "sink",
+      "docstring": "Count token frequencies across a tokenized sequence.",
+      "keywords": [
+        "word_frequencies",
+        "term_frequency",
+        "token_counts",
+        "bag_of_words"
+      ],
+      "inputs": {
+        "tokens": {
+          "name": "tokens",
+          "type_name": "TokenSequence",
+          "state": "tokenized_sequence",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "string"
+        }
+      },
+      "outputs": {
+        "frequencies": {
+          "name": "frequencies",
+          "type_name": "TokenFrequencies",
+          "state": "frequency_map",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "composite",
+          "rank": 0,
+          "element_type": "composite_record"
+        }
+      },
+      "code_template": "from collections import Counter as _Counter\n{frequencies} = dict(_Counter({tokens}))",
+      "slots": [
+        "frequencies",
+        "tokens"
+      ],
+      "endable": true,
+      "verified": true
+    }
+  ],
   "mock_fixtures": [
     {
       "match_type_tokens": [
@@ -35,9 +135,37 @@
   "supported_formats": [],
   "typestates": {
     "domain": "nlp",
-    "states": [],
+    "states": [
+      {
+        "name": "raw_document",
+        "parent_state": null,
+        "carrier_type": "DocumentText",
+        "description": "Raw text document",
+        "properties": {}
+      },
+      {
+        "name": "tokenized_sequence",
+        "parent_state": null,
+        "carrier_type": "TokenSequence",
+        "description": "List of tokens",
+        "properties": {}
+      },
+      {
+        "name": "frequency_map",
+        "parent_state": null,
+        "carrier_type": "TokenFrequencies",
+        "description": "Token count dictionary",
+        "properties": {}
+      }
+    ],
     "transitions": [],
-    "initial_state": null,
-    "terminal_states": []
+    "initial_state": "raw_document",
+    "terminal_states": [
+      "frequency_map"
+    ]
+  },
+  "pointed_defaults": {
+    "DocumentText": "''",
+    "TokenSequence": "[]"
   }
 }

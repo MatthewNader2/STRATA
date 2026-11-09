@@ -1523,9 +1523,15 @@ class LatticeRouter:
                     composed_path: List[Cell] = []
                     sub_kwargs = dict(kwargs)
                     sub_kwargs["recursion_depth"] = recursion_depth + 1
+                    current_start_sig = start_sig
                     for sub_g in subgoals:
+                        if composed_path:
+                            last_c = composed_path[-1]
+                            last_out = getattr(last_c, "primary_output", None)
+                            current_start_sig = getattr(last_out, "signature", last_out) if last_out else None
                         sub_res = self.plan_path(
                             sub_g,
+                            start_sig=current_start_sig,
                             return_tuple=False,
                             top_k=top_k,
                             route_method=route_method,

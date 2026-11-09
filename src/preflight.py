@@ -31,11 +31,19 @@ from dataclasses import dataclass, field
 try:
     from .lattice import UNRESOLVED_PORT, TypeRegistry, AlgebraicSignature, PortSignature
     from .tokenizer import CellTokenizer
-    from .unification import ExecutionContext, unify, _shape_compatible, _is_sink_cell, resolve_typed_binding_record, TypedBindingRecord, _declared_role_semantics
+    from .unification import (
+        ExecutionContext, unify, _shape_compatible, _is_sink_cell,
+        resolve_typed_binding_record, TypedBindingRecord, _declared_role_semantics,
+        _get_p_field, _enrich_port_signature_qualifiers, _collect_propagated_qualifiers,
+    )
 except (ImportError, ValueError):
     from lattice import UNRESOLVED_PORT, TypeRegistry, AlgebraicSignature, PortSignature
     from tokenizer import CellTokenizer
-    from unification import ExecutionContext, unify, _shape_compatible, _is_sink_cell, resolve_typed_binding_record, TypedBindingRecord, _declared_role_semantics
+    from unification import (
+        ExecutionContext, unify, _shape_compatible, _is_sink_cell,
+        resolve_typed_binding_record, TypedBindingRecord, _declared_role_semantics,
+        _get_p_field, _enrich_port_signature_qualifiers, _collect_propagated_qualifiers,
+    )
 
 
 @dataclass
@@ -45,22 +53,6 @@ class VariableSchema:
     removed_components: Set[str] = field(default_factory=set)
     added_components: Set[str] = field(default_factory=set)
     removed_by: Dict[str, str] = field(default_factory=dict)
-
-    @property
-    def known_columns(self) -> Optional[Set[str]]:
-        return self.known_components
-
-    @known_columns.setter
-    def known_columns(self, val: Optional[Set[str]]) -> None:
-        self.known_components = val
-
-    @property
-    def removed_columns(self) -> Set[str]:
-        return self.removed_components
-
-    @property
-    def added_columns(self) -> Set[str]:
-        return self.added_components
 
 
 
@@ -359,12 +351,11 @@ class PreflightLinter:
                     if val is not None:
                         bound_values_str.add(str(val).strip("'\""))
 
-            stopwords = cls._registry().get_stopwords()
             seen_consumed_lits: Set[str] = set()
 
             for _, kind, lit_val in extracted_literals:
                 clean_lit = lit_val.strip("'\"")
-                if not clean_lit or clean_lit in waived or clean_lit.lower() in stopwords:
+                if not clean_lit or clean_lit in waived:
                     continue
 
                 if kind not in ("file_asset", "quoted_str", "numeric"):
@@ -582,8 +573,23 @@ class PreflightLinter:
 
                 # 1. Structural Carrier & Shape Compatibility
                 if not _shape_compatible(resolved_sig, in_port_sig):
-                    res_quals = getattr(resolved_sig, "qualifiers", frozenset())
-                    in_rej = getattr(in_port_sig, "rejected_qualifiers", frozenset())
+                    res_quals_raw = _get_p_field(resolved_sig, "qualifiers", None) or getattr(getattr(resolved_sig, "signature", None), "qualifiers", frozenset()) or frozenset()
+                    in_rej_raw = _get_p_field(in_port_sig, "rejected_qualifiers", None) or getattr(getattr(in_port_sig, "signature", None), "rejected_qualifiers", frozenset()) or frozenset()
+
+                    flat_res_quals = set()
+                    for q in res_quals_raw:
+                        if isinstance(q, (tuple, list, set, frozenset)):
+                            flat_res_quals.update(str(x).lower() for x in q)
+                        else:
+                            flat_res_quals.add(str(q).lower())
+
+                    flat_in_rej = set()
+                    for q in in_rej_raw:
+                        if isinstance(q, (tuple, list, set, frozenset)):
+                            flat_in_rej.update(str(x).lower() for x in q)
+                        else:
+                            flat_in_rej.add(str(q).lower())
+
                     msg = (
                         f"Cell '{cell.cell_id}' port '{p_name}' has carrier/shape mismatch with "
                         f"bound variable '{bound_val}' (produced by '{prod_id}' port '{prod_port}')."
@@ -598,8 +604,8 @@ class PreflightLinter:
                             "bound_val": bound_val,
                             "producer_cell_id": prod_id,
                             "producer_port": prod_port,
-                            "resolved_qualifiers": list(res_quals) if isinstance(res_quals, (set, frozenset, list)) else [],
-                            "rejected_qualifiers": list(in_rej) if isinstance(in_rej, (set, frozenset, list)) else [],
+                            "resolved_qualifiers": sorted(list(flat_res_quals)),
+                            "rejected_qualifiers": sorted(list(flat_in_rej)),
                         },
                     )
                     continue
@@ -633,8 +639,14 @@ class PreflightLinter:
             if _is_sink_cell(cell):
                 continue
 
+            # Calculate propagated qualifiers from input variables
+            prop_quals = _collect_propagated_qualifiers(cell, bindings, var_signatures)
+
             # Register cell outputs for subsequent consumers
             prim_out = getattr(cell, "primary_output", None)
+            if prop_quals and prim_out is not None:
+                prim_out = _enrich_port_signature_qualifiers(prim_out, prop_quals)
+
             if prim_out is not None:
                 p_name = getattr(prim_out, "name", None)
                 if p_name and p_name in bindings:
@@ -644,6 +656,8 @@ class PreflightLinter:
                         var_producers[v] = (cell, p_name)
 
             for out_name, out_sig in cell_outputs.items():
+                if prop_quals:
+                    out_sig = _enrich_port_signature_qualifiers(out_sig, prop_quals)
                 if out_name in bindings:
                     v = bindings[out_name]
                     if isinstance(v, str) and v.isidentifier():
@@ -654,6 +668,8 @@ class PreflightLinter:
             if isinstance(out_var, str) and out_var.isidentifier() and out_var not in var_signatures:
                 first_sig = prim_out or (next(iter(cell_outputs.values())) if cell_outputs else None)
                 if first_sig is not None:
+                    if prop_quals:
+                        first_sig = _enrich_port_signature_qualifiers(first_sig, prop_quals)
                     var_signatures[out_var] = first_sig
                     var_producers[out_var] = (cell, "output_var")
 
@@ -745,21 +761,14 @@ class PreflightLinter:
                         is_terminal = _active_vocab().is_terminal(cell)
                     except Exception:
                         pass
+                # In graph-theoretic dataflow liveness:
+                # A step is live if its outputs are consumed, OR if it represents a terminal deliverable / sink,
+                # OR if it was explicitly synthesized as the witness to a declared user specification clause.
                 if (
                     is_terminal
                     or getattr(cell, "is_goal", False)
+                    or getattr(cell, "matched_clause_idx", None) is not None
                 ):
-                    continue
-                outs_all_scalar = bool(cell.outputs) and all(
-                    _registry_liveness.is_subtype(
-                        str(getattr(getattr(o, "signature", o), "type_name", "") or ""), "scalar"
-                    )
-                    or _registry_liveness.is_subtype(
-                        str(getattr(getattr(o, "signature", o), "type_name", "") or ""), "numeric"
-                    )
-                    for o in cell.outputs.values()
-                )
-                if outs_all_scalar and getattr(cell, "matched_clause_idx", None) is not None:
                     continue
                 dead_v = next(iter(produced_vars))
                 msg = (
@@ -1057,7 +1066,7 @@ class PreflightLinter:
         # -----------------------------------------------------------------
         reg = cls._registry()
         key_binds = set(reg.get_verification_semantics("key_binds") or ())
-        proj_roles = cls._role_set("get_projection_tokens", "get_column_projection_tokens")
+        proj_roles = cls._role_set("get_projection_tokens")
         for cell, bindings in pipeline_bindings:
             for p_name, val in bindings.items():
                 if val is UNRESOLVED_PORT:

@@ -9927,12 +9927,5 @@
     "canvas": {
       "parent": "object"
     }
-  },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ]
+  }
 }

@@ -2,54 +2,6 @@
   "domain": "control_flow",
   "description": "Higher-Order Lattice Combinators (Cartesian Closed Category morphisms) for modular, language-agnostic control flow synthesis in STRATA.",
   "version": "1.0.0",
-  "verification_semantics": {
-    "fold_loop_topologies": [
-      "fold_loop",
-      "reduce_loop",
-      "accumulation_loop",
-      "fold",
-      "reduce"
-    ],
-    "collect_loop_topologies": [
-      "collect_loop",
-      "collection_loop",
-      "accumulate_loop"
-    ],
-    "extremum_loop_topologies": [
-      "extremum_loop",
-      "argmax_loop",
-      "argmin_loop"
-    ],
-    "fold_loop_kinds": [
-      "fold",
-      "reduce",
-      "accumulation"
-    ],
-    "collect_loop_kinds": [
-      "collect"
-    ],
-    "extremum_loop_kinds": [
-      "extremum"
-    ],
-    "order_flag_names": [
-      "direction",
-      "extreme",
-      "mode",
-      "order"
-    ],
-    "combinator_roles": [
-      "combinator"
-    ],
-    "combinator_topologies": [
-      "combinator",
-      "traced_loop",
-      "state_loop",
-      "coproduct_branch",
-      "product_parallel",
-      "identity_junction",
-      "context_manager"
-    ]
-  },
   "cells": [
     {
       "cell_id": "CF_FUNCTION_DEF",
@@ -1208,7 +1160,7 @@
         }
       },
       "code_templates": {
-        "python": "{final_state} = {init_state}\nfor _item in {collection}:\n    {body}",
+        "python": "_state = {init_state}\nfor _item in {collection}:\n    _state = ({body_fn})(_state, _item)\n{final_state} = _state",
         "cpp": "{State} {final_state} = {init_state};\nfor (const auto& _item : {collection}) {\n    {body}\n}",
         "rust": "let mut {final_state} = {init_state};\nfor _item in &{collection} {\n    {body}\n}"
       },
@@ -1221,7 +1173,7 @@
         "accumulate"
       ],
       "effects": [],
-      "code_template": "{final_state} = {init_state}\nfor _item in {collection}:\n    {body}",
+      "code_template": "_state = {init_state}\nfor _item in {collection}:\n    _state = ({body_fn})(_state, _item)\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "final_state"
@@ -1445,7 +1397,7 @@
         }
       },
       "code_templates": {
-        "python": "{final_state} = {init_state}\nwhile {cond_fn}({final_state}):\n    {body}",
+        "python": "_state = {init_state}\nwhile ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n{final_state} = _state",
         "cpp": "{State} {final_state} = {init_state};\nwhile ({cond_fn}({final_state})) {\n    {body}\n}",
         "rust": "let mut {final_state} = {init_state};\nwhile {cond_fn}(&{final_state}) {\n    {body}\n}"
       },
@@ -1459,7 +1411,7 @@
         "iterate"
       ],
       "effects": [],
-      "code_template": "{final_state} = {init_state}\nwhile {cond_fn}({final_state}):\n    {body}",
+      "code_template": "_state = {init_state}\nwhile ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
       "primary_out": "final_state"
@@ -1529,7 +1481,7 @@
         }
       },
       "code_templates": {
-        "python": "{final_state} = {init_state}\n_iter_count = 0\nwhile {cond_fn}({final_state}) and _iter_count < {max_iters}:\n    {body}\n    _iter_count += 1",
+        "python": "_state = {init_state}\n_iter = 0\nwhile _iter < {max_iters} and ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n    _iter += 1\n{final_state} = _state",
         "cpp": "{State} {final_state} = {init_state};\nint _iter_count = 0;\nwhile ({cond_fn}({final_state}) && _iter_count < {max_iters}) {\n    {body}\n    ++_iter_count;\n}",
         "rust": "let mut {final_state} = {init_state};\nlet mut _iter_count = 0;\nwhile {cond_fn}(&{final_state}) && _iter_count < {max_iters} {\n    {body}\n    _iter_count += 1;\n}"
       },
@@ -1540,7 +1492,7 @@
         "max_iterations"
       ],
       "effects": [],
-      "code_template": "{final_state} = {init_state}\n_iter_count = 0\nwhile {cond_fn}({final_state}) and _iter_count < {max_iters}:\n    {body}\n    _iter_count += 1",
+      "code_template": "_state = {init_state}\n_iter = 0\nwhile _iter < {max_iters} and ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n    _iter += 1\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
       "primary_out": "final_state"
@@ -1600,7 +1552,7 @@
         }
       },
       "code_templates": {
-        "python": "{final_state} = {init_state}\nwhile True:\n    {body}\n    if {until_cond_fn}({final_state}):\n        break",
+        "python": "_state = {init_state}\nwhile True:\n    _state = ({body_fn})(_state)\n    if ({until_cond_fn})(_state):\n        break\n{final_state} = _state",
         "cpp": "{State} {final_state} = {init_state};\ndo {\n    {body}\n} while (!{until_cond_fn}({final_state}));",
         "rust": "let mut {final_state} = {init_state};\nloop {\n    {body}\n    if {until_cond_fn}(&{final_state}) {\n        break;\n    }\n}"
       },
@@ -1611,7 +1563,7 @@
         "do_while"
       ],
       "effects": [],
-      "code_template": "{final_state} = {init_state}\nwhile True:\n    {body}\n    if {until_cond_fn}({final_state}):\n        break",
+      "code_template": "_state = {init_state}\nwhile True:\n    _state = ({body_fn})(_state)\n    if ({until_cond_fn})(_state):\n        break\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
       "primary_out": "final_state"
@@ -1678,7 +1630,7 @@
         }
       },
       "code_templates": {
-        "python": "if {condition}:\n    {then_branch}\nelse:\n    {else_branch}",
+        "python": "if {condition}:\n    {result} = ({on_true})({data})\nelse:\n    {result} = ({on_false})({data})",
         "cpp": "if ({condition}) {\n    {then_branch}\n} else {\n    {else_branch}\n}",
         "rust": "if {condition} {\n    {then_branch}\n} else {\n    {else_branch}\n}"
       },
@@ -1692,7 +1644,7 @@
         "choose"
       ],
       "effects": [],
-      "code_template": "if {condition}:\n    {then_branch}\nelse:\n    {else_branch}",
+      "code_template": "if {condition}:\n    {result} = ({on_true})({data})\nelse:\n    {result} = ({on_false})({data})",
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result"
@@ -1955,7 +1907,7 @@
         }
       },
       "code_templates": {
-        "python": "try:\n    {try_body}\nexcept {exception_type} as _err:\n    {except_body}",
+        "python": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})({data}, _err)",
         "cpp": "{U} {result};\ntry {\n    {try_body}\n} catch (const std::exception& _err /* {exception_type} */) {\n    {except_body}\n}",
         "rust": "let {result}: {U} = match std::panic::catch_unwind(std::panic::AssertUnwindSafe /* {exception_type} */(|| {action}({data}))) {\n    Ok(res) => res,\n    Err(_err) => {fallback}(_err, {data}),\n};"
       },
@@ -1971,7 +1923,7 @@
         "handle"
       ],
       "effects": [],
-      "code_template": "try:\n    {try_body}\nexcept {exception_type} as _err:\n    {except_body}",
+      "code_template": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})({data}, _err)",
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result"
@@ -2624,7 +2576,7 @@
         }
       },
       "code_templates": {
-        "python": "with {context_manager} as _ctx:\n    {body}",
+        "python": "with {context_manager} as _ctx:\n    {result} = ({body_fn})(_ctx)",
         "cpp": "{\n    auto _ctx = {context_manager}.acquire();\n    {body}\n}",
         "rust": "{\n    let _ctx = {context_manager}.enter();\n    {body}\n}"
       },
@@ -2637,7 +2589,7 @@
         "open"
       ],
       "effects": [],
-      "code_template": "with {context_manager} as _ctx:\n    {body}",
+      "code_template": "with {context_manager} as _ctx:\n    {result} = ({body_fn})(_ctx)",
       "node_role": "combinator",
       "primary_in": "context_manager",
       "primary_out": "result"
@@ -2650,12 +2602,5 @@
     "initial_state": null,
     "terminal_states": []
   },
-  "materialization_states": [
-    "destination_written",
-    "filepath_written",
-    "saved",
-    "exported",
-    "written_to_disk"
-  ],
   "supported_formats": []
 }

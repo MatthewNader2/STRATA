@@ -231,9 +231,24 @@ class M3GreedyFreezeRouteMethod(RouteMethod):
                 else:
                     fit = self.clause_fit(target_cl, cand)
 
+                # Lookahead reachability: ensure candidate can transition/bridge to target anchors
+                def _can_reach_target(c: Cell) -> bool:
+                    if not target_anchors or any(a.cell_id == c.cell_id for a in target_anchors):
+                        return True
+                    simulated_path = committed_path + [c]
+                    for ta in target_anchors:
+                        if self.step_unifies(c, ta, prev_path=simulated_path) or self.step_unifies_dag(ta, simulated_path, ctx=ctx):
+                            return True
+                        if self.find_bridge(c, ta, candidates, orch, prev_path=simulated_path) is not None:
+                            return True
+                    return False
+
+                reaches_target = 1 if _can_reach_target(cand) else 0
+
                 return (
                     0 if unrequested_egress else (0 if is_inversion else 1),
                     1 if is_target_cl else 0,
+                    reaches_target,
                     handle_score,
                     fit,
                     new_mass,

@@ -127,10 +127,24 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         elif dst_lit is not None:
             eligible_sinks = [c for c in sink_pool if self.file_compat(c, dst_lit) > 0]
         else:
-            eligible_sinks = []
+            # Generalized co-terminal anchor: in memory-only or open pipelines,
+            # terminal cells or evaluators matching the final clause serve as the sink anchor.
+            terminal_roles = set()
+            if orch and hasattr(orch, "registry"):
+                terminal_roles.update(orch.registry.get_verification_semantics("terminal_roles") or ())
+            terminal_roles.update({"evaluator", "metric", "sink", "consumer"})
+            eligible_sinks = [
+                c for c in candidates
+                if (getattr(c, "node_role", "") in terminal_roles or self.clause_fit(last_clause, c)[0] > 0)
+                and not self.is_ingress_node(c, orch)
+            ]
         best_sink: Optional[Cell] = max(
             eligible_sinks,
-            key=lambda c: (self.file_compat(c, dst_lit), self.clause_fit(last_clause, c), relevance_map.get(c.cell_id, 0.0)),
+            key=lambda c: (
+                self.file_compat(c, dst_lit) if dst_lit is not None else 0,
+                self.clause_fit(last_clause, c),
+                relevance_map.get(c.cell_id, 0.0),
+            ),
         ) if eligible_sinks else None
         self._trace("m2_endpoints", source=best_source.cell_id if best_source else None,
                     sink=best_sink.cell_id if best_sink else None,

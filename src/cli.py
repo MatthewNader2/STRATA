@@ -1073,6 +1073,7 @@ class PipelineDebugger:
 
         dbg_ctx = ExecutionContext(prompt=effective_prompt)
         if intent_data and isinstance(intent_data, dict):
+            dbg_ctx.intent_data = dict(intent_data)
             if hasattr(dbg_ctx, "blackboard") and dbg_ctx.blackboard is not None:
                 dbg_ctx.blackboard.lock_from_intent(intent_data)
                 if dbg_ctx.blackboard.locked_by_neural:
@@ -1084,20 +1085,20 @@ class PipelineDebugger:
                 dbg_ctx.hyperparameters = dict(intent_data["hyperparameters"])
             if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
                 dbg_ctx.llm_slots = dict(intent_data["slots"])
-                if hasattr(dbg_ctx, "sync_llm_slots"):
-                    dbg_ctx.sync_llm_slots()
-            tgt = intent_data.get("target_sink") or intent_data.get("target_key")
+            if intent_data.get("variables") and isinstance(intent_data["variables"], list):
+                dbg_ctx.variables_spec = [str(v).strip() for v in intent_data["variables"] if str(v).strip()]
+                dbg_ctx.llm_slots.setdefault("variables", dbg_ctx.variables_spec)
+            if hasattr(dbg_ctx, "sync_llm_slots"):
+                dbg_ctx.sync_llm_slots()
+            tgt = intent_data.get("target_sink") or intent_data.get("target_key") or intent_data.get("deliverable")
             if tgt:
                 dbg_ctx.target_key = str(tgt).strip()
-                dbg_ctx.target_literals.add(str(tgt).strip().lower())
-            if intent_data.get("columns") and isinstance(intent_data["columns"], list):
-                dbg_ctx.columns = [str(c).strip() for c in intent_data["columns"]]
+                dbg_ctx.target_literals.add(dbg_ctx.target_key)
+                dbg_ctx.parameters["target_sink"] = dbg_ctx.target_key
             if intent_data.get("parameters") and isinstance(intent_data["parameters"], dict):
                 for p_key, p_val in intent_data["parameters"].items():
                     if p_key:
                         dbg_ctx.parameters.setdefault(str(p_key), p_val)
-            if intent_data.get("by_column"):
-                dbg_ctx.parameters["by_column"] = str(intent_data["by_column"]).strip()
             if intent_data.get("source_files"):
                 dbg_ctx.parameters["source_uris"] = list(intent_data["source_files"])
             if intent_data.get("dest_files"):
@@ -2796,22 +2797,25 @@ class NSTLInteractiveShell(cmd.Cmd):
         t_route_start = time.perf_counter()
         plan_ctx = ExecutionContext(prompt=effective_prompt)
         if intent_data and isinstance(intent_data, dict):
-            tgt = intent_data.get("target_sink") or intent_data.get("target_key")
+            plan_ctx.intent_data = dict(intent_data)
+            tgt = intent_data.get("target_sink") or intent_data.get("target_key") or intent_data.get("deliverable")
             if tgt:
                 plan_ctx.target_key = str(tgt).strip()
                 plan_ctx.target_literals.add(plan_ctx.target_key)
-            if intent_data.get("columns") and isinstance(intent_data["columns"], list):
-                plan_ctx.columns = [str(c).strip() for c in intent_data["columns"]]
+                plan_ctx.parameters["target_sink"] = plan_ctx.target_key
             if intent_data.get("hyperparameters") and isinstance(intent_data["hyperparameters"], dict):
                 plan_ctx.hyperparameters = dict(intent_data["hyperparameters"])
             if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
                 plan_ctx.llm_slots = dict(intent_data["slots"])
+            if intent_data.get("variables") and isinstance(intent_data["variables"], list):
+                plan_ctx.variables_spec = [str(v).strip() for v in intent_data["variables"] if str(v).strip()]
+                plan_ctx.llm_slots.setdefault("variables", plan_ctx.variables_spec)
+            if hasattr(plan_ctx, "sync_llm_slots"):
+                plan_ctx.sync_llm_slots()
             if intent_data.get("parameters") and isinstance(intent_data["parameters"], dict):
                 for p_key, p_val in intent_data["parameters"].items():
                     if p_key:
                         plan_ctx.parameters.setdefault(str(p_key), p_val)
-            if intent_data.get("by_column"):
-                plan_ctx.parameters["by_column"] = str(intent_data["by_column"]).strip()
             if intent_data.get("source_files"):
                 plan_ctx.parameters["source_uris"] = list(intent_data["source_files"])
             if intent_data.get("dest_files"):
