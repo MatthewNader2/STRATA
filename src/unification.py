@@ -7238,6 +7238,7 @@ class UnificationGate:
                     producer_var = flushed_v
 
             bound_producer = False
+            is_formal_step = bool(getattr(cell, "formal_program_step", False))
 
             step_key = str(idx)
             step_llm_bindings = (
@@ -7765,7 +7766,6 @@ class UnificationGate:
                                 break
 
             explicit_port_bindings = getattr(cell, "explicit_port_bindings", None)
-            is_formal_step = bool(getattr(cell, "formal_program_step", False))
             if explicit_port_bindings:
                 for p_name, p_sig in cell.inputs.items():
                     if p_name in explicit_port_bindings and p_name not in cell_bindings:

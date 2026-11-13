@@ -1261,6 +1261,7 @@ class LatticeRouter:
         loaded = list(getattr(self.orchestrator, "loaded_cells", {}).values())
         if not loaded:
             return 0
+        reg = TypeRegistry.get_instance()
 
         # Collect currently producible output signatures in tunnel
         frontier_goals: List[Tuple[Cell, float]] = [
@@ -2383,6 +2384,7 @@ class LatticeRouter:
                 pass
             return False
 
+        reg = TypeRegistry.get_instance()
         new_path: List[Cell] = []
         for i in range(len(path)):
             new_path.append(path[i])

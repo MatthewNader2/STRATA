@@ -56,6 +56,10 @@
     "domain": "requests",
     "states": [
       {
+        "name": "unbound",
+        "description": "Unbound session context body slot awaiting macro expansion."
+      },
+      {
         "name": "active_session",
         "description": "Persistent requests.Session object with active connection pooling."
       },

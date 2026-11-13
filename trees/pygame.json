@@ -121,6 +121,10 @@
     "domain": "pygame",
     "states": [
       {
+        "name": "unbound",
+        "description": "Unbound loop or callback body slot awaiting macro expansion."
+      },
+      {
         "name": "active",
         "description": "Resource actively in use and available for morphism transformations."
       },

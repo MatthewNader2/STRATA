@@ -96,6 +96,10 @@
     "domain": "pathlib",
     "states": [
       {
+        "name": "unbound",
+        "description": "Unbound control-flow or iterator body slot awaiting macro expansion."
+      },
+      {
         "name": "absolute_path",
         "description": "Path instance with fully resolved absolute filesystem coordinates.",
         "parent_state": "existing_path"

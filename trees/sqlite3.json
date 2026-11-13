@@ -84,6 +84,13 @@
     "domain": "sqlite3",
     "states": [
       {
+        "name": "unbound",
+        "parent_state": null,
+        "carrier_type": "callable",
+        "description": "Unbound transaction body slot awaiting macro expansion.",
+        "properties": {}
+      },
+      {
         "name": "active",
         "parent_state": null,
         "carrier_type": "cursor",
