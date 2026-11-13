@@ -6,6 +6,14 @@
     {
       "cell_id": "CF_FUNCTION_DEF",
       "stage": 2,
+      "node_type": "macro",
+      "topology_type": "function_scope",
+      "slots": {
+        "body": {
+          "input_type": "Any",
+          "output_type": "Any"
+        }
+      },
       "doc": "Lambda Abstraction / Morphism Definition: Encapsulates a parameterized sub-pipeline into a named, reusable Callable function with explicit signature and scope.",
       "inputs": {
         "fn_name": {
@@ -16,7 +24,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "arg_names": {
           "type_name": "str",
@@ -26,7 +48,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "body_pipeline": {
           "type_name": "Callable[..., R]",
@@ -36,7 +72,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -45,11 +87,16 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
-        "python": "def {fn_name}({arg_names}):\n    return {body_pipeline}({arg_names})\n{function_handle} = {fn_name}",
+        "python": "def {fn_name}({arg_names}):\n    return ({body_pipeline})({arg_names})\n{function_handle} = {fn_name}",
         "cpp": "auto {fn_name} = []({arg_names}) { return {body_pipeline}({arg_names}); };\nauto {function_handle} = {fn_name};",
         "rust": "let {fn_name} = |{arg_names}| {body_pipeline}({arg_names});\nlet {function_handle} = {fn_name};"
       },
@@ -62,10 +109,11 @@
         "procedure"
       ],
       "effects": [],
-      "code_template": "def {fn_name}({arg_names}):\n    return {body_pipeline}({arg_names})\n{function_handle} = {fn_name}",
+      "code_template": "def {fn_name}({arg_names}):\n    return ({body_pipeline})({arg_names})\n{function_handle} = {fn_name}",
       "node_role": "combinator",
       "primary_in": "body_pipeline",
-      "primary_out": "function_handle"
+      "primary_out": "function_handle",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_LAMBDA",
@@ -80,7 +128,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "expression": {
           "type_name": "Callable[..., R]",
@@ -90,7 +152,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -99,7 +167,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -117,7 +190,8 @@
       "code_template": "{closure} = lambda {arg_names}: {expression}({arg_names})",
       "node_role": "combinator",
       "primary_in": "expression",
-      "primary_out": "closure"
+      "primary_out": "closure",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_CLASS_DEF",
@@ -132,7 +206,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "init_params": {
           "type_name": "str",
@@ -142,7 +230,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "init_assignments": {
           "type_name": "str",
@@ -152,7 +254,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "method_name": {
           "type_name": "str",
@@ -162,7 +278,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "method_params": {
           "type_name": "str",
@@ -172,7 +302,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "method_body": {
           "type_name": "Callable[..., R]",
@@ -182,7 +326,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -191,7 +341,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Type[C]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -210,7 +365,8 @@
       "code_template": "class {class_name}:\n    def __init__(self, {init_params}):\n        {init_assignments}\n    def {method_name}(self, {method_params}):\n        return {method_body}(self, {method_params})\n{class_handle} = {class_name}",
       "node_role": "combinator",
       "primary_in": "class_name",
-      "primary_out": "class_handle"
+      "primary_out": "class_handle",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_RECURSIVE_FUNC",
@@ -225,7 +381,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "base_predicate": {
           "type_name": "Callable[[T], bool]",
@@ -235,7 +405,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "base_action": {
           "type_name": "Callable[[T], R]",
@@ -245,7 +421,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "step_action": {
           "type_name": "Callable[[T, Callable[[T], R]], R]",
@@ -255,7 +437,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T, Callable[[T], R]], R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -265,7 +453,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -274,7 +467,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "R",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -293,7 +491,8 @@
       "code_template": "def {fn_name}(_x):\n    if {base_predicate}(_x):\n        return {base_action}(_x)\n    return {step_action}(_x, {fn_name})\n{result} = {fn_name}({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_DIVIDE_AND_CONQUER",
@@ -308,7 +507,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "base_predicate": {
           "type_name": "Callable[[T], bool]",
@@ -318,7 +531,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "base_action": {
           "type_name": "Callable[[T], R]",
@@ -328,7 +547,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "split_fn": {
           "type_name": "Callable[[T], List[T]]",
@@ -338,7 +563,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], List[T]]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "combine_fn": {
           "type_name": "Callable[[T, List[R]], R]",
@@ -348,7 +579,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T, List[R]], R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -358,7 +595,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -367,7 +609,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "R",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -386,7 +633,8 @@
       "code_template": "def {fn_name}(_x):\n    if {base_predicate}(_x):\n        return {base_action}(_x)\n    _subs = {split_fn}(_x)\n    _sub_results = [{fn_name}(_sub) for _sub in _subs]\n    return {combine_fn}(_x, _sub_results)\n{result} = {fn_name}({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_COND_CHAIN",
@@ -409,7 +657,22 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[Tuple[Callable[[T], bool], Callable[[T], R]]]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "default_action": {
           "type_name": "Callable[[T], R]",
@@ -419,7 +682,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], R]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -429,7 +698,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -438,7 +712,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "R",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -458,7 +737,8 @@
       "code_template": "_matched = False\nfor _pred, _act in {branch_table}:\n    if _pred({data}):\n        {result} = _act({data})\n        _matched = True\n        break\nif not _matched:\n    {result} = {default_action}({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_NESTED_FOR_EACH",
@@ -482,7 +762,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "inner_generator": {
           "type_name": "Callable[[T], List[U]]",
@@ -492,7 +786,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], List[U]]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "body_fn": {
           "type_name": "Callable[[T, U, State], State]",
@@ -502,7 +802,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T, U, State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "init_state": {
           "type_name": "State",
@@ -512,7 +818,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -521,7 +832,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -540,7 +856,8 @@
       "code_template": "{final_state} = {init_state}\nfor _outer in {outer_collection}:\n    for _inner in {inner_generator}(_outer):\n        {final_state} = {body_fn}(_outer, _inner, {final_state})",
       "node_role": "combinator",
       "primary_in": "outer_collection",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_TOP_K",
@@ -551,7 +868,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -564,7 +880,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "key_fn": {
           "type_name": "Callable[[T], Comparable]",
@@ -574,7 +904,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], Comparable]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "k": {
           "type_name": "int",
@@ -584,7 +920,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -602,7 +952,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -627,7 +991,8 @@
       "code_template": "{output_collection} = sorted({collection}, key={key_fn}, reverse=True)[:{k}]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_BOTTOM_K",
@@ -638,7 +1003,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -651,7 +1015,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "key_fn": {
           "type_name": "Callable[[T], Comparable]",
@@ -661,7 +1039,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], Comparable]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "k": {
           "type_name": "int",
@@ -671,7 +1055,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -689,7 +1087,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -711,7 +1123,8 @@
       "code_template": "{output_collection} = sorted({collection}, key={key_fn}, reverse=False)[:{k}]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_MAP",
@@ -722,7 +1135,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -735,7 +1147,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "transform": {
           "type_name": "Callable[[T], U]",
@@ -745,7 +1171,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -763,7 +1195,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[U]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -784,7 +1230,8 @@
       "code_template": "{output_collection} = [{transform}(item) for item in {collection}]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FILTER",
@@ -795,7 +1242,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -808,7 +1254,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -818,7 +1278,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -836,7 +1302,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -857,7 +1337,8 @@
       "code_template": "{output_collection} = [item for item in {collection} if {predicate}(item)]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FLAT_MAP",
@@ -868,7 +1349,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -881,7 +1361,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "transform": {
           "type_name": "Callable[[T], List[U]]",
@@ -891,7 +1385,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], List[U]]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -909,7 +1409,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[U]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -928,7 +1442,8 @@
       "code_template": "{output_collection} = [elem for sublist in ({transform}(item) for item in {collection}) for elem in sublist]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FOLD_REDUCE",
@@ -939,7 +1454,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -952,7 +1466,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "accumulator": {
           "type_name": "Callable[[State, T], State]",
@@ -962,7 +1490,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State, T], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "initial": {
           "type_name": "State",
@@ -971,7 +1505,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "dependencies": [
@@ -983,7 +1522,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1004,7 +1548,8 @@
       "code_template": "import functools\n{accumulated_state} = functools.reduce({accumulator}, {collection}, {initial})",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "accumulated_state"
+      "primary_out": "accumulated_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_ZIP_WITH",
@@ -1028,7 +1573,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "collection_b": {
           "type_name": "List[U]",
@@ -1047,7 +1606,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[U]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "zipper": {
           "type_name": "Callable[[T, U], V]",
@@ -1057,7 +1630,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T, U], V]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -1075,7 +1654,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[V]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1094,7 +1687,8 @@
       "code_template": "{output_collection} = [{zipper}(a, b) for a, b in zip({collection_a}, {collection_b})]",
       "node_role": "combinator",
       "primary_in": "collection_a",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FOR_EACH_STATE",
@@ -1114,7 +1708,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -1127,7 +1720,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "body_fn": {
           "type_name": "Callable[[T, State], State]",
@@ -1137,7 +1744,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T, State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "init_state": {
           "type_name": "State",
@@ -1147,7 +1760,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1156,7 +1774,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1176,7 +1799,8 @@
       "code_template": "_state = {init_state}\nfor _item in {collection}:\n    _state = ({body_fn})(_state, _item)\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FOR_RANGE_STATE",
@@ -1191,7 +1815,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "stop": {
           "type_name": "int",
@@ -1201,7 +1839,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "step": {
           "type_name": "int",
@@ -1211,7 +1863,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "body_fn": {
           "type_name": "Callable[[int, State], State]",
@@ -1221,7 +1887,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[int, State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "init_state": {
           "type_name": "State",
@@ -1231,7 +1903,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1240,7 +1917,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1260,7 +1942,8 @@
       "code_template": "{final_state} = {init_state}\nfor _idx in range({start}, {stop}, {step}):\n    {final_state} = {body_fn}(_idx, {final_state})",
       "node_role": "combinator",
       "primary_in": "init_state",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FOR_ENUMERATE_MAP",
@@ -1271,7 +1954,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -1284,7 +1966,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "transform": {
           "type_name": "Callable[[int, T], U]",
@@ -1294,7 +1990,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[int, T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "start_index": {
           "type_name": "int",
@@ -1304,7 +2006,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1322,7 +2038,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[U]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1340,7 +2070,8 @@
       "code_template": "{output_collection} = [{transform}(idx, item) for idx, item in enumerate({collection}, start={start_index})]",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "output_collection"
+      "primary_out": "output_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_WHILE_LOOP",
@@ -1364,27 +2095,44 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "cond_fn": {
           "type_name": "Callable[[State], bool]",
           "required": true,
           "port_role": "functional_operator",
-          "default_value": "lambda s: True",
+          "default_value": "lambda s: False",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
           "required": false,
           "port_role": "functional_operator",
-          "default_value": "lambda item, s: s",
+          "default_value": "lambda s: s",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -1393,7 +2141,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1414,7 +2167,8 @@
       "code_template": "_state = {init_state}\nwhile ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_WHILE_BOUNDED",
@@ -1438,27 +2192,44 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "cond_fn": {
           "type_name": "Callable[[State], bool]",
           "required": true,
           "port_role": "functional_operator",
-          "default_value": "lambda s: True",
+          "default_value": "lambda s: False",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
           "required": false,
           "port_role": "functional_operator",
-          "default_value": "lambda item, s: s",
+          "default_value": "lambda s: s",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "max_iters": {
           "type_name": "int",
@@ -1468,7 +2239,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1477,7 +2262,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1495,7 +2285,8 @@
       "code_template": "_state = {init_state}\n_iter = 0\nwhile _iter < {max_iters} and ({cond_fn})(_state):\n    _state = ({body_fn})(_state)\n    _iter += 1\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_REPEAT_UNTIL",
@@ -1519,7 +2310,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
@@ -1529,7 +2325,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], State]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "until_cond_fn": {
           "type_name": "Callable[[State], bool]",
@@ -1539,7 +2341,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[State], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -1548,7 +2356,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1566,7 +2379,8 @@
       "code_template": "_state = {init_state}\nwhile True:\n    _state = ({body_fn})(_state)\n    if ({until_cond_fn})(_state):\n        break\n{final_state} = _state",
       "node_role": "combinator",
       "primary_in": "init_state",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_BRANCH_IF_ELSE",
@@ -1587,7 +2401,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "on_true": {
           "type_name": "Callable[[T], U]",
@@ -1597,7 +2425,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "on_false": {
           "type_name": "Callable[[T], U]",
@@ -1607,7 +2441,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -1617,7 +2457,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1626,7 +2471,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1647,7 +2497,8 @@
       "code_template": "if {condition}:\n    {result} = ({on_true})({data})\nelse:\n    {result} = ({on_false})({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_BRANCH_COND_ELIF",
@@ -1662,7 +2513,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "branch_1": {
           "type_name": "Callable[[T], U]",
@@ -1672,7 +2537,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "cond_2": {
           "type_name": "bool",
@@ -1682,7 +2553,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "branch_2": {
           "type_name": "Callable[[T], U]",
@@ -1692,7 +2577,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "default_branch": {
           "type_name": "Callable[[T], U]",
@@ -1702,7 +2593,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -1712,7 +2609,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1721,7 +2623,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1740,7 +2647,8 @@
       "code_template": "if {cond_1}:\n    {result} = ({branch_1})({data})\nelif {cond_2}:\n    {result} = ({branch_2})({data})\nelse:\n    {result} = ({default_branch})({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_MATCH_CASE",
@@ -1755,7 +2663,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "case_a_val": {
           "type_name": "str",
@@ -1765,7 +2687,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "action_a": {
           "type_name": "Callable[[T], U]",
@@ -1775,7 +2711,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "case_b_val": {
           "type_name": "str",
@@ -1785,7 +2727,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "action_b": {
           "type_name": "Callable[[T], U]",
@@ -1795,7 +2751,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "default_action": {
           "type_name": "Callable[[T], U]",
@@ -1805,7 +2767,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "data": {
           "type_name": "T",
@@ -1815,7 +2783,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1824,7 +2797,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1843,7 +2821,8 @@
       "code_template": "match {discriminator}:\n    case _val if _val == {case_a_val}:\n        {result} = {action_a}({data})\n    case _val if _val == {case_b_val}:\n        {result} = {action_b}({data})\n    case _:\n        {result} = {default_action}({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_TRY_EXCEPT",
@@ -1864,7 +2843,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -1874,7 +2859,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[Exception, T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "exception_type": {
           "type_name": "str",
@@ -1884,7 +2875,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "data": {
           "type_name": "T",
@@ -1894,7 +2899,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1903,7 +2913,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -1926,7 +2941,8 @@
       "code_template": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})({data}, _err)",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_TRY_EXCEPT_FINALLY",
@@ -1941,7 +2957,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -1951,7 +2973,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[Exception, T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "finalizer": {
           "type_name": "Callable[[T], None]",
@@ -1961,7 +2989,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], None]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "exception_type": {
           "type_name": "str",
@@ -1971,7 +3005,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "data": {
           "type_name": "T",
@@ -1981,7 +3029,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1990,11 +3043,16 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
-        "python": "try:\n    {result} = {action}({data})\nexcept {exception_type} as _err:\n    {result} = {fallback}(_err, {data})\nfinally:\n    {finalizer}({data})",
+        "python": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})(_err, {data})\nfinally:\n    ({finalizer})({data})",
         "cpp": "{U} {result};\nstruct _FinalizerGuard { std::function<void()> clean; ~_FinalizerGuard() { clean(); } } _fg{[&]() { {finalizer}({data}); }};\ntry {\n    {result} = {action}({data});\n} catch (const std::exception& _err /* {exception_type} */) {\n    {result} = {fallback}(_err, {data});\n}",
         "rust": "struct Cleanup<F: FnOnce()>(Option<F>);\nimpl<F: FnOnce()> Drop for Cleanup<F> {\n    fn drop(&mut self) { if let Some(f) = self.0.take() { f(); } }\n}\nlet _guard = Cleanup(Some(|| {finalizer}({data})));\nlet {result}: {U} = match std::panic::catch_unwind(std::panic::AssertUnwindSafe /* {exception_type} */(|| {action}({data}))) {\n    Ok(res) => res,\n    Err(_err) => {fallback}(_err, {data}),\n};"
       },
@@ -2007,14 +3065,31 @@
         "catch"
       ],
       "effects": [],
-      "code_template": "try:\n    {result} = {action}({data})\nexcept {exception_type} as _err:\n    {result} = {fallback}(_err, {data})\nfinally:\n    {finalizer}({data})",
+      "code_template": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})(_err, {data})\nfinally:\n    ({finalizer})({data})",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_TRY_EXCEPT_ELSE",
       "stage": 2,
+      "node_type": "macro",
+      "topology_type": "exception_guard",
+      "slots": {
+        "action": {
+          "input_type": "T",
+          "output_type": "U"
+        },
+        "success_continuation": {
+          "input_type": "U",
+          "output_type": "V"
+        },
+        "fallback": {
+          "input_type": "Tuple[Exception, T]",
+          "output_type": "V"
+        }
+      },
       "doc": "Branching Error Guard: Executes success_continuation solely if action completes with no exceptions; otherwise triggers fallback.",
       "inputs": {
         "action": {
@@ -2025,7 +3100,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "success_continuation": {
           "type_name": "Callable[[U], V]",
@@ -2035,7 +3116,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[U], V]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], V]",
@@ -2045,7 +3132,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[Exception, T], V]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "exception_type": {
           "type_name": "str",
@@ -2055,7 +3148,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "data": {
           "type_name": "T",
@@ -2065,7 +3172,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2074,11 +3186,16 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "V",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
-        "python": "try:\n    _res = {action}({data})\nexcept {exception_type} as _err:\n    {result} = {fallback}(_err, {data})\nelse:\n    {result} = {success_continuation}(_res)",
+        "python": "try:\n    _res = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})(_err, {data})\nelse:\n    {result} = ({success_continuation})(_res)",
         "cpp": "{V} {result};\ntry {\n    auto _res = {action}({data});\n    {result} = {success_continuation}(_res);\n} catch (const std::exception& _err /* {exception_type} */) {\n    {result} = {fallback}(_err, {data});\n}",
         "rust": "let {result}: {V} = match std::panic::catch_unwind(std::panic::AssertUnwindSafe /* {exception_type} */(|| {action}({data}))) {\n    Ok(_res) => {success_continuation}(_res),\n    Err(_err) => {fallback}(_err, {data}),\n};"
       },
@@ -2090,10 +3207,11 @@
         "success"
       ],
       "effects": [],
-      "code_template": "try:\n    _res = {action}({data})\nexcept {exception_type} as _err:\n    {result} = {fallback}(_err, {data})\nelse:\n    {result} = {success_continuation}(_res)",
+      "code_template": "try:\n    _res = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})(_err, {data})\nelse:\n    {result} = ({success_continuation})(_res)",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_RETRY_BACKOFF",
@@ -2108,7 +3226,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -2118,7 +3242,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[Exception, T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "max_retries": {
           "type_name": "int",
@@ -2128,7 +3258,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "backoff_sec": {
           "type_name": "float",
@@ -2138,7 +3282,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "data": {
           "type_name": "T",
@@ -2148,7 +3306,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "dependencies": [
@@ -2160,7 +3323,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2180,7 +3348,8 @@
       "code_template": "import time\nfor _attempt in range({max_retries}):\n    try:\n        {result} = {action}({data})\n        break\n    except Exception as _err:\n        if _attempt == {max_retries} - 1:\n            {result} = {fallback}(_err, {data})\n        else:\n            time.sleep({backoff_sec} * (2 ** _attempt))",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_FIND_FIRST",
@@ -2191,7 +3360,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -2204,7 +3372,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -2214,7 +3396,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "default_val": {
           "type_name": "Optional[T]",
@@ -2224,7 +3412,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[T]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2233,7 +3426,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[T]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2252,7 +3450,8 @@
       "code_template": "{result} = next((item for item in {collection} if {predicate}(item)), {default_val})",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_ALL_SATISFY",
@@ -2263,7 +3462,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -2276,7 +3474,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -2286,7 +3498,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -2295,7 +3513,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2313,7 +3545,8 @@
       "code_template": "{all_match} = all({predicate}(item) for item in {collection})",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "all_match"
+      "primary_out": "all_match",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_ANY_SATISFY",
@@ -2324,7 +3557,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -2337,7 +3569,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -2347,7 +3593,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -2356,7 +3608,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2374,7 +3640,8 @@
       "code_template": "{any_match} = any({predicate}(item) for item in {collection})",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "any_match"
+      "primary_out": "any_match",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_PARTITION",
@@ -2385,7 +3652,6 @@
           "type_name": "List[T]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "[]",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "opaque",
@@ -2398,7 +3664,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -2408,7 +3688,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], bool]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -2426,7 +3712,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "false_collection": {
           "type_name": "List[T]",
@@ -2442,7 +3742,21 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[T]",
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "memory_order": "any",
+            "rank_polymorphic": true,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2460,7 +3774,8 @@
       "code_template": "{true_collection}, {false_collection} = ([x for x in {collection} if {predicate}(x)], [x for x in {collection} if not {predicate}(x)])",
       "node_role": "combinator",
       "primary_in": "collection",
-      "primary_out": "true_collection"
+      "primary_out": "true_collection",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_GUARD",
@@ -2475,7 +3790,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "action": {
           "type_name": "Callable[[T], U]",
@@ -2485,7 +3814,13 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[T], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         },
         "fallback_val": {
           "type_name": "U",
@@ -2495,7 +3830,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "data": {
           "type_name": "T",
@@ -2505,7 +3845,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "T",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2514,7 +3859,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2533,7 +3883,8 @@
       "code_template": "{result} = {action}({data}) if {condition} else {fallback_val}",
       "node_role": "combinator",
       "primary_in": "data",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     },
     {
       "cell_id": "CF_WITH_CONTEXT",
@@ -2549,21 +3900,31 @@
           "type_name": "ContextManager[C]",
           "required": true,
           "port_role": "data_input",
-          "default_value": "open('/dev/null')",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ContextManager[C]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "body_fn": {
           "type_name": "Callable[[C], U]",
           "required": false,
           "port_role": "functional_operator",
-          "default_value": "lambda item, s: s",
+          "default_value": "lambda ctx: ctx",
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[C], U]",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": [],
+          "effect_suspended": true
         }
       },
       "outputs": {
@@ -2572,7 +3933,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "U",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "code_templates": {
@@ -2592,7 +3958,8 @@
       "code_template": "with {context_manager} as _ctx:\n    {result} = ({body_fn})(_ctx)",
       "node_role": "combinator",
       "primary_in": "context_manager",
-      "primary_out": "result"
+      "primary_out": "result",
+      "mutation_type": "combinator"
     }
   ],
   "typestates": {
@@ -2602,5 +3969,92 @@
     "initial_state": null,
     "terminal_states": []
   },
-  "supported_formats": []
+  "supported_formats": [],
+  "role_semantics": {
+    "fold_loop_topologies": [
+      "fold_loop",
+      "reduce_loop",
+      "accumulation_loop",
+      "fold",
+      "reduce"
+    ],
+    "collect_loop_topologies": [
+      "collect_loop",
+      "collection_loop",
+      "accumulate_loop"
+    ],
+    "extremum_loop_topologies": [
+      "extremum_loop",
+      "argmax_loop",
+      "argmin_loop"
+    ],
+    "fold_loop_kinds": [
+      "fold",
+      "reduce",
+      "accumulation"
+    ],
+    "collect_loop_kinds": [
+      "collect"
+    ],
+    "extremum_loop_kinds": [
+      "extremum"
+    ],
+    "combinator_roles": [
+      "combinator"
+    ],
+    "hof_roles": [
+      "functional_operator",
+      "callback",
+      "predicate",
+      "key_fn"
+    ],
+    "macro_node_types": [
+      "macro",
+      "higher_order",
+      "combinator"
+    ],
+    "macro_node_roles": [
+      "macro",
+      "higher_order",
+      "combinator"
+    ],
+    "combinator_topologies": [
+      "combinator",
+      "traced_loop",
+      "state_loop",
+      "coproduct_branch",
+      "product_parallel",
+      "identity_junction",
+      "context_manager",
+      "function_scope",
+      "exception_guard"
+    ],
+    "control_flow_domains": [
+      "control_flow"
+    ],
+    "control_flow_topologies": [
+      "combinator",
+      "traced_loop",
+      "state_loop",
+      "coproduct_branch",
+      "product_parallel",
+      "identity_junction",
+      "context_manager",
+      "function_scope",
+      "exception_guard"
+    ],
+    "stopping_tokens": [
+      "FINISH",
+      "DONE",
+      "STOP",
+      "COMPLETE",
+      "END"
+    ],
+    "state_loop_topologies": [
+      "state_loop",
+      "while_loop",
+      "fixed_point",
+      "repeat_until"
+    ]
+  }
 }

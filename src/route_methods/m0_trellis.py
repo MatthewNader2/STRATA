@@ -41,7 +41,13 @@ class M0TrellisRouteMethod(RouteMethod):
         if not orch:
             raise ValueError("[M0] LatticeOrchestrator is required for Trellis planning.")
 
-        planner = LatticePlanner(orchestrator=orch)
+        call_kwargs = dict(kwargs)
+        call_kwargs.pop("rag", None)
+        topo = call_kwargs.pop("topology_mode", "linear")
+        call_kwargs.setdefault("allow_greedy_completion", False)
+        call_kwargs.setdefault("allow_m1_tagging", False)
+
+        planner = LatticePlanner(orchestrator=orch, topology_mode=topo)
         return planner.plan(
             prompt=prompt,
             tunnel=tunnel,
@@ -50,5 +56,5 @@ class M0TrellisRouteMethod(RouteMethod):
             goal_sig=goal_sig,
             max_transforms=max_transforms,
             ctx=ctx,
-            **kwargs
+            **call_kwargs
         )

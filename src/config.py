@@ -70,10 +70,18 @@ class NSTLSettings(BaseSettings):
     )
 
     # Macro-goal routing & Topology Planning
-    profile: Optional[str] = Field(default="0", description="Active profile identifier (0, A, B, C, D, E, S, U, AE).")
+    profile: Optional[str] = Field(default="0", description="Active profile identifier (0, A, B, C, D, E, S, U, AE, O).")
     macros_enabled: bool = True
     topology_mode: str = "frontier"
+    edge_mode: str = Field(
+        default="live",
+        description="Edge computation mode: 'live' (lazy + state-conditioned live 5-axis) or 'static' (eager precomputed 5-axis adjacency).",
+    )
     use_ir_compiler: bool = False
+    strict_io: bool = Field(
+        default=False,
+        description="When True, refuse pipelines with unbound required path ports instead of emitting typed input_n.ext / output_n.ext boundary placeholders.",
+    )
     require_coverage_floor: bool = True
     coverage_floor_fraction: float = Field(
         default=0.85,
@@ -189,6 +197,12 @@ class NSTLSettings(BaseSettings):
     clause_weight_ratio: float = Field(default=0.3, ge=0.0, le=1.0)
     clause_precision_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
     join_relevance_threshold: float = Field(default=0.05, ge=0.0, le=1.0)
+
+    @field_validator("edge_mode", mode="before")
+    @classmethod
+    def _validate_edge_mode(cls, value: Any) -> str:
+        m = str(value or "live").strip().lower()
+        return m if m in ("static", "live") else "live"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -75,7 +75,7 @@ try:
     from utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
     from errors import SynthesisError
     from tokenizer import CellTokenizer
-    from planner import _segment_prompt_clauses, STOPWORDS
+    from planner import _segment_prompt_clauses
     from preflight import PreflightLinter
     from lattice_auditor import LatticeAuditor
     from macro_harvester import MacroHarvester
@@ -97,7 +97,7 @@ except ImportError as _err:
         from .utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
         from .errors import SynthesisError
         from .tokenizer import CellTokenizer
-        from .planner import _segment_prompt_clauses, STOPWORDS
+        from .planner import _segment_prompt_clauses
         from .preflight import PreflightLinter
         from .lattice_auditor import LatticeAuditor
         from .macro_harvester import MacroHarvester
@@ -325,193 +325,26 @@ def cmd_harvest(args):
     print(f"[+] Merged and saved into '{out_file}'.")
 
 
-def init_sqlite_db(db_path: Path, clean: bool = False) -> None:
-    """Initializes standard STRATA SQLite schema without destroying existing data unless clean=True."""
-    if clean and db_path.exists():
-        os.remove(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with contextlib.closing(sqlite3.connect(str(db_path))) as conn:
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS nodes (
-                cell_id              TEXT PRIMARY KEY,
-                domain_name          TEXT,
-                node_type            TEXT,
-                node_role            TEXT DEFAULT 'function',
-                stage                INTEGER,
-                keywords             TEXT,
-                input_type           TEXT,
-                input_state          TEXT,
-                output_type          TEXT,
-                output_state         TEXT,
-                code                 TEXT,
-                dependencies         TEXT,
-                configuration_schema TEXT,
-                slots                TEXT DEFAULT '{}',
-                verified             INTEGER DEFAULT 0,
-                docstring            TEXT DEFAULT '',
-                enrichment_source    TEXT DEFAULT NULL,
-                enriched_at          TEXT DEFAULT NULL,
-                source_provenance    TEXT DEFAULT 'unknown',
-                source_priority      INTEGER DEFAULT 100,
-                raw_cell             TEXT DEFAULT NULL
-            )
-        """)
-        cur.execute("PRAGMA table_info(nodes)")
-        existing_cols = {row[1] for row in cur.fetchall()}
-        if "slots" not in existing_cols:
-            try:
-                cur.execute("ALTER TABLE nodes ADD COLUMN slots TEXT DEFAULT '{}'")
-            except Exception:
-                pass
-        if "raw_cell" not in existing_cols:
-            try:
-                cur.execute("ALTER TABLE nodes ADD COLUMN raw_cell TEXT DEFAULT NULL")
-            except Exception:
-                pass
-
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_input ON nodes(input_type, input_state)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_output ON nodes(output_type, output_state)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_domain ON nodes(domain_name)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_role ON nodes(node_role)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_type ON nodes(node_type)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_slots ON nodes(slots)")
-        cur.execute("CREATE TABLE IF NOT EXISTS types (type_name TEXT, parent_type TEXT, domain_name TEXT, PRIMARY KEY (type_name, parent_type))")
-        cur.execute("CREATE TABLE IF NOT EXISTS typestates (state_name TEXT PRIMARY KEY, parent_state TEXT, carrier_type TEXT, properties TEXT, domain_name TEXT)")
-        cur.execute("CREATE TABLE IF NOT EXISTS aliases (alias TEXT PRIMARY KEY, canonical TEXT, domain_name TEXT)")
-        cur.execute("CREATE TABLE IF NOT EXISTS artifact_readers (category TEXT, module_name TEXT, function_name TEXT, domain_name TEXT, PRIMARY KEY (category, module_name, function_name))")
-        cur.execute("CREATE TABLE IF NOT EXISTS structural_metadata (category TEXT, item TEXT, extra TEXT, domain_name TEXT, PRIMARY KEY (category, item, extra, domain_name))")
-        cur.execute("CREATE TABLE IF NOT EXISTS _compilation_meta (key TEXT PRIMARY KEY, value TEXT, timestamp REAL)")
-        conn.commit()
-
-
-# Bump whenever the compiled node serialization changes: forces stale databases to rebuild.
-COMPILER_SCHEMA_VERSION = "2"
-
-
-def compute_trees_fingerprint(trees_dir: Union[str, Path] = "trees") -> str:
-    """Computes a fast SHA-256 fingerprint over all tree JSON files in the directory."""
-    td = Path(trees_dir)
-    if not td.exists():
-        return "MISSING"
-    try:
-        entries = sorted([e for e in os.scandir(td) if e.is_file() and e.name.endswith(".json")], key=lambda x: x.name)
-    except OSError:
-        return "MISSING"
-
-    if not entries:
-        return "EMPTY"
-
-    h = hashlib.sha256()
-    h.update(f"compiler:{COMPILER_SCHEMA_VERSION}".encode("utf-8"))
-    for entry in entries:
-        h.update(entry.name.encode("utf-8"))
-        try:
-            stat = entry.stat()
-            h.update(f":{stat.st_size}:{stat.st_mtime_ns}".encode("utf-8"))
-        except OSError:
-            pass
-    return h.hexdigest()
-
-
-def get_stored_meta(db_path: Union[str, Path], key: str) -> Optional[str]:
-    """Reads one value from the compilation metadata table (None when absent)."""
-    target = Path(db_path)
-    if not target.exists():
-        return None
-    try:
-        with contextlib.closing(sqlite3.connect(str(target))) as conn:
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-            row = conn.execute("SELECT value FROM _compilation_meta WHERE key = ?", (key,)).fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
-
-
-def get_stored_fingerprint(db_path: Union[str, Path]) -> Optional[str]:
-    """Retrieves the compilation fingerprint recorded in the SQLite database."""
-    target = Path(db_path)
-    if not target.exists():
-        return None
-    try:
-        with contextlib.closing(sqlite3.connect(str(target))) as conn:
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-            cur = conn.cursor()
-            cur.execute("SELECT value FROM _compilation_meta WHERE key = 'trees_fingerprint'")
-            row = cur.fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
-
-
-def record_trees_fingerprint(db_path: Union[str, Path], fingerprint: str) -> None:
-    """Records the tree compilation fingerprint into the SQLite database."""
-    try:
-        with contextlib.closing(sqlite3.connect(str(db_path))) as conn:
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-            cur = conn.cursor()
-            cur.execute("CREATE TABLE IF NOT EXISTS _compilation_meta (key TEXT PRIMARY KEY, value TEXT, timestamp REAL)")
-            cur.execute("INSERT OR REPLACE INTO _compilation_meta (key, value, timestamp) VALUES ('trees_fingerprint', ?, ?)",
-                        (fingerprint, time.time()))
-            cur.execute("INSERT OR REPLACE INTO _compilation_meta (key, value, timestamp) VALUES ('compiler_schema', ?, ?)",
-                        (COMPILER_SCHEMA_VERSION, time.time()))
-            conn.commit()
-    except Exception:
-        pass
-
-
-def ensure_lattice_compiled(trees_dir: Union[str, Path] = "trees", db_path: Union[str, Path] = "trees/lattice.db") -> bool:
-    """
-    Ensures target SQLite database is up-to-date with domain trees.
-    Performs fast O(1) directory mtime checks on startup to eliminate stat storm bottlenecks.
-    """
-    trees_path = Path(trees_dir)
-    target_db = Path(db_path)
-
-    schema_current = (not target_db.exists()) or get_stored_meta(target_db, "compiler_schema") == COMPILER_SCHEMA_VERSION
-
-    if target_db.exists() and schema_current:
-        try:
-            db_mtime = target_db.stat().st_mtime_ns
-            dir_mtime = trees_path.stat().st_mtime_ns
-            if db_mtime >= dir_mtime:
-                stored_fp = get_stored_fingerprint(target_db)
-                if stored_fp is not None:
-                    entries = [e for e in os.scandir(trees_path) if e.is_file() and e.name.endswith(".json")]
-                    if not entries and stored_fp == "EMPTY":
-                        return False
-                    if entries and all(e.stat().st_mtime_ns <= db_mtime for e in entries):
-                        return False
-        except OSError:
-            pass
-
-    current_fp = compute_trees_fingerprint(trees_path)
-    stored_fp = get_stored_fingerprint(target_db)
-
-    if target_db.exists() and schema_current and stored_fp is not None and stored_fp == current_fp:
-        return False
-
-    if current_fp == "EMPTY":
-        init_sqlite_db(target_db, clean=True)
-        record_trees_fingerprint(target_db, current_fp)
-        return True
-
-    print(f"[*] Tree update detected in '{trees_path}'. Auto-compiling lattice database '{target_db}'...")
-    compile_args = argparse.Namespace(
-        trees_dir=str(trees_path),
-        output=str(target_db),
-        domains=[],
-        clean=True
+try:
+    from lattice_db import (
+        COMPILER_SCHEMA_VERSION,
+        init_sqlite_db,
+        compute_trees_fingerprint,
+        get_stored_meta,
+        get_stored_fingerprint,
+        record_trees_fingerprint,
+        ensure_lattice_compiled,
     )
-    cmd_compile(compile_args)
-    record_trees_fingerprint(target_db, current_fp)
-    return True
+except ImportError:
+    from .lattice_db import (
+        COMPILER_SCHEMA_VERSION,
+        init_sqlite_db,
+        compute_trees_fingerprint,
+        get_stored_meta,
+        get_stored_fingerprint,
+        record_trees_fingerprint,
+        ensure_lattice_compiled,
+    )
 
 
 def cmd_compile(args):
@@ -821,13 +654,12 @@ class PipelineDebugger:
         t_trans = 0.0
         intent_data = None
 
-        if prof in ("E", "S"):
-            mm = ModelManager.get_instance()
-            if mm.profile and (mm.has_translator_pass() or mm.has_semantic_compiler()):
-                t0_t = time.perf_counter()
-                intent_data = mm.compile_semantic_intent(prompt_clean)
-                effective_prompt = ensure_comprehensive_prompt(prompt_clean, intent_data.get("effective_prompt") or prompt_clean)
-                t_trans = (time.perf_counter() - t0_t) * 1000.0
+        mm = ModelManager.get_instance()
+        if mm.profile and (mm.has_translator_pass() or mm.has_semantic_compiler()):
+            t0_t = time.perf_counter()
+            intent_data = mm.compile_semantic_intent(prompt_clean)
+            effective_prompt = ensure_comprehensive_prompt(prompt_clean, intent_data.get("effective_prompt") or prompt_clean)
+            t_trans = (time.perf_counter() - t0_t) * 1000.0
 
         clauses = _segment_prompt_clauses(effective_prompt)
         prompt_tokens = CellTokenizer.tokenize_prompt(effective_prompt)
@@ -842,13 +674,13 @@ class PipelineDebugger:
         l0_table.add_row("Raw User Prompt", prompt_clean)
         if prof == "E":
             l0_table.add_row(f"Translator Output ({t_trans:.1f}ms)", f"[italic magenta]{effective_prompt}[/italic magenta]")
-        elif prof == "S" and intent_data:
+        elif prof in ("S", "O") and intent_data:
             task_str = intent_data.get("task", "generic")
             tgt_sink = intent_data.get("target_sink", "")
             tgt_info = f" | Target: {tgt_sink}" if tgt_sink else ""
-            l0_table.add_row(f"Profile S Compiler ({t_trans:.1f}ms)", f"[italic magenta]Task: {task_str}{tgt_info}[/italic magenta]")
+            l0_table.add_row(f"Profile {prof} Compiler ({t_trans:.1f}ms)", f"[italic magenta]Task: {task_str}{tgt_info}[/italic magenta]")
         else:
-            l0_table.add_row("Translator Pass", "[dim]Bypassed (Active in Profile E/S)[/dim]")
+            l0_table.add_row("Translator Pass", "[dim]Bypassed (Active in Profile E/S/O)[/dim]")
 
         clauses_formatted = "  ➔  ".join(f"[bold yellow]Clause {idx+1}:[/bold yellow] '{cl}'" for idx, cl in enumerate(clauses)) if clauses else "[dim]None[/dim]"
         l0_table.add_row(f"Decomposed Clauses ({len(clauses)})", clauses_formatted)
@@ -1516,7 +1348,7 @@ class PipelineDebugger:
                                 declared: List[str] = list(getattr(p_sig, "qualifiers", None) or ())
                                 sig_inner = getattr(p_sig, "signature", None)
                                 declared.append(str(getattr(sig_inner, "state", "") or ""))
-                                declared.extend(str(s) for s in (getattr(sig_inner, "accepted_states", None) or frozenset()))
+                                declared.extend(str(s) for s in (getattr(sig_inner, "accepted_states", None) or ()))
                                 declared_toks: Set[str] = set()
                                 for d in declared:
                                     declared_toks.update(CellTokenizer.tokenize_identifier(d.lower()))
@@ -1924,6 +1756,7 @@ class NSTLInteractiveShell(cmd.Cmd):
         exec_sandbox: bool = False,
         llm_feedback: bool = False,
         allowed_capabilities: Optional[Union[str, List[str], Set[str]]] = None,
+        edge_mode: Optional[str] = None,
     ):
         super().__init__()
         self.db_path = db_path
@@ -1956,6 +1789,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             self.no_exec = not settings.sandbox_enabled
         self.timeout: float = timeout
 
+        self._explicit_reranker: Optional[bool] = bool(reranker) if reranker is not None else None
         if reranker is not None:
             settings.use_reranker = bool(reranker)
             os.environ["NSTL_USE_RERANKER"] = "1" if reranker else "0"
@@ -1978,15 +1812,29 @@ class NSTLInteractiveShell(cmd.Cmd):
             settings.topology_mode = str(topology).lower()
         self.topology_mode = settings.topology_mode
 
+        if edge_mode is not None:
+            em = str(edge_mode).strip().lower()
+            if em in ("static", "live"):
+                settings.edge_mode = em
+                try:
+                    from experiments import ACTIVE_EXPERIMENTS
+                except (ImportError, ValueError):
+                    from .experiments import ACTIVE_EXPERIMENTS
+                ACTIVE_EXPERIMENTS.edge_mode = em
+        self.edge_mode = settings.edge_mode
+
         if interactive:
             console.print("\n[bold cyan][*] Initializing STRATA Neuro-Symbolic Engine...[/bold cyan]")
         t0 = time.perf_counter()
 
         trees_dir = settings.trees_dir or Path(db_path).parent
         ensure_lattice_compiled(trees_dir=str(trees_dir), db_path=db_path)
-        self.orchestrator = LatticeOrchestrator(trees_directory=str(trees_dir), db_path=db_path)
-        self.orchestrator.load_from_database(db_path)
-        self.orchestrator.build_topology()
+        self.orchestrator = LatticeOrchestrator(trees_directory=str(trees_dir), db_path=db_path, auto_load=False)
+        if os.path.exists(db_path):
+            self.orchestrator.load_from_database(db_path)
+        else:
+            self.orchestrator.load_all_json_trees()
+            self.orchestrator.build_topology()
         self.gate = UnificationGate(self.orchestrator)
         self.sandbox = GEVRSandbox(allowed_capabilities=self.allowed_capabilities)
 
@@ -2034,7 +1882,7 @@ class NSTLInteractiveShell(cmd.Cmd):
         _quick_line = "  ".join(f"[{k}] {v}:{_short_label.get(v, v)}" for k, v in QUICK_PROFILE_SHORTCUTS)
         quick_shortcuts = Text(
             f"Quick Layers: {_quick_line}\n"
-            "Commands: /profile <0|A|B|C|D|E|S|U|AE> | /method <M<n>> | /reranker [on|off|<model>] | /topology <frontier|linear> | /audit | /macro | /debug [on|off] | /sandbox [on|off] | /status | /new | /clear | /exit",
+            "Commands: /profile <0|A|B|C|D|E|S|U|AE|O> | /method <M<n>> | /reranker [on|off|<model>] | /topology <frontier|linear> | /audit | /macro | /debug [on|off] | /sandbox [on|off] | /status | /new | /clear | /exit",
             justify="center",
             style="dim cyan"
         )
@@ -2053,12 +1901,14 @@ class NSTLInteractiveShell(cmd.Cmd):
         prof_u = prof.upper()
         if prof_u in ("0", "SYMBOLIC", "ZERO", "PURE"):
             return "Profile 0 (Pure Symbolic Layer)"
+        elif prof_u == "B":
+            return "Profile B (Bi-Encoder Dense Embeddings Only)"
         elif prof_u == "A":
-            return "Profile A (Dense Embeddings RAG)"
-        elif prof_u in ("C", "B"):
+            return "Profile A (Dense Embeddings + Neural Reranker)"
+        elif prof_u == "C":
             return "Profile C (Hybrid Neuro-Symbolic + GGUF LLM)"
         elif prof_u == "D":
-            return "Profile D (Routing-Only Benchmark)"
+            return "Profile D (Embeddings + SLM Slot Extraction Only)"
         elif prof_u == "E":
             return "Profile E (Translator Pass + Neuro-Symbolic)"
         elif prof_u == "S":
@@ -2067,26 +1917,32 @@ class NSTLInteractiveShell(cmd.Cmd):
             return "Profile U (Early-Exit Single LLM Layer-Tapping)"
         elif prof_u == "AE":
             return "Profile AE (Structural Transition Autoencoder Manifold)"
+        elif prof_u in ("O", "OMEGA", "Ω"):
+            return "Profile Omega (4-Stage Coalgebraic + Bidirectional A* Pipeline)"
         return f"Profile {prof_u}"
 
     def _get_profile_description(self, prof: str) -> str:
         prof_u = prof.upper()
         if prof_u in ("0", "SYMBOLIC", "ZERO", "PURE"):
-            return "Deterministic type-safe lattice search across all loaded nodes. Baseline layer (zero neural models)."
+            return "Deterministic formal-syntax lattice composition. Baseline layer (zero neural models)."
+        elif prof_u == "B":
+            return "FAISS vector retrieval with bi-encoder dense embeddings only (no reranker, no LLM)."
         elif prof_u == "A":
-            return "FAISS vector retrieval with dense embedding model."
-        elif prof_u in ("C", "B"):
+            return "FAISS dense vector retrieval + cross-encoder/listwise neural reranking (no LLM)."
+        elif prof_u == "C":
             return "Embedder RAG + GGUF local LLM slot-filling & self-repair."
         elif prof_u == "D":
-            return "LLM-guided path search without full code synthesis."
+            return "Embeddings + SLM schema-constrained slot extraction only (no feedback repair/translator)."
         elif prof_u == "E":
-            return "2-stage pipeline: conversational prompt -> canonical translator."
+            return "2-stage pipeline: conversational prompt -> canonical translator + semantic compiler."
         elif prof_u == "S":
-            return "Typed Intent & Schema Compiler pass + Neuro-Symbolic synthesis."
+            return "Typed Intent & Schema Compiler (IRCompiler) + Neuro-Symbolic synthesis."
         elif prof_u == "U":
             return "Single unified LLM: intermediate layer k tapped for dense RAG, full depth for generation."
         elif prof_u == "AE":
             return "Continuous transition manifold embedding type signatures and cell morphisms."
+        elif prof_u in ("O", "OMEGA", "Ω"):
+            return "Coalgebraic unfolding + calibrated hybrid cone + type-directed A* + exact unification & pointed defaults."
         return ""
 
     def _update_prompt(self):
@@ -2158,6 +2014,8 @@ class NSTLInteractiveShell(cmd.Cmd):
 
     def _switch_profile(self, profile: str, embedder: str = "", llm: str = "", device: str = "auto", verbose: bool = True) -> bool:
         p = profile.strip().upper()
+        if p in ("OMEGA", "Ω"):
+            p = "O"
         import os
         os.environ["NSTL_PROFILE"] = p
         try:
@@ -2178,24 +2036,30 @@ class NSTLInteractiveShell(cmd.Cmd):
                 settings.profile = "0"
             except Exception:
                 pass
+            try:
+                ModelManager.get_instance().initialize_profile("0")
+            except Exception:
+                pass
             self.rag = None
+            self.embedder_name = ""
+            self.llm_name = ""
             self.router = LatticeRouter(
                 self.orchestrator,
                 internal_rag=None,
                 default_route_method=self.route_method,
-                use_reranker=getattr(self, "use_reranker", False),
-                reranker_model=getattr(self, "reranker_model", None),
+                use_reranker=False,
+                reranker_model=None,
             )
             self._update_prompt()
             if verbose:
                 console.print(f"[bold green][✓] Switched to {self._format_profile_name(self.active_profile)}[/bold green]\n")
             return True
 
-        if p not in ("A", "B", "C", "D", "E", "S", "U", "AE"):
-            console.print(f"[bold red][!] Unknown profile '{profile}'. Valid options: 0 (Symbolic), A, B, C, D, E, S, U, AE.[/bold red]")
+        if p not in ("A", "B", "C", "D", "E", "S", "U", "AE", "O"):
+            console.print(f"[bold red][!] Unknown profile '{profile}'. Valid options: 0 (Symbolic), A, B, C, D, E, S, U, AE, O.[/bold red]")
             return False
 
-        available_llm = _get_available_llms()
+        has_llm_profile = p in ("C", "D", "E", "S", "U", "O")
         if p == "U":
             emb_choice = "llm_early_exit"
             llm_choice = select_optimal_llm(llm or self.llm_name)
@@ -2204,7 +2068,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             llm_choice = ""
         else:
             emb_choice = select_optimal_embedder(embedder or self.embedder_name or "auto")
-            llm_choice = select_optimal_llm(llm or self.llm_name)
+            llm_choice = select_optimal_llm(llm or self.llm_name) if has_llm_profile else ""
 
         if verbose:
             console.print(f"[bold cyan][*] Loading {self._format_profile_name(p)}...[/bold cyan]")
@@ -2215,22 +2079,26 @@ class NSTLInteractiveShell(cmd.Cmd):
             mm.initialize_profile(
                 profile_type=p,
                 embedder_name=emb_choice,
-                llm_name=llm_choice if p in ("B", "C", "D", "E", "S", "U") else ""
+                llm_name=llm_choice
             )
             self.embedder_name = emb_choice
-            self.llm_name = llm_choice if p in ("B", "C", "D", "E", "S", "U") else ""
+            actual_llm = getattr(mm.active_profile, "llm_name", "none") or "none"
+            self.llm_name = "" if actual_llm in ("none", "None", "") else actual_llm
 
             if verbose:
                 console.print(f"[*] Indexing FAISS vector space for {len(self.orchestrator.cells):,} nodes...")
             self.rag = LocalRAG(trees_dir="trees", orchestrator=self.orchestrator)
             self.orchestrator.rag = self.rag
+            explicit_rr = getattr(self, "_explicit_reranker", None)
+            rr_arg = None if explicit_rr is None else bool(explicit_rr)
             self.router = LatticeRouter(
                 self.orchestrator,
                 internal_rag=self.rag,
                 default_route_method=self.route_method,
-                use_reranker=getattr(self, "use_reranker", False),
+                use_reranker=rr_arg,
                 reranker_model=getattr(self, "reranker_model", None),
             )
+            self.use_reranker = bool(getattr(self.router, "use_reranker", False))
 
             self.active_profile = p
             self._update_prompt()
@@ -2251,9 +2119,10 @@ class NSTLInteractiveShell(cmd.Cmd):
                 self.orchestrator,
                 internal_rag=None,
                 default_route_method=self.route_method,
-                use_reranker=getattr(self, "use_reranker", False),
+                use_reranker=False,
                 reranker_model=getattr(self, "reranker_model", None),
             )
+            self.use_reranker = False
             self._update_prompt()
             return False
 
@@ -2269,12 +2138,14 @@ class NSTLInteractiveShell(cmd.Cmd):
             table.add_column("Target Latency", style="bold green")
             table.add_column("Role in STRATA Paper / Architecture", style="dim")
 
-            table.add_row("0 / symbolic", "Profile 0 (Pure Symbolic)", "< 15 ms", "Deterministic A* graph search (zero neural models)")
-            table.add_row("A", "Profile A (Dense Embeddings RAG)", "~50–100 ms", "Vector embeddings (SentenceTransformer / FAISS HNSW search)")
-            table.add_row("C", "Profile C (Neuro-Symbolic LLM)", "~500 ms–2 s", "Full hybrid: Embedder + Local GGUF LLM slot-filling + Sandbox repair")
-            table.add_row("D", "Profile D (Routing Benchmark)", "~200–500 ms", "LLM-guided path search without code generation")
-            table.add_row("E", "Profile E (Translator Pass)", "~1–2 s", "Two-stage: Query Translator pass + Neuro-Symbolic synthesis")
-            table.add_row("S", "Profile S (Semantic Compiler)", "~1–2 s", "Typed Intent & Schema Compiler pass + Neuro-Symbolic synthesis")
+            table.add_row("0 / symbolic", "Profile 0 (Pure Symbolic)", "< 15 ms", "Formal composition grammar (zero neural models)")
+            table.add_row("B", "Profile B (Bi-Encoder Embeddings Only)", "~30–80 ms", "Vector embeddings only (SentenceTransformer / FAISS)")
+            table.add_row("A", "Profile A (Dense Embeddings + Reranker)", "~80–200 ms", "Bi-encoder FAISS + Cross-Encoder/Listwise neural reranker")
+            table.add_row("D", "Profile D (Embeddings + SLM Slot Extraction)", "~150–400 ms", "Embeddings + schema-constrained SLM slot extraction only")
+            table.add_row("C", "Profile C (Neuro-Symbolic LLM)", "~500 ms–2 s", "Embedder + Local GGUF LLM slot-filling + Sandbox repair")
+            table.add_row("E", "Profile E (Translator Pass)", "~1–2 s", "Query Translator + Semantic Compiler + Neuro-Symbolic synthesis")
+            table.add_row("S", "Profile S (Semantic Compiler)", "~1–2 s", "Typed Intent & IRCompiler pass + Neuro-Symbolic synthesis")
+            table.add_row("O", "Profile Omega (4-Stage Formal)", "~1–2 s", "Coalgebraic Unfolder + Calibrated Cone + Bidirectional A* + Unification")
 
             console.print(table)
             console.print(f"\nActive Profile: [bold yellow]{self._format_profile_name(self.active_profile)}[/bold yellow]\n")
@@ -2337,6 +2208,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             self.use_reranker = True
             console.print(f"[bold cyan][*] Reranker model set to '{arg}'.[/bold cyan]")
 
+        self._explicit_reranker = self.use_reranker
         settings.use_reranker = self.use_reranker
         os.environ["NSTL_USE_RERANKER"] = "1" if self.use_reranker else "0"
         if getattr(self, "router", None) is not None:
@@ -2375,6 +2247,7 @@ class NSTLInteractiveShell(cmd.Cmd):
                 self._switch_profile(self.active_profile, llm=val)
         elif key in ("reranker", "neural_reranker"):
             enabled = val.lower() in ("1", "true", "on", "yes", "enable", "enabled")
+            self._explicit_reranker = enabled
             settings.use_reranker = enabled
             self.use_reranker = enabled
             os.environ["NSTL_USE_RERANKER"] = "1" if enabled else "0"
@@ -2425,8 +2298,23 @@ class NSTLInteractiveShell(cmd.Cmd):
             enabled = val.lower() in ("1", "true", "on", "yes", "enable", "enabled")
             settings.dev_mode = enabled
             console.print(f"[green][*] Dev mode set to {'ON' if enabled else 'OFF'}.[/green]")
+        elif key in ("edge_mode", "edge-mode", "edges"):
+            em = val.strip().lower()
+            if em not in ("static", "live"):
+                console.print("[bold red][!] edge_mode must be 'static' or 'live'.[/bold red]")
+                return
+            settings.edge_mode = em
+            self.edge_mode = em
+            try:
+                from experiments import ACTIVE_EXPERIMENTS
+            except (ImportError, ValueError):
+                from .experiments import ACTIVE_EXPERIMENTS
+            ACTIVE_EXPERIMENTS.edge_mode = em
+            if getattr(self, "orchestrator", None) is not None:
+                self.orchestrator.build_topology(edge_mode=em)
+            console.print(f"[green][*] Edge mode set to '{em}' (5-axis topology rebuilt).[/green]")
         else:
-            console.print(f"[bold red][!] Unknown parameter '{key}'. Supported: embedder, llm, device, reranker, reranker_model, macros, dev, debug, timeout.[/bold red]")
+            console.print(f"[bold red][!] Unknown parameter '{key}'. Supported: embedder, llm, device, reranker, reranker_model, macros, dev, debug, timeout, edge_mode.[/bold red]")
 
     def do_dev(self, arg: str):
         """Toggle or set Dev Mode. Usage: /dev [on|off]"""
@@ -2779,19 +2667,18 @@ class NSTLInteractiveShell(cmd.Cmd):
         effective_prompt = prompt
         t_trans = 0.0
         intent_data = None
-        if prof in ("E", "S"):
-            mm = ModelManager.get_instance()
-            if mm.profile and (mm.has_translator_pass() or mm.has_semantic_compiler()):
-                t0_trans = time.perf_counter()
-                intent_data = mm.compile_semantic_intent(prompt)
-                effective_prompt = ensure_comprehensive_prompt(prompt, intent_data.get("effective_prompt") or prompt)
-                t_trans = (time.perf_counter() - t0_trans) * 1000.0
-                task_str = intent_data.get("task", "generic")
-                tgt_sink = intent_data.get("target_sink", "")
-                tgt_info = f" | Target: {tgt_sink}" if tgt_sink else ""
-                console.print(f"[bold magenta][Profile {prof} Compiler ({t_trans:.1f}ms)][/bold magenta] Task: {task_str}{tgt_info}")
-                if intent_data.get("hyperparameters"):
-                    console.print(f"  [dim]Extracted Params: {intent_data['hyperparameters']}[/dim]")
+        mm = ModelManager.get_instance()
+        if mm.profile and (mm.has_translator_pass() or mm.has_semantic_compiler()):
+            t0_trans = time.perf_counter()
+            intent_data = mm.compile_semantic_intent(prompt)
+            effective_prompt = ensure_comprehensive_prompt(prompt, intent_data.get("effective_prompt") or prompt)
+            t_trans = (time.perf_counter() - t0_trans) * 1000.0
+            task_str = intent_data.get("task", "generic")
+            tgt_sink = intent_data.get("target_sink", "")
+            tgt_info = f" | Target: {tgt_sink}" if tgt_sink else ""
+            console.print(f"[bold magenta][Profile {prof} Compiler ({t_trans:.1f}ms)][/bold magenta] Task: {task_str}{tgt_info}")
+            if intent_data.get("hyperparameters"):
+                console.print(f"  [dim]Extracted Params: {intent_data['hyperparameters']}[/dim]")
 
         # Step 2: Routing via LatticeRouter
         t_route_start = time.perf_counter()
@@ -3052,6 +2939,7 @@ def cmd_shell(args):
         exec_sandbox=getattr(args, "exec_sandbox", False),
         llm_feedback=getattr(args, "llm_feedback", False),
         allowed_capabilities=getattr(args, "allow_capabilities", ""),
+        edge_mode=getattr(args, "edge_mode", None),
     )
     shell.cmdloop()
 
@@ -3110,6 +2998,7 @@ def cmd_run(args):
         exec_sandbox=getattr(args, "exec_sandbox", False),
         llm_feedback=getattr(args, "llm_feedback", False),
         allowed_capabilities=getattr(args, "allow_capabilities", ""),
+        edge_mode=getattr(args, "edge_mode", None),
     )
     shell.default(f"{prompt} --debug" if debug_mode else prompt)
 
@@ -3129,10 +3018,12 @@ def cmd_audit(args):
     trees_dir = getattr(args, "trees_dir", "trees")
     ensure_lattice_compiled(trees_dir=trees_dir, db_path=str(db_path))
     print(f"[*] Initializing Lattice Orchestrator from '{db_path}'...")
-    orch = LatticeOrchestrator(trees_directory=trees_dir, db_path=str(db_path))
+    orch = LatticeOrchestrator(trees_directory=trees_dir, db_path=str(db_path), auto_load=False)
     if db_path.exists():
         orch.load_from_database(str(db_path))
-    orch.build_topology()
+    else:
+        orch.load_all_json_trees()
+        orch.build_topology()
 
     print(f"[*] Running Lattice Auditor on {len(orch.cells):,} cells...")
     auditor = LatticeAuditor(orch)
@@ -3171,10 +3062,12 @@ def cmd_macro(args):
     trees_dir = getattr(args, "trees_dir", "trees")
 
     print(f"[*] Loading lattice for macro harvesting...")
-    orch = LatticeOrchestrator(trees_directory=trees_dir, db_path=str(db_path))
+    orch = LatticeOrchestrator(trees_directory=trees_dir, db_path=str(db_path), auto_load=False)
     if db_path.exists():
         orch.load_from_database(str(db_path))
-    orch.build_topology()
+    else:
+        orch.load_all_json_trees()
+        orch.build_topology()
 
     macro_id = getattr(args, "id", None) or None
     domain = getattr(args, "domain", None) or None
@@ -3234,6 +3127,15 @@ def cmd_benchmark(args):
         except Exception:
             pass
         os.environ["NSTL_TOPOLOGY_MODE"] = str(args.topology).lower()
+    if getattr(args, "edge_mode", None) is not None:
+        em = str(args.edge_mode).strip().lower()
+        if em in ("static", "live"):
+            try:
+                from config import settings
+                settings.edge_mode = em
+            except Exception:
+                pass
+            os.environ["NSTL_EDGE_MODE"] = em
     if getattr(args, "reranker", None) is not None:
         try:
             from config import settings
@@ -3382,6 +3284,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Experimental: Disable Absorbing Markov Chain N=(I-Q)^-1 hitting-probability prior.",
     )
+    p_bench.add_argument(
+        "--edge-mode",
+        choices=["static", "live"],
+        default=None,
+        help="5-axis edge computation mode: 'static' (eager precomputed) or 'live' (lazy + step-conditioned).",
+    )
     p_bench.set_defaults(func=cmd_benchmark)
 
     p_precompute = subparsers.add_parser("precompute-rag", help="Precompute FAISS dense embeddings into .rag_cache/")
@@ -3434,6 +3342,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Experimental: Disable Absorbing Markov Chain N=(I-Q)^-1 hitting-probability prior.",
     )
+    p_run.add_argument("--edge-mode", choices=["static", "live"], default=None, help="5-axis edge calculator mode: static (eager full graph) or live (lazy frontier).")
     p_run.add_argument("--explain-plan", action="store_true", help="Print clause-level coverage and precision diagnostics table")
     p_run.set_defaults(func=cmd_run)
 
@@ -3480,6 +3389,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Experimental: Disable Absorbing Markov Chain N=(I-Q)^-1 hitting-probability prior.",
     )
+    p_shell.add_argument("--edge-mode", choices=["static", "live"], default=None, help="5-axis edge calculator mode: static (eager full graph) or live (lazy frontier).")
     p_shell.set_defaults(func=cmd_shell)
 
     return parser
@@ -3521,6 +3431,14 @@ def main():
             ACTIVE_EXPERIMENTS.use_sparse_coding = True
         if getattr(args, "no_markov_prior", False):
             ACTIVE_EXPERIMENTS.use_markov_hitting_prior = False
+        if getattr(args, "edge_mode", None):
+            em = str(args.edge_mode).lower()
+            ACTIVE_EXPERIMENTS.edge_mode = em
+            try:
+                from config import settings
+            except (ImportError, ValueError):
+                from .config import settings
+            settings.edge_mode = em
     except Exception as _exp_err:
         logger.debug("[CLI] Experiment config binding skipped: %s", _exp_err)
 
@@ -3542,7 +3460,8 @@ def main():
             dev=None,
             timeout=DEFAULT_SANDBOX_TIMEOUT,
             reranker=None,
-            reranker_model=None
+            reranker_model=None,
+            edge_mode=getattr(args, "edge_mode", None),
         ))
 
 

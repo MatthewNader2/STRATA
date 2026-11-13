@@ -80,10 +80,6 @@
         "description": "Integer byte size for chunked streaming transfer."
       },
       {
-        "name": "closed",
-        "description": "Transport session or connection pool terminated."
-      },
-      {
         "name": "configured_adapter",
         "description": "HTTPAdapter instance initialized with pool and retry configuration."
       },
@@ -209,10 +205,6 @@
         "description": "Pair of connect and read timeout floats."
       },
       {
-        "name": "uninitialized",
-        "description": "Resource or network transport has not been established."
-      },
-      {
         "name": "url_prefix",
         "description": "String URL prefix for mounting network transport adapters."
       },
@@ -265,7 +257,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "params": {
           "type_name": "http_params",
@@ -278,7 +284,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_params",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.query_parameters",
+          "typestate": "requests::query_parameters",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -291,7 +311,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -304,7 +338,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -317,7 +365,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.get({url}, params={params}, headers={headers}, timeout={timeout})",
@@ -325,7 +378,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_POST_JSON",
@@ -353,7 +408,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "json_data": {
           "type_name": "http_payload",
@@ -365,7 +434,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.json_payload",
+          "typestate": "requests::json_payload",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -378,7 +461,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -391,7 +488,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -404,7 +515,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.post({url}, json={json_data}, headers={headers}, timeout={timeout})",
@@ -412,7 +528,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_POST_DATA",
@@ -440,7 +558,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "data": {
           "type_name": "http_payload",
@@ -452,7 +584,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.form_data",
+          "typestate": "requests::form_data",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -465,7 +611,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -478,7 +638,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -491,7 +665,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.post({url}, data={data}, headers={headers}, timeout={timeout})",
@@ -499,7 +678,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_PUT",
@@ -527,7 +708,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "json_data": {
           "type_name": "http_payload",
@@ -539,7 +734,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.json_payload",
+          "typestate": "requests::json_payload",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -552,7 +761,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -565,7 +788,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -578,7 +815,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.put({url}, json={json_data}, headers={headers}, timeout={timeout})",
@@ -586,7 +828,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_PATCH",
@@ -614,7 +858,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "json_data": {
           "type_name": "http_payload",
@@ -626,7 +884,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.json_payload",
+          "typestate": "requests::json_payload",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -639,7 +911,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -652,7 +938,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -665,7 +965,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.patch({url}, json={json_data}, headers={headers}, timeout={timeout})",
@@ -673,7 +978,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_DELETE",
@@ -701,7 +1008,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -714,7 +1035,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -727,7 +1062,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -740,7 +1089,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.delete({url}, headers={headers}, timeout={timeout})",
@@ -748,7 +1102,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_HEAD",
@@ -776,7 +1132,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -789,7 +1159,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -802,7 +1186,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -815,7 +1213,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.head({url}, headers={headers}, timeout={timeout})",
@@ -823,7 +1226,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_OPTIONS",
@@ -851,7 +1256,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -864,7 +1283,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -877,7 +1310,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -890,7 +1337,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.options({url}, headers={headers}, timeout={timeout})",
@@ -898,7 +1350,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_INIT",
@@ -926,7 +1380,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session} = requests.Session()",
@@ -934,7 +1393,9 @@
         "import requests"
       ],
       "primary_in": null,
-      "primary_out": "session"
+      "primary_out": "session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_GET",
@@ -962,7 +1423,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -974,7 +1440,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "params": {
           "type_name": "http_params",
@@ -987,7 +1467,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_params",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.query_parameters",
+          "typestate": "requests::query_parameters",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1000,7 +1494,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -1013,7 +1521,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1026,7 +1548,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.get({url}, params={params}, headers={headers}, timeout={timeout})",
@@ -1034,7 +1561,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_POST_JSON",
@@ -1062,7 +1591,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -1074,7 +1608,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "json_data": {
           "type_name": "http_payload",
@@ -1086,7 +1634,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.json_payload",
+          "typestate": "requests::json_payload",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1099,7 +1661,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -1112,7 +1688,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1125,7 +1715,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.post({url}, json={json_data}, headers={headers}, timeout={timeout})",
@@ -1133,7 +1728,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_POST_DATA",
@@ -1160,7 +1757,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -1172,7 +1774,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "data": {
           "type_name": "http_payload",
@@ -1184,7 +1800,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.form_data",
+          "typestate": "requests::form_data",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1197,7 +1827,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -1210,7 +1854,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1223,7 +1881,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.post({url}, data={data}, headers={headers}, timeout={timeout})",
@@ -1231,7 +1894,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_PUT",
@@ -1259,7 +1924,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -1271,7 +1941,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "json_data": {
           "type_name": "http_payload",
@@ -1283,7 +1967,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.json_payload",
+          "typestate": "requests::json_payload",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1296,7 +1994,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -1309,7 +2021,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1322,7 +2048,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.put({url}, json={json_data}, headers={headers}, timeout={timeout})",
@@ -1330,7 +2061,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_DELETE",
@@ -1358,7 +2091,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -1370,7 +2108,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1383,7 +2135,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -1396,7 +2162,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1409,7 +2189,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.delete({url}, headers={headers}, timeout={timeout})",
@@ -1417,7 +2202,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_CLOSE",
@@ -1445,7 +2232,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "outputs": {},
@@ -1454,7 +2246,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": null
+      "primary_out": null,
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_CONTEXT",
@@ -1485,7 +2279,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1498,7 +2306,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "with requests.Session() as {session}:\n    {body}",
@@ -1506,7 +2319,9 @@
         "import requests"
       ],
       "primary_in": null,
-      "primary_out": "session"
+      "primary_out": "session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_BEARER_AUTH",
@@ -1534,7 +2349,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.bearer_token",
+          "typestate": "requests::bearer_token",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -1547,7 +2376,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1560,7 +2403,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "code_template": "{out_headers} = dict({headers} or dict())\n{out_headers}['Authorization'] = 'Bearer ' + str({token})",
@@ -1568,7 +2425,9 @@
         "import requests"
       ],
       "primary_in": "token",
-      "primary_out": "out_headers"
+      "primary_out": "out_headers",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_BASIC_AUTH",
@@ -1596,7 +2455,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.username",
+          "typestate": "requests::username",
+          "invariants": []
         },
         "password": {
           "type_name": "str",
@@ -1608,7 +2481,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.password",
+          "typestate": "requests::password",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1621,7 +2508,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_auth",
+          "layout": null,
+          "semantics": "requests.auth_credentials",
+          "typestate": "requests::auth_credentials",
+          "invariants": []
         }
       },
       "code_template": "{auth} = requests.auth.HTTPBasicAuth({username}, {password})",
@@ -1630,7 +2522,9 @@
         "import requests.auth"
       ],
       "primary_in": "username",
-      "primary_out": "auth"
+      "primary_out": "auth",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_API_KEY_HEADER",
@@ -1659,7 +2553,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "header_name": {
           "type_name": "str",
@@ -1672,7 +2580,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "X-API-Key"
+          "default_value": "X-API-Key",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.header_key",
+          "typestate": "requests::header_key",
+          "invariants": []
         },
         "api_key": {
           "type_name": "str",
@@ -1684,7 +2606,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.api_key_secret",
+          "typestate": "requests::api_key_secret",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1697,7 +2633,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "code_template": "{out_headers} = dict({headers} or dict())\n{out_headers}[{header_name}] = str({api_key})",
@@ -1705,7 +2655,9 @@
         "import requests"
       ],
       "primary_in": "api_key",
-      "primary_out": "out_headers"
+      "primary_out": "out_headers",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_USER_AGENT",
@@ -1733,7 +2685,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "user_agent": {
           "type_name": "str",
@@ -1745,7 +2711,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.user_agent_string",
+          "typestate": "requests::user_agent_string",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1758,7 +2738,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "code_template": "{out_headers} = dict({headers} or dict())\n{out_headers}['User-Agent'] = str({user_agent})",
@@ -1766,7 +2760,9 @@
         "import requests"
       ],
       "primary_in": "user_agent",
-      "primary_out": "out_headers"
+      "primary_out": "out_headers",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_COOKIES",
@@ -1793,7 +2789,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "cookies": {
           "type_name": "http_cookies",
@@ -1805,7 +2806,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_cookies",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.cookie_jar",
+          "typestate": "requests::cookie_jar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1818,7 +2833,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.cookies.update({cookies})\n{updated_session} = {session}",
@@ -1826,7 +2846,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "updated_session"
+      "primary_out": "updated_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_BUILD_QUERY_PARAMS",
@@ -1854,7 +2876,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_params",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.raw_params",
+          "typestate": "requests::raw_params",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1867,7 +2903,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_params",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.query_parameters",
+          "typestate": "requests::query_parameters",
+          "invariants": []
         }
       },
       "code_template": "{query_params} = dict((k, v) for k, v in ({params} or dict()).items() if v is not None)",
@@ -1875,7 +2925,9 @@
         "import requests"
       ],
       "primary_in": "params",
-      "primary_out": "query_params"
+      "primary_out": "query_params",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_JSON",
@@ -1903,7 +2955,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1916,7 +2973,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.parsed_json",
+          "typestate": "requests::parsed_json",
+          "invariants": []
         }
       },
       "code_template": "{data} = {response}.json()",
@@ -1924,7 +2995,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "data"
+      "primary_out": "data",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_TEXT",
@@ -1952,7 +3025,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1965,7 +3043,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.decoded_text",
+          "typestate": "requests::decoded_text",
+          "invariants": []
         }
       },
       "code_template": "{text} = {response}.text",
@@ -1973,7 +3065,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "text"
+      "primary_out": "text",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_CONTENT",
@@ -2001,7 +3095,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2014,7 +3113,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.raw_bytes",
+          "typestate": "requests::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{content} = {response}.content",
@@ -2022,7 +3135,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "content"
+      "primary_out": "content",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_STATUS_CODE",
@@ -2049,7 +3164,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2062,7 +3182,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "status_code",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.status_code_value",
+          "typestate": "requests::status_code_value",
+          "invariants": []
         }
       },
       "code_template": "{status_code} = {response}.status_code",
@@ -2070,7 +3204,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "status_code"
+      "primary_out": "status_code",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_OK",
@@ -2098,7 +3234,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2111,7 +3252,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_ok} = {response}.ok",
@@ -2119,7 +3274,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "is_ok"
+      "primary_out": "is_ok",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_HEADERS",
@@ -2146,7 +3303,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2159,7 +3321,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "code_template": "{headers} = dict({response}.headers)",
@@ -2167,7 +3343,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "headers"
+      "primary_out": "headers",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_COOKIES",
@@ -2194,7 +3372,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2207,7 +3390,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_cookies",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.cookie_jar",
+          "typestate": "requests::cookie_jar",
+          "invariants": []
         }
       },
       "code_template": "{cookies} = {response}.cookies.get_dict()",
@@ -2215,7 +3412,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "cookies"
+      "primary_out": "cookies",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_URL",
@@ -2242,7 +3441,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2255,7 +3459,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         }
       },
       "code_template": "{url} = {response}.url",
@@ -2263,7 +3481,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "url"
+      "primary_out": "url",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_ELAPSED",
@@ -2291,7 +3511,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2304,7 +3529,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "code_template": "{elapsed_seconds} = {response}.elapsed.total_seconds()",
@@ -2312,7 +3551,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "elapsed_seconds"
+      "primary_out": "elapsed_seconds",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_ENCODING",
@@ -2339,7 +3580,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2352,7 +3598,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.encoding_name",
+          "typestate": "requests::encoding_name",
+          "invariants": []
         }
       },
       "code_template": "{encoding} = {response}.encoding",
@@ -2360,7 +3620,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "encoding"
+      "primary_out": "encoding",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_RAISE_FOR_STATUS",
@@ -2387,7 +3649,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2400,7 +3667,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "code_template": "{response}.raise_for_status()\n{validated_response} = {response}",
@@ -2408,7 +3680,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "validated_response"
+      "primary_out": "validated_response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_IS_STATUS_200",
@@ -2436,7 +3710,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "status_code",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.status_code_value",
+          "typestate": "requests::status_code_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2449,7 +3737,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_200} = ({status_code} == 200)",
@@ -2457,7 +3759,9 @@
         "import requests"
       ],
       "primary_in": "status_code",
-      "primary_out": "is_200"
+      "primary_out": "is_200",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_IS_CLIENT_ERROR",
@@ -2486,7 +3790,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "status_code",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.status_code_value",
+          "typestate": "requests::status_code_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2499,7 +3817,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_client_error} = (400 <= {status_code} < 500)",
@@ -2507,7 +3839,9 @@
         "import requests"
       ],
       "primary_in": "status_code",
-      "primary_out": "is_client_error"
+      "primary_out": "is_client_error",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_IS_SERVER_ERROR",
@@ -2536,7 +3870,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "status_code",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.status_code_value",
+          "typestate": "requests::status_code_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2549,7 +3897,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_server_error} = ({status_code} >= 500)",
@@ -2557,7 +3919,9 @@
         "import requests"
       ],
       "primary_in": "status_code",
-      "primary_out": "is_server_error"
+      "primary_out": "is_server_error",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_GET_STREAM",
@@ -2584,7 +3948,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "params": {
           "type_name": "http_params",
@@ -2597,7 +3975,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_params",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.query_parameters",
+          "typestate": "requests::query_parameters",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -2610,7 +4002,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -2623,7 +4029,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2636,7 +4056,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.streaming",
+          "typestate": "requests::streaming",
+          "invariants": []
         }
       },
       "code_template": "{response} = requests.get({url}, params={params}, headers={headers}, stream=True, timeout={timeout})",
@@ -2644,7 +4069,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_STREAM_ITER_CONTENT",
@@ -2672,7 +4099,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.streaming",
+          "typestate": "requests::streaming",
+          "invariants": []
         },
         "chunk_size": {
           "type_name": "int",
@@ -2685,7 +4117,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2698,7 +4144,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "stream_content",
+          "layout": null,
+          "semantics": "requests.stream_chunks",
+          "typestate": "requests::stream_chunks",
+          "invariants": []
         }
       },
       "code_template": "{stream} = {response}.iter_content(chunk_size={chunk_size})",
@@ -2706,7 +4157,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "stream"
+      "primary_out": "stream",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_SAVE_TO_FILE",
@@ -2734,7 +4187,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -2749,7 +4207,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.destination_path",
+          "typestate": "requests::destination_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2765,7 +4237,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.written",
+          "typestate": "requests::written",
+          "invariants": []
         }
       },
       "code_template": "with open({filepath}, 'wb') as _f:\n    _f.write({response}.content)\n{out_path} = {filepath}",
@@ -2773,7 +4259,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_RESP_STREAM_SAVE_TO_FILE",
@@ -2800,7 +4288,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.streaming",
+          "typestate": "requests::streaming",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -2815,7 +4308,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.destination_path",
+          "typestate": "requests::destination_path",
+          "invariants": []
         },
         "chunk_size": {
           "type_name": "int",
@@ -2828,7 +4335,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2844,7 +4365,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.written",
+          "typestate": "requests::written",
+          "invariants": []
         }
       },
       "code_template": "with open({filepath}, 'wb') as _f:\n    for _chunk in {response}.iter_content(chunk_size={chunk_size}):\n        if _chunk:\n            _f.write(_chunk)\n{out_path} = {filepath}",
@@ -2852,7 +4387,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_POST_UPLOAD_FILE",
@@ -2880,7 +4417,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -2895,7 +4446,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.source_path",
+          "typestate": "requests::source_path",
+          "invariants": []
         },
         "file_field": {
           "type_name": "str",
@@ -2908,7 +4473,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.field_name",
+          "typestate": "requests::field_name",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -2921,7 +4500,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -2934,7 +4527,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2947,7 +4554,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "with open({filepath}, 'rb') as _f:\n    {response} = requests.post({url}, files=dict([({file_field}, _f)]), headers={headers}, timeout={timeout})",
@@ -2955,7 +4567,9 @@
         "import requests"
       ],
       "primary_in": "filepath",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_DOWNLOAD_IMAGE",
@@ -2983,7 +4597,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -2998,7 +4626,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.destination_path",
+          "typestate": "requests::destination_path",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -3011,7 +4653,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3027,7 +4683,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.written",
+          "typestate": "requests::written",
+          "invariants": []
         }
       },
       "code_template": "with requests.get({url}, stream=True, timeout={timeout}) as _r:\n    _r.raise_for_status()\n    with open({filepath}, 'wb') as _f:\n        for _chunk in _r.iter_content(chunk_size=8192):\n            if _chunk:\n                _f.write(_chunk)\n{out_path} = {filepath}",
@@ -3035,7 +4705,9 @@
         "import requests"
       ],
       "primary_in": "url",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_HTTP_ADAPTER_INIT",
@@ -3064,7 +4736,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         },
         "pool_maxsize": {
           "type_name": "int",
@@ -3077,7 +4763,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         },
         "max_retries": {
           "type_name": "int",
@@ -3090,7 +4790,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3103,7 +4817,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_adapter",
+          "layout": null,
+          "semantics": "requests.configured_adapter",
+          "typestate": "requests::configured_adapter",
+          "invariants": []
         }
       },
       "code_template": "{adapter} = requests.adapters.HTTPAdapter(pool_connections={pool_connections}, pool_maxsize={pool_maxsize}, max_retries={max_retries})",
@@ -3112,7 +4831,9 @@
         "import requests.adapters"
       ],
       "primary_in": null,
-      "primary_out": "adapter"
+      "primary_out": "adapter",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_MOUNT_ADAPTER",
@@ -3140,7 +4861,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "prefix": {
           "type_name": "str",
@@ -3154,7 +4880,21 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": "https://"
+          "default_value": "https://",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_prefix",
+          "typestate": "requests::url_prefix",
+          "invariants": []
         },
         "adapter": {
           "type_name": "http_adapter",
@@ -3166,7 +4906,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_adapter",
+          "layout": null,
+          "semantics": "requests.configured_adapter",
+          "typestate": "requests::configured_adapter",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3179,7 +4924,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.mount({prefix}, {adapter})\n{configured_session} = {session}",
@@ -3187,7 +4937,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "configured_session"
+      "primary_out": "configured_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_SET_PROXIES",
@@ -3215,7 +4967,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "http_proxy": {
           "type_name": "str",
@@ -3229,7 +4986,21 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": ""
+          "default_value": "",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.proxy_address",
+          "typestate": "requests::proxy_address",
+          "invariants": []
         },
         "https_proxy": {
           "type_name": "str",
@@ -3243,7 +5014,21 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": ""
+          "default_value": "",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.proxy_address",
+          "typestate": "requests::proxy_address",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3256,7 +5041,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.proxies = dict([('http', {http_proxy}), ('https', {https_proxy})])\n{configured_session} = {session}",
@@ -3264,7 +5054,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "configured_session"
+      "primary_out": "configured_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_SET_VERIFY_SSL",
@@ -3292,7 +5084,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "verify": {
           "type_name": "bool",
@@ -3306,7 +5103,21 @@
           "element_type": "bool",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": true
+          "default_value": true,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3319,7 +5130,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.verify = {verify}\n{configured_session} = {session}",
@@ -3327,7 +5143,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "configured_session"
+      "primary_out": "configured_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_SET_CLIENT_CERT",
@@ -3355,7 +5173,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "cert_file": {
           "type_name": "str",
@@ -3370,7 +5193,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.source_path",
+          "typestate": "requests::source_path",
+          "invariants": []
         },
         "key_file": {
           "type_name": "str",
@@ -3385,7 +5222,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.source_path",
+          "typestate": "requests::source_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3398,7 +5249,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.cert = ({cert_file}, {key_file})\n{configured_session} = {session}",
@@ -3406,7 +5262,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "configured_session"
+      "primary_out": "configured_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SESSION_CLEAR_COOKIES",
@@ -3433,7 +5291,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3446,7 +5309,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         }
       },
       "code_template": "{session}.cookies.clear()\n{cleared_session} = {session}",
@@ -3454,7 +5322,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "cleared_session"
+      "primary_out": "cleared_session",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_DIGEST_AUTH",
@@ -3481,7 +5351,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.username",
+          "typestate": "requests::username",
+          "invariants": []
         },
         "password": {
           "type_name": "str",
@@ -3493,7 +5377,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.password",
+          "typestate": "requests::password",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3506,7 +5404,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_auth",
+          "layout": null,
+          "semantics": "requests.auth_credentials",
+          "typestate": "requests::auth_credentials",
+          "invariants": []
         }
       },
       "code_template": "{auth} = requests.auth.HTTPDigestAuth({username}, {password})",
@@ -3515,7 +5418,9 @@
         "import requests.auth"
       ],
       "primary_in": "username",
-      "primary_out": "auth"
+      "primary_out": "auth",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_PROXY_AUTH",
@@ -3542,7 +5447,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.username",
+          "typestate": "requests::username",
+          "invariants": []
         },
         "password": {
           "type_name": "str",
@@ -3554,7 +5473,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.password",
+          "typestate": "requests::password",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3567,7 +5500,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_auth",
+          "layout": null,
+          "semantics": "requests.auth_credentials",
+          "typestate": "requests::auth_credentials",
+          "invariants": []
         }
       },
       "code_template": "{auth} = requests.auth.HTTPProxyAuth({username}, {password})",
@@ -3576,7 +5514,9 @@
         "import requests.auth"
       ],
       "primary_in": "username",
-      "primary_out": "auth"
+      "primary_out": "auth",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_REQUEST_PREPARE",
@@ -3604,7 +5544,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "method": {
           "type_name": "str",
@@ -3617,7 +5562,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "GET"
+          "default_value": "GET",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.header_key",
+          "typestate": "requests::header_key",
+          "invariants": []
         },
         "url": {
           "type_name": "url",
@@ -3629,7 +5588,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "headers": {
           "type_name": "http_headers",
@@ -3642,7 +5615,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "data": {
           "type_name": "http_payload",
@@ -3655,7 +5642,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_payload",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.form_data",
+          "typestate": "requests::form_data",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3668,7 +5669,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "prepared_request",
+          "layout": null,
+          "semantics": "requests.prepared_message",
+          "typestate": "requests::prepared_message",
+          "invariants": []
         }
       },
       "code_template": "{prepared_request} = {session}.prepare_request(requests.Request(method={method}, url={url}, headers={headers}, data={data}))",
@@ -3676,7 +5682,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "prepared_request"
+      "primary_out": "prepared_request",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_SESSION_SEND",
@@ -3704,7 +5712,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "session",
+          "layout": null,
+          "semantics": "requests.active_session",
+          "typestate": "requests::active_session",
+          "invariants": []
         },
         "prepared_request": {
           "type_name": "prepared_request",
@@ -3716,7 +5729,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "prepared_request",
+          "layout": null,
+          "semantics": "requests.prepared_message",
+          "typestate": "requests::prepared_message",
+          "invariants": []
         },
         "timeout": {
           "type_name": "float",
@@ -3729,7 +5747,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3742,7 +5774,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.http_response",
+          "typestate": "requests::http_response",
+          "invariants": []
         }
       },
       "code_template": "{response} = {session}.send({prepared_request}, timeout={timeout})",
@@ -3750,7 +5787,9 @@
         "import requests"
       ],
       "primary_in": "session",
-      "primary_out": "response"
+      "primary_out": "response",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_HISTORY",
@@ -3777,7 +5816,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3800,7 +5844,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.redirect_chain",
+          "typestate": "requests::redirect_chain",
+          "invariants": []
         }
       },
       "code_template": "{history} = list({response}.history)",
@@ -3808,7 +5868,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "history"
+      "primary_out": "history",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_IS_REDIRECT",
@@ -3835,7 +5897,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3848,7 +5915,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.boolean_flag",
+          "typestate": "requests::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_redirect} = bool({response}.is_redirect)",
@@ -3856,7 +5937,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "is_redirect"
+      "primary_out": "is_redirect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_LINKS",
@@ -3884,7 +5967,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3897,7 +5985,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.link_headers",
+          "typestate": "requests::link_headers",
+          "invariants": []
         }
       },
       "code_template": "{links} = dict({response}.links)",
@@ -3905,7 +6007,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "links"
+      "primary_out": "links",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_REASON",
@@ -3932,7 +6036,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3945,7 +6054,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.reason_phrase",
+          "typestate": "requests::reason_phrase",
+          "invariants": []
         }
       },
       "code_template": "{reason} = str({response}.reason)",
@@ -3953,7 +6076,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "reason"
+      "primary_out": "reason",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_APPARENT_ENCODING",
@@ -3980,7 +6105,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3993,7 +6123,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.encoding_name",
+          "typestate": "requests::encoding_name",
+          "invariants": []
         }
       },
       "code_template": "{apparent_encoding} = str({response}.apparent_encoding)",
@@ -4001,7 +6145,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "apparent_encoding"
+      "primary_out": "apparent_encoding",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_CONTENT_TYPE",
@@ -4028,7 +6174,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4041,7 +6192,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.mime_type",
+          "typestate": "requests::mime_type",
+          "invariants": []
         }
       },
       "code_template": "{content_type} = str({response}.headers.get('Content-Type', ''))",
@@ -4049,7 +6214,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "content_type"
+      "primary_out": "content_type",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_CONTENT_LENGTH",
@@ -4076,7 +6243,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4089,7 +6261,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.content_length_bytes",
+          "typestate": "requests::content_length_bytes",
+          "invariants": []
         }
       },
       "code_template": "{content_length} = int({response}.headers.get('Content-Length', 0))",
@@ -4097,7 +6283,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "content_length"
+      "primary_out": "content_length",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_STREAM_ITER_LINES",
@@ -4125,7 +6313,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.streaming",
+          "typestate": "requests::streaming",
+          "invariants": []
         },
         "chunk_size": {
           "type_name": "int",
@@ -4138,7 +6331,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4151,7 +6358,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "stream_content",
+          "layout": null,
+          "semantics": "requests.stream_chunks",
+          "typestate": "requests::stream_chunks",
+          "invariants": []
         }
       },
       "code_template": "{lines_stream} = {response}.iter_lines(chunk_size={chunk_size})",
@@ -4159,7 +6371,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "lines_stream"
+      "primary_out": "lines_stream",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_SAVE_JSON",
@@ -4187,7 +6401,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -4202,7 +6421,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.destination_path",
+          "typestate": "requests::destination_path",
+          "invariants": []
         },
         "indent": {
           "type_name": "int",
@@ -4215,7 +6448,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.chunk_size_bytes",
+          "typestate": "requests::chunk_size_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4231,7 +6478,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.written",
+          "typestate": "requests::written",
+          "invariants": []
         }
       },
       "code_template": "with open({filepath}, 'w', encoding='utf-8') as _f:\n    json.dump({response}.json(), _f, indent={indent})\n{out_path} = {filepath}",
@@ -4240,7 +6501,9 @@
         "import json"
       ],
       "primary_in": "response",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_RESP_SAVE_TEXT",
@@ -4268,7 +6531,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         },
         "filepath": {
           "type_name": "str",
@@ -4283,7 +6551,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.destination_path",
+          "typestate": "requests::destination_path",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -4296,7 +6578,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.encoding_name",
+          "typestate": "requests::encoding_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4312,7 +6608,21 @@
           "supported_formats": [
             "http",
             "https"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.written",
+          "typestate": "requests::written",
+          "invariants": []
         }
       },
       "code_template": "with open({filepath}, 'w', encoding={encoding}) as _f:\n    _f.write({response}.text)\n{out_path} = {filepath}",
@@ -4320,7 +6630,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "REQ_BUILD_CUSTOM_HEADER",
@@ -4348,7 +6660,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         },
         "name": {
           "type_name": "str",
@@ -4361,7 +6687,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "Content-Type"
+          "default_value": "Content-Type",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.header_key",
+          "typestate": "requests::header_key",
+          "invariants": []
         },
         "value": {
           "type_name": "str",
@@ -4373,7 +6713,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.header_value",
+          "typestate": "requests::header_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4386,7 +6740,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "http_headers",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.request_headers",
+          "typestate": "requests::request_headers",
+          "invariants": []
         }
       },
       "code_template": "{out_headers} = dict({headers} or dict())\n{out_headers}[str({name})] = str({value})",
@@ -4394,7 +6762,9 @@
         "import requests"
       ],
       "primary_in": "value",
-      "primary_out": "out_headers"
+      "primary_out": "out_headers",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_URL_JOIN",
@@ -4421,7 +6791,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         },
         "endpoint": {
           "type_name": "str",
@@ -4434,7 +6818,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4447,7 +6845,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "url",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.url_string",
+          "typestate": "requests::url_string",
+          "invariants": []
         }
       },
       "code_template": "{full_url} = urllib.parse.urljoin({base_url}, {endpoint})",
@@ -4455,7 +6867,9 @@
         "import urllib.parse"
       ],
       "primary_in": "base_url",
-      "primary_out": "full_url"
+      "primary_out": "full_url",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_SET_TIMEOUT_TUPLE",
@@ -4484,7 +6898,21 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 5.0
+          "default_value": 5.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         },
         "read_timeout": {
           "type_name": "float",
@@ -4498,7 +6926,21 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 30.0
+          "default_value": 30.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_seconds",
+          "typestate": "requests::timeout_seconds",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4511,13 +6953,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "requests.timeout_tuple",
+          "typestate": "requests::timeout_tuple",
+          "invariants": []
         }
       },
       "code_template": "{timeout} = ({connect_timeout}, {read_timeout})",
       "dependencies": [],
       "primary_in": "connect_timeout",
-      "primary_out": "timeout"
+      "primary_out": "timeout",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "REQ_RESP_CLOSE",
@@ -4544,7 +7002,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "response",
+          "layout": null,
+          "semantics": "requests.received",
+          "typestate": "requests::received",
+          "invariants": []
         }
       },
       "outputs": {},
@@ -4553,7 +7016,9 @@
         "import requests"
       ],
       "primary_in": "response",
-      "primary_out": null
+      "primary_out": null,
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "supported_formats": [

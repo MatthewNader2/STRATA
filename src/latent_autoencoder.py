@@ -13,13 +13,108 @@ Trained self-supervised via contrastive negative sampling over tree edges in <2 
 from __future__ import annotations
 import math
 import re
-import hashlib
 from typing import Dict, List, Optional, Set, Tuple, Any, Union, Collection
 import numpy as np
 
 from log_config import get_logger
 
 logger = get_logger("latent_autoencoder")
+
+
+def _hash_u64(text: str, salt: int = 0) -> int:
+    """Deterministic 64-bit FNV-1a + SplitMix64 integer hash (zero RNG, zero MD5)."""
+    h = (0xCBF29CE484222325 ^ (salt * 0x9E3779B97F4A7C15)) & 0xFFFFFFFFFFFFFFFF
+    for b in text.encode("utf-8"):
+        h ^= b
+        h = (h * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    h = ((h ^ (h >> 30)) * 0xBF58476D1CE4E5B9) & 0xFFFFFFFFFFFFFFFF
+    h = ((h ^ (h >> 27)) * 0x94D049BB133111EB) & 0xFFFFFFFFFFFFFFFF
+    return h ^ (h >> 31)
+
+
+def _split_camel_and_punct(text: str) -> List[str]:
+    expanded = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    return [t.lower() for t in re.split(r"[^A-Za-z0-9]+", expanded) if t]
+
+
+def _extract_structural_features(text: str, is_typestate: bool = True) -> List[Tuple[str, float]]:
+    """
+    Decomposes a typestate string, cell identifier, or phrase into weighted
+    compositional structural + subword + character n-gram features.
+    """
+    s = (text or "").strip() or "__empty__"
+    feats: List[Tuple[str, float]] = []
+
+    if is_typestate:
+        # Canonical format: BaseType[state]{q1,q2} or general phrase
+        state_match = re.search(r"\[([^\]]+)\]", s)
+        qual_match = re.search(r"\{([^}]+)\}", s)
+        base_part = re.sub(r"\[[^\]]*\]|\{[^}]*\}", " ", s).strip()
+
+        if base_part:
+            if " " not in base_part:
+                feats.append((f"base:{base_part.lower()}", 1.0))
+            base_toks = _split_camel_and_punct(base_part)
+            for tok in base_toks:
+                feats.append((f"tok:{tok}", 1.2))
+                if len(tok) >= 3:
+                    for i in range(len(tok) - 2):
+                        feats.append((f"tri:{tok[i:i+3]}", 0.30))
+            for i in range(len(base_toks) - 1):
+                feats.append((f"big:{base_toks[i]}_{base_toks[i+1]}", 0.65))
+
+        if state_match:
+            st_raw = state_match.group(1).strip().lower()
+            feats.append((f"state_raw:{st_raw}", 1.2))
+            for st_tok in _split_camel_and_punct(st_raw):
+                feats.append((f"state:{st_tok}", 0.9))
+                feats.append((f"tok:{st_tok}", 0.5))
+
+        if qual_match:
+            for q in qual_match.group(1).split(","):
+                qn = q.strip().lower()
+                if qn:
+                    feats.append((f"qual_raw:{qn}", 1.0))
+                    for qt in _split_camel_and_punct(qn):
+                        feats.append((f"qual:{qt}", 0.7))
+    else:
+        feats.append((f"cid:{s.lower()}", 1.0))
+        toks = _split_camel_and_punct(s)
+        for tok in toks:
+            feats.append((f"ctok:{tok}", 1.0))
+            if len(tok) >= 3:
+                for i in range(len(tok) - 2):
+                    feats.append((f"ctri:{tok[i:i+3]}", 0.30))
+        for i in range(len(toks) - 1):
+            feats.append((f"cbig:{toks[i]}_{toks[i+1]}", 0.70))
+
+    if not feats:
+        feats.append((f"raw:{s.lower()}", 1.0))
+    return feats
+
+
+def _project_compositional_features(
+    features: List[Tuple[str, float]],
+    dimension: int,
+) -> np.ndarray:
+    """
+    Deterministic Weinberger signed feature projection into R^d, normalized to the unit sphere.
+    Preserves compositional similarity without random MD5 seeds.
+    """
+    vec = np.zeros(dimension, dtype=np.float32)
+    if dimension <= 0:
+        return vec
+    for feat, weight in features:
+        h1 = _hash_u64(feat, 1)
+        h2 = _hash_u64(feat, 2)
+        idx1 = h1 % dimension
+        idx2 = h2 % dimension
+        sign1 = 1.0 if ((h1 >> 63) & 1) else -1.0
+        sign2 = 1.0 if ((h2 >> 63) & 1) else -1.0
+        vec[idx1] += np.float32(weight * sign1)
+        vec[idx2] += np.float32(0.70710678 * weight * sign2)
+    norm = float(np.linalg.norm(vec))
+    return (vec / norm).astype(np.float32) if norm > 1e-9 else vec
 
 
 def _canonical_typestate_str(sig: Any) -> str:
@@ -37,7 +132,7 @@ def _canonical_typestate_str(sig: Any) -> str:
     parts = [str(t_name)]
     if state and str(state).lower() not in ("any", "none", "unknown"):
         parts.append(f"[{state}]")
-    if quals and isinstance(quals, (list, tuple, set, frozenset)):
+    if quals and isinstance(quals, (list, tuple, set)):
         valid_q = sorted(str(q) for q in quals if q and str(q).lower() not in ("any", "none"))
         if valid_q:
             parts.append(f"{{{','.join(valid_q)}}}")
@@ -141,10 +236,20 @@ class TransitionAutoencoder:
         N_E = len(self.idx_to_typestate)
         N_R = len(self.idx_to_cell)
 
-        # 2. Initialize latent representations on unit hypersphere
+        # 2. Initialize latent representations structurally on unit hypersphere
         rng = np.random.RandomState(self.seed)
-        self.Z = rng.normal(0, 1.0 / math.sqrt(self.dimension), (N_E, self.dimension)).astype(np.float32)
-        self.T = rng.normal(0, 1.0 / math.sqrt(self.dimension), (N_R, self.dimension)).astype(np.float32)
+        self.Z = np.vstack([
+            _project_compositional_features(_extract_structural_features(ts, is_typestate=True), self.dimension)
+            for ts in self.idx_to_typestate
+        ]).astype(np.float32)
+        self.T = np.vstack([
+            _project_compositional_features(_extract_structural_features(cid, is_typestate=False), self.dimension)
+            for cid in self.idx_to_cell
+        ]).astype(np.float32)
+        if N_E > 0:
+            self.Z += rng.normal(0, 0.05 / math.sqrt(self.dimension), (N_E, self.dimension)).astype(np.float32)
+        if N_R > 0:
+            self.T += rng.normal(0, 0.05 / math.sqrt(self.dimension), (N_R, self.dimension)).astype(np.float32)
         self.Z /= (np.linalg.norm(self.Z, axis=1, keepdims=True) + 1e-9)
         self.T /= (np.linalg.norm(self.T, axis=1, keepdims=True) + 1e-9)
 
@@ -200,24 +305,22 @@ class TransitionAutoencoder:
         if self.is_trained and self.Z is not None and s in self.typestate_to_idx:
             return self.Z[self.typestate_to_idx[s]].copy()
 
-        # Deterministic out-of-vocabulary semantic projection
-        h = int(hashlib.md5(s.encode("utf-8")).hexdigest()[:8], 16)
-        rng = np.random.RandomState(h % (2**31 - 1))
-        vec = rng.normal(0, 1.0, self.dimension).astype(np.float32)
-        norm = np.linalg.norm(vec)
-        return vec / (norm + 1e-9) if norm > 0 else vec
+        # Deterministic compositional structural/vocabulary projection (zero MD5 RNG)
+        return _project_compositional_features(
+            _extract_structural_features(s, is_typestate=True),
+            self.dimension,
+        )
 
     def encode_cell(self, cell_id: str) -> np.ndarray:
         """Projects a cell morphism c into the continuous translation manifold t_c in R^d."""
         if self.is_trained and self.T is not None and cell_id in self.cell_to_idx:
             return self.T[self.cell_to_idx[cell_id]].copy()
 
-        # Deterministic out-of-vocabulary projection
-        h = int(hashlib.md5(cell_id.encode("utf-8")).hexdigest()[:8], 16)
-        rng = np.random.RandomState(h % (2**31 - 1))
-        vec = rng.normal(0, 1.0, self.dimension).astype(np.float32)
-        norm = np.linalg.norm(vec)
-        return vec / (norm + 1e-9) if norm > 0 else vec
+        # Deterministic compositional identifier/token projection (zero MD5 RNG)
+        return _project_compositional_features(
+            _extract_structural_features(cell_id, is_typestate=False),
+            self.dimension,
+        )
 
     def predict_transition(
         self,

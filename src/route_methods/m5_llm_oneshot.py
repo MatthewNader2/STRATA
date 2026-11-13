@@ -1,38 +1,10 @@
 from __future__ import annotations
 import json
 from typing import Dict, List, Optional, Any
-from .base import RouteMethod
-from .m1_clause_anchor import M1ClauseAnchorRouteMethod
+from .base import RouteMethod, is_macro_cell
 from lattice import Cell, LatticeOrchestrator
 from unification import ExecutionContext
 from inference import ModelManager
-try:
-    from ..tokenizer import CellTokenizer
-except (ImportError, ValueError):
-    from tokenizer import CellTokenizer
-
-
-def _ir_filter_m5(candidates, ir_step):
-    if not ir_step: return candidates
-    op  = str(ir_step.get("op", "")).strip().lower()
-    lib = str(ir_step.get("library", "")).strip().lower()
-    if not op and not lib: return candidates
-    out = []
-    for c in candidates:
-        cid = c.cell_id.lower(); dom = (getattr(c, "domain_name", "") or getattr(c, "domain", "") or "").lower()
-        toks = set(str(k).lower() for k in getattr(c, "keywords", []) or [])
-        toks |= set(str(k).lower() for k in getattr(c, "semantic_tags", []) or [])
-        if (not op or op in cid or any(op in t for t in toks)) and (not lib or lib in dom or lib in cid):
-            out.append(c)
-    if out:
-        return out
-    op_tokens = CellTokenizer.tokenize_identifier(op)
-    if op_tokens:
-        for c in candidates:
-            c_toks = getattr(c, "identity_tokens", c.token_set)
-            if op_tokens & c_toks:
-                out.append(c)
-    return out
 
 
 class M5LLMOneShotRouteMethod(RouteMethod):
@@ -41,122 +13,68 @@ class M5LLMOneShotRouteMethod(RouteMethod):
     def plan(self, prompt, tunnel, relevance_map, orchestrator=None, ctx=None,
              start_sig=None, goal_sig=None, max_transforms=6, **kwargs):
         self._current_prompt = prompt
-        try:
-            from inference import ModelManager
-        except (ImportError, ValueError):
-            from ..inference import ModelManager
-        if not ModelManager.get_instance().can_synthesize():
+        mm = ModelManager.get_instance()
+        if not mm.can_synthesize():
             return []
         orch = orchestrator or self.orchestrator
-        if not tunnel: return []
+        if not tunnel:
+            return []
         candidates = [
             c for c in tunnel
             if getattr(c, "node_type", "") != "constant"
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
                 )
             )
         ] or [tunnel[0]]
         cand_map = {c.cell_id.lower(): c for c in candidates}
-        mm = ModelManager.get_instance()
-        has_llm = mm.can_synthesize()
 
-        proposed = []
+        def _fail(reason: str) -> List[Cell]:
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
+
+        proposed: List[Cell] = []
         _llm_error = None
-        if has_llm:
-            try:
-                from ir_compiler import IRCompiler
-                compiler = getattr(self, "_cached_ir", None) or IRCompiler(orch)
-                self._cached_ir = compiler
-                ir = compiler.compile(prompt)
-                if ir is not None and ir.steps:
-                    for step in ir.steps:
-                        pool = _ir_filter_m5(candidates, step)
-                        pool.sort(key=lambda c: relevance_map.get(c.cell_id, 0.0) * 5.0, reverse=True)
-                        if pool:
-                            chosen = None
-                            for cand in pool:
-                                if not any(p.cell_id == cand.cell_id for p in proposed):
-                                    chosen = cand
-                                    break
-                            if chosen is not None:
-                                proposed.append(chosen)
-            except Exception:
-                proposed = []
-
-        if not proposed and has_llm:
-            try:
-                top_str = "\n".join(f"- {c.cell_id}" for c in sorted(candidates, key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)[:20])
-                resp = mm.generate_text(f"Intent: {prompt}\nCells:\n{top_str}\nReturn JSON list of cell IDs in order:", max_tokens=128, system_prompt="Output ONLY a JSON list.").strip()
-                parsed_list = None
-                if "[" in resp and "]" in resp:
-                    lbracket = resp.find("[")
-                    rbracket = resp.rfind("]")
-                    try:
-                        parsed_list = json.loads(resp[lbracket : rbracket + 1])
-                    except Exception:
-                        pass
-                if isinstance(parsed_list, list):
-                    for cid in parsed_list:
-                        if str(cid).strip().lower() in cand_map: proposed.append(cand_map[str(cid).strip().lower()])
-            except Exception as _llm_err:
-                proposed = []
-                _llm_error = f"{type(_llm_err).__name__}: {_llm_err}"
+        try:
+            top_str = "\n".join(
+                f"- {c.cell_id}"
+                for c in sorted(candidates, key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)[:25]
+            )
+            resp = mm.generate_text(
+                f"Intent: {prompt}\nCells:\n{top_str}\nReturn JSON list of cell IDs in order:",
+                max_tokens=192,
+                system_prompt="Output ONLY a JSON list.",
+            ).strip()
+            parsed_list = None
+            if "[" in resp and "]" in resp:
+                lbracket = resp.find("[")
+                rbracket = resp.rfind("]")
+                try:
+                    parsed_list = json.loads(resp[lbracket : rbracket + 1])
+                except Exception:
+                    pass
+            if isinstance(parsed_list, list):
+                for cid in parsed_list:
+                    key = str(cid).strip().lower()
+                    if key in cand_map:
+                        proposed.append(cand_map[key])
+        except Exception as _llm_err:
+            proposed = []
+            _llm_error = f"{type(_llm_err).__name__}: {_llm_err}"
 
         if not proposed:
-            return self._delegate_to_m1(
-                (f"LLM/IR proposal raised {_llm_error}" if _llm_error else
-                 ("no LLM loaded in this profile" if not has_llm else "LLM/IR proposed no usable cells")),
-                prompt, tunnel, relevance_map, orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms)
+            return _fail(
+                f"LLM proposal raised {_llm_error}" if _llm_error else "LLM one-shot proposed no usable cells"
+            )
 
         chain = [proposed[0]]
-        first = chain[0]
-        if not self.is_ingress_node(first, orch) and any(getattr(p, "required", False) and getattr(p, "default_value", None) is None for p in first.inputs.values()):
-            s1_candidates = [c for c in candidates if self.is_ingress_node(c, orch)]
-            if not s1_candidates and orch and hasattr(orch, "loaded_cells"):
-                s1_candidates = [c for c in orch.loaded_cells.values() if self.is_ingress_node(c, orch)]
-            if s1_candidates:
-                best_s1 = None
-                best_bridge = None
-                best_score = -1.0
-                for s1 in s1_candidates:
-                    rel = relevance_map.get(s1.cell_id, 0.0) if relevance_map else 0.0
-                    if self.step_unifies(s1, first, prev_path=[s1]):
-                        score = 10.0 + rel
-                        if score > best_score:
-                            best_score = score
-                            best_s1 = s1
-                            best_bridge = None
-                    else:
-                        brg = self.find_bridge(s1, first, candidates, orch, prev_path=[s1])
-                        if not brg and orch and hasattr(orch, "loaded_cells"):
-                            brg = self.find_bridge(s1, first, list(orch.loaded_cells.values()), orch, prev_path=[s1])
-                        if brg:
-                            score = 5.0 + rel
-                            if score > best_score:
-                                best_score = score
-                                best_s1 = s1
-                                best_bridge = brg
-                if best_s1 is None:
-                    try:
-                        p_clauses = self.segment_prompt_clauses(prompt)
-                        producer = self._find_type_producer(first, [], candidates, p_clauses, orch)
-                        if producer is not None and self.is_ingress_node(producer, orch):
-                            best_s1 = producer
-                    except Exception:
-                        pass
-                if best_s1 is not None:
-                    if best_bridge is not None:
-                        chain = [best_s1, best_bridge] + chain
-                    else:
-                        chain = [best_s1] + chain
-
         for nxt in proposed[1:]:
+            if any(c.cell_id == nxt.cell_id for c in chain):
+                continue
             curr = chain[-1]
             if self.step_unifies(curr, nxt, prev_path=chain) or self.step_unifies_dag(nxt, chain, ctx=ctx):
                 chain.append(nxt)
@@ -177,61 +95,29 @@ class M5LLMOneShotRouteMethod(RouteMethod):
                             connected = True
                             break
                     if not connected:
-                        try:
-                            clauses = self.segment_prompt_clauses(prompt)
-                            producer = self._find_type_producer(nxt, chain, candidates, clauses, orch)
-                            if producer is not None:
-                                chain.extend([producer, nxt])
-                                connected = True
-                        except Exception:
-                            pass
-                    if not connected:
-                        return self._delegate_to_m1(
-                            f"proposed step {nxt.cell_id} could not be connected or bridged",
-                            prompt, tunnel, relevance_map, orch, ctx=ctx,
-                            start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms
-                        )
-        if len(chain) < 2:
-            return self._delegate_to_m1(
-                "verified chain shorter than 2 cells",
-                prompt, tunnel, relevance_map, orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-            )
+                        return _fail(f"proposed step {nxt.cell_id} could not be connected or bridged")
+
+        if len(chain) < 2 and len(proposed) >= 2:
+            return _fail("verified chain shorter than 2 cells")
 
         self.tag_cells_with_clause_indices(chain, prompt, orchestrator=orch)
 
         try:
-            from token_evidence import audit
-            aud = audit(chain, prompt, orch)
-            if aud.get("available") and any(iss.get("kind") == "clause_unserved" for iss in aud.get("issues", [])):
-                return self._delegate_to_m1(
-                    "LLM proposed path has unserved clauses",
-                    prompt, tunnel, relevance_map, orch, ctx=ctx,
-                    start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-                )
             from unification import UnificationGate, ExecutionContext
             from preflight import PreflightLinter
             _gate = UnificationGate(orchestrator=orch)
-            _tctx = ExecutionContext(prompt=prompt)
+            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
             _ur = _gate.unify_pipeline(chain, _tctx, extract_llm_slots=False)
             if _ur.is_bottom():
-                return self._delegate_to_m1(
-                    "LLM proposed path does not unify (bottom)",
-                    prompt, tunnel, relevance_map, orch, ctx=ctx,
-                    start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-                )
+                return _fail("LLM proposed path does not unify (bottom)")
             _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
             _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code)
             if not _lint.is_valid:
-                return self._delegate_to_m1(
-                    f"LLM proposed path has pre-flight violations: {_lint.violations[0][:100]}",
-                    prompt, tunnel, relevance_map, orch, ctx=ctx,
-                    start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-                )
+                return _fail(f"LLM proposed path has pre-flight violations: {_lint.violations[0][:100]}")
         except Exception:
             pass
 
-        clauses = self.segment_prompt_clauses(prompt)
+        clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
         return chain[:max_allowed]
 

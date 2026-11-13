@@ -49,7 +49,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 try:
-    from src.schema import CellSchema, PortSchema, TreeSchema
+    from src.schema import (
+        CellSchema, PortSchema, TreeSchema,
+        LayoutContract, RelationConstraintSchema, BridgeProfileSchema,
+    )
     from src.log_config import get_logger
     from src.tokenizer import CellTokenizer
     from src.signature_introspector import (
@@ -61,7 +64,10 @@ try:
     from src.library_adapters import get_adapter_for_package
 except ImportError:
     try:
-        from schema import CellSchema, PortSchema, TreeSchema
+        from schema import (
+            CellSchema, PortSchema, TreeSchema,
+            LayoutContract, RelationConstraintSchema, BridgeProfileSchema,
+        )
         from log_config import get_logger
         from tokenizer import CellTokenizer
         from signature_introspector import (
@@ -72,7 +78,10 @@ except ImportError:
         )
         from library_adapters import get_adapter_for_package
     except ImportError:
-        from .schema import CellSchema, PortSchema, TreeSchema
+        from .schema import (
+            CellSchema, PortSchema, TreeSchema,
+            LayoutContract, RelationConstraintSchema, BridgeProfileSchema,
+        )
         from .log_config import get_logger
         from .tokenizer import CellTokenizer
         from .signature_introspector import (
@@ -85,17 +94,27 @@ except ImportError:
 
 logger = get_logger("universal_harvester")
 
+def _reg_semantics(key: str) -> Set[str]:
+    try:
+        from lattice import TypeRegistry
+        return {str(x).strip().lower() for x in (TypeRegistry.get_instance().get_verification_semantics(key) or ()) if str(x).strip()}
+    except Exception:
+        return set()
+
+
 def _is_language_primitive(type_name: str) -> bool:
     """Universal structural check for language-level primitives (zero domain hardcoding)."""
     if not type_name:
         return True
     clean = str(type_name).strip().lower()
-    if clean in ("none", "nonetype", "void", "noreturn", "any", "object", "ellipsis", "callable", "type"):
+    if clean in (_reg_semantics("void_types") | _reg_semantics("universal_top_types")):
+        return True
+    if clean in (None.__class__.__name__.lower(), Ellipsis.__class__.__name__.lower()):
         return True
     import builtins
     if hasattr(builtins, clean):
         obj = getattr(builtins, clean)
-        if isinstance(obj, type):
+        if isinstance(obj, type) or obj is callable:
             return True
     try:
         import typing
@@ -109,8 +128,18 @@ def _is_language_primitive(type_name: str) -> bool:
 CONSTRUCTED_STATE = "constructed"
 MUTATED_STATE = "mutated"
 
-_NONE_RETURNS = ("none", "nonetype", "void", "noreturn")
-_WILDCARD_RETURNS = ("any", "", "*", "top", "unknown")
+
+def _none_returns_set() -> Set[str]:
+    return _reg_semantics("void_types") | {None.__class__.__name__.lower()}
+
+
+def _wildcard_returns_set() -> Set[str]:
+    try:
+        from lattice import TypeRegistry
+        reg = TypeRegistry.get_instance()
+        return {str(x).lower() for x in (reg.get_declared_top_types() or ())} | _reg_semantics("universal_top_types") | {""}
+    except Exception:
+        return {""}
 
 
 def _is_constant_like(attr_name: str, val: Any) -> bool:
@@ -201,11 +230,12 @@ def _is_fully_untyped(inputs: Dict[str, Any], out_type: str) -> bool:
     Fully-untyped morphisms carry no verifiable dataflow semantics and are
     demoted so typed alternatives always win routing ties.
     """
-    if str(out_type).lower() not in ("any", "", "none", "*"):
+    untyped_set = _wildcard_returns_set() | {None.__class__.__name__.lower(), "none"}
+    if str(out_type).lower() not in untyped_set:
         return False
     for p in inputs.values():
         t = getattr(p, "type_name", None) if not isinstance(p, dict) else p.get("type_name")
-        if str(t).lower() not in ("any", "", "none", "*"):
+        if str(t).lower() not in untyped_set:
             return False
     return True
 
@@ -232,6 +262,10 @@ def _clean_enum_values(values: Optional[List[Any]]) -> Optional[List[Any]]:
     """Sanitizes enum domain choices into JSON-serializable primitives."""
     if not values:
         return None
+    cleaned = [_clean_default_value(v) for v in values]
+    return cleaned if cleaned else None
+
+
 def _resolve_port_carrier_and_type(
     adapter: Any,
     p_name: str,
@@ -243,18 +277,27 @@ def _resolve_port_carrier_and_type(
     p_abs = adapter.get_abstract_type(annotation, param_name=p_name)
     if not p_abs and doc_type:
         p_abs = adapter.get_abstract_type(doc_type, param_name=p_name)
-    if not p_abs and p_name.lower() in ("filepath", "filename", "file_path", "path", "file", "savepath", "pathname", "fname"):
-        p_abs = "path"
-    if p_abs == "path" and p_type in ("any", "str", "object", ""):
-        p_type = "path"
-CONVENTIONAL_ESTIMATOR_VERBS: Tuple[str, ...] = (
-    "fit",
-    "predict",
-    "transform",
-    "score",
-    "partial_fit",
-    "fit_transform",
-)
+    if not p_abs:
+        path_tokens: Set[str] = set()
+        try:
+            from lattice import TypeRegistry
+            path_tokens = set(TypeRegistry.get_instance().get_path_port_name_tokens())
+        except Exception:
+            path_tokens = set()
+        if p_name.lower() in path_tokens:
+            p_abs = "path"
+    if p_abs == "path":
+        p_t_low = str(p_type or "").strip().lower()
+        is_top_or_str = (not p_t_low or p_t_low == "str" or p_t_low == "object")
+        if not is_top_or_str:
+            try:
+                from lattice import TypeRegistry
+                is_top_or_str = TypeRegistry.get_instance().is_declared_top(p_t_low)
+            except Exception:
+                pass
+        if is_top_or_str:
+            p_type = "path"
+    return p_abs, p_type
 
 
 def _infer_port_role(
@@ -268,43 +311,133 @@ def _infer_port_role(
 ) -> Optional[str]:
     """
     Structural role extraction for harvested port signatures across all libraries.
-    Detects estimator contracts, source data inputs, and destination/model sinks.
+    Queries declared TypeRegistry verification semantics and generic carrier poset structure.
     """
     c_lower = str(callable_name).lower()
     p_lower = str(param_name).lower()
-    d_lower = str(doc_desc).lower()
     t_lower = str(param_type).lower()
 
-    # 1. Estimator verbs (conventional estimator shape)
-    is_estimator = any(
-        c_lower == v or c_lower.startswith(f"{v}_") or c_lower.endswith(f"_{v}") or v in c_lower
-        for v in CONVENTIONAL_ESTIMATOR_VERBS
-    )
-    if is_estimator:
-        if p_lower in ("features", "feature_data", "input_features"):
-            return "feature_input"
-        if p_lower in ("target", "targets", "labels", "label", "y_true", "y_pred"):
-            return "target_input"
+    reg = None
+    try:
+        from lattice import TypeRegistry
+        reg = TypeRegistry.get_instance()
+    except Exception:
+        reg = None
 
-    # 2. Source Data (reading/loading files or data input)
-    if any(prefix in c_lower for prefix in ("read", "load", "open", "from_")) or p_lower in ("filepath", "source_path", "filename", "file_path", "path", "image_path"):
-        if pos_idx == 0 or p_lower in ("filepath", "source_path", "filename", "file_path", "path", "image_path"):
-            return "source_data"
+    def _sem_set(key: str) -> Set[str]:
+        if reg is not None:
+            return set(reg.get_verification_semantics(key) or ())
+        return set()
 
-    # 3. Model / Destination Sink (writing/saving files or model persistence)
-    if any(prefix in c_lower for prefix in ("save", "write", "dump", "export", "to_")) or p_lower in ("dest_path", "savepath", "output_path", "target_path"):
-        if p_lower in ("dest_path", "savepath", "output_path", "target_path") or (pos_idx > 0 and t_lower in ("str", "path")):
-            return "model_sink"
+    src_tokens = _sem_set("source_port_tokens")
+    if reg is not None:
+        src_tokens |= set(reg.get_source_port_tokens() or ())
+    dest_tokens = _sem_set("dest_port_tokens")
+    if reg is not None:
+        dest_tokens |= set(reg.get_dest_port_tokens() or ())
+    src_verbs = _sem_set("ingress_verbs")
+    sink_verbs = _sem_set("egress_verbs")
+    key_roles = _sem_set("key_roles")
+    val_roles = _sem_set("assigned_value_roles")
+    model_roles = _sem_set("model_roles")
 
-    # 4. Data / Structural Input
-    if t_lower in ("dataframe", "table", "dataset", "ndarray", "matrix", "tensor") or p_lower in ("df", "dataframe", "data", "graph", "dataset", "x", "y"):
-        return "data_input"
+    if p_lower in key_roles:
+        return "key"
+    if p_lower in val_roles:
+        return "assigned_value"
 
-    # 5. Model Input
-    if p_lower in ("model", "estimator", "clf", "regressor"):
+    is_locator_type = (t_lower == "path" or (reg is not None and (reg.is_declared_top(t_lower) or t_lower == "str")))
+
+    # Source Data (reading/loading files or locator parameters)
+    if p_lower in src_tokens or (src_verbs and any(prefix in c_lower for prefix in src_verbs) and pos_idx == 0 and is_locator_type):
+        return "source_data"
+
+    # Model / Destination Sink (writing/saving files)
+    _path_locs = (set(reg.get_path_port_tokens() or ()) if reg is not None else set()) | {str.__name__}
+    if p_lower in dest_tokens or (sink_verbs and any(prefix in c_lower for prefix in sink_verbs) and pos_idx > 0 and t_lower in _path_locs):
+        return "model_sink"
+
+    # Generic carrier-driven Data Input via TypeRegistry (zero domain hardcoding)
+    is_prim_or_top = (reg is not None and (reg.is_declared_top(t_lower) or reg.is_scalar_primitive(t_lower) or t_lower == "object"))
+    if reg is not None and t_lower and not is_prim_or_top:
+        if reg.is_composite_carrier(t_lower) or reg.is_abstract_carrier(t_lower):
+            return "data_input"
+
+    # Model Input from registry-declared model roles
+    if p_lower in model_roles:
         return "model_input"
 
     return None
+
+
+def _populate_five_axis_contract(domain_name: str, cells: List[CellSchema]) -> List[CellSchema]:
+    """Populates 5-axis port fields, effects, relations, and neutral priority across harvested cells."""
+    dom = str(domain_name or "generic").strip().lower()
+    reg = None
+    try:
+        from lattice import TypeRegistry
+        reg = TypeRegistry.get_instance()
+    except Exception:
+        reg = None
+    for cell in cells:
+        cell.source_priority = 100
+        if not cell.effects and cell.postconditions:
+            cell.effects = list(cell.postconditions)
+        elif cell.effects is None:
+            cell.effects = []
+        if not cell.mutation_type:
+            cell.mutation_type = "io" if str(cell.node_role or "").lower() == "sink" else "pure"
+
+        cid = str(cell.cell_id or "")
+        is_oo_method = (str(cell.node_type or "").lower() == "method" and "." in cid)
+        owner_qual = cid.rsplit(".", 1)[0].lower() if is_oo_method else None
+        rels = list(cell.relations or [])
+        seen_rels = {(r.kind, r.source_port, r.target_port) for r in rels}
+
+        for io_dir, ports_obj in (("inputs", cell.inputs), ("outputs", cell.outputs)):
+            if not isinstance(ports_obj, dict):
+                continue
+            for pname, port in ports_obj.items():
+                if not isinstance(port, PortSchema):
+                    continue
+                tn = str(port.type_name or "any")
+                st = str(port.state or "any")
+                st_low = st.strip().lower()
+                is_top_state = (reg.is_declared_top_state(st_low) if reg is not None else st_low in _wildcard_returns_set())
+                if port.carrier is None:
+                    port.carrier = tn
+                if owner_qual and port.nominal_type is None:
+                    p_role = str(port.port_role or "").lower()
+                    receiver_roles = _reg_semantics("receiver_roles")
+                    model_out_roles = _reg_semantics("model_output_roles")
+                    if (io_dir == "outputs" and p_role in model_out_roles) or (io_dir == "inputs" and (pname == "self" or p_role in receiver_roles)):
+                        port.nominal_type = owner_qual
+                if port.layout is None:
+                    sc = port.shape_contract if isinstance(port.shape_contract, dict) else {}
+                    rk = port.rank if port.rank is not None else sc.get("ndim")
+                    dt = port.element_type or sc.get("dtype")
+                    sh = sc.get("shape")
+                    sk_low = str(port.structure_kind or "").lower()
+                    poly = bool(sc.get("rank_polymorphic")) or (rk is None and sk_low in _reg_semantics("polymorphic_structure_kinds"))
+                    port.layout = LayoutContract(rank=rk, shape=sh, dtype=dt, rank_polymorphic=poly, length=sc.get("len"))
+                if port.semantics is None:
+                    port.semantics = "any" if (is_top_state or st_low == "constant") else f"{dom}.{st_low}"
+                if port.typestate is None:
+                    port.typestate = "any" if is_top_state else f"{dom}::{st_low}"
+                if not port.invariants and port.qualifiers:
+                    port.invariants = [
+                        ".".join(str(x).lower() for x in q) if isinstance(q, (list, tuple)) else str(q).lower()
+                        for q in port.qualifiers
+                    ]
+                if io_dir == "inputs":
+                    if port.complement_of_port and ("complement_of", pname, port.complement_of_port) not in seen_rels:
+                        rels.append(RelationConstraintSchema(kind="complement_of", source_port=pname, target_port=port.complement_of_port))
+                        seen_rels.add(("complement_of", pname, port.complement_of_port))
+                    if port.disjoint_from_port and ("disjoint_from", pname, port.disjoint_from_port) not in seen_rels:
+                        rels.append(RelationConstraintSchema(kind="disjoint_from", source_port=pname, target_port=port.disjoint_from_port))
+                        seen_rels.add(("disjoint_from", pname, port.disjoint_from_port))
+        cell.relations = rels
+    return cells
 
 
 def _harvest_constant_cell(
@@ -561,6 +694,13 @@ class UniversalHarvester:
             reads[m_name] = _self_attribute_reads(src, method_names)
             calls[m_name] = _self_method_calls(src)
 
+        state_guard_fns: Set[str] = set()
+        try:
+            from lattice import TypeRegistry
+            state_guard_fns = set(TypeRegistry.get_instance().get_verification_semantics("state_guard_functions") or ())
+        except Exception:
+            state_guard_fns = set()
+
         # Direct evidence: reads an attribute a mutator writes
         frontier: List[str] = []
         for m_name in state_dependent:
@@ -571,7 +711,7 @@ class UniversalHarvester:
                 is_dep = True
             elif any(r.endswith("_") and not r.startswith("_") and not r.endswith("__") for r in m_reads):
                 is_dep = True
-            elif "check_is_fitted" in m_src:
+            elif state_guard_fns and any(gf in m_src for gf in state_guard_fns):
                 is_dep = True
 
             if is_dep:
@@ -616,7 +756,7 @@ class UniversalHarvester:
         has_source = bool(src)
         if has_source and _returns_self_in_source(src):
             return True, "source:return self"
-        if ret_clean and ret_clean.lower() not in _NONE_RETURNS and ret_clean.lower() not in _WILDCARD_RETURNS:
+        if ret_clean and ret_clean.lower() not in _none_returns_set() and ret_clean.lower() not in _wildcard_returns_set():
             # Concrete annotated return: only the stub-only Self channel can
             # still apply (no source to contradict the annotation).
             if not has_source and not ret_is_union and ret_clean.lower() == "self":
@@ -655,7 +795,8 @@ class UniversalHarvester:
         # --- Abstract Protocol Carrier Check ---
         # Compound collections, tables, and tensors carrying data are domain carriers
         abs_t = abstract_type or self.adapter.get_abstract_type(type_name)
-        if abs_t and abs_t not in ("scalar", "text", "logical", "path", "any"):
+        non_domain_abs = _reg_semantics("atomic_carrier_roots") | _reg_semantics("universal_top_types")
+        if abs_t and abs_t not in non_domain_abs:
             return True
 
         if _is_language_primitive(type_name):
@@ -813,7 +954,7 @@ class UniversalHarvester:
                         )
 
                         p_enum = _clean_enum_values(self.adapter.get_parameter_domains(p.annotation, doc, p.name))
-                        if p_enum and p_type in ("int", "str", "any"):
+                        if p_enum and p_type in (_wildcard_returns_set() | {int.__name__, str.__name__}):
                             p_type = "Enum"
                         p_default = None if is_req else _clean_default_value(p.default)
 
@@ -849,7 +990,7 @@ class UniversalHarvester:
 
                     ret_type = extract_clean_type_name(sig.return_annotation)
                     ret_clean = ret_type if ret_type else "any"
-                    ret_is_none = ret_clean.lower() in _NONE_RETURNS
+                    ret_is_none = ret_clean.lower() in _none_returns_set()
 
                     return_specs = self.adapter.get_return_ports(sig.return_annotation, doc)
                     if ret_clean == "any" and return_specs and return_specs[0][1] != "any":
@@ -873,7 +1014,7 @@ class UniversalHarvester:
 
                     is_sink = (
                         not produces_domain
-                        and (ret_is_none or ret_clean.lower() in ("none", "nonetype", "bool", "int", "void"))
+                        and (ret_is_none or ret_clean.lower() in (_none_returns_set() | {bool.__name__, int.__name__}))
                         and len(return_specs) <= 1
                         and self.adapter.is_egress_sink(fn, attr_name, list(inputs.keys()), produces_domain, inputs=inputs)
                     )
@@ -893,9 +1034,10 @@ class UniversalHarvester:
                                 description=f"Output {state}"
                             )
                         }
+                        _p_hints = _reg_semantics("path_port_hints") | _reg_semantics("path_roles")
                         path_ports = [
                             p_name for p_name, p_schema in inputs.items()
-                            if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in ("path", "dest", "file", "buf", "fp"))
+                            if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in _p_hints)
                         ]
                         if path_ports:
                             dest_port = path_ports[0]
@@ -1062,9 +1204,6 @@ class UniversalHarvester:
                         prio = min(prio + 50, 100)
 
                     tokens = sorted(list(CellTokenizer.tokenize_identifier(attr_name)))
-                    if "split" in attr_name.lower() or "model_selection" in m_name.lower():
-                        tokens.extend(["validation", "verification", "partition", "allocate", "alloc", "verif", "holdout"])
-                        tokens = sorted(list(set(tokens)))
 
                     cell = CellSchema(
                         cell_id=cid,
@@ -1090,7 +1229,7 @@ class UniversalHarvester:
                 except Exception:
                     continue
 
-        return cells
+        return _populate_five_axis_contract(self.domain_name, cells)
 
     # ------------------------------------------------------------------
     # Per-class harvest: constructor, constants, instance/static/class methods
@@ -1192,7 +1331,23 @@ class UniversalHarvester:
                         required_template_args.append(f"{{{p.name}}}")
 
                 cls_tokens = CellTokenizer.tokenize_identifier(c_name)
-                if any(b.__name__ in ("BaseEstimator", "ClassifierMixin", "RegressorMixin") for b in getattr(cls, "__mro__", ())):
+                _est_bases: Set[str] = set()
+                _mut_methods: Set[str] = set()
+                _cons_methods: Set[str] = set()
+                try:
+                    from lattice import TypeRegistry
+                    _tr = TypeRegistry.get_instance()
+                    _est_bases = set(_tr.get_verification_semantics("estimator_base_classes") or ())
+                    _mut_methods = set(_tr.get_verification_semantics("estimator_mutator_methods") or ())
+                    _cons_methods = set(_tr.get_verification_semantics("estimator_consumer_methods") or ())
+                except Exception:
+                    pass
+                has_protocol = (
+                    bool(_mut_methods and _cons_methods)
+                    and any(hasattr(cls, mm) for mm in _mut_methods)
+                    and any(hasattr(cls, cm) for cm in _cons_methods)
+                )
+                if any(b.__name__ in _est_bases for b in getattr(cls, "__mro__", ())) or has_protocol:
                     cls_tokens.add("model")
                 ctor_tokens = sorted(list(cls_tokens))
                 ctor_expr = _public_alias(cls_mod, c_name)
@@ -1375,7 +1530,7 @@ class UniversalHarvester:
 
                 ret_type = extract_clean_type_name(sig.return_annotation)
                 ret_clean = ret_type if ret_type else "any"
-                ret_is_none = ret_clean.lower() in _NONE_RETURNS
+                ret_is_none = ret_clean.lower() in _none_returns_set()
 
                 method_records.append({
                     "cid": cid,
@@ -1442,7 +1597,7 @@ class UniversalHarvester:
                         _sig = self.adapter.resolve_callable_signature(member_fn, callable_name=attr_name, parent_cls_name=c_name, mod=m)
                         if _sig is not None:
                             _ret = extract_clean_type_name(_sig.return_annotation)
-                            if _ret.lower() in ("none", "nonetype", "void", "noreturn", "self"):
+                            if _ret.lower() in (_none_returns_set() | {"self"}):
                                 analysis_mutators.add(attr_name)
                     except Exception:
                         pass
@@ -1454,7 +1609,7 @@ class UniversalHarvester:
                     _sig = self.adapter.resolve_callable_signature(member_fn, callable_name=attr_name, parent_cls_name=c_name, mod=m)
                     if _sig is not None:
                         _ret = extract_clean_type_name(_sig.return_annotation)
-                        if _ret.lower() in ("none", "nonetype", "void", "noreturn"):
+                        if _ret.lower() in _none_returns_set():
                             analysis_mutators.add(attr_name)
                 except Exception:
                     pass
@@ -1504,7 +1659,7 @@ class UniversalHarvester:
         sig = rec["sig"]
         params: List[inspect.Parameter] = rec["params"]
         ret_clean: str = rec["ret_clean"]
-        ret_is_none: bool = bool(rec.get("ret_is_none", ret_clean.lower() in _NONE_RETURNS))
+        ret_is_none: bool = bool(rec.get("ret_is_none", ret_clean.lower() in _none_returns_set()))
         is_static: bool = rec["is_static"]
         is_class: bool = rec["is_class"]
         cid: str = rec["cid"]
@@ -1737,7 +1892,7 @@ class UniversalHarvester:
             )
             is_sink = (
                 not produces_domain
-                and (ret_is_none or ret_clean.lower() in ("none", "nonetype", "bool", "int", "void"))
+                and (ret_is_none or ret_clean.lower() in (_none_returns_set() | {bool.__name__, int.__name__}))
                 and len(return_specs) <= 1
                 and self.adapter.is_egress_sink(fn, attr, list(inputs.keys()), produces_domain, inputs=inputs)
             )
@@ -1753,9 +1908,10 @@ class UniversalHarvester:
                         description=f"Output {out_state}"
                     )
                 }
+                _p_hints = _reg_semantics("path_port_hints") | _reg_semantics("path_roles")
                 path_ports = [
                     p_name for p_name, p_schema in inputs.items()
-                    if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in ("path", "dest", "file", "buf", "fp"))
+                    if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in _p_hints)
                 ]
                 if path_ports:
                     dest_port = path_ports[0]
@@ -1764,7 +1920,7 @@ class UniversalHarvester:
                         if f"{{{dest_port}}}" not in required_template_args:
                             required_template_args.append(f"{{{dest_port}}}")
                 code_template = f"{cls_expr}.{attr}({', '.join(required_template_args)})\n{{output_var}} = 'done'"
-            elif ret_clean.lower() in _NONE_RETURNS:
+            elif ret_clean.lower() in _none_returns_set():
                 stage, node_type, node_role = 2, "function", "transform"
                 out_state = MUTATED_STATE
                 out_type = "any"
@@ -1959,9 +2115,10 @@ class UniversalHarvester:
                         description=f"Output {out_state}"
                     )
                 }
+                _p_hints = _reg_semantics("path_port_hints") | _reg_semantics("path_roles")
                 path_ports = [
                     p_name for p_name, p_schema in inputs.items()
-                    if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in ("path", "dest", "file", "buf", "fp"))
+                    if p_schema.abstract_type == "path" or any(ind in p_name.lower() for ind in _p_hints)
                 ]
                 if path_ports:
                     dest_port = path_ports[0]
@@ -2040,12 +2197,6 @@ class UniversalHarvester:
             prio = min(prio + 50, 100)
 
         method_tokens = CellTokenizer.tokenize_identifier(attr) | CellTokenizer.tokenize_identifier(c_name)
-        if any(b.__name__ in ("BaseEstimator", "ClassifierMixin", "RegressorMixin") for b in getattr(cls, "__mro__", ())):
-            method_tokens.add("model")
-        if attr.lower() in ("fit", "fit_transform"):
-            method_tokens.update({"train", "training", "model", "learn"})
-        if "split" in attr.lower() or "split" in c_name.lower() or "model_selection" in cls_mod.lower():
-            method_tokens.update({"validation", "verification", "partition", "allocate", "alloc", "verif", "holdout"})
         tokens = sorted(list(method_tokens))
         method_dep_mod = cls_mod.split("._", 1)[0] if "._" in cls_mod else cls_mod
 
@@ -2107,9 +2258,6 @@ class UniversalHarvester:
                 or next((v for k, v in old_knowledge.items() if k.endswith(suffix)), None)
             )
             if match:
-                old_prio = match.get("source_priority", 100)
-                if old_prio <= 10:
-                    cell.source_priority = old_prio
                 old_tags = match.get("semantic_tags", [])
                 if old_tags:
                     cell.semantic_tags = list(dict.fromkeys(cell.semantic_tags + old_tags))

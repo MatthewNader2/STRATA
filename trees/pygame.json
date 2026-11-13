@@ -253,10 +253,6 @@
         "description": "Absolute millisecond tick counter since engine initialization."
       },
       {
-        "name": "uninitialized",
-        "description": "Resource or engine subsystem not yet allocated or initialized."
-      },
-      {
         "name": "vector_cartesian",
         "description": "2D Cartesian coordinate vector handle."
       }
@@ -292,7 +288,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "{status} = pygame.init()",
@@ -300,7 +310,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_QUIT",
@@ -329,7 +341,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -342,7 +368,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.closed",
+          "typestate": "pygame::closed",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.quit()\n{success} = True",
@@ -350,7 +390,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "success"
+      "primary_out": "success",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_SET_MODE",
@@ -382,7 +424,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -395,7 +451,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
+          "invariants": []
         }
       },
       "code_template": "{screen} = pygame.display.set_mode({size})",
@@ -403,7 +464,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "screen"
+      "primary_out": "screen",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SET_CAPTION",
@@ -432,7 +495,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "Pygame Window"
+          "default_value": "Pygame Window",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -445,7 +522,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.display.set_caption({title})\n{status} = True",
@@ -453,7 +544,9 @@
         "import pygame"
       ],
       "primary_in": "title",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GET_SURFACE",
@@ -481,7 +574,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
+          "invariants": []
         }
       },
       "code_template": "{screen} = pygame.display.get_surface()",
@@ -489,7 +587,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "screen"
+      "primary_out": "screen",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_CLOCK_INIT",
@@ -517,7 +617,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "clock",
+          "layout": null,
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "{clock} = pygame.time.Clock()",
@@ -525,7 +630,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "clock"
+      "primary_out": "clock",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_CLOCK_TICK",
@@ -553,7 +660,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "clock",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "framerate": {
           "type_name": "int",
@@ -566,7 +678,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -579,7 +705,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.time_delta",
+          "typestate": "pygame::time_delta",
+          "invariants": []
         }
       },
       "code_template": "{delta_time} = {clock}.tick({framerate})",
@@ -587,7 +727,9 @@
         "import pygame"
       ],
       "primary_in": "clock",
-      "primary_out": "delta_time"
+      "primary_out": "delta_time",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TIME_GET_TICKS",
@@ -615,7 +757,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.time_stamp",
+          "typestate": "pygame::time_stamp",
+          "invariants": []
         }
       },
       "code_template": "{ticks} = pygame.time.get_ticks()",
@@ -623,7 +779,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "ticks"
+      "primary_out": "ticks",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TIME_DELAY",
@@ -652,7 +810,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10
+          "default_value": 10,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -665,7 +837,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.time_delta",
+          "typestate": "pygame::time_delta",
+          "invariants": []
         }
       },
       "code_template": "{actual_delay} = pygame.time.delay({milliseconds})",
@@ -673,7 +859,9 @@
         "import pygame"
       ],
       "primary_in": "milliseconds",
-      "primary_out": "actual_delay"
+      "primary_out": "actual_delay",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_EVENT_GET",
@@ -711,7 +899,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.event_queue",
+          "typestate": "pygame::event_queue",
+          "invariants": []
         }
       },
       "code_template": "{events} = pygame.event.get()",
@@ -719,7 +923,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "events"
+      "primary_out": "events",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_EVENT_POLL",
@@ -746,7 +952,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "event",
+          "layout": null,
+          "semantics": "pygame.event_object",
+          "typestate": "pygame::event_object",
+          "invariants": []
         }
       },
       "code_template": "{event} = pygame.event.poll()",
@@ -754,7 +965,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "event"
+      "primary_out": "event",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_KEY_GET_PRESSED",
@@ -782,7 +995,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "tuple",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.key_map",
+          "typestate": "pygame::key_map",
+          "invariants": []
         }
       },
       "code_template": "{keys} = pygame.key.get_pressed()",
@@ -790,7 +1017,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "keys"
+      "primary_out": "keys",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MOUSE_GET_POS",
@@ -818,7 +1047,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "code_template": "{pos} = pygame.mouse.get_pos()",
@@ -826,7 +1069,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "pos"
+      "primary_out": "pos",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MOUSE_GET_PRESSED",
@@ -853,7 +1098,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[bool, bool, bool]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.mouse_state",
+          "typestate": "pygame::mouse_state",
+          "invariants": []
         }
       },
       "code_template": "{buttons} = pygame.mouse.get_pressed()",
@@ -861,7 +1120,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "buttons"
+      "primary_out": "buttons",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_EVENT_TYPE_CHECK",
@@ -889,7 +1150,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "event",
+          "layout": null,
+          "semantics": "pygame.event_object",
+          "typestate": "pygame::event_object",
+          "invariants": []
         },
         "target_type": {
           "type_name": "int",
@@ -902,7 +1168,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -915,7 +1195,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         }
       },
       "code_template": "{matches} = ({event}.type == {target_type})",
@@ -923,7 +1217,9 @@
         "import pygame"
       ],
       "primary_in": "event",
-      "primary_out": "matches"
+      "primary_out": "matches",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_CREATE",
@@ -956,7 +1252,21 @@
           "default_value": [
             800,
             600
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -969,7 +1279,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "{surface} = pygame.Surface({size})",
@@ -977,7 +1292,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "surface"
+      "primary_out": "surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_FILL",
@@ -1005,7 +1322,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -1023,7 +1345,21 @@
             0,
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1036,7 +1372,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{surface}.fill({color})\n{out_surface} = {surface}",
@@ -1044,7 +1385,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_BLIT",
@@ -1072,7 +1415,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "source_surface": {
           "type_name": "surface",
@@ -1084,7 +1432,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "dest_pos": {
           "type_name": "Tuple[int, int]",
@@ -1100,7 +1453,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1113,7 +1480,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{dest_surface}.blit({source_surface}, {dest_pos})\n{out_surface} = {dest_surface}",
@@ -1121,7 +1493,9 @@
         "import pygame"
       ],
       "primary_in": "dest_surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_SURFACE_CONVERT_ALPHA",
@@ -1149,7 +1523,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1162,7 +1541,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{converted_surface} = {surface}.convert_alpha()",
@@ -1170,7 +1554,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "converted_surface"
+      "primary_out": "converted_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_CONVERT",
@@ -1198,7 +1584,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1211,7 +1602,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{converted_surface} = {surface}.convert()",
@@ -1219,7 +1615,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "converted_surface"
+      "primary_out": "converted_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_GET_RECT",
@@ -1247,7 +1645,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1260,7 +1663,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{rect} = {surface}.get_rect()",
@@ -1268,7 +1676,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "rect"
+      "primary_out": "rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SURFACE_GET_SIZE",
@@ -1296,7 +1706,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1309,7 +1724,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "code_template": "{size} = {surface}.get_size()",
@@ -1317,7 +1746,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "size"
+      "primary_out": "size",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_INIT",
@@ -1346,7 +1777,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "y": {
           "type_name": "int",
@@ -1359,7 +1804,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "width": {
           "type_name": "int",
@@ -1373,7 +1832,21 @@
           "element_type": "int64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 100
+          "default_value": 100,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         },
         "height": {
           "type_name": "int",
@@ -1387,7 +1860,21 @@
           "element_type": "int64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 100
+          "default_value": 100,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1400,7 +1887,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{rect} = pygame.Rect({x}, {y}, {width}, {height})",
@@ -1408,7 +1900,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "rect"
+      "primary_out": "rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_MOVE",
@@ -1436,7 +1930,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "dx": {
           "type_name": "int",
@@ -1449,7 +1948,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "dy": {
           "type_name": "int",
@@ -1462,7 +1975,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1475,7 +2002,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{moved_rect} = {rect}.move({dx}, {dy})",
@@ -1483,7 +2015,9 @@
         "import pygame"
       ],
       "primary_in": "rect",
-      "primary_out": "moved_rect"
+      "primary_out": "moved_rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_MOVE_IP",
@@ -1511,7 +2045,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "dx": {
           "type_name": "int",
@@ -1524,7 +2063,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "dy": {
           "type_name": "int",
@@ -1537,7 +2090,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1550,7 +2117,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{rect}.move_ip({dx}, {dy})\n{out_rect} = {rect}",
@@ -1558,7 +2130,9 @@
         "import pygame"
       ],
       "primary_in": "rect",
-      "primary_out": "out_rect"
+      "primary_out": "out_rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_COLLIDERECT",
@@ -1586,7 +2160,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "rect_b": {
           "type_name": "rect",
@@ -1598,7 +2177,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1611,7 +2195,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         }
       },
       "code_template": "{collided} = {rect_a}.colliderect({rect_b})",
@@ -1619,7 +2217,9 @@
         "import pygame"
       ],
       "primary_in": "rect_a",
-      "primary_out": "collided"
+      "primary_out": "collided",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_COLLIDEPOINT",
@@ -1647,7 +2247,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "point": {
           "type_name": "Tuple[int, int]",
@@ -1663,7 +2268,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1676,7 +2295,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         }
       },
       "code_template": "{inside} = {rect}.collidepoint({point})",
@@ -1684,7 +2317,9 @@
         "import pygame"
       ],
       "primary_in": "rect",
-      "primary_out": "inside"
+      "primary_out": "inside",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_COLLIDELIST",
@@ -1712,7 +2347,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "rect_list": {
           "type_name": "list",
@@ -1734,7 +2374,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.geometry_list",
+          "typestate": "pygame::geometry_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1747,7 +2403,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.index_state",
+          "typestate": "pygame::index_state",
+          "invariants": []
         }
       },
       "code_template": "{index} = {rect}.collidelist({rect_list})",
@@ -1755,7 +2425,9 @@
         "import pygame"
       ],
       "primary_in": "rect",
-      "primary_out": "index"
+      "primary_out": "index",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_CLAMP",
@@ -1783,7 +2455,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "outer_rect": {
           "type_name": "rect",
@@ -1795,7 +2472,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1808,7 +2490,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{clamped_rect} = {inner_rect}.clamp({outer_rect})",
@@ -1816,7 +2503,9 @@
         "import pygame"
       ],
       "primary_in": "inner_rect",
-      "primary_out": "clamped_rect"
+      "primary_out": "clamped_rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_RECT_CENTER_SET",
@@ -1844,7 +2533,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "center_pos": {
           "type_name": "Tuple[int, int]",
@@ -1860,7 +2554,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1873,7 +2581,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "code_template": "{rect}.center = {center_pos}\n{out_rect} = {rect}",
@@ -1881,7 +2594,9 @@
         "import pygame"
       ],
       "primary_in": "rect",
-      "primary_out": "out_rect"
+      "primary_out": "out_rect",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_RECT",
@@ -1909,7 +2624,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -1926,7 +2646,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "rect": {
           "type_name": "rect",
@@ -1938,7 +2672,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1951,7 +2690,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.rect({surface}, {color}, {rect})\n{out_surface} = {surface}",
@@ -1959,7 +2703,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_CIRCLE",
@@ -1987,7 +2733,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2004,7 +2755,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "center": {
           "type_name": "Tuple[int, int]",
@@ -2020,7 +2785,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "radius": {
           "type_name": "int",
@@ -2033,7 +2812,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10
+          "default_value": 10,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2046,7 +2839,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.circle({surface}, {color}, {center}, {radius})\n{out_surface} = {surface}",
@@ -2054,7 +2852,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_LINE",
@@ -2082,7 +2882,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2099,7 +2904,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "start_pos": {
           "type_name": "Tuple[int, int]",
@@ -2115,7 +2934,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "end_pos": {
           "type_name": "Tuple[int, int]",
@@ -2131,7 +2964,21 @@
           "default_value": [
             100,
             100
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "width": {
           "type_name": "int",
@@ -2144,7 +2991,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2157,7 +3018,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.line({surface}, {color}, {start_pos}, {end_pos}, {width})\n{out_surface} = {surface}",
@@ -2165,7 +3031,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_LINES",
@@ -2193,7 +3061,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2210,7 +3083,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "closed": {
           "type_name": "bool",
@@ -2223,7 +3110,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         },
         "points": {
           "type_name": "list",
@@ -2245,7 +3146,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate_list",
+          "typestate": "pygame::coordinate_list",
+          "invariants": []
         },
         "width": {
           "type_name": "int",
@@ -2258,7 +3175,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2271,7 +3202,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.lines({surface}, {color}, {closed}, {points}, {width})\n{out_surface} = {surface}",
@@ -2279,7 +3215,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_POLYGON",
@@ -2307,7 +3245,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2324,7 +3267,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "points": {
           "type_name": "list",
@@ -2346,7 +3303,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate_list",
+          "typestate": "pygame::coordinate_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2359,7 +3332,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.polygon({surface}, {color}, {points})\n{out_surface} = {surface}",
@@ -2367,7 +3345,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_ELLIPSE",
@@ -2395,7 +3375,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2412,7 +3397,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "rect": {
           "type_name": "rect",
@@ -2424,7 +3423,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2437,7 +3441,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.ellipse({surface}, {color}, {rect})\n{out_surface} = {surface}",
@@ -2445,7 +3454,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DISPLAY_FLIP",
@@ -2473,7 +3484,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2486,7 +3502,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.flushed",
+          "typestate": "pygame::flushed",
+          "invariants": []
         }
       },
       "code_template": "pygame.display.flip()\n{status} = True",
@@ -2494,7 +3524,9 @@
         "import pygame"
       ],
       "primary_in": "screen",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_DISPLAY_UPDATE",
@@ -2522,7 +3554,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "rect_list": {
           "type_name": "list",
@@ -2544,7 +3581,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.geometry_list",
+          "typestate": "pygame::geometry_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2557,7 +3610,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.flushed",
+          "typestate": "pygame::flushed",
+          "invariants": []
         }
       },
       "code_template": "pygame.display.update({rect_list})\n{status} = True",
@@ -2565,7 +3632,9 @@
         "import pygame"
       ],
       "primary_in": "screen",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_FONT_INIT",
@@ -2592,7 +3661,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "pygame.font.init()\n{status} = True",
@@ -2600,7 +3683,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_FONT_QUIT",
@@ -2629,7 +3714,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2642,7 +3741,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.closed",
+          "typestate": "pygame::closed",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.font.quit()\n{status} = True",
@@ -2650,7 +3763,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_FONT_SYSFONT",
@@ -2679,7 +3794,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "size": {
           "type_name": "int",
@@ -2692,7 +3821,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "bold": {
           "type_name": "bool",
@@ -2705,7 +3848,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "italic": {
           "type_name": "bool",
@@ -2718,7 +3875,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2731,7 +3902,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "font",
+          "layout": null,
+          "semantics": "pygame.font_handle",
+          "typestate": "pygame::font_handle",
+          "invariants": []
         }
       },
       "code_template": "{font} = pygame.font.SysFont({name}, {size}, {bold}, {italic})",
@@ -2739,7 +3915,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "font"
+      "primary_out": "font",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_FONT_RENDER",
@@ -2767,7 +3945,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "font",
+          "layout": null,
+          "semantics": "pygame.font_handle",
+          "typestate": "pygame::font_handle",
+          "invariants": []
         },
         "text": {
           "type_name": "str",
@@ -2780,7 +3963,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "antialias": {
           "type_name": "bool",
@@ -2793,7 +3990,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -2810,7 +4021,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2823,7 +4048,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.rendered",
+          "typestate": "pygame::rendered",
+          "invariants": []
         }
       },
       "code_template": "{text_surface} = {font}.render({text}, {antialias}, {color})",
@@ -2831,7 +4061,9 @@
         "import pygame"
       ],
       "primary_in": "font",
-      "primary_out": "text_surface"
+      "primary_out": "text_surface",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_IMAGE_LOAD",
@@ -2861,7 +4093,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2874,7 +4120,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "{surface} = pygame.image.load({image_path})",
@@ -2882,7 +4133,9 @@
         "import pygame"
       ],
       "primary_in": "image_path",
-      "primary_out": "surface"
+      "primary_out": "surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_IMAGE_SAVE",
@@ -2910,7 +4163,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "file_path": {
           "type_name": "str",
@@ -2924,7 +4182,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2937,7 +4209,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.flushed",
+          "typestate": "pygame::flushed",
+          "invariants": []
         }
       },
       "code_template": "pygame.image.save({surface}, {file_path})\n{status} = True",
@@ -2945,7 +4231,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_MIXER_INIT",
@@ -2974,7 +4262,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "size": {
           "type_name": "int",
@@ -2987,7 +4289,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "channels": {
           "type_name": "int",
@@ -3000,7 +4316,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "buffer": {
           "type_name": "int",
@@ -3013,7 +4343,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3026,7 +4370,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "pygame.mixer.init(frequency={frequency}, size={size}, channels={channels}, buffer={buffer})\n{status} = True",
@@ -3034,7 +4392,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MIXER_QUIT",
@@ -3063,7 +4423,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3076,7 +4450,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.closed",
+          "typestate": "pygame::closed",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.mixer.quit()\n{status} = True",
@@ -3084,7 +4472,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_SOUND_LOAD",
@@ -3114,7 +4504,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3127,7 +4531,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sound",
+          "layout": null,
+          "semantics": "pygame.sound_handle",
+          "typestate": "pygame::sound_handle",
+          "invariants": []
         }
       },
       "code_template": "{sound} = pygame.mixer.Sound({file_path})",
@@ -3135,7 +4544,9 @@
         "import pygame"
       ],
       "primary_in": "file_path",
-      "primary_out": "sound"
+      "primary_out": "sound",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SOUND_PLAY",
@@ -3163,7 +4574,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sound",
+          "layout": null,
+          "semantics": "pygame.sound_handle",
+          "typestate": "pygame::sound_handle",
+          "invariants": []
         },
         "loops": {
           "type_name": "int",
@@ -3176,7 +4592,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3189,7 +4619,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "channel",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "code_template": "{channel} = {sound}.play(loops={loops})",
@@ -3197,7 +4632,9 @@
         "import pygame"
       ],
       "primary_in": "sound",
-      "primary_out": "channel"
+      "primary_out": "channel",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SOUND_STOP",
@@ -3225,7 +4662,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sound",
+          "layout": null,
+          "semantics": "pygame.sound_handle",
+          "typestate": "pygame::sound_handle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3238,7 +4680,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{sound}.stop()\n{status} = True",
@@ -3246,7 +4702,9 @@
         "import pygame"
       ],
       "primary_in": "sound",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GAME_LOOP",
@@ -3275,13 +4733,28 @@
           "state": "loop_condition",
           "abstract_type": "logical",
           "required": true,
+          "default_value": true,
           "port_role": "data_input",
           "description": "Loop continuation flag.",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         },
         "body": {
           "type_name": "str",
@@ -3294,7 +4767,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3307,7 +4794,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "State",
+          "layout": null,
+          "semantics": "pygame.terminated",
+          "typestate": "pygame::terminated",
+          "invariants": []
         }
       },
       "code_template": "while {running}:\n    {body}\n{final_state} = None",
@@ -3315,7 +4807,9 @@
         "import pygame"
       ],
       "primary_in": "running",
-      "primary_out": "final_state"
+      "primary_out": "final_state",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_EVENT_LOOP",
@@ -3350,7 +4844,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3363,7 +4871,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "event",
+          "layout": null,
+          "semantics": "pygame.event_object",
+          "typestate": "pygame::event_object",
+          "invariants": []
         },
         "completed": {
           "type_name": "bool",
@@ -3374,7 +4887,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.flushed",
+          "typestate": "pygame::flushed",
+          "invariants": []
         }
       },
       "code_template": "for {event} in pygame.event.get():\n    {body}\n{completed} = True",
@@ -3382,7 +4909,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "completed"
+      "primary_out": "completed",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_SCALE",
@@ -3410,7 +4939,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "size": {
           "type_name": "Tuple[int, int]",
@@ -3427,7 +4961,21 @@
           "default_value": [
             100,
             100
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3440,7 +4988,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{scaled_surface} = pygame.transform.scale({surface}, {size})",
@@ -3448,7 +5001,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "scaled_surface"
+      "primary_out": "scaled_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_ROTOZOOM",
@@ -3476,7 +5031,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "angle": {
           "type_name": "float",
@@ -3489,7 +5049,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "scale": {
           "type_name": "float",
@@ -3502,7 +5076,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 1.0
+          "default_value": 1.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3515,7 +5103,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{transformed_surface} = pygame.transform.rotozoom({surface}, {angle}, {scale})",
@@ -3523,7 +5116,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "transformed_surface"
+      "primary_out": "transformed_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_ROTATE",
@@ -3551,7 +5146,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "angle": {
           "type_name": "float",
@@ -3564,7 +5164,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3577,7 +5191,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{rotated_surface} = pygame.transform.rotate({surface}, {angle})",
@@ -3585,7 +5204,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "rotated_surface"
+      "primary_out": "rotated_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_FLIP",
@@ -3613,7 +5234,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "flip_x": {
           "type_name": "bool",
@@ -3626,7 +5252,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false
+          "default_value": false,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "flip_y": {
           "type_name": "bool",
@@ -3639,7 +5279,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false
+          "default_value": false,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3652,7 +5306,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{flipped_surface} = pygame.transform.flip({surface}, {flip_x}, {flip_y})",
@@ -3660,7 +5319,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "flipped_surface"
+      "primary_out": "flipped_surface",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_SMOOTHSCALE",
@@ -3688,7 +5349,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "size": {
           "type_name": "Tuple[int, int]",
@@ -3705,7 +5371,21 @@
           "default_value": [
             100,
             100
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3718,7 +5398,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{smooth_surface} = pygame.transform.smoothscale({surface}, {size})",
@@ -3726,7 +5411,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "smooth_surface"
+      "primary_out": "smooth_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_SCALE_BY",
@@ -3754,7 +5441,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "factor": {
           "type_name": "float",
@@ -3767,7 +5459,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 1.0
+          "default_value": 1.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3780,7 +5486,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{scaled_surface} = pygame.transform.scale_by({surface}, {factor})",
@@ -3788,7 +5499,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "scaled_surface"
+      "primary_out": "scaled_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TRANSFORM_CHOP",
@@ -3816,7 +5529,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "rect": {
           "type_name": "rect",
@@ -3828,7 +5546,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3841,7 +5564,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{chopped_surface} = pygame.transform.chop({surface}, {rect})",
@@ -3849,7 +5577,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "chopped_surface"
+      "primary_out": "chopped_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_INIT",
@@ -3878,7 +5608,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "y": {
           "type_name": "float",
@@ -3891,7 +5635,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3904,7 +5662,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{vector} = pygame.math.Vector2({x}, {y})",
@@ -3912,7 +5675,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "vector"
+      "primary_out": "vector",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_ADD",
@@ -3940,7 +5705,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         },
         "v2": {
           "type_name": "vector2",
@@ -3952,7 +5722,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3965,7 +5740,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{v_out} = {v1} + {v2}",
@@ -3973,7 +5753,9 @@
         "import pygame"
       ],
       "primary_in": "v1",
-      "primary_out": "v_out"
+      "primary_out": "v_out",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_SUB",
@@ -4001,7 +5783,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         },
         "v2": {
           "type_name": "vector2",
@@ -4013,7 +5800,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4026,7 +5818,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{v_out} = {v1} - {v2}",
@@ -4034,7 +5831,9 @@
         "import pygame"
       ],
       "primary_in": "v1",
-      "primary_out": "v_out"
+      "primary_out": "v_out",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_SCALE",
@@ -4062,7 +5861,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         },
         "scalar": {
           "type_name": "float",
@@ -4075,7 +5879,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4088,7 +5906,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{scaled_vector} = {vector} * {scalar}",
@@ -4096,7 +5919,9 @@
         "import pygame"
       ],
       "primary_in": "vector",
-      "primary_out": "scaled_vector"
+      "primary_out": "scaled_vector",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_LENGTH",
@@ -4124,7 +5949,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4137,7 +5967,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.scalar_magnitude",
+          "typestate": "pygame::scalar_magnitude",
+          "invariants": []
         }
       },
       "code_template": "{length} = {vector}.length()",
@@ -4145,7 +5989,9 @@
         "import pygame"
       ],
       "primary_in": "vector",
-      "primary_out": "length"
+      "primary_out": "length",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_NORMALIZE",
@@ -4173,7 +6019,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4186,7 +6037,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{normalized_vector} = {vector}.normalize() if {vector}.length_squared() > 0 else pygame.math.Vector2(0, 0)",
@@ -4194,7 +6050,9 @@
         "import pygame"
       ],
       "primary_in": "vector",
-      "primary_out": "normalized_vector"
+      "primary_out": "normalized_vector",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_ROTATE",
@@ -4222,7 +6080,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         },
         "angle": {
           "type_name": "float",
@@ -4235,7 +6098,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4248,7 +6125,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "code_template": "{rotated_vector} = {vector}.rotate({angle})",
@@ -4256,7 +6138,9 @@
         "import pygame"
       ],
       "primary_in": "vector",
-      "primary_out": "rotated_vector"
+      "primary_out": "rotated_vector",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_VECTOR2_DISTANCE_TO",
@@ -4284,7 +6168,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         },
         "v2": {
           "type_name": "vector2",
@@ -4296,7 +6185,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "vector2",
+          "layout": null,
+          "semantics": "pygame.vector_cartesian",
+          "typestate": "pygame::vector_cartesian",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4309,7 +6203,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.scalar_magnitude",
+          "typestate": "pygame::scalar_magnitude",
+          "invariants": []
         }
       },
       "code_template": "{distance} = {v1}.distance_to({v2})",
@@ -4317,7 +6225,9 @@
         "import pygame"
       ],
       "primary_in": "v1",
-      "primary_out": "distance"
+      "primary_out": "distance",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_COLOR_INIT",
@@ -4346,7 +6256,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 8
+          "default_value": 8,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "g": {
           "type_name": "int",
@@ -4359,7 +6283,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "b": {
           "type_name": "int",
@@ -4372,7 +6310,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "a": {
           "type_name": "int",
@@ -4385,7 +6337,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4398,7 +6364,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "color",
+          "layout": null,
+          "semantics": "pygame.color_object",
+          "typestate": "pygame::color_object",
+          "invariants": []
         }
       },
       "code_template": "{color} = pygame.Color({r}, {g}, {b}, {a})",
@@ -4406,7 +6377,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "color"
+      "primary_out": "color",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_COLOR_LERP",
@@ -4434,7 +6407,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "color",
+          "layout": null,
+          "semantics": "pygame.color_object",
+          "typestate": "pygame::color_object",
+          "invariants": []
         },
         "c2": {
           "type_name": "color",
@@ -4446,7 +6424,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "color",
+          "layout": null,
+          "semantics": "pygame.color_object",
+          "typestate": "pygame::color_object",
+          "invariants": []
         },
         "amount": {
           "type_name": "float",
@@ -4459,7 +6442,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4472,7 +6469,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "color",
+          "layout": null,
+          "semantics": "pygame.color_object",
+          "typestate": "pygame::color_object",
+          "invariants": []
         }
       },
       "code_template": "{interpolated_color} = {c1}.lerp({c2}, {amount})",
@@ -4480,7 +6482,9 @@
         "import pygame"
       ],
       "primary_in": "c1",
-      "primary_out": "interpolated_color"
+      "primary_out": "interpolated_color",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SPRITE_INIT",
@@ -4508,7 +6512,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sprite",
+          "layout": null,
+          "semantics": "pygame.sprite_handle",
+          "typestate": "pygame::sprite_handle",
+          "invariants": []
         }
       },
       "code_template": "{sprite} = pygame.sprite.Sprite()",
@@ -4516,7 +6525,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "sprite"
+      "primary_out": "sprite",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GROUP_INIT",
@@ -4544,7 +6555,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         }
       },
       "code_template": "{group} = pygame.sprite.Group()",
@@ -4552,7 +6568,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "group"
+      "primary_out": "group",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GROUP_ADD",
@@ -4580,7 +6598,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         },
         "sprite": {
           "type_name": "sprite",
@@ -4592,7 +6615,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sprite",
+          "layout": null,
+          "semantics": "pygame.sprite_handle",
+          "typestate": "pygame::sprite_handle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4605,7 +6633,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         }
       },
       "code_template": "{group}.add({sprite})\n{out_group} = {group}",
@@ -4613,7 +6646,9 @@
         "import pygame"
       ],
       "primary_in": "group",
-      "primary_out": "out_group"
+      "primary_out": "out_group",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GROUP_UPDATE",
@@ -4641,7 +6676,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4654,7 +6694,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         }
       },
       "code_template": "{group}.update()\n{out_group} = {group}",
@@ -4662,7 +6707,9 @@
         "import pygame"
       ],
       "primary_in": "group",
-      "primary_out": "out_group"
+      "primary_out": "out_group",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GROUP_DRAW",
@@ -4690,7 +6737,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         },
         "surface": {
           "type_name": "surface",
@@ -4702,7 +6754,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4715,7 +6772,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{group}.draw({surface})\n{out_surface} = {surface}",
@@ -4723,7 +6785,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SPRITE_COLLIDE_RECT",
@@ -4751,7 +6815,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sprite",
+          "layout": null,
+          "semantics": "pygame.sprite_handle",
+          "typestate": "pygame::sprite_handle",
+          "invariants": []
         },
         "sprite2": {
           "type_name": "sprite",
@@ -4763,7 +6832,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sprite",
+          "layout": null,
+          "semantics": "pygame.sprite_handle",
+          "typestate": "pygame::sprite_handle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4776,7 +6850,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         }
       },
       "code_template": "{collided} = pygame.sprite.collide_rect({sprite1}, {sprite2})",
@@ -4784,7 +6872,9 @@
         "import pygame"
       ],
       "primary_in": "sprite1",
-      "primary_out": "collided"
+      "primary_out": "collided",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_GROUP_COLLIDE",
@@ -4812,7 +6902,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         },
         "group_b": {
           "type_name": "group",
@@ -4824,7 +6919,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "group",
+          "layout": null,
+          "semantics": "pygame.group_handle",
+          "typestate": "pygame::group_handle",
+          "invariants": []
         },
         "dokill_a": {
           "type_name": "bool",
@@ -4837,7 +6937,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "dokill_b": {
           "type_name": "bool",
@@ -4850,7 +6964,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4863,7 +6991,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "{collision_dict} = pygame.sprite.groupcollide({group_a}, {group_b}, {dokill_a}, {dokill_b})",
@@ -4871,7 +7013,9 @@
         "import pygame"
       ],
       "primary_in": "group_a",
-      "primary_out": "collision_dict"
+      "primary_out": "collision_dict",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SPRITE_KILL",
@@ -4899,7 +7043,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sprite",
+          "layout": null,
+          "semantics": "pygame.sprite_handle",
+          "typestate": "pygame::sprite_handle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4912,7 +7061,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.closed",
+          "typestate": "pygame::closed",
+          "invariants": []
         }
       },
       "code_template": "{sprite}.kill()\n{status} = True",
@@ -4920,7 +7083,9 @@
         "import pygame"
       ],
       "primary_in": "sprite",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MASK_FROM_SURFACE",
@@ -4948,7 +7113,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "threshold": {
           "type_name": "int",
@@ -4961,7 +7131,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4974,7 +7158,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "mask",
+          "layout": null,
+          "semantics": "pygame.mask_handle",
+          "typestate": "pygame::mask_handle",
+          "invariants": []
         }
       },
       "code_template": "{mask} = pygame.mask.from_surface({surface}, threshold={threshold})",
@@ -4982,7 +7171,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "mask"
+      "primary_out": "mask",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MASK_OVERLAP",
@@ -5010,7 +7201,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "mask",
+          "layout": null,
+          "semantics": "pygame.mask_handle",
+          "typestate": "pygame::mask_handle",
+          "invariants": []
         },
         "mask_b": {
           "type_name": "mask",
@@ -5022,7 +7218,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "mask",
+          "layout": null,
+          "semantics": "pygame.mask_handle",
+          "typestate": "pygame::mask_handle",
+          "invariants": []
         },
         "offset": {
           "type_name": "Tuple[int, int]",
@@ -5035,7 +7236,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5048,7 +7263,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "code_template": "{overlap_point} = {mask_a}.overlap({mask_b}, {offset})",
@@ -5056,7 +7285,9 @@
         "import pygame"
       ],
       "primary_in": "mask_a",
-      "primary_out": "overlap_point"
+      "primary_out": "overlap_point",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_LOAD",
@@ -5086,7 +7317,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5099,7 +7344,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.initialized",
+          "typestate": "pygame::initialized",
+          "invariants": []
         }
       },
       "code_template": "pygame.mixer.music.load({music_path})\n{status} = True",
@@ -5107,7 +7366,9 @@
         "import pygame"
       ],
       "primary_in": "music_path",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_PLAY",
@@ -5136,7 +7397,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "start": {
           "type_name": "float",
@@ -5149,7 +7424,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5162,7 +7451,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "code_template": "pygame.mixer.music.play(loops={loops}, start={start})\n{status} = True",
@@ -5170,7 +7473,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_STOP",
@@ -5199,7 +7504,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5212,7 +7531,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.closed",
+          "typestate": "pygame::closed",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.mixer.music.stop()\n{status} = True",
@@ -5220,7 +7553,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_PAUSE",
@@ -5249,7 +7584,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5262,7 +7611,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.mixer.music.pause()\n{status} = True",
@@ -5270,7 +7633,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_UNPAUSE",
@@ -5299,7 +7664,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.loop_condition",
+          "typestate": "pygame::loop_condition",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5312,7 +7691,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "code_template": "if {trigger}:\n    pygame.mixer.music.unpause()\n{status} = True",
@@ -5320,7 +7713,9 @@
         "import pygame"
       ],
       "primary_in": "trigger",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MUSIC_SET_VOLUME",
@@ -5349,7 +7744,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5362,7 +7771,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.mixer.music.set_volume({volume})\n{status} = True",
@@ -5370,7 +7793,9 @@
         "import pygame"
       ],
       "primary_in": "volume",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_SOUND_SET_VOLUME",
@@ -5398,7 +7823,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sound",
+          "layout": null,
+          "semantics": "pygame.sound_handle",
+          "typestate": "pygame::sound_handle",
+          "invariants": []
         },
         "volume": {
           "type_name": "float",
@@ -5411,7 +7841,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5424,7 +7868,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sound",
+          "layout": null,
+          "semantics": "pygame.sound_handle",
+          "typestate": "pygame::sound_handle",
+          "invariants": []
         }
       },
       "code_template": "{sound}.set_volume({volume})\n{out_sound} = {sound}",
@@ -5432,7 +7881,9 @@
         "import pygame"
       ],
       "primary_in": "sound",
-      "primary_out": "out_sound"
+      "primary_out": "out_sound",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MOUSE_SET_VISIBLE",
@@ -5461,7 +7912,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false
+          "default_value": false,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5474,7 +7939,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.logical_state",
+          "typestate": "pygame::logical_state",
+          "invariants": []
         }
       },
       "code_template": "{previous_state} = pygame.mouse.set_visible({visible})",
@@ -5482,7 +7961,9 @@
         "import pygame"
       ],
       "primary_in": "visible",
-      "primary_out": "previous_state"
+      "primary_out": "previous_state",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_MOUSE_SET_POS",
@@ -5511,7 +7992,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5524,7 +8019,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.mouse.set_pos({pos})\n{status} = True",
@@ -5532,7 +8041,9 @@
         "import pygame"
       ],
       "primary_in": "pos",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DISPLAY_SET_ICON",
@@ -5560,7 +8071,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5573,7 +8089,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.display.set_icon({icon_surface})\n{status} = True",
@@ -5581,7 +8111,9 @@
         "import pygame"
       ],
       "primary_in": "icon_surface",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_AALINE",
@@ -5609,7 +8141,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -5626,7 +8163,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "start_pos": {
           "type_name": "Tuple[int, int]",
@@ -5642,7 +8193,21 @@
           "default_value": [
             0,
             0
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "end_pos": {
           "type_name": "Tuple[int, int]",
@@ -5658,7 +8223,21 @@
           "default_value": [
             100,
             100
-          ]
+          ],
+          "carrier": "Tuple[int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.coordinate",
+          "typestate": "pygame::coordinate",
+          "invariants": []
         },
         "blend": {
           "type_name": "int",
@@ -5671,7 +8250,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5684,7 +8277,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.aaline({surface}, {color}, {start_pos}, {end_pos}, {blend})\n{out_surface} = {surface}",
@@ -5692,7 +8290,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_DRAW_ARC",
@@ -5720,7 +8320,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         },
         "color": {
           "type_name": "Tuple[int, int, int]",
@@ -5737,7 +8342,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[int, int, int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.rgb_color",
+          "typestate": "pygame::rgb_color",
+          "invariants": []
         },
         "rect": {
           "type_name": "rect",
@@ -5749,7 +8368,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "rect",
+          "layout": null,
+          "semantics": "pygame.geometry",
+          "typestate": "pygame::geometry",
+          "invariants": []
         },
         "start_angle": {
           "type_name": "float",
@@ -5762,7 +8386,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "stop_angle": {
           "type_name": "float",
@@ -5775,7 +8413,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "width": {
           "type_name": "int",
@@ -5788,7 +8440,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.dimensions",
+          "typestate": "pygame::dimensions",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5801,7 +8467,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.modified",
+          "typestate": "pygame::modified",
+          "invariants": []
         }
       },
       "code_template": "pygame.draw.arc({surface}, {color}, {rect}, {start_angle}, {stop_angle}, {width})\n{out_surface} = {surface}",
@@ -5809,7 +8480,9 @@
         "import pygame"
       ],
       "primary_in": "surface",
-      "primary_out": "out_surface"
+      "primary_out": "out_surface",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_TIME_SET_TIMER",
@@ -5838,7 +8511,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "millis": {
           "type_name": "int",
@@ -5851,7 +8538,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "loops": {
           "type_name": "int",
@@ -5864,7 +8565,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5877,7 +8592,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.active",
+          "typestate": "pygame::active",
+          "invariants": []
         }
       },
       "code_template": "pygame.time.set_timer({event_id}, {millis}, {loops})\n{status} = True",
@@ -5885,7 +8614,9 @@
         "import pygame"
       ],
       "primary_in": "event_id",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_EVENT_POST",
@@ -5913,7 +8644,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "event",
+          "layout": null,
+          "semantics": "pygame.event_object",
+          "typestate": "pygame::event_object",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5926,7 +8662,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.flushed",
+          "typestate": "pygame::flushed",
+          "invariants": []
         }
       },
       "code_template": "{status} = pygame.event.post({event})",
@@ -5934,7 +8684,9 @@
         "import pygame"
       ],
       "primary_in": "event",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PYGAME_EVENT_CUSTOM",
@@ -5963,7 +8715,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "attributes": {
           "type_name": "dict",
@@ -5976,7 +8742,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         }
       },
       "outputs": {
@@ -5989,7 +8769,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "event",
+          "layout": null,
+          "semantics": "pygame.event_object",
+          "typestate": "pygame::event_object",
+          "invariants": []
         }
       },
       "code_template": "{event} = pygame.event.Event({event_type}, **{attributes})",
@@ -5997,7 +8782,9 @@
         "import pygame"
       ],
       "primary_in": null,
-      "primary_out": "event"
+      "primary_out": "event",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYGAME_FIXED_STEP_LOOP",
@@ -6033,7 +8820,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.time_delta",
+          "typestate": "pygame::time_delta",
+          "invariants": []
         },
         "time_step": {
           "type_name": "float",
@@ -6046,7 +8847,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0
+          "default_value": 0.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.configuration",
+          "typestate": "pygame::configuration",
+          "invariants": []
         },
         "body": {
           "type_name": "str",
@@ -6059,7 +8874,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -6072,7 +8901,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pygame.time_delta",
+          "typestate": "pygame::time_delta",
+          "invariants": []
         }
       },
       "code_template": "while {accumulator} >= {time_step}:\n    {body}\n{final_accumulator} = {accumulator}",
@@ -6080,7 +8923,9 @@
         "import pygame"
       ],
       "primary_in": "accumulator",
-      "primary_out": "final_accumulator"
+      "primary_out": "final_accumulator",
+      "effects": [],
+      "mutation_type": "pure"
     }
   ],
   "capabilities": {

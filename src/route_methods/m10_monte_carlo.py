@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import RouteMethod, Cell
+from .base import RouteMethod, Cell, is_macro_cell
 from lattice import LatticeOrchestrator, TypeRegistry
 from unification import ExecutionContext, unify
 
@@ -58,12 +58,14 @@ class M10MonteCarloRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        pool = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not c.cell_id.startswith("MACRO_")]
+        pool = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not is_macro_cell(c)]
         ev = self._evidence()
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
         if ev is None or not pool or not clauses:
-            return self._delegate_to_m1("evidence service or clause segmentation unavailable", prompt, tunnel, relevance_map, orch,
-                                        ctx=ctx, start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms)
+            reason = "evidence service or clause segmentation unavailable"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         proto: Dict[str, Cell] = {c.cell_id: c for c in pool}
         literals: List[List[str]] = [
@@ -73,6 +75,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
 
         # ---- action space: per-clause groups -------------------------------------------------
         groups: List[List[Tuple[List[str], float]]] = []
+        max_alts = max(getattr(settings, "mcts_max_branch", 3) - 1, 1)
         for j, cl in enumerate(clauses):
             toks = ev.clause_tokens(cl)
             primary = [c for c, _ in anchors_for_clause(ev, cl, pool, relevance_map, on_event=None, clause_idx=j)]
@@ -80,14 +83,24 @@ class M10MonteCarloRouteMethod(RouteMethod):
             if primary:
                 _po = ev.identity_overlap(toks, primary[0])
                 gl.append(([c.cell_id for c in primary], _po["recall"] * _po["name_precision"]))
-                # Alternatives exist only where the evidence is genuinely TIED with the primary (same coverage of
-                # the clause, differing only in how completely the clause names the cell, e.g. fft / rfft /
-                # fftshift). Cells that explain less of the clause are not ambiguity, just worse choices.
-                tied = [(o, c) for o, c in ((ev.identity_overlap(toks, c), c) for c in pool if c.cell_id not in {p.cell_id for p in primary})
-                        if o["hit"] > 0.0 and abs(o["recall"] - _po["recall"]) <= 1e-9]
-                tied.sort(key=lambda t: (t[0]["rank"], relevance_map.get(t[1].cell_id, 0.0)), reverse=True)
-                for o, c in tied[: max(settings.mcts_max_branch - 1, 0)]:
-                    gl.append(([c.cell_id], o["recall"] * o["name_precision"]))
+                prim_ids = {p.cell_id for p in primary}
+                alt_scored = [
+                    (o, c)
+                    for o, c in ((ev.identity_overlap(toks, c), c) for c in pool if c.cell_id not in prim_ids)
+                    if o["hit"] > 0.0 or relevance_map.get(c.cell_id, 0.0) > 0.0
+                ]
+                alt_scored.sort(key=lambda t: (t[0]["rank"], relevance_map.get(t[1].cell_id, 0.0)), reverse=True)
+                for o, c in alt_scored[:max_alts]:
+                    score_val = max(o["recall"] * o["name_precision"], 0.1 * relevance_map.get(c.cell_id, 0.0))
+                    gl.append(([c.cell_id], score_val))
+            else:
+                fallback_cands = sorted(
+                    pool,
+                    key=lambda c: relevance_map.get(c.cell_id, 0.0),
+                    reverse=True,
+                )[:max_alts + 1]
+                for c in fallback_cands:
+                    gl.append(([c.cell_id], max(0.05, relevance_map.get(c.cell_id, 0.0))))
             groups.append(gl)
 
         # ---- bridge candidates: tree postconditions that satisfy tree preconditions ----------
@@ -232,9 +245,13 @@ class M10MonteCarloRouteMethod(RouteMethod):
         verdicts: Dict[Tuple, Dict[str, Any]] = {}
         reg = TypeRegistry.get_instance()
 
+        unif_reward_cache: Dict[tuple, float] = {}
+
         def _fast_reward(path_t: tuple) -> float:
             if not path_t:
                 return 0.0
+            if path_t in unif_reward_cache:
+                return unif_reward_cache[path_t]
             mat_cells = materialize(path_t)
             # Fast structural port-compatibility check between adjacent steps
             compat_factor = 1.0
@@ -245,16 +262,29 @@ class M10MonteCarloRouteMethod(RouteMethod):
                 if p_out is not None and p_in is not None:
                     t_out = str(getattr(getattr(p_out, "signature", p_out), "type_name", "") or "").lower()
                     t_in = str(getattr(getattr(p_in, "signature", p_in), "type_name", "") or "").lower()
-                    if t_out and t_in and t_out not in ("any", "*") and t_in not in ("any", "*"):
+                    if t_out and t_in and not reg.is_declared_top(t_out) and not reg.is_declared_top(t_in):
                         if not (reg.is_subtype(t_out, t_in) or reg.is_subtype(t_in, t_out)):
                             compat_factor *= 0.5
+
+            # Stage 3 UnificationGate validity check inside rollout reward
+            unif_factor = 1.0
+            try:
+                gate_r = UnificationGate(orchestrator=orch)
+                ctx_r = ExecutionContext(prompt=prompt)
+                ur_r = gate_r.unify_pipeline(mat_cells, ctx_r, extract_llm_slots=False)
+                if ur_r.is_bottom() or not getattr(ur_r, "value", None):
+                    unif_factor = 0.05
+            except Exception:
+                unif_factor = 0.05
 
             res = _audit(mat_cells, prompt, orch)
             infos = [c for c in res.get("clauses", []) if c["status"] in ("served", "UNSERVED")]
             served = (sum(1 for c in infos if c["status"] == "served") / len(infos)) if infos else 0.0
             quality = (sum(c["quality"] for c in infos) / len(infos)) if infos else 0.0
             n_issues = len(res.get("issues", []))
-            return (served * quality * compat_factor) / (1.0 + n_issues)
+            val = (served * quality * compat_factor * unif_factor) / (1.0 + n_issues)
+            unif_reward_cache[path_t] = val
+            return val
 
         def reward(state) -> float:
             return _fast_reward(state[1])
@@ -268,32 +298,10 @@ class M10MonteCarloRouteMethod(RouteMethod):
             max_rollout_depth=N + settings.mcts_max_bridges + 2, seed=settings.mcts_seed,
         )
         result = search.search((0, tuple(), 0))
-        # Never do worse than the deterministic baseline (every clause's primary group, no bridges).
-        baseline = (0, tuple(), 0)
-        for _j in range(N):
-            if groups[_j] and ("group", 0) in actions(baseline):
-                baseline = step(baseline, ("group", 0))
-            else:
-                baseline = (baseline[0] + 1, baseline[1], baseline[2])
-        base_reward = reward(baseline)
-        if base_reward >= result.best_reward:
-            self._trace("mcts_baseline_kept", baseline_reward=round(base_reward, 4), search_reward=round(result.best_reward, 4))
-            result.best_state, result.best_reward = baseline, base_reward
-        # Minimise: a bridge stays only if the verifier score drops without it (greedy, deterministic).
-        bridge_ids = {b.cell_id for b in bridges}
-        kept_path = result.best_state[1]
-        cur_reward = reward((N, kept_path, 0))
-        for pos in range(len(kept_path) - 1, -1, -1):
-            if kept_path[pos][0] in bridge_ids:
-                trial = kept_path[:pos] + kept_path[pos + 1:]
-                r_trial = reward((N, trial, 0))
-                if r_trial >= cur_reward - 1e-12:
-                    self._trace("mcts_bridge_removed", cell=kept_path[pos][0], reason="verifier score did not drop without it")
-                    kept_path, cur_reward = trial, r_trial
-        result.best_state, result.best_reward = (N, kept_path, 0), cur_reward
         best_path = result.best_state[1]
+        cur_reward = result.best_reward
 
-        # Final verification pass: run heavy compilation and preflight ONCE on the winning trajectory
+        # Final verification pass: run compilation and preflight ONCE on the winning trajectory
         nviol, note = 0, None
         final_cells: List[Cell] = []
         if best_path and cur_reward > 0.0:
@@ -323,6 +331,8 @@ class M10MonteCarloRouteMethod(RouteMethod):
                     best_reward=round(result.best_reward, 4), best_plan=[c for c, _ in best_path], verdict=v,
                     root=result.root_stats[:8], best_line=result.best_path_stats)
         if not best_path or result.best_reward <= 0.0 or nviol >= 10:
-            return self._delegate_to_m1("Monte Carlo search found no plan with positive reward", prompt, tunnel, relevance_map, orch,
-                                        ctx=ctx, start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms)
+            reason = "Monte Carlo search found no plan with positive reward"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
         return final_cells if final_cells else materialize(best_path)

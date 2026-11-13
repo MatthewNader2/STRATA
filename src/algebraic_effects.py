@@ -9,7 +9,7 @@ Solves Issue 1, Issue 4 & Proposal 4.B:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 try:
     from .lattice import Cell, PortSignature, AlgebraicSignature, TypeRegistry, is_path_port
@@ -31,10 +31,10 @@ class PropertyBundle:
     all non-invalidated predicates of `v` plus the postconditions of `f`.
     """
     carrier_type: str
-    active_states: FrozenSet[str] = field(default_factory=frozenset)
-    predicates: FrozenSet[Tuple[str, str, Any]] = field(default_factory=frozenset)
-    keys_present: FrozenSet[str] = field(default_factory=frozenset)
-    keys_deleted: FrozenSet[str] = field(default_factory=frozenset)
+    active_states: Tuple[str, ...] = field(default_factory=tuple)
+    predicates: Tuple[Tuple[str, str, Any], ...] = field(default_factory=tuple)
+    keys_present: Tuple[str, ...] = field(default_factory=tuple)
+    keys_deleted: Tuple[str, ...] = field(default_factory=tuple)
     partition_source: Optional[str] = None
     partition_index: Optional[int] = None
     lineage_root: Optional[str] = None
@@ -44,16 +44,19 @@ class PropertyBundle:
         new_carrier: Optional[str] = None,
         new_state: Optional[str] = None,
         added_predicates: Sequence[Tuple[str, str, Any]] = (),
-        invalidated_props: Set[str] = frozenset(),
-        added_keys: Set[str] = frozenset(),
-        removed_keys: Set[str] = frozenset(),
+        invalidated_props: Sequence[str] = (),
+        added_keys: Sequence[str] = (),
+        removed_keys: Sequence[str] = (),
         partition_source: Optional[str] = None,
         partition_index: Optional[int] = None,
     ) -> "PropertyBundle":
         """Monotonic semilattice join with selective property invalidation."""
         states = set(self.active_states)
-        if new_state and new_state.lower() not in ("any", "*", "default", ""):
-            states.add(new_state.lower())
+        reg = TypeRegistry.get_instance()
+        if new_state:
+            ns_low = new_state.strip().lower()
+            if ns_low and not reg.is_declared_top(ns_low) and not reg.is_declared_top_state(ns_low):
+                states.add(ns_low)
 
         kept_preds = {
             (prop, op, val)
@@ -67,10 +70,10 @@ class PropertyBundle:
 
         return PropertyBundle(
             carrier_type=new_carrier or self.carrier_type,
-            active_states=frozenset(states),
-            predicates=frozenset(kept_preds),
-            keys_present=frozenset(k_pres),
-            keys_deleted=frozenset(k_del),
+            active_states=tuple(sorted(states)),
+            predicates=tuple(sorted(kept_preds, key=lambda x: (str(x[0]), str(x[1]), repr(x[2])))),
+            keys_present=tuple(sorted(k_pres)),
+            keys_deleted=tuple(sorted(k_del)),
             partition_source=partition_source if partition_source is not None else self.partition_source,
             partition_index=partition_index if partition_index is not None else self.partition_index,
             lineage_root=self.lineage_root,
@@ -85,9 +88,9 @@ class PropertyBundle:
         reg = TypeRegistry.get_instance()
         is_top = (
             not req_s
-            or req_s in ("any", "*", "top", "unknown", "⊤")
+            or reg.is_declared_top(req_s)
             or (hasattr(reg, "is_top_state") and reg.is_top_state(req_s))
-            or (hasattr(reg, "is_declared_top_state") and reg.is_declared_top_state(req_s))
+            or reg.is_declared_top_state(req_s)
         )
         if not is_top:
             active_lower = {str(s).lower() for s in self.active_states}
@@ -237,7 +240,9 @@ def build_universal_verification_contract(
                     "expression": expr,
                     "description": desc,
                 })
-                if prop:
+                if prop and str(prop).strip().lower() != "state":
+                    # "state" is a compile-time typestate tag verified statically in Layer 2/3,
+                    # not a runtime Python attribute on carriers like np.ndarray.
                     root = var_to_root.get(t_var, t_var)
                     accumulated_props.setdefault(root, {})[str(prop)] = val
 
@@ -358,6 +363,7 @@ def build_universal_verification_contract(
                     "postconditions": [
                         p for p in cell_posts
                         if (getattr(p, "target", None) if not isinstance(p, dict) else p.get("target")) in (out_name, "output_var", None)
+                        and str(getattr(p, "property", None) if not isinstance(p, dict) else p.get("property") or "").strip().lower() != "state"
                     ],
                 })
 

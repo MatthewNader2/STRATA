@@ -12,37 +12,59 @@ from typing import Dict, List, Optional, Set, Tuple, Any
 from log_config import get_logger
 
 try:
-    from ..lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port
+    from ..lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port, is_macro_cell
     from ..unification import unify, Substitution, ExecutionContext, unify_cell_with_scope
     from ..tokenizer import CellTokenizer
     from ..planner import LatticePlanner
     from ..utils import tokenize_alphanumeric
     from ..dag_plan import DAGPlan, OpenPortFrontier
 except (ImportError, ValueError):
-    from lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port
+    from lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port, is_macro_cell
     from unification import unify, Substitution, ExecutionContext, unify_cell_with_scope
     from tokenizer import CellTokenizer
-    from planner import LatticePlanner, STOPWORDS, _WILDCARD_CARRIERS
+    from planner import LatticePlanner
     from utils import tokenize_alphanumeric
     from dag_plan import DAGPlan, OpenPortFrontier
 
 logger = get_logger("route_methods")
 
-# STOPWORDS / _WILDCARD_CARRIERS are imported from planner (single source of
-# truth — duplicated vocabularies silently drift and change token filtering
-# between the router, the planner and the route methods).
-
 
 _ACTIVE_ORCHESTRATOR: List[Any] = []
 
 
-def _bridge_roles() -> frozenset:
+def _fmt_port_sig(p: Any) -> str:
+    """Formats a port signature compactly as `type[state]` when state is non-top and non-void."""
+    sig = getattr(p, "signature", None)
+    tn = str(getattr(sig, "type_name", "") or getattr(p, "abstract_type", "") or "any")
+    st = str(getattr(sig, "state", "") or "").strip()
+    if not st:
+        return tn
+    st_low = st.lower()
+    reg = TypeRegistry.get_instance()
+    if reg.is_declared_top(st_low) or reg.is_void_type(st_low):
+        return tn
+    return f"{tn}[{st}]"
+
+
+def _bridge_roles() -> Set[str]:
     """Declared bridge/adapter role names come from the trees' verification_semantics."""
     try:
         from lattice import TypeRegistry
-        return frozenset(str(r).strip().lower() for r in TypeRegistry.get_instance().get_verification_semantics("bridge_roles"))
+        return {str(r).strip().lower() for r in TypeRegistry.get_instance().get_verification_semantics("bridge_roles")}
     except Exception:
-        return frozenset()
+        return set()
+
+
+def _clause_has_egress_intent(clause: str) -> bool:
+    """Language-level materialization intent for a clause: declared egress
+    verbs (planner.EGRESS_INTENT_TOKENS) when not an in-memory variable target."""
+    try:
+        from ..planner import EGRESS_INTENT_TOKENS
+    except (ImportError, ValueError):
+        from planner import EGRESS_INTENT_TOKENS
+    target = ExecutionContext._extract_target_sink(clause)
+    toks = set(CellTokenizer.tokenize_prompt(clause.lower()))
+    return bool(toks & EGRESS_INTENT_TOKENS) and not target
 
 
 def is_terminal_sink(cell: Any, orch: Optional[Any] = None) -> bool:
@@ -163,38 +185,6 @@ class RouteMethod(ABC):
     effective_method: Optional[str] = None      # set when this method handed the request to another
     fallback_reason: Optional[str] = None
 
-    def _delegate_to_m1(self, reason: str, prompt: str, tunnel: List[Cell], relevance_map: Dict[str, float],
-                        orch: Any = None, **plan_kwargs: Any) -> List[Cell]:
-        """
-        Hand the request to M1 (clause anchor) IF allow_fallback is enabled.
-        When allow_fallback=False (default for strict scientific evaluation),
-        record the failure reason in route_trace and return empty result.
-        """
-        try:
-            from config import settings
-            allow = settings.allow_fallback
-        except Exception:
-            try:
-                from ..config import settings
-                allow = settings.allow_fallback
-            except Exception:
-                allow = False
-
-        self.fallback_reason = reason
-        if not allow:
-            logger.warning(f"[ROUTE_FAILURE] {type(self).__name__} failed (fallback disabled): {reason}")
-            self._trace("method_failure", requested=type(self).__name__, reason=reason)
-            return []
-
-        from route_methods.m1_clause_anchor import M1ClauseAnchorRouteMethod
-        self.effective_method = "M1"
-        logger.warning(f"[ROUTE_FALLBACK] {type(self).__name__} -> M1: {reason}")
-        self._trace("method_fallback", requested=type(self).__name__, to="M1", reason=reason)
-        m1 = M1ClauseAnchorRouteMethod(orchestrator=orch or self.orchestrator)
-        out = m1.plan(prompt, tunnel, relevance_map, orchestrator=orch or self.orchestrator, **plan_kwargs)
-        self.trace_events.extend(getattr(m1, "trace_events", []))
-        return out
-
     def _trace(self, event: str, **fields: Any) -> None:
         """Structured planner telemetry surfaced by `--debug` (never affects planning)."""
         if not hasattr(self, "trace_events"):
@@ -218,6 +208,36 @@ class RouteMethod(ABC):
         Plans a type-valid sequence of Cell morphisms from the semantic tunnel.
         """
         pass
+
+    def _blend_latent_transition(self, src_cell: Cell, dst_cell: Cell, base_aff: float) -> float:
+        """Applies learned continuous transition compatibility when Profile AE is active."""
+        try:
+            try:
+                from inference import ModelManager
+            except (ImportError, ValueError):
+                from ..inference import ModelManager
+            mm = ModelManager.get_instance()
+            if mm is None or getattr(mm, "current_profile_name", None) == "0":
+                return base_aff
+            prof = getattr(mm, "active_profile", None)
+            if prof is None or not hasattr(prof, "score_transition"):
+                return base_aff
+
+            src_in = getattr(src_cell, "primary_input", None)
+            src_in_sig = getattr(src_in, "signature", src_in) if src_in is not None else "__start__"
+            src_out = getattr(src_cell, "primary_output", None)
+            src_out_sig = getattr(src_out, "signature", src_out) if src_out is not None else "__end__"
+            dst_in = getattr(dst_cell, "primary_input", None)
+            dst_in_sig = getattr(dst_in, "signature", dst_in) if dst_in is not None else "__start__"
+            dst_out = getattr(dst_cell, "primary_output", None)
+            dst_out_sig = getattr(dst_out, "signature", dst_out) if dst_out is not None else "__end__"
+
+            s_fwd = float(mm.score_transition(src_out_sig, dst_cell.cell_id, dst_out_sig))
+            s_chain = float(mm.score_transition(src_in_sig, src_cell.cell_id, dst_in_sig))
+            t_ae = max(0.0, min(1.0, 0.5 * (0.5 * (s_fwd + s_chain) + 1.0)))
+            return (0.7 * base_aff + 0.3 * t_ae) if base_aff > 0.0 else (0.5 * t_ae)
+        except Exception:
+            return base_aff
 
     def calculate_edge_affinity(
         self,
@@ -292,13 +312,13 @@ class RouteMethod(ABC):
         if orch:
             adj = getattr(orch, "_adjacency", None) or getattr(orch, "adjacency", None)
             if adj and dst_cell.cell_id in adj.get(src_cell.cell_id, ()):
-                return 0.35
+                return self._blend_latent_transition(src_cell, dst_cell, 0.35)
 
         # 5. Same-domain morphism continuity
         if src_domain and dst_domain and src_domain == dst_domain:
-            return 0.20
+            return self._blend_latent_transition(src_cell, dst_cell, 0.20)
 
-        return 0.0
+        return self._blend_latent_transition(src_cell, dst_cell, 0.0)
 
     @staticmethod
     def is_file_format_compatible(cell: Cell, file_path_str: str) -> bool:
@@ -320,21 +340,49 @@ class RouteMethod(ABC):
         if not path_ports:
             return True
 
+        reg = TypeRegistry.get_instance()
+        fmt_groups = reg.get_format_groups()
+        loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
         for p in path_ports:
+            tn = str(getattr(p, "type_name", "") or "").strip()
+            fmt = ""
+            has_concrete_fmt = False
+            if "[" in tn and tn.endswith("]"):
+                ctor, _, inner = tn[:-1].partition("[")
+                if ctor.strip().lower() in loc_ctors:
+                    parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
+                    if len(parts) >= 2:
+                        fmt = parts[1]
+                        if fmt and fmt != "generic" and not reg.is_declared_top(fmt):
+                            has_concrete_fmt = fmt not in fmt_groups
+                            if has_concrete_fmt:
+                                if (
+                                    ext == fmt
+                                    or (len(ext) >= 2 and fmt.startswith(ext))
+                                    or reg.is_subtype(ext, fmt)
+                                    or reg.is_subtype(fmt, ext)
+                                ):
+                                    return True
+                                return False
+                            # Group-level format (e.g. TabularFormat, ImageFormat): match subtypes in that group.
+                            if reg.is_subtype(ext, fmt) or ext == fmt:
+                                return True
+                            for anc in fmt_groups:
+                                if reg.is_subtype(ext, anc) and (reg.is_subtype(fmt, anc) or fmt == anc):
+                                    return True
+                            return False
             port_fmts = getattr(p, "supported_formats", None)
             if port_fmts:
                 clean_fmts = {str(f).strip().lower() for f in port_fmts}
                 if "*" not in clean_fmts and ext not in clean_fmts:
                     return False
-            tn = str(getattr(p, "type_name", "") or "").strip()
             if "[" in tn and tn.endswith("]"):
                 ctor, _, inner = tn[:-1].partition("[")
-                if ctor.strip().lower() in ("file", "stream", "path", "asset"):
+                if ctor.strip().lower() in loc_ctors:
                     parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
                     if len(parts) >= 2:
                         fmt = parts[1]
-                        reg = TypeRegistry.get_instance()
-                        if fmt in ("any", "generic", "*", ""):
+                        if not fmt or fmt == "generic" or reg.is_declared_top(fmt):
                             carrier = parts[0]
                             try:
                                 placeholder = reg.get_asset_placeholder(carrier, "")
@@ -343,23 +391,16 @@ class RouteMethod(ABC):
                                     if carrier_ext and carrier_ext != "dat":
                                         if ext == carrier_ext or reg.is_subtype(ext, carrier_ext) or reg.is_subtype(carrier_ext, ext):
                                             return True
-                                        for anc in reg.get_format_groups():
+                                        for anc in fmt_groups:
                                             if reg.is_subtype(ext, anc) and reg.is_subtype(carrier_ext, anc):
                                                 return True
                                         return False
                             except Exception:
                                 pass
                             return True
-                        if ext == fmt or fmt in ext or ext in fmt or reg.is_subtype(ext, fmt) or reg.is_subtype(fmt, ext):
-                            return True
-                        for anc in reg.get_format_groups():
-                            if reg.is_subtype(ext, anc) and (reg.is_subtype(fmt, anc) or fmt in anc):
-                                return True
-                        return False
                     elif len(parts) == 1:
                         target = parts[0]
-                        reg = TypeRegistry.get_instance()
-                        if target in ("any", "generic", "*", ""):
+                        if not target or target == "generic" or reg.is_declared_top(target):
                             return True
                         if ext == target or target in ext or ext in target or reg.is_subtype(ext, target) or reg.is_subtype(target, ext):
                             return True
@@ -507,7 +548,15 @@ class RouteMethod(ABC):
                     b_cloned = b.clone() if hasattr(b, "clone") else copy.copy(b)
                     b_cloned.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
                     cloned_chain.append(b_cloned)
-                return cloned_chain
+                if prev_path:
+                    full_scope = list(prev_path) + cloned_chain
+                    if not (
+                        self.step_unifies(cloned_chain[-1], dst_cell, prev_path=full_scope)
+                        or self.step_unifies_dag(dst_cell, full_scope)
+                    ):
+                        cloned_chain = []
+                if cloned_chain:
+                    return cloned_chain
         single = self.find_bridge(src_cell, dst_cell, candidates or [], orchestrator=orch, prev_path=prev_path)
         return [single] if single else []
 
@@ -554,17 +603,22 @@ class RouteMethod(ABC):
             cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
             cand_tags = {str(t).lower() for t in (getattr(cand, "semantic_tags", None) or [])}
             bridge_tokens = set(reg.get_verification_semantics("bridge_tokens") or ())
+            assigned_val_roles = set(reg.get_verification_semantics("assigned_value_roles") or ())
+            assigned_val_binds = set(reg.get_verification_semantics("assigned_value_binds") or ())
+            carrier_binds = set(reg.get_verification_semantics("carrier_binds") or ())
+            df_roles = set(reg.get_verification_semantics("dataflow_roles") or ())
+            compound_sk = set(reg.get_verification_semantics("compound_structure_kinds") or ())
             # Domain-agnostic Lens Injection: a morphism that writes an assigned value/field
             # back into a composite carrier (mu : Record x Field -> Record) is an eligible bridge.
             is_lens_setter = (
-                any(getattr(p, "binds", None) == "assigned_value" or getattr(p, "port_role", None) in ("value_input", "assigned_value") for p in cand.inputs.values())
-                and any(getattr(p, "binds", None) == "data_carrier" or getattr(p, "port_role", None) == "data_input" for p in cand.inputs.values())
-                and any(getattr(p, "structure_kind", None) == "composite" or getattr(p, "abstract_type", None) == "table" for p in cand.outputs.values())
+                any(getattr(p, "binds", None) in assigned_val_binds or getattr(p, "port_role", None) in assigned_val_roles for p in cand.inputs.values())
+                and any(getattr(p, "binds", None) in carrier_binds or getattr(p, "port_role", None) in df_roles for p in cand.inputs.values())
+                and any(getattr(p, "structure_kind", None) in compound_sk or getattr(p, "abstract_type", None) in reg.get_composite_carrier_roots() for p in cand.outputs.values())
             )
 
             is_declared_bridge = (
                 cand_role in _bridge_roles()
-                or getattr(cand, "node_type", "") in ("tunnel", "bridge")
+                or getattr(cand, "node_type", "") in _bridge_roles()
                 or bool(bridge_tokens & cand_tags)
                 or is_lens_setter
             )
@@ -610,7 +664,7 @@ class RouteMethod(ABC):
                 if sig_inner:
                     r_raw = r_raw or getattr(sig_inner, "rejected_qualifiers", None) or ()
                 for r in r_raw:
-                    if isinstance(r, (tuple, list, set, frozenset)):
+                    if isinstance(r, (tuple, list, set)):
                         dst_rejs.update(str(x).lower() for x in r)
                     else:
                         dst_rejs.add(str(r).lower())
@@ -621,7 +675,7 @@ class RouteMethod(ABC):
                     for o in getattr(scope_c, "outputs", {}).values():
                         q_raw = getattr(o, "qualifiers", None) or getattr(getattr(o, "signature", None), "qualifiers", None) or ()
                         for q in q_raw:
-                            if isinstance(q, (tuple, list, set, frozenset)):
+                            if isinstance(q, (tuple, list, set)):
                                 src_quals.update(str(x).lower() for x in q)
                             else:
                                 src_quals.add(str(q).lower())
@@ -632,7 +686,7 @@ class RouteMethod(ABC):
                         c_out_quals = set()
                         raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
                         for q in raw_co:
-                            if isinstance(q, (tuple, list, set, frozenset)):
+                            if isinstance(q, (tuple, list, set)):
                                 c_out_quals.update(str(x).lower() for x in q)
                             else:
                                 c_out_quals.add(str(q).lower())
@@ -669,8 +723,6 @@ class RouteMethod(ABC):
                     opt_in = len(cand.inputs) - req_in
                     if req_in == 1 and opt_in == 0:
                         score += 3.0  # Clean unary element-wise transform preserving element count
-                    elif any("transform_length" in str(getattr(getattr(p, "signature", p), "state", "")) for p in cand.inputs.values()):
-                        score -= 2.0  # Penalize transforms requiring output length specifications
                 if score > best_score:
                     best_score = score
                     best_b = cand
@@ -688,71 +740,6 @@ class RouteMethod(ABC):
                 b.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
                 return b
 
-        # Open-World Continuum (Issue 5): If no pre-harvested bridge exists in the lattice,
-        # instantiate a TypedHoleCell(tau_src -> tau_dst) when synthesis is available and allowed.
-        # Categorical guard: A unary data-carrier hole bridge cannot synthesize a trained
-        # model/estimator instance or object receiver. Furthermore, the hole bridge must
-        # validly satisfy dst_cell in the current scope.
-        if allow_holes and best_b is None and src_cell.primary_output and dst_cell.primary_input:
-            try:
-                from dag_plan import TypedHoleCell
-                from inference import ModelManager
-                from preflight import PreflightLinter
-                from lattice import TypeRegistry
-                reg = TypeRegistry.get_instance()
-
-                dst_in = dst_cell.primary_input
-                dst_in_role = str(getattr(dst_in, "port_role", "") or getattr(dst_in, "derived_role", "") or "").lower()
-                dst_in_type = str(getattr(dst_in, "type_name", "") or "").lower()
-                is_obj_receiver = (
-                    PreflightLinter._is_object_receiver_role(dst_in_role)
-                    or getattr(dst_in, "structure_kind", None) == "handle"
-                    or (bool(dst_in_role) and bool(reg and (reg.is_subtype(dst_in_role, "model") or reg.is_subtype(dst_in_role, "handle"))))
-                    or (bool(dst_in_type) and bool(reg and (reg.is_subtype(dst_in_type, "model") or reg.is_subtype(dst_in_type, "handle"))))
-                )
-
-                has_unmet_model_req = False
-                for p_name, p_sig in (getattr(dst_cell, "inputs", {}) or {}).items():
-                    if getattr(p_sig, "required", False):
-                        p_role = str(getattr(p_sig, "port_role", "") or getattr(p_sig, "derived_role", "") or "").lower()
-                        p_type = str(getattr(p_sig, "type_name", "") or "").lower()
-                        if (
-                            PreflightLinter._is_object_receiver_role(p_role)
-                            or getattr(p_sig, "structure_kind", None) == "handle"
-                            or (bool(p_role) and bool(reg and (reg.is_subtype(p_role, "model") or reg.is_subtype(p_role, "handle"))))
-                            or (bool(p_type) and bool(reg and (reg.is_subtype(p_type, "model") or reg.is_subtype(p_type, "handle"))))
-                        ):
-                            has_producer_in_scope = any(
-                                (
-                                    bool(reg and reg.is_subtype(getattr(c, "node_role", ""), "model"))
-                                    or bool(getattr(getattr(c, "primary_output", None), "structure_kind", None) == "handle")
-                                    or bool(reg and reg.is_subtype(str(getattr(getattr(c, "primary_output", None), "type_name", "")).lower(), "model"))
-                                    or bool(reg and reg.is_subtype(str(getattr(getattr(c, "primary_output", None), "type_name", "")).lower(), "handle"))
-                                    or PreflightLinter._is_object_receiver_role(str(getattr(getattr(c, "primary_output", None), "port_role", "")).lower())
-                                )
-                                for c in current_scope
-                            )
-                            if not has_producer_in_scope:
-                                has_unmet_model_req = True
-                                break
-
-                if not is_obj_receiver and not has_unmet_model_req and ModelManager.get_instance().can_synthesize():
-                    hole_cell = TypedHoleCell(
-                        hole_id=f"HOLE_BRIDGE_{src_cell.cell_id}_TO_{dst_cell.cell_id}",
-                        task_description=f"Bridge {src_cell.primary_output.type_name} to {dst_cell.primary_input.type_name}",
-                        in_sig=src_cell.primary_output.signature,
-                        out_sig=dst_cell.primary_input.signature,
-                    )
-                    hole_cell.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
-                    hole_cell.clause_literals = getattr(dst_cell, "clause_literals", None)
-                    can_cand_to_dst = (
-                        self.step_unifies(hole_cell, dst_cell, prev_path=current_scope + [hole_cell])
-                        or self.step_unifies_dag(dst_cell, current_scope + [hole_cell])
-                    )
-                    if can_cand_to_dst:
-                        return hole_cell
-            except Exception as hole_exc:
-                logger.debug("[ROUTE] TypedHoleCell bridge fallback skipped: %s", hole_exc)
         return None
 
     @classmethod
@@ -877,12 +864,20 @@ class RouteMethod(ABC):
         return _segment_prompt_clauses(prompt)
 
     @classmethod
-    def tag_cells_with_clause_indices(cls, path: List[Cell], prompt: str, orchestrator: Any = None, ctx: Optional[Any] = None) -> List[Dict[str, Any]]:
+    def tag_cells_with_clause_indices(
+        cls,
+        path: List[Cell],
+        prompt: str,
+        orchestrator: Any = None,
+        ctx: Optional[Any] = None,
+        clause_semantic_scores: Optional[List[Dict[str, float]]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Tag path cells with the prompt clause they SERVE (matched_clause_idx).
 
         Evidence comes from token_evidence (corpus IDF, identity precision x
-        recall). Enforces monotonic causal ordering: primary evidence winners
+        recall), plus calibrated semantic scores when enabled (Profiles B/A+).
+        Enforces monotonic causal ordering: primary evidence winners
         are assigned in causal sequence, and intermediate connectors/bridges
         are topologically bounded within [c_prev, c_next], eliminating spurious
         lexical overlaps that violate causality.
@@ -890,7 +885,7 @@ class RouteMethod(ABC):
         decisions: List[Dict[str, Any]] = []
         if not path or not prompt:
             return decisions
-        from token_evidence import get_evidence
+        from token_evidence import get_evidence, _resolve_clause_semantic_scores
         orch = orchestrator
         if orch is None:
             for c in path:
@@ -902,6 +897,9 @@ class RouteMethod(ABC):
         if ev is None or not clauses:
             return decisions
         clause_toks = [ev.clause_tokens(cl) for cl in clauses]
+        clause_sem = None if ev._pure_symbolic else _resolve_clause_semantic_scores(orch, prompt, clause_semantic_scores)
+        if clause_sem is not None and len(clause_sem) != len(clauses):
+            clause_sem = None
 
         # Distinct morphism instances: each step in the path must have independent state
         seen_ids = set()
@@ -922,12 +920,19 @@ class RouteMethod(ABC):
 
         # Pass 1: Primary evidence winners across all clauses
         # Greedy highest-rank matching: pair each clause with its strongest lexical-identity cell
+        # (or calibrated semantic winner when lexical hit is absent in non-P0 profiles)
         # subject to causal monotonicity (prod_clause <= cons_clause along linear pipeline order).
         candidates = []
         for j in range(len(clauses)):
+            sem_map_j = (clause_sem[j] or {}) if clause_sem is not None else {}
+            max_sem_j = max(sem_map_j.values(), default=0.0) if sem_map_j else 0.0
             for i in range(len(path)):
                 if table[i][j]["hit"] > 0.0:
-                    candidates.append((table[i][j]["rank"], j, i))
+                    candidates.append(((1, table[i][j]["rank"]), j, i))
+                elif clause_sem is not None and max_sem_j >= 0.35:
+                    sem_sc = float(sem_map_j.get(path[i].cell_id, 0.0) or 0.0)
+                    if sem_sc >= 0.35 and sem_sc >= 0.70 * max_sem_j:
+                        candidates.append(((0, (sem_sc, 0.0, sem_sc)), j, i))
         candidates.sort(key=lambda x: x[0], reverse=True)
 
         assigned_clauses = set()
@@ -1007,12 +1012,8 @@ class RouteMethod(ABC):
                         best_j_raw, best_rank_raw = j, table[i][j]["rank"]
                 if best_j_raw is not None:
                     cell.matched_clause_idx = best_j_raw
-                elif succ:
-                    cell.matched_clause_idx = succ[0]
-                elif prec:
-                    cell.matched_clause_idx = prec[-1]
-                else:
-                    cell.matched_clause_idx = 0
+                # Leave matched_clause_idx as None for non-lexical connectors/bridges rather
+                # than stamping a fallback neighbour clause index onto them.
 
             decisions.append({
                 "cell": cell.cell_id, "tagged_clause": cell.matched_clause_idx,
@@ -1072,13 +1073,36 @@ class RouteMethod(ABC):
             o = ev.identity_overlap(ctoks, cand)
             if o["hit"] <= 0.0:
                 continue
-            if not (self.step_unifies(routed_path[-1], cand, prev_path=routed_path)
-                    or self.step_unifies_dag(cand, routed_path)):
-                continue
-            if not self.step_unifies(cand, anchor, prev_path=routed_path + [cand]):
-                continue
-            if best_rank is None or o["rank"] > best_rank:
-                best, best_rank = cand, o["rank"]
+            direct_cand = (
+                self.step_unifies(routed_path[-1], cand, prev_path=routed_path)
+                or self.step_unifies_dag(cand, routed_path)
+            )
+            p_bridges: List[Cell] = []
+            if direct_cand and (
+                self.step_unifies(cand, anchor, prev_path=routed_path + [cand])
+                or self.step_unifies_dag(anchor, routed_path + [cand])
+            ):
+                cand_rank = (1, o["rank"])
+            else:
+                # Try bridging routed_path[-1] -> cand (e.g. DataFrame -> ndarray before LinearRegression.fit -> predict)
+                p_bridges = self.find_bridge_chain(
+                    routed_path[-1], cand, candidates, prev_path=routed_path
+                )
+                cand_after_bridge = bool(p_bridges) and (
+                    self.step_unifies(p_bridges[-1], cand, prev_path=list(routed_path) + p_bridges)
+                    or self.step_unifies_dag(cand, list(routed_path) + p_bridges)
+                )
+                if not cand_after_bridge:
+                    continue
+                scope_after = list(routed_path) + p_bridges + [cand]
+                if not (
+                    self.step_unifies(cand, anchor, prev_path=scope_after)
+                    or self.step_unifies_dag(anchor, scope_after)
+                ):
+                    continue
+                cand_rank = (0, o["rank"])
+            if best_rank is None or cand_rank > best_rank:
+                best, best_rank = cand, cand_rank
         if best is None:
             return None
         inst = best.clone() if hasattr(best, "clone") else best
@@ -1115,7 +1139,7 @@ class RouteMethod(ABC):
         if not path or self.orchestrator is None:
             return path
 
-        # Step 1: Precondition & Typestate Bridge Closure via find_shortest_bridge_path
+        # Step 1: Precondition & Typestate Bridge Closure via indexed find_shortest_bridge_path
         bridged_path: List[Cell] = []
         for c in path:
             if not bridged_path:
@@ -1128,157 +1152,7 @@ class RouteMethod(ABC):
                 bridged_path.append(c)
         path = bridged_path
 
-        # Step 1.5: Closed open-port frontier closure via backward search and typestate demand
-        try:
-            from unification import is_edge_valid
-        except (ImportError, ValueError):
-            from ..unification import is_edge_valid
         from dag_plan import OpenPortFrontier
-
-        reg = TypeRegistry.get_instance()
-        idx = 0
-        max_bridge_steps = len(path) * 4
-        bridge_steps = 0
-
-        while idx < len(path) and bridge_steps < max_bridge_steps:
-            bridge_steps += 1
-            curr_c = path[idx]
-            in_scope_cells = path[:idx]
-            cells_to_insert = []
-
-            # Build open-port frontier for in-scope cells
-            frontier = OpenPortFrontier()
-            for s_idx, sc in enumerate(in_scope_cells):
-                frontier.add_ingress_node(sc, step_idx=s_idx)
-
-            for p_name, p in (curr_c.inputs or {}).items():
-                if not getattr(p, "required", True) or getattr(p, "default_value", None) is not None:
-                    continue
-                p_tname = str(getattr(p, "type_name", "") or "").lower()
-                has_enum = bool(getattr(p, "enum_values", None))
-                if reg.is_literal_groundable(p_tname, has_enum=has_enum):
-                    continue
-                if is_path_port(p):
-                    continue
-                if self.is_ingress_node(curr_c) or getattr(curr_c, "node_role", "") == "source":
-                    continue
-
-                # Check if any in-scope cell output unifies with this port via is_edge_valid and rank check
-                p_unified = False
-                p_rank = getattr(p, "rank", None)
-                for op in frontier.open_ports:
-                    op_sig = op.signature
-                    op_rank = getattr(op_sig, "rank", None)
-                    if p_rank is not None and op_rank is not None and p_rank != op_rank:
-                        continue
-                    if is_edge_valid(op_sig, p, producer_cell=op.cell_ref, consumer_cell=curr_c):
-                        p_unified = True
-                        break
-
-                if p_unified:
-                    continue
-
-                # Port p is a required unbound port with no in-scope producer!
-                # Backward search by (carrier, rank, unification) and typestate demand
-                best_cand_cell = None
-                p_state = str(getattr(getattr(p, "signature", p), "state", "") or "").lower()
-                p_structure = str(getattr(p, "structure_kind", "") or "").lower()
-
-                # Priority 1: Algebraic typestate transition counterpart in same domain
-                curr_domain = getattr(curr_c, "domain_name", "") or getattr(curr_c, "domain", "")
-                if p_structure == "handle" or p_state:
-                    p_accepted = set(getattr(p, "accepted_states", ()) or ())
-                    if p_state:
-                        p_accepted.add(p_state)
-                    for cand in self.orchestrator.loaded_cells.values():
-                        if any(existing.cell_id == cand.cell_id for existing in path):
-                            continue
-                        cand_domain = getattr(cand, "domain_name", "") or getattr(cand, "domain", "")
-                        for cand_out in (cand.outputs or {}).values():
-                            c_rank = getattr(cand_out, "rank", None)
-                            if p_rank is not None and c_rank is not None and p_rank != c_rank:
-                                continue
-                            if is_edge_valid(cand_out, p, producer_cell=cand, consumer_cell=curr_c):
-                                out_st = str(getattr(getattr(cand_out, "signature", cand_out), "state", "") or "").lower()
-                                state_match = bool(p_accepted and out_st in p_accepted)
-                                domain_match = bool(curr_domain and cand_domain and curr_domain == cand_domain)
-                                if state_match and domain_match:
-                                    best_cand_cell = cand
-                                    break
-                                elif best_cand_cell is None:
-                                    best_cand_cell = cand
-                        if best_cand_cell is not None and bool(curr_domain and getattr(best_cand_cell, "domain_name", "") == curr_domain):
-                            break
-
-                # Priority 2: Projection from in-scope composite carrier (carrier, rank, unification)
-                if best_cand_cell is None:
-                    in_scope_carrier_cell = None
-                    for prev in reversed(in_scope_cells):
-                        for prev_out in (prev.outputs or {}).values():
-                            carrier = getattr(prev_out, "type_name", None) or getattr(prev_out, "abstract_type", None)
-                            if carrier and reg.is_composite_carrier(carrier):
-                                in_scope_carrier_cell = prev
-                                break
-                        if in_scope_carrier_cell:
-                            break
-
-                    if in_scope_carrier_cell:
-                        for cand in self.orchestrator.loaded_cells.values():
-                            if any(existing.cell_id == cand.cell_id for existing in path):
-                                continue
-                            for cand_out in (cand.outputs or {}).values():
-                                c_rank = getattr(cand_out, "rank", None)
-                                if p_rank is not None and c_rank is not None and p_rank != c_rank:
-                                    continue
-                                if not is_edge_valid(cand_out, p, producer_cell=cand, consumer_cell=curr_c):
-                                    continue
-                                if self.orchestrator.cells_directly_unify(in_scope_carrier_cell, cand):
-                                    best_cand_cell = cand
-                                    break
-                                bridges = self.orchestrator.find_shortest_bridge_path(in_scope_carrier_cell, cand)
-                                if bridges:
-                                    best_cand_cell = cand
-                                    break
-                            if best_cand_cell:
-                                break
-
-                # Priority 3: General backward search closing required unbound port
-                if best_cand_cell is None:
-                    for cand in self.orchestrator.loaded_cells.values():
-                        if any(existing.cell_id == cand.cell_id for existing in path):
-                            continue
-                        for cand_out in (cand.outputs or {}).values():
-                            c_rank = getattr(cand_out, "rank", None)
-                            if p_rank is not None and c_rank is not None and p_rank != c_rank:
-                                continue
-                            if is_edge_valid(cand_out, p, producer_cell=cand, consumer_cell=curr_c):
-                                best_cand_cell = cand
-                                break
-                        if best_cand_cell:
-                            break
-
-                if best_cand_cell is not None:
-                    cand_path = [best_cand_cell]
-                    if in_scope_cells:
-                        prev = in_scope_cells[-1]
-                        if not self.orchestrator.cells_directly_unify(prev, best_cand_cell):
-                            bridges = self.orchestrator.find_shortest_bridge_path(prev, best_cand_cell)
-                            if bridges:
-                                cand_path = bridges + [best_cand_cell]
-                    to_add = [c for c in cand_path if not any(existing.cell_id == c.cell_id for existing in path)]
-                    if to_add:
-                        cells_to_insert.extend(to_add)
-                        if trace:
-                            self._trace("unbound_port_closed", for_cell=curr_c.cell_id, port=p_name,
-                                        producer=best_cand_cell.cell_id)
-                else:
-                    logger.debug(f"[ROUTE] Unbound port gap: no tree cell closes port={p_name} of {curr_c.cell_id}")
-
-            if cells_to_insert:
-                path = path[:idx] + cells_to_insert + path[idx:]
-                continue
-            idx += 1
-
         try:
             try:
                 from ..unification import analyze_property_contracts as _prop_analyze
@@ -1516,7 +1390,7 @@ class RouteMethod(ABC):
                 )
                 is_candidate_bridge = not is_exempt and (
                     c_role in bridge_roles
-                    or getattr(c, "node_type", "") in ("tunnel", "bridge")
+                    or getattr(c, "node_type", "") in bridge_roles
                     or bool(bridge_roles & c_tags)
                     or (vocab is not None and hasattr(vocab, "is_bridge") and vocab.is_bridge(c))
                 )
@@ -1635,27 +1509,42 @@ class RouteMethod(ABC):
             if is_path_port(p)
         ]
         reg = TypeRegistry.get_instance()
+        fmt_groups = reg.get_format_groups()
+        loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
         for p in path_ports:
-            port_fmts = getattr(p, "supported_formats", None)
-            if port_fmts:
-                clean_fmts = {str(f).strip().lower() for f in port_fmts}
-                if ext in clean_fmts:
-                    return 2
             tn = str(getattr(p, "type_name", "") or "").strip()
+            has_concrete_fmt = False
             if "[" in tn and tn.endswith("]"):
                 ctor, _, inner = tn[:-1].partition("[")
-                if ctor.strip().lower() in ("file", "stream", "path", "asset"):
+                if ctor.strip().lower() in loc_ctors:
                     parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
                     if len(parts) >= 2:
                         fmt = parts[1]
-                        if fmt not in ("any", "generic", "*", ""):
-                            if ext == fmt or reg.is_subtype(ext, fmt):
+                        if fmt and fmt != "generic" and not reg.is_declared_top(fmt):
+                            has_concrete_fmt = fmt not in fmt_groups
+                            if (
+                                ext == fmt
+                                or (len(ext) >= 2 and fmt.startswith(ext))
+                                or reg.is_subtype(ext, fmt)
+                                or (has_concrete_fmt and reg.is_subtype(fmt, ext))
+                            ):
                                 return 2
                     elif len(parts) == 1:
                         target = parts[0]
-                        if target not in ("any", "generic", "*", ""):
-                            if ext == target or reg.is_subtype(ext, target):
+                        if target and target != "generic" and not reg.is_declared_top(target):
+                            has_concrete_fmt = target not in fmt_groups
+                            if (
+                                ext == target
+                                or (len(ext) >= 2 and target.startswith(ext))
+                                or reg.is_subtype(ext, target)
+                            ):
                                 return 2
+            if not has_concrete_fmt:
+                port_fmts = getattr(p, "supported_formats", None)
+                if port_fmts:
+                    clean_fmts = {str(f).strip().lower() for f in port_fmts}
+                    if ext in clean_fmts:
+                        return 2
         return 1
 
     def requested_sink(self, prompt: str, candidates: List[Cell]) -> Optional[Cell]:
@@ -1713,7 +1602,7 @@ class RouteMethod(ABC):
             if getattr(c, "node_type", "") == "constant":
                 continue
             if not getattr(c, "slots", None):
-                if cid.startswith("MACRO_"):
+                if is_macro_cell(c):
                     continue
                 if getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator":
                     continue

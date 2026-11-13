@@ -36,7 +36,21 @@
           "port_role": "data_input",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "DocumentText",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "nlp.raw_document",
+          "typestate": "nlp::raw_document",
+          "invariants": []
         }
       },
       "outputs": {
@@ -48,7 +62,21 @@
           "port_role": "data_output",
           "structure_kind": "collection",
           "rank": 1,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "TokenSequence",
+          "layout": {
+            "rank": 1,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "nlp.tokenized_sequence",
+          "typestate": "nlp::tokenized_sequence",
+          "invariants": []
         }
       },
       "code_template": "{tokens} = [w.strip('.,!?;:()[]') for w in str({text}).lower().split() if w.strip('.,!?;:()[]')]",
@@ -56,7 +84,9 @@
         "tokens",
         "text"
       ],
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "NLP_WORD_FREQUENCIES",
@@ -80,7 +110,21 @@
           "port_role": "data_input",
           "structure_kind": "collection",
           "rank": 1,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "TokenSequence",
+          "layout": {
+            "rank": 1,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "nlp.tokenized_sequence",
+          "typestate": "nlp::tokenized_sequence",
+          "invariants": []
         }
       },
       "outputs": {
@@ -92,7 +136,21 @@
           "port_role": "result",
           "structure_kind": "composite",
           "rank": 0,
-          "element_type": "composite_record"
+          "element_type": "composite_record",
+          "carrier": "TokenFrequencies",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "nlp.frequency_map",
+          "typestate": "nlp::frequency_map",
+          "invariants": []
         }
       },
       "code_template": "from collections import Counter as _Counter\n{frequencies} = dict(_Counter({tokens}))",
@@ -101,7 +159,9 @@
         "tokens"
       ],
       "endable": true,
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "mock_fixtures": [

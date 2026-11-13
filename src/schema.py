@@ -1,5 +1,5 @@
 # src/schema.py
-from typing import Dict, List, Optional, Literal, Any, Union
+from typing import Dict, List, Optional, Literal, Any, Union, Set
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 import ast
 
@@ -137,6 +137,26 @@ class TypestateDefinition(BaseModel):
     properties: Dict[str, Any] = Field(default_factory=dict)
 
 
+def _schema_reg_semantics(key: str) -> Set[str]:
+    try:
+        from lattice import TypeRegistry
+        return {str(x).strip().lower() for x in (TypeRegistry.get_instance().get_verification_semantics(key) or ()) if str(x).strip()}
+    except Exception:
+        return set()
+
+
+def _void_or_top_shape() -> Set[str]:
+    return _schema_reg_semantics("void_types") | _schema_reg_semantics("universal_top_types") | _schema_reg_semantics("bottom_types")
+
+
+def _top_or_default_state() -> Set[str]:
+    return _schema_reg_semantics("top_states") | {""}
+
+
+def _scalar_primary_abstract() -> Set[str]:
+    return _schema_reg_semantics("atomic_carrier_roots") | _schema_reg_semantics("scalar_abstract_types")
+
+
 class ShapeContractSchema(BaseModel):
     """
     Unified formal contract for port tensor shapes and rank constraints.
@@ -181,7 +201,7 @@ class ShapeContractSchema(BaseModel):
             )
         if isinstance(v, str):
             s = v.strip()
-            if not s or s.lower() in ("none", "null", "any", "*"):
+            if not s or s.lower() in _void_or_top_shape():
                 return cls(
                     ndim=None,
                     shape=None,
@@ -204,7 +224,8 @@ class ShapeContractSchema(BaseModel):
             ch = None
             ch_ax = None
             l = None
-            if ndim == 3 and shape_elements[0] in ("H", "height", "rows") and isinstance(shape_elements[2], int):
+            height_tokens = _schema_reg_semantics("height_axis_tokens")
+            if ndim == 3 and str(shape_elements[0]) in height_tokens and isinstance(shape_elements[2], int):
                 ch = shape_elements[2]
                 ch_ax = -1
             elif ndim == 1 and isinstance(shape_elements[0], int):
@@ -218,6 +239,67 @@ class ShapeContractSchema(BaseModel):
                 len=l,
             )
         return None
+
+
+class LayoutContract(BaseModel):
+    """
+    Axis 2 (M): Algebraic Memory Layout for a port.
+    Separates physical tensor/container rank, symbolic dimensions, dtype, and order
+    from semantic interpretations and value invariants.
+    Supports polymorphic TypeVar symbols (e.g. rank='R', dtype='D').
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    rank: Optional[Union[int, str]] = None
+    shape: Optional[List[Union[int, str]]] = None
+    dtype: Optional[str] = None
+    memory_order: Optional[Literal["C", "F", "any"]] = None
+    rank_polymorphic: bool = False
+    channel_count: Optional[int] = None
+    channel_axis: Optional[int] = None
+    length: Optional[Union[int, str]] = None
+
+
+class RelationConstraintSchema(BaseModel):
+    """
+    Cell-level multi-port coupling constraint beyond single-port 5-axis types.
+    Examples: complement_of, disjoint_from, key_of, same_provenance, same_nominal.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    kind: Literal["complement_of", "disjoint_from", "key_of", "same_provenance", "same_nominal", "same_length", "custom"]
+    source_port: str
+    target_port: str
+    role: Optional[str] = None
+    description: Optional[str] = None
+
+
+class BridgeProfileSchema(BaseModel):
+    """
+    Declarative morphism-bridge contract indicating which 5-axis delta(s) a conversion
+    cell resolves and whether the conversion is zero-copy, copy, or lossy.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    is_bridge: bool = True
+    delta_axes: List[Literal["carrier", "layout", "semantics", "typestate", "invariants", "nominal"]] = Field(default_factory=list)
+    cost_tier: float = 1.0  # 0.0=subtype/identity, 0.01=view, 1.0=copy/permute, 10.0=lossy projection
+    lossy: bool = False
+    requires_intent: bool = False
+
+
+class PolymorphicPropagationSchema(BaseModel):
+    """
+    Declares whether an operation acts as a structure-preserving functor across
+    input ports to output ports (e.g. CLIP preserves BGR semantics; MEAN collapses it).
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    preserves_semantics: bool = False
+    preserves_layout: bool = False
+    preserves_typestate: bool = False
+    preserves_nominal: bool = False
+    source_port: Optional[str] = None
 
 
 class TypestateVocabularySchema(BaseModel):
@@ -259,12 +341,44 @@ class PortSchema(BaseModel):
     complement_of_port: Optional[str] = None
     disjoint_from_port: Optional[str] = None
     key_from_upstream_role: Optional[str] = None
+    # --- 5-Axis Product Fields (C, M, Sigma, S, Phi) ---
+    carrier: Optional[str] = None
+    nominal_type: Optional[str] = None
+    layout: Optional[Union[LayoutContract, Dict[str, Any]]] = None
+    semantics: Optional[str] = None
+    typestate: Optional[str] = None
+    invariants: List[str] = Field(default_factory=list)
+    effect_suspended: bool = False
 
     def model_post_init(self, __context: Any) -> None:
         if self.role and not self.port_role:
             self.port_role = self.role
         elif self.port_role and not self.role:
             self.role = self.port_role
+        # Populate 5-axis normalized projections cleanly if omitted on legacy JSONs
+        if self.carrier is None and self.type_name:
+            self.carrier = self.type_name
+        if self.layout is None and (self.shape_contract is not None or self.rank is not None or self.element_type is not None):
+            sc = self.shape_contract if isinstance(self.shape_contract, dict) else {}
+            self.layout = LayoutContract(
+                rank=sc.get("ndim", self.rank),
+                shape=sc.get("shape"),
+                dtype=self.element_type,
+                rank_polymorphic=bool(sc.get("rank_polymorphic", False)),
+                channel_count=sc.get("channel_count"),
+                channel_axis=sc.get("channel_axis"),
+                length=sc.get("len"),
+            )
+        if self.typestate is None and self.state:
+            dom = str(self.domain or "").strip().lower()
+            st = str(self.state).strip().lower()
+            is_top_d = st in _top_or_default_state()
+            self.typestate = f"{dom}::{st}" if (dom and "::" not in st and not is_top_d) else st
+        if self.semantics is None and self.state:
+            dom = str(self.domain or "").strip().lower()
+            st = str(self.state).strip().lower()
+            is_top_d = st in _top_or_default_state()
+            self.semantics = "any" if is_top_d else (f"{dom}.{st}" if (dom and "." not in st and "::" not in st) else st)
 
     @field_validator("shape_contract", mode="before")
     @classmethod
@@ -342,11 +456,14 @@ class CellSchema(BaseModel):
     internal_topology: Dict[str, List[str]] = Field(default_factory=dict)
     algorithmic_steps: List[str] = Field(default_factory=list)
 
-    # --- Semantic IR Extensions ---
+    # --- Semantic IR & 5-Axis Relational Extensions ---
     preconditions: List[Union[ConditionPredicate, str, Dict[str, Any]]] = Field(default_factory=list)
     postconditions: List[Union[ConditionPredicate, str, Dict[str, Any]]] = Field(default_factory=list)
     effects: List[Union[ConditionPredicate, str, Dict[str, Any]]] = Field(default_factory=list)  # alias for postconditions
     edges: List[Union[EdgeSchema, Dict[str, Any]]] = Field(default_factory=list)
+    relations: List[Union[RelationConstraintSchema, Dict[str, Any]]] = Field(default_factory=list)
+    bridge_profile: Optional[Union[BridgeProfileSchema, Dict[str, Any]]] = None
+    polymorphic_propagation: Optional[Union[PolymorphicPropagationSchema, Dict[str, Any]]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -529,10 +646,11 @@ class CellSchema(BaseModel):
             return self.inputs[self.primary_in]
         required = [p for p in self.inputs.values() if p.required]
         if required:
+            scalar_abs = _scalar_primary_abstract()
             non_scalar = [
                 p
                 for p in required
-                if (p.abstract_type or "").lower() not in ("scalar", "text", "path", "logical")
+                if (p.abstract_type or "").lower() not in scalar_abs
             ]
             return non_scalar[0] if non_scalar else required[0]
         return next(iter(self.inputs.values()))
@@ -602,6 +720,7 @@ class TreeSchema(BaseModel):
     dest_port_tokens: List[str] = Field(default_factory=list)
     data_bearing_roles: List[str] = Field(default_factory=list)
     pointed_defaults: Dict[str, Any] = Field(default_factory=dict)
+    role_semantics: Dict[str, Any] = Field(default_factory=dict)  # declared structural roles/types/effects
     supported_formats: List[str] = Field(default_factory=list)
     capabilities: Dict[str, Any] = Field(default_factory=dict)
 

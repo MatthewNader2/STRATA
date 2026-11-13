@@ -1,21 +1,99 @@
 {
   "domain": "python_core",
+  "is_core": true,
   "version": "1.0.0",
   "description": "Standard Python algorithmic morphisms and data structure utilities.",
   "types": {
-    "dict": {
-      "parent": "collection"
+    "any": {
+      "parent": null
     },
-    "list": {
-      "parent": "sequence"
+    "object": {
+      "parent": "any"
+    },
+    "scalar": {
+      "parent": "object"
+    },
+    "numeric": {
+      "parent": "scalar"
+    },
+    "number": {
+      "parent": "numeric"
     },
     "int": {
       "parent": "numeric"
     },
+    "float": {
+      "parent": "numeric"
+    },
+    "bool": {
+      "parent": "int"
+    },
     "str": {
+      "parent": "scalar"
+    },
+    "bytes": {
+      "parent": "scalar"
+    },
+    "literal": {
+      "parent": "scalar"
+    },
+    "collection": {
       "parent": "object"
+    },
+    "sequence": {
+      "parent": "collection"
+    },
+    "mapping": {
+      "parent": "collection"
+    },
+    "dict": {
+      "parent": "mapping"
+    },
+    "list": {
+      "parent": "sequence"
+    },
+    "tuple": {
+      "parent": "sequence"
+    },
+    "set": {
+      "parent": "collection"
+    },
+    "none": {
+      "parent": "object"
+    },
+    "nonetype": {
+      "parent": "none"
+    },
+    "void": {
+      "parent": "none"
+    },
+    "unit": {
+      "parent": "none"
     }
   },
+  "top_types": [
+    "any",
+    "*",
+    "top",
+    "unknown",
+    "\u22a4"
+  ],
+  "top_states": [
+    "any",
+    "*",
+    "default",
+    "unregistered",
+    "unbound",
+    "top",
+    "none",
+    "\u22a4"
+  ],
+  "product_constructors": [
+    "tuple",
+    "pair",
+    "product",
+    "record"
+  ],
   "cells": [
     {
       "cell_id": "PYTHON_DIJKSTRA_ALGORITHM",
@@ -48,7 +126,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.adjacency_dict",
+          "typestate": "python_core::adjacency_dict",
+          "invariants": []
         },
         "start": {
           "type_name": "str",
@@ -59,7 +151,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.source_node",
+          "typestate": "python_core::source_node",
+          "invariants": []
         }
       },
       "outputs": {
@@ -70,7 +176,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.distances",
+          "typestate": "python_core::distances",
+          "invariants": []
         }
       },
       "code_template": "import heapq\n\ndef dijkstra(graph, start):\n    distances = dict.fromkeys(graph, float('inf'))\n    if start in distances:\n        distances[start] = 0\n    pq = [(0, start)] if start in distances else []\n    while pq:\n        curr_dist, curr_node = heapq.heappop(pq)\n        if curr_dist > distances.get(curr_node, float('inf')):\n            continue\n        for neighbor, weight in graph.get(curr_node, {}).items():\n            dist = curr_dist + weight\n            if dist < distances.get(neighbor, float('inf')):\n                distances[neighbor] = dist\n                heapq.heappush(pq, (dist, neighbor))\n    return distances\n\n{output_var} = dijkstra({graph}, {start})",
@@ -80,13 +200,14 @@
         "import heapq"
       ],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "graph",
         "start",
         "output_var"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_BINARY_SEARCH_SORT",
@@ -126,7 +247,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.sorted_list",
+          "typestate": "python_core::sorted_list",
+          "invariants": []
         },
         "target": {
           "type_name": "int",
@@ -137,7 +274,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.query",
+          "typestate": "python_core::query",
+          "invariants": []
         }
       },
       "outputs": {
@@ -148,7 +299,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.index",
+          "typestate": "python_core::index",
+          "invariants": []
         }
       },
       "code_template": "def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n\n{output_var} = binary_search({data}, {target})",
@@ -156,13 +321,14 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "data",
         "target",
         "output_var"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_MERGE_SORT_ALGORITHM",
@@ -201,7 +367,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_list",
+          "typestate": "python_core::raw_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -223,7 +405,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.sorted_list",
+          "typestate": "python_core::sorted_list",
+          "invariants": []
         }
       },
       "code_template": "def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    res = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            res.append(left[i])\n            i += 1\n        else:\n            res.append(right[j])\n            j += 1\n    res.extend(left[i:])\n    res.extend(right[j:])\n    return res\n\n{output_var} = merge_sort({data})",
@@ -231,12 +429,13 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "data",
         "output_var"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_DICT_INIT",
@@ -261,7 +460,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_dict",
+          "typestate": "python_core::initialized_dict",
+          "invariants": []
         }
       },
       "code_template": "{output_var} = {}",
@@ -269,11 +482,12 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "output_var"
       ],
-      "endable": false
+      "endable": false,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_DICT_GET",
@@ -301,7 +515,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_dict",
+          "typestate": "python_core::initialized_dict",
+          "invariants": []
         },
         "key": {
           "type_name": "str",
@@ -312,7 +540,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.key_name",
+          "typestate": "python_core::key_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -323,7 +565,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "any",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.extracted_value",
+          "typestate": "python_core::extracted_value",
+          "invariants": []
         }
       },
       "code_template": "{output_var} = {mapping}.get({key})",
@@ -331,13 +587,14 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "output_var",
         "mapping",
         "key"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_DICT_SET",
@@ -365,7 +622,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_dict",
+          "typestate": "python_core::initialized_dict",
+          "invariants": []
         },
         "key": {
           "type_name": "str",
@@ -376,7 +647,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.key_name",
+          "typestate": "python_core::key_name",
+          "invariants": []
         },
         "value": {
           "type_name": "object",
@@ -386,7 +671,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "any",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.extracted_value",
+          "typestate": "python_core::extracted_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -397,7 +696,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "dict",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_dict",
+          "typestate": "python_core::initialized_dict",
+          "invariants": []
         }
       },
       "code_template": "{output_var} = dict({mapping})\n{output_var}[{key}] = {value}",
@@ -405,14 +718,15 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "output_var",
         "mapping",
         "key",
         "value"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PYTHON_LIST_APPEND",
@@ -437,7 +751,21 @@
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "any",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_list",
+          "typestate": "python_core::raw_list",
+          "invariants": []
         },
         "element": {
           "type_name": "object",
@@ -448,7 +776,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "any",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.extracted_value",
+          "typestate": "python_core::extracted_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -459,7 +801,21 @@
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "any",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_list",
+          "typestate": "python_core::raw_list",
+          "invariants": []
         }
       },
       "code_template": "{output_var} = list({items}) + [{element}]",
@@ -467,13 +823,14 @@
       "primary_out": "output_var",
       "dependencies": [],
       "verified": 1,
-      "source_priority": 100,
       "slots": [
         "output_var",
         "items",
         "element"
       ],
-      "endable": true
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
     }
   ],
   "supported_formats": [],
@@ -562,5 +919,619 @@
     "float": 0.0,
     "str": "''",
     "bool": false
+  },
+  "dest_port_tokens": [
+    "dest",
+    "destination",
+    "output",
+    "out",
+    "target",
+    "save",
+    "export",
+    "write",
+    "savepath",
+    "output_path",
+    "target_path",
+    "dest_path"
+  ],
+  "source_port_tokens": [
+    "source",
+    "src",
+    "input",
+    "in",
+    "load",
+    "read",
+    "filepath",
+    "source_path",
+    "file_path"
+  ],
+  "materialization_states": [
+    "saved_file",
+    "exported_file",
+    "written_file",
+    "saved",
+    "exported",
+    "written",
+    "materialized",
+    "closed",
+    "done",
+    "displayed",
+    "plotted"
+  ],
+  "role_semantics": {
+    "atomic_carrier_roots": [
+      "scalar",
+      "numeric",
+      "number",
+      "int",
+      "float",
+      "bool",
+      "str",
+      "bytes",
+      "literal",
+      "none",
+      "nonetype",
+      "void",
+      "unit",
+      "path",
+      "filepath",
+      "uri",
+      "url",
+      "text",
+      "logical"
+    ],
+    "composite_carrier_roots": [
+      "collection",
+      "sequence",
+      "mapping",
+      "dict",
+      "list",
+      "tuple",
+      "set"
+    ],
+    "literal_types": [
+      "int",
+      "float",
+      "bool",
+      "str",
+      "numeric",
+      "number",
+      "scalar",
+      "literal",
+      "bytes",
+      "path",
+      "filepath",
+      "uri",
+      "url",
+      "enum"
+    ],
+    "universal_top_types": [
+      "any",
+      "*",
+      "top",
+      "unknown",
+      "generic",
+      "\u22a4"
+    ],
+    "void_types": [
+      "none",
+      "nonetype",
+      "void",
+      "unit",
+      "1",
+      "effect[io]",
+      ""
+    ],
+    "bottom_types": [
+      "none",
+      "null",
+      "undefined",
+      "bottom",
+      "empty",
+      "void",
+      "unit",
+      "nil",
+      "\u22a5",
+      ""
+    ],
+    "empty_carrier_types": [
+      "none",
+      "nonetype",
+      "void",
+      "unit"
+    ],
+    "output_targets": [
+      "output_var",
+      "output",
+      "out",
+      "result",
+      "res"
+    ],
+    "receiver_roles": [
+      "receiver",
+      "self",
+      "instance",
+      "owner",
+      "target_object",
+      "carrier"
+    ],
+    "receiver_port_names": [
+      "self",
+      "obj",
+      "instance",
+      "carrier",
+      "container"
+    ],
+    "carrier_binds": [
+      "data_carrier",
+      "receiver",
+      "carrier",
+      "primary_operand",
+      "state",
+      "container"
+    ],
+    "dataflow_roles": [
+      "data_input",
+      "carrier",
+      "data_carrier",
+      "receiver",
+      "primary_operand",
+      "source_data",
+      "state",
+      "container"
+    ],
+    "config_roles": [
+      "config",
+      "configuration",
+      "hyperparameter",
+      "option",
+      "flag",
+      "parameter",
+      "literal_parameter"
+    ],
+    "configuration_roles": [
+      "config",
+      "configuration",
+      "hyperparameter",
+      "option",
+      "flag",
+      "parameter",
+      "literal_parameter"
+    ],
+    "parameter_roles": [
+      "parameter",
+      "literal_parameter",
+      "hyperparameter",
+      "option",
+      "flag",
+      "config"
+    ],
+    "key_roles": [
+      "key",
+      "key_selector",
+      "column_key",
+      "field_key",
+      "attr_key",
+      "index_key",
+      "coordinate"
+    ],
+    "key_binds": [
+      "key",
+      "component_key",
+      "key_selector",
+      "column_key",
+      "field_key",
+      "attr_key",
+      "index_key",
+      "coordinate"
+    ],
+    "assigned_value_roles": [
+      "value_input",
+      "assigned_value",
+      "column_value",
+      "field_value",
+      "value"
+    ],
+    "assigned_value_binds": [
+      "assigned_value",
+      "column_value",
+      "field_value",
+      "value"
+    ],
+    "assigned_value_port_names": [
+      "value",
+      "val",
+      "new_value",
+      "data"
+    ],
+    "projective_roles": [
+      "key",
+      "key_selector",
+      "projection",
+      "target_projection",
+      "feature_projection",
+      "field_key",
+      "attr_key",
+      "index_key"
+    ],
+    "projective_binds": [
+      "key",
+      "key_selector",
+      "column_key",
+      "field_key",
+      "attr_key",
+      "index_key",
+      "projection"
+    ],
+    "projection_roles": [
+      "projection",
+      "key_selector"
+    ],
+    "projection_port_names": [
+      "key",
+      "keys",
+      "field",
+      "fields",
+      "index"
+    ],
+    "terminal_output_roles": [
+      "terminal_output",
+      "sink_output",
+      "output",
+      "result"
+    ],
+    "source_data_roles": [
+      "source",
+      "ingress",
+      "source_data",
+      "src"
+    ],
+    "destination_roles": [
+      "destination",
+      "dest",
+      "sink",
+      "egress",
+      "terminal",
+      "output"
+    ],
+    "source_roles": [
+      "source",
+      "ingress",
+      "source_data",
+      "src"
+    ],
+    "ingress_roles": [
+      "source",
+      "ingress",
+      "io_ingress",
+      "generator",
+      "constructor"
+    ],
+    "sink_roles": [
+      "sink",
+      "terminal",
+      "egress",
+      "export",
+      "io_egress"
+    ],
+    "terminal_roles": [
+      "sink",
+      "terminal",
+      "egress",
+      "io_egress",
+      "export",
+      "evaluator",
+      "metric",
+      "consumer",
+      "output"
+    ],
+    "transform_roles": [
+      "transformation",
+      "transform",
+      "filter",
+      "aggregation",
+      "endomorphism",
+      "operator",
+      "bridge"
+    ],
+    "bridge_roles": [
+      "bridge",
+      "tunnel",
+      "adapter",
+      "adaptor",
+      "cast",
+      "coercion",
+      "projection"
+    ],
+    "ingress_stages": [
+      "1"
+    ],
+    "transform_stages": [
+      "2"
+    ],
+    "terminal_stages": [
+      "3"
+    ],
+    "source_states": [
+      "source_identifier",
+      "input_path",
+      "source_path",
+      "file_path",
+      "uri",
+      "url",
+      "filepath"
+    ],
+    "terminal_states": [
+      "saved_file",
+      "exported_file",
+      "written_file",
+      "saved",
+      "exported",
+      "written",
+      "materialized",
+      "closed",
+      "done",
+      "displayed",
+      "plotted"
+    ],
+    "materialization_states": [
+      "saved_file",
+      "exported_file",
+      "written_file",
+      "saved",
+      "exported",
+      "written",
+      "materialized"
+    ],
+    "terminal_invalid_states": [
+      "closed",
+      "destroyed",
+      "freed",
+      "disposed",
+      "invalid",
+      "deleted",
+      "nonexistent"
+    ],
+    "protocols": [
+      "file",
+      "http",
+      "https",
+      "s3",
+      "gs",
+      "ftp",
+      "sql",
+      "sqlite",
+      "memory"
+    ],
+    "condition_states": [
+      "condition",
+      "predicate",
+      "boolean_expression",
+      "filter_expr",
+      "query_expr",
+      "expression"
+    ],
+    "string_like_types": [
+      "str",
+      "string",
+      "literal",
+      "key_name"
+    ],
+    "target_roles": [
+      "target",
+      "destination",
+      "target_input",
+      "target_projection"
+    ],
+    "target_states": [
+      "target",
+      "target_name",
+      "target_identifier"
+    ],
+    "order_flag_names": [
+      "ascending",
+      "descending",
+      "reverse"
+    ],
+    "antonym_flag_pairs": [
+      [
+        "ascending",
+        "descending"
+      ]
+    ],
+    "generic_prepositions": [],
+    "generic_format_extensions": [
+      "dat",
+      "bin",
+      "txt",
+      "json"
+    ],
+    "bridge_tokens": [
+      "bridge",
+      "adapter",
+      "convert",
+      "cast",
+      "to",
+      "as"
+    ],
+    "bridge_role_weights": {
+      "target_match": 100.0,
+      "property_match": 10.0,
+      "bridge": 20.0
+    },
+    "reduction_tags": [
+      "reduction",
+      "aggregate",
+      "summary",
+      "collapse"
+    ],
+    "smoke_test_loop_bound": [
+      "2"
+    ],
+    "permitted_kernel_builtins": [
+      "len",
+      "range",
+      "min",
+      "max",
+      "sum",
+      "abs",
+      "round",
+      "int",
+      "float",
+      "str",
+      "bool",
+      "list",
+      "tuple",
+      "dict",
+      "set",
+      "enumerate",
+      "zip",
+      "sorted",
+      "reversed",
+      "any",
+      "all",
+      "map",
+      "filter",
+      "math",
+      "heapq",
+      "bisect"
+    ],
+    "forbidden_identifier_names": [
+      "eval",
+      "exec",
+      "compile",
+      "__import__",
+      "open",
+      "system",
+      "popen",
+      "subprocess"
+    ],
+    "headless_environment": [
+      "MPLBACKEND=Agg",
+      "SDL_VIDEODRIVER=dummy",
+      "SDL_AUDIODRIVER=dummy",
+      "QT_QPA_PLATFORM=offscreen"
+    ],
+    "latent_scoring_weights": [
+      "structural=0.5",
+      "semantic=0.5"
+    ],
+    "owner_sink_roles": [
+      "instance_sink",
+      "owner_sink"
+    ],
+    "structural_kinds": [
+      "scalar",
+      "tensor",
+      "vector",
+      "matrix",
+      "dataframe",
+      "series",
+      "collection",
+      "handle",
+      "record",
+      "table",
+      "mapping",
+      "composite",
+      "path_spec"
+    ],
+    "polymorphic_structure_kinds": [
+      "tensor",
+      "collection"
+    ],
+    "path_compat_structure_kinds": [
+      "path_spec",
+      "scalar"
+    ],
+    "scalar_abstract_types": [
+      "scalar",
+      "primitive",
+      "numeric",
+      "number"
+    ],
+    "compound_structure_kinds": [
+      "tensor",
+      "collection",
+      "composite"
+    ],
+    "locator_constructors": [
+      "file",
+      "stream",
+      "path",
+      "asset"
+    ],
+    "optic_roles": [
+      "getter",
+      "setter",
+      "complement"
+    ],
+    "read_optic_roles": [
+      "getter",
+      "complement"
+    ],
+    "accessor_optic_roles": [
+      "getter",
+      "setter"
+    ],
+    "repeatable_optic_roles": [
+      "getter",
+      "setter",
+      "complement"
+    ],
+    "macro_node_types": [
+      "macro",
+      "higher_order",
+      "combinator"
+    ],
+    "macro_node_roles": [
+      "macro",
+      "higher_order",
+      "combinator"
+    ],
+    "hof_roles": [
+      "functional_operator",
+      "callback",
+      "predicate",
+      "key_fn"
+    ],
+    "top_states": [
+      "any",
+      "*",
+      "default",
+      "unregistered",
+      "unbound",
+      "top",
+      "none",
+      "generic",
+      "\u22a4"
+    ],
+    "destination_states": [
+      "materialization",
+      "destination",
+      "serialized",
+      "sink"
+    ],
+    "cleaner_roles": [
+      "cleaner",
+      "transformer",
+      "filter"
+    ],
+    "collection_types": [
+      "list",
+      "sequence",
+      "collection",
+      "mapping"
+    ],
+    "path_port_hints": [
+      "path",
+      "dest",
+      "file",
+      "buf",
+      "fp"
+    ],
+    "literal_roles": [
+      "literal",
+      "literal_parameter"
+    ]
   }
 }

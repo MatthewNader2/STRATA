@@ -18,7 +18,7 @@ normalizer; disabling the flag yields a purely character-level tokenizer.
 
 from __future__ import annotations
 import functools
-from typing import Set, FrozenSet, List
+from typing import Set, Tuple, List
 
 
 # --------------------------------------------------------------------------- #
@@ -41,6 +41,20 @@ def normalize_token(token: str) -> str:
 # expands them in both directions.
 _ALIASES: dict = {}
 _ALIASES_REV: dict = {}
+
+
+def _is_profile_zero() -> bool:
+    try:
+        from .inference import ModelManager
+    except (ImportError, ValueError):
+        try:
+            from inference import ModelManager
+        except Exception:
+            return False
+    try:
+        return getattr(ModelManager.get_instance(), "current_profile_name", None) == "0"
+    except Exception:
+        return False
 
 
 def register_aliases(mapping: dict) -> None:
@@ -77,19 +91,21 @@ def _expand_aliases(tokens):
     return out
 
 
-def _tokenize_identifier_cached(identifier: str) -> FrozenSet[str]:
+@functools.lru_cache(maxsize=16384)
+def _tokenize_identifier_cached(identifier: str, expand_aliases: bool = True) -> Tuple[str, ...]:
     clean = str(identifier).strip()
     if not clean:
-        return frozenset()
+        return ()
     tokens = set()
 
     def _emit(chunk):
         t = "".join(chunk).lower().strip()
         if len(t) > 1:
             tokens.add(t)
-            s = normalize_token(t)
-            if len(s) > 1:
-                tokens.add(s)
+            if ENABLE_ENGLISH_STEMMING:
+                s = normalize_token(t)
+                if len(s) > 1:
+                    tokens.add(s)
 
     seg, chunk = [], []
     for ch in clean:
@@ -127,10 +143,10 @@ def _tokenize_identifier_cached(identifier: str) -> FrozenSet[str]:
     if len(full) > 1:
         tokens.add(full)
 
-    if _ALIASES:  # (apply_fixes_v7)
+    if expand_aliases and _ALIASES:  # (apply_fixes_v7)
         tokens = _expand_aliases(tokens)
 
-    return frozenset(tokens)
+    return tuple(sorted(tokens))
 
 
 class CellTokenizer:
@@ -163,14 +179,14 @@ class CellTokenizer:
         """
         if not identifier:
             return set()
-        return set(_tokenize_identifier_cached(str(identifier)))
+        return set(_tokenize_identifier_cached(str(identifier), not _is_profile_zero()))
 
     @classmethod
-    def tokenize_identifier_frozen(cls, identifier: str) -> FrozenSet[str]:
-        """Cached immutable variant returning FrozenSet[str]."""
+    def tokenize_identifier_frozen(cls, identifier: str) -> Tuple[str, ...]:
+        """Cached immutable variant returning Tuple[str, ...]."""
         if not identifier:
-            return frozenset()
-        return _tokenize_identifier_cached(str(identifier))
+            return ()
+        return _tokenize_identifier_cached(str(identifier), not _is_profile_zero())
 
     @classmethod
     def tokenize_prompt(cls, prompt: str, remove_stopwords: bool = False) -> Set[str]:
@@ -186,7 +202,7 @@ class CellTokenizer:
                     w = "".join(cur)
                     if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
                         tokens.add(w)
-                        if w.isalpha():
+                        if ENABLE_ENGLISH_STEMMING and w.isalpha():
                             s = normalize_token(w)
                             if len(s) > 1:
                                 tokens.add(s)
@@ -195,7 +211,7 @@ class CellTokenizer:
             w = "".join(cur)
             if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
                 tokens.add(w)
-                if w.isalpha():
+                if ENABLE_ENGLISH_STEMMING and w.isalpha():
                     s = normalize_token(w)
                     if len(s) > 1:
                         tokens.add(s)
@@ -203,7 +219,7 @@ class CellTokenizer:
             cw = raw.strip(",;.:!?()[]{}\'\"")
             if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):
                 tokens.update(cls.tokenize_identifier(cw))
-        if _ALIASES:  # (apply_fixes_v7)
+        if _ALIASES and not _is_profile_zero():  # (apply_fixes_v7)
             tokens = _expand_aliases(tokens)
         return tokens
 

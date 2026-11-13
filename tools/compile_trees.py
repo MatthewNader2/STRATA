@@ -128,7 +128,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     primary_in            TEXT,
     primary_out           TEXT,
     is_public             INTEGER,
-    source_provenance     TEXT
+    source_provenance     TEXT,
+    raw_cell              TEXT
 );
 """
 
@@ -594,11 +595,15 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     """Create the ``nodes`` table if missing; add any new columns."""
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS types;")
+    cur.execute("DROP TABLE IF EXISTS typestates;")
+    cur.execute("DROP TABLE IF EXISTS aliases;")
+    cur.execute("DROP TABLE IF EXISTS artifact_readers;")
     cur.execute("DROP TABLE IF EXISTS structural_metadata;")
     cur.execute(_CREATE_TABLE_SQL)
     cur.execute(_CREATE_TYPES_TABLE_SQL)
     cur.execute(_CREATE_TYPESTATES_TABLE_SQL)
     cur.execute(_CREATE_ALIASES_TABLE_SQL)
+    cur.execute(_CREATE_ARTIFACT_READERS_TABLE_SQL)
     cur.execute(_CREATE_STRUCTURAL_METADATA_TABLE_SQL)
     existing = {row[1] for row in cur.execute("PRAGMA table_info(nodes)")}
     for col in _COLUMNS:
@@ -632,6 +637,15 @@ CREATE TABLE IF NOT EXISTS aliases (
 );
 """
 
+_CREATE_ARTIFACT_READERS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS artifact_readers (
+    category      TEXT NOT NULL,
+    module_name   TEXT NOT NULL,
+    function_name TEXT NOT NULL,
+    PRIMARY KEY (category, module_name, function_name)
+);
+"""
+
 _CREATE_STRUCTURAL_METADATA_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS structural_metadata (
     category TEXT,
@@ -640,6 +654,35 @@ CREATE TABLE IF NOT EXISTS structural_metadata (
     PRIMARY KEY (category, item)
 );
 """
+
+
+def _persist_artifact_readers(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
+    cur = conn.cursor()
+    written = 0
+    for path in tree_files:
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        readers_map = data.get("artifact_readers")
+        if isinstance(readers_map, dict):
+            for cat, readers in readers_map.items():
+                if not isinstance(readers, list):
+                    continue
+                for r in readers:
+                    parts = str(r).replace(":", ".").rsplit(".", 1)
+                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                        cur.execute(
+                            "INSERT OR REPLACE INTO artifact_readers (category, module_name, function_name) "
+                            "VALUES (?, ?, ?)",
+                            (str(cat).strip().lower(), parts[0].strip(), parts[1].strip()),
+                        )
+                        written += 1
+    conn.commit()
+    return written
 
 
 def _persist_aliases(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
@@ -665,9 +708,61 @@ def _persist_aliases(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
     return written
 
 
+def _merge_list_mapping(acc: dict, incoming: dict, lower_keys: bool = True) -> None:
+    if not isinstance(incoming, dict):
+        return
+    for raw_k, raw_v in incoming.items():
+        k = str(raw_k).strip().lower() if lower_keys else str(raw_k).strip()
+        if not k:
+            continue
+        if isinstance(raw_v, (list, tuple, set)):
+            vals = list(raw_v)
+            prev = acc.get(k)
+            if isinstance(prev, list):
+                seen = {json.dumps(x, sort_keys=True) for x in prev}
+                for item in vals:
+                    marker = json.dumps(item, sort_keys=True)
+                    if marker not in seen:
+                        prev.append(item)
+                        seen.add(marker)
+            else:
+                deduped = []
+                seen = set()
+                for item in vals:
+                    marker = json.dumps(item, sort_keys=True)
+                    if marker not in seen:
+                        deduped.append(item)
+                        seen.add(marker)
+                acc[k] = deduped
+        elif isinstance(raw_v, dict):
+            prev = acc.get(k)
+            if isinstance(prev, dict):
+                _merge_list_mapping(prev, raw_v, lower_keys=lower_keys)
+            else:
+                acc[k] = dict(raw_v)
+        else:
+            acc[k] = raw_v
+
+
 def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
     cur = conn.cursor()
     written = 0
+    core_domains = {"", "python_core", "core", "base", "builtin", "builtins"}
+
+    def _insert(cat: str, it: str, ex: Optional[str] = None):
+        nonlocal written
+        cur.execute(
+            "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+            (cat, str(it), ex)
+        )
+        written += 1
+
+    merged_role_semantics: dict = {}
+    merged_capabilities: dict = {}
+    merged_carrier_roles: dict = {}
+    merged_state_role_ancestors: dict = {}
+    merged_state_role_markers: dict = {}
+
     for path in tree_files:
         try:
             with path.open("r", encoding="utf-8") as fh:
@@ -677,28 +772,39 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
         if not isinstance(data, dict):
             continue
 
-        def _insert(cat: str, it: str, ex: Optional[str] = None):
-            nonlocal written
-            cur.execute(
-                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
-                (cat, str(it), ex)
-            )
-            written += 1
+        dom = str(data.get("domain") or path.stem).strip().lower()
 
         mappings = [
             ("dest_port_tokens", "dest_port_token"),
+            ("source_port_tokens", "source_port_token"),
             ("data_bearing_roles", "data_bearing_role"),
             ("abstract_carriers", "abstract_carrier"),
             ("type_vars", "type_var"),
             ("top_types", "top_type"),
+            ("top_states", "top_state"),
             ("product_constructors", "product_constructor"),
             ("materialization_states", "materialization_state"),
+            ("top_level_carriers", "top_level_carrier"),
+            ("path_port_tokens", "path_port_token"),
+            ("identifier_root_states", "identifier_root_state"),
+            ("supported_formats", "supported_format"),
         ]
         for key, cat in mappings:
             items = data.get(key)
             if isinstance(items, list):
                 for item in items:
                     _insert(cat, item)
+
+        ts_info = data.get("typestates")
+        if isinstance(ts_info, dict) and isinstance(ts_info.get("terminal_states"), list):
+            for ts_item in ts_info["terminal_states"]:
+                _insert("terminal_state", ts_item)
+
+        adv_q = data.get("advisory_qualifiers")
+        if isinstance(adv_q, list):
+            for q in adv_q:
+                q_json = json.dumps(q, sort_keys=True)
+                _insert("advisory_qualifier", q_json, q_json)
 
         acm = data.get("abstract_carrier_mapping")
         if isinstance(acm, dict):
@@ -708,12 +814,63 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
         pdefs = data.get("pointed_defaults")
         if isinstance(pdefs, dict):
             for k, val in pdefs.items():
-                _insert("type_default", k, json.dumps(val))
+                k_low = str(k).strip().lower()
+                if not k_low:
+                    continue
+                if dom:
+                    _insert("type_default", f"{dom}:{k_low}", json.dumps(val))
+                if dom in core_domains:
+                    _insert("type_default", k_low, json.dumps(val))
 
-        caps = data.get("capabilities")
-        if isinstance(caps, dict):
-            for k, val in caps.items():
-                _insert("capability", k, json.dumps(val))
+        if isinstance(data.get("enum_constant_rules"), list):
+            for rule in data["enum_constant_rules"]:
+                if isinstance(rule, dict):
+                    rule_json = json.dumps(rule, sort_keys=True)
+                    _insert("enum_constant_rule", rule_json, rule_json)
+
+        probes = data.get("mock_probes")
+        if not probes:
+            for k_p, v_p in data.items():
+                if k_p.startswith("mock_") and isinstance(v_p, list):
+                    probes = v_p
+                    break
+        if isinstance(probes, list):
+            for probe in probes:
+                if isinstance(probe, dict):
+                    probe_json = json.dumps(probe, sort_keys=True)
+                    _insert("mock_probe", probe_json, probe_json)
+
+        _merge_list_mapping(merged_role_semantics, data.get("role_semantics"), lower_keys=True)
+        _merge_list_mapping(merged_capabilities, data.get("capabilities"), lower_keys=False)
+        _merge_list_mapping(merged_carrier_roles, data.get("carrier_roles"), lower_keys=True)
+        _merge_list_mapping(merged_state_role_ancestors, data.get("state_role_ancestors"), lower_keys=True)
+        _merge_list_mapping(merged_state_role_markers, data.get("state_role_markers"), lower_keys=True)
+
+        cells = data.get("cells") or data.get("nodes") or data.get("morphisms") or []
+        if isinstance(cells, list):
+            for c in cells:
+                if not isinstance(c, dict):
+                    continue
+                for tv in c.get("type_vars") or ():
+                    _insert("type_var", tv)
+                inputs = c.get("inputs")
+                if isinstance(inputs, dict):
+                    for p in inputs.values():
+                        if isinstance(p, dict):
+                            role = p.get("port_role") or p.get("role")
+                            if role:
+                                _insert("role_carrier", str(role).strip().lower())
+
+    for k, val in merged_role_semantics.items():
+        _insert("role_semantics", k, json.dumps(val))
+    for k, val in merged_capabilities.items():
+        _insert("capability", k, json.dumps(val))
+    for k, val in merged_carrier_roles.items():
+        _insert("carrier_role", k, json.dumps(val))
+    for k, val in merged_state_role_ancestors.items():
+        _insert("state_role_ancestor", k, json.dumps(val))
+    for k, val in merged_state_role_markers.items():
+        _insert("state_role_marker", k, json.dumps(val))
 
     conn.commit()
     return written
@@ -727,6 +884,7 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
     """
     cur = conn.cursor()
     written = 0
+    core_domains = {"", "python_core", "core", "base", "builtin", "builtins"}
     for path in tree_files:
         try:
             with path.open("r", encoding="utf-8") as fh:
@@ -736,6 +894,7 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
         if not isinstance(data, dict):
             continue
 
+        dom = str(data.get("domain") or path.stem).strip().lower()
         entries: List[Tuple[str, str]] = []
         raw_types = data.get("types")
         if isinstance(raw_types, list):
@@ -746,6 +905,29 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
                     name = item.get("name") or item.get("type_name")
                     if not name:
                         continue
+                    k_low = str(name).strip().lower()
+                    if "default_value" in item:
+                        if dom:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", f"{dom}:{k_low}", json.dumps(item["default_value"])),
+                            )
+                        if dom in core_domains:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", k_low, json.dumps(item["default_value"])),
+                            )
+                    elif "pointed_default" in item:
+                        if dom:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", f"{dom}:{k_low}", json.dumps(item["pointed_default"])),
+                            )
+                        if dom in core_domains:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", k_low, json.dumps(item["pointed_default"])),
+                            )
                     parents = item.get("parents")
                     if isinstance(parents, list) and parents:
                         for p in parents:
@@ -757,16 +939,29 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
         elif isinstance(raw_types, dict):
             for name, meta in raw_types.items():
                 if isinstance(meta, dict):
+                    k_low = str(name).strip().lower()
                     if "default_value" in meta:
-                        cur.execute(
-                            "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
-                            ("type_default", str(name), json.dumps(meta["default_value"])),
-                        )
+                        if dom:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", f"{dom}:{k_low}", json.dumps(meta["default_value"])),
+                            )
+                        if dom in core_domains:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", k_low, json.dumps(meta["default_value"])),
+                            )
                     elif "pointed_default" in meta:
-                        cur.execute(
-                            "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
-                            ("type_default", str(name), json.dumps(meta["pointed_default"])),
-                        )
+                        if dom:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", f"{dom}:{k_low}", json.dumps(meta["pointed_default"])),
+                            )
+                        if dom in core_domains:
+                            cur.execute(
+                                "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                                ("type_default", k_low, json.dumps(meta["pointed_default"])),
+                            )
                     parents = meta.get("parents")
                     if isinstance(parents, list) and parents:
                         for p in parents:
@@ -873,6 +1068,7 @@ def compile_database(
         types_written = _persist_type_hierarchies(conn, tree_files)
         typestates_written = _persist_typestates(conn, tree_files)
         aliases_written = _persist_aliases(conn, tree_files)
+        readers_written = _persist_artifact_readers(conn, tree_files)
         structural_written = _persist_structural_metadata(conn, tree_files)
         if types_written:
             print(f"[compile_trees] Persisted {types_written} type-hierarchy entrie(s) into the types table.")
@@ -880,6 +1076,8 @@ def compile_database(
             print(f"[compile_trees] Persisted {typestates_written} typestate declaration(s) into the typestates table.")
         if aliases_written:
             print(f"[compile_trees] Persisted {aliases_written} alias declaration(s) into the aliases table.")
+        if readers_written:
+            print(f"[compile_trees] Persisted {readers_written} artifact reader(s) into the artifact_readers table.")
         if structural_written:
             print(f"[compile_trees] Persisted {structural_written} structural metadata entrie(s) into the structural_metadata table.")
 

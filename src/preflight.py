@@ -56,7 +56,10 @@ class VariableSchema:
 
 
 
-class _DynamicDataBearingRoles(frozenset):
+import collections.abc
+
+
+class _DynamicDataBearingRoles(collections.abc.Set):
     """Dynamic data-bearing roles proxy backed by TypeRegistry."""
     def __contains__(self, item):
         return str(item).lower() in TypeRegistry.get_instance().get_data_bearing_roles()
@@ -69,7 +72,7 @@ class _DynamicDataBearingRoles(frozenset):
 DATA_BEARING_ROLES = _DynamicDataBearingRoles()
 
 
-class _DynamicConventionalEstimatorVerbs(frozenset):
+class _DynamicConventionalEstimatorVerbs(collections.abc.Set):
     """Dynamic conventional estimator verbs proxy backed by TypeRegistry."""
     def __contains__(self, item):
         return str(item).lower() in TypeRegistry.get_instance().get_estimator_verbs()
@@ -280,6 +283,7 @@ class PreflightLinter:
         code_str: Optional[str] = None,
         waived_literals: Optional[Set[str]] = None,
         orchestrator: Optional[Any] = None,
+        clause_semantic_scores: Optional[List[Dict[str, float]]] = None,
     ) -> PreflightLintResult:
         violations: List[str] = []
         warnings: List[str] = []
@@ -334,12 +338,25 @@ class PreflightLinter:
                 )
             )
 
-        # Extract universal literals from prompt if ExecutionContext is available.
+        # Extract universal literals from prompt (unless pipeline is explicit formal Program_0 syntax,
+        # where literals are explicitly declared per-port and must not be regex-scraped from call wrappers).
         extracted_literals: List[Tuple[int, str, str]] = []
-        try:
-            extracted_literals = ExecutionContext._extract_universal_literals(prompt or "")
-        except Exception:
-            pass
+        is_formal_pipeline = bool(pipeline_bindings) and all(
+            bool(getattr(_c, "formal_program_step", False)) for _c, _ in pipeline_bindings
+        )
+        if is_formal_pipeline:
+            for _cell_idx, (_cell_item, _b_dict) in enumerate(pipeline_bindings):
+                exp_b = getattr(_cell_item, "explicit_port_bindings", None) or {}
+                for _pn, _lv in exp_b.items():
+                    if isinstance(_lv, str) and _lv.strip():
+                        extracted_literals.append((_cell_idx, "quoted_str", _lv.strip()))
+                    elif isinstance(_lv, (int, float)) and not isinstance(_lv, bool):
+                        extracted_literals.append((_cell_idx, "numeric", str(_lv)))
+        else:
+            try:
+                extracted_literals = ExecutionContext._extract_universal_literals(prompt or "")
+            except Exception:
+                pass
 
         # -----------------------------------------------------------------
         # Check 1: Universal Literal Consumption
@@ -573,19 +590,19 @@ class PreflightLinter:
 
                 # 1. Structural Carrier & Shape Compatibility
                 if not _shape_compatible(resolved_sig, in_port_sig):
-                    res_quals_raw = _get_p_field(resolved_sig, "qualifiers", None) or getattr(getattr(resolved_sig, "signature", None), "qualifiers", frozenset()) or frozenset()
-                    in_rej_raw = _get_p_field(in_port_sig, "rejected_qualifiers", None) or getattr(getattr(in_port_sig, "signature", None), "rejected_qualifiers", frozenset()) or frozenset()
+                    res_quals_raw = _get_p_field(resolved_sig, "qualifiers", None) or getattr(getattr(resolved_sig, "signature", None), "qualifiers", ()) or ()
+                    in_rej_raw = _get_p_field(in_port_sig, "rejected_qualifiers", None) or getattr(getattr(in_port_sig, "signature", None), "rejected_qualifiers", ()) or ()
 
                     flat_res_quals = set()
                     for q in res_quals_raw:
-                        if isinstance(q, (tuple, list, set, frozenset)):
+                        if isinstance(q, (tuple, list, set)):
                             flat_res_quals.update(str(x).lower() for x in q)
                         else:
                             flat_res_quals.add(str(q).lower())
 
                     flat_in_rej = set()
                     for q in in_rej_raw:
-                        if isinstance(q, (tuple, list, set, frozenset)):
+                        if isinstance(q, (tuple, list, set)):
                             flat_in_rej.update(str(x).lower() for x in q)
                         else:
                             flat_in_rej.add(str(q).lower())
@@ -786,19 +803,43 @@ class PreflightLinter:
         # -----------------------------------------------------------------
         # Check 4: Monotonic Clause Ordering & Dependency Inversion (R5-2)
         # -----------------------------------------------------------------
-        if prompt:
+        if prompt and not is_formal_pipeline:
             path_cells = [c for c, _ in pipeline_bindings]
-            try:
+            # Preserve causal clause tags already established by the planner or Layer-3
+            # role-partitioned complement/bridge synthesis; only invoke heuristic re-tagging
+            # when no causal tags exist yet, or monotonically interpolate missing bridge tags.
+            has_any_tag = any(getattr(c, "matched_clause_idx", None) is not None for c in path_cells)
+            if not has_any_tag:
                 try:
-                    from .route_methods.base import RouteMethod
-                except (ImportError, ValueError):
-                    from route_methods.base import RouteMethod
-                RouteMethod.tag_cells_with_clause_indices(path_cells, prompt, orchestrator=orchestrator)
+                    try:
+                        from .route_methods.base import RouteMethod
+                    except (ImportError, ValueError):
+                        from route_methods.base import RouteMethod
+                    RouteMethod.tag_cells_with_clause_indices(
+                        path_cells, prompt, orchestrator=orchestrator,
+                        clause_semantic_scores=clause_semantic_scores,
+                    )
+                    for idx, c in enumerate(path_cells):
+                        if pipeline_bindings[idx][0] is not c:
+                            pipeline_bindings[idx] = (c, pipeline_bindings[idx][1])
+                except Exception:
+                    pass
+            elif any(getattr(c, "matched_clause_idx", None) is None for c in path_cells):
                 for idx, c in enumerate(path_cells):
-                    if pipeline_bindings[idx][0] is not c:
-                        pipeline_bindings[idx] = (c, pipeline_bindings[idx][1])
-            except Exception:
-                pass
+                    if getattr(c, "matched_clause_idx", None) is None:
+                        prev_cl = next(
+                            (getattr(path_cells[k], "matched_clause_idx", None)
+                             for k in range(idx - 1, -1, -1)
+                             if getattr(path_cells[k], "matched_clause_idx", None) is not None),
+                            None,
+                        )
+                        next_cl = next(
+                            (getattr(path_cells[k], "matched_clause_idx", None)
+                             for k in range(idx + 1, len(path_cells))
+                             if getattr(path_cells[k], "matched_clause_idx", None) is not None),
+                            None,
+                        )
+                        c.matched_clause_idx = prev_cl if prev_cl is not None else next_cl
 
         # Track which variables each cell produces and consumes
         cell_producers: Dict[str, Tuple[int, Any]] = {}  # var_name -> (step_idx, cell)
@@ -886,18 +927,17 @@ class PreflightLinter:
 
             clean_roles = set(r.lower() for r in (reg_p.get_verification_semantics("clean_roles") if reg_p else []))
             clean_roles.update(r.lower() for r in (reg_p.get_verification_semantics("transform_roles") if reg_p else []))
-            if not clean_roles:
-                clean_roles = {"cleaner", "transformer", "filter"}
             cons_is_cleaner = bool(cons_effects & clean_effects) or (getattr(cons_cell, "node_role", "") in clean_roles)
 
             cons_in_v = None
+            _df_roles_4b = set(r.lower() for r in (reg_p.get_verification_semantics("dataflow_roles") if reg_p else []))
             if cons_is_cleaner:
                 for port_name, b_val in cons_bindings.items():
                     if isinstance(b_val, str) and _is_var(b_val):
                         port_sig = getattr(cons_cell, "inputs", {}).get(port_name)
                         p_role = getattr(port_sig, "port_role", "") if port_sig else ""
                         p_tn = getattr(getattr(port_sig, "signature", port_sig), "type_name", "") if port_sig else ""
-                        if not port_sig or p_role in ("carrier", "data_input", "feature_input") or (reg_p and (reg_p.is_abstract_carrier(p_tn) or reg_p.get_abstract_carrier(p_tn) is not None)):
+                        if not port_sig or p_role in _df_roles_4b or (reg_p and (reg_p.is_abstract_carrier(p_tn) or reg_p.get_abstract_carrier(p_tn) is not None)):
                             cons_in_v = b_val
                             break
             if cons_in_v:
@@ -933,11 +973,14 @@ class PreflightLinter:
         # is flagged provenance_mismatch.
         # -----------------------------------------------------------------
         prompt_clauses = []
-        try:
-            from planner import _segment_prompt_clauses
-            prompt_clauses = _segment_prompt_clauses(prompt or "")
-        except Exception:
-            pass
+        if is_formal_pipeline:
+            prompt_clauses = [s.strip() for s in (prompt or "").split("->") if s.strip()]
+        else:
+            try:
+                from planner import _segment_prompt_clauses
+                prompt_clauses = _segment_prompt_clauses(prompt or "")
+            except Exception:
+                pass
 
         for j, (cell, bindings) in enumerate(pipeline_bindings):
             cons_clause = getattr(cell, "matched_clause_idx", None)
@@ -962,9 +1005,10 @@ class PreflightLinter:
 
                 # Carriers of any modality are exempt as they carry throughout the entire pipeline
                 reg_4c = cls._registry()
+                _cb_set = set(reg_4c.get_verification_semantics("carrier_binds") or ())
                 is_carrier_port = (
                     getattr(p_sig, "is_carrier", False)
-                    or p_binds in ("data_carrier", "carrier")
+                    or p_binds in _cb_set
                     or reg_4c.is_abstract_carrier(p_abstract)
                     or reg_4c.is_abstract_carrier(p_tn)
                     or reg_4c.get_abstract_carrier(p_tn) is not None
@@ -973,7 +1017,9 @@ class PreflightLinter:
                     continue
 
                 # Literal parameters or component keys are exempt
-                if p_binds in ("key", "component_key", "field_key") or getattr(p_sig, "port_role", None) in ("literal_parameter", "key"):
+                _kb_set = set(reg_4c.get_verification_semantics("key_binds") or ())
+                _kr_set = set(reg_4c.get_verification_semantics("key_roles") or ()) | set(reg_4c.get_verification_semantics("parameter_roles") or ())
+                if p_binds in _kb_set or getattr(p_sig, "port_role", None) in _kr_set or reg_4c.is_config_role(getattr(p_sig, "port_role", None)):
                     continue
 
                 # Extract root variable if projection
@@ -1059,6 +1105,103 @@ class PreflightLinter:
                             "variable": val_expr,
                         },
                     )
+
+
+        # -----------------------------------------------------------------
+        # Check 4d: Uncommitted Optic Component Transforms
+        #
+        # When an optic getter extracts a focus component (e.g. a column or
+        # slice) and subsequent non-scalar transforms mutate it into a new
+        # variable, that transformed focus must eventually be consumed
+        # (either committed back via an optic setter or fed into a downstream
+        # reduction/sink). Leaving a mutated optic focus unreferenced means the
+        # intended in-place/carrier mutation was silently dropped.
+        # -----------------------------------------------------------------
+        all_consumed_vars: Set[str] = set()
+        for cell_c, bindings_c in pipeline_bindings:
+            if not isinstance(bindings_c, dict):
+                continue
+            out_keys_c = set((getattr(cell_c, "outputs", {}) or {}).keys()) | {"output_var"}
+            for p_n, v_e in bindings_c.items():
+                if p_n in out_keys_c or not isinstance(v_e, str) or not _is_var(v_e):
+                    continue
+                all_consumed_vars.add(v_e.split("[")[0].strip())
+
+        reg_4d = cls._registry()
+        sink_roles_4d = (
+            set(reg_4d.get_verification_semantics("sink_roles") or ())
+            | set(reg_4d.get_verification_semantics("terminal_roles") or ())
+            | set(reg_4d.get_verification_semantics("model_output_roles") or ())
+        )
+        open_focus_chains: Dict[str, Dict[str, Any]] = {}
+        for cell_c, bindings_c in pipeline_bindings:
+            if not isinstance(bindings_c, dict):
+                continue
+            cell_outs_map = getattr(cell_c, "outputs", {}) or {}
+            out_keys_c = set(cell_outs_map.keys()) | {"output_var"}
+            step_out_vars: List[Tuple[str, Any]] = []
+            for o_k, o_sig in cell_outs_map.items():
+                o_v = bindings_c.get(o_k)
+                if isinstance(o_v, str) and _is_var(o_v):
+                    step_out_vars.append((o_v.split("[")[0].strip(), o_sig))
+            if not step_out_vars and isinstance(bindings_c.get("output_var"), str) and _is_var(bindings_c["output_var"]):
+                prim_o = getattr(cell_c, "primary_output", None)
+                step_out_vars.append((bindings_c["output_var"].split("[")[0].strip(), prim_o))
+
+            step_in_vars: Set[str] = set()
+            for p_n, v_e in bindings_c.items():
+                if p_n in out_keys_c or not isinstance(v_e, str) or not _is_var(v_e):
+                    continue
+                step_in_vars.add(v_e.split("[")[0].strip())
+
+            optic_r_c = str(getattr(cell_c, "optic_role", "") or "").strip().lower()
+            if optic_r_c == "getter":
+                for o_v, _ in step_out_vars:
+                    open_focus_chains[o_v] = {"getter": cell_c, "last_cell": cell_c, "modified": False}
+            elif optic_r_c == "setter":
+                for in_v in step_in_vars:
+                    open_focus_chains.pop(in_v, None)
+            else:
+                matched_in = next((iv for iv in step_in_vars if iv in open_focus_chains), None)
+                if matched_in is not None:
+                    entry = open_focus_chains.pop(matched_in)
+                    c_nr_4d = str(getattr(cell_c, "node_role", "") or "").strip().lower()
+                    _optic_r_4d = set(reg_4d.get_verification_semantics("optic_roles") or ())
+                    is_terminal_or_est = (
+                        optic_r_c in _optic_r_4d
+                        or getattr(cell_c, "stage", None) == 3
+                        or c_nr_4d in sink_roles_4d
+                    )
+                    if not is_terminal_or_est and step_out_vars:
+                        o_v, o_sig = step_out_vars[0]
+                        o_sk = str(getattr(o_sig, "structure_kind", "") or "").lower()
+                        o_rk = getattr(o_sig, "canonical_rank", None)
+                        if o_rk is None:
+                            o_rk = getattr(o_sig, "rank", None)
+                        o_tn = str(getattr(getattr(o_sig, "signature", o_sig), "type_name", "") or getattr(o_sig, "type_name", "") or "").strip().lower()
+                        is_scalar_4d = o_rk == 0 or o_sk == "scalar" or (bool(o_tn) and reg_4d.is_subtype(o_tn, "scalar"))
+                        if not is_scalar_4d and o_sk != "handle":
+                            open_focus_chains[o_v] = {
+                                "getter": entry["getter"],
+                                "last_cell": cell_c,
+                                "modified": True,
+                            }
+
+        for focus_v, entry in open_focus_chains.items():
+            if entry.get("modified") and focus_v not in all_consumed_vars:
+                g_cid = getattr(entry["getter"], "cell_id", "unknown")
+                l_cid = getattr(entry["last_cell"], "cell_id", "unknown")
+                msg = (
+                    f"Optic focus extracted by '{g_cid}' and mutated via '{l_cid}' into '{focus_v}' "
+                    f"was never committed back to its carrier or consumed downstream."
+                )
+                _add_violation(
+                    "uncommitted_optic_transform",
+                    msg,
+                    cell_id=l_cid,
+                    variable_name=focus_v,
+                    details={"getter": g_cid, "mutator": l_cid, "variable": focus_v},
+                )
 
 
         # -----------------------------------------------------------------
@@ -1178,33 +1321,71 @@ class PreflightLinter:
             warnings.append(f"property analysis unavailable: {type(_prop_err).__name__}: {_prop_err}")
 
         # -----------------------------------------------------------------
+        # Check 12: Structured Cell Relations (complement_of, disjoint_from, same_provenance)
+        # -----------------------------------------------------------------
+        for i, (cell, bindings) in enumerate(pipeline_bindings):
+            if not isinstance(bindings, dict):
+                continue
+            for rel in (getattr(cell, "relations", None) or []):
+                if not isinstance(rel, dict):
+                    continue
+                kind = str(rel.get("kind") or "").lower()
+                sp = str(rel.get("source_port") or "")
+                tp = str(rel.get("target_port") or "")
+                if not sp or not tp:
+                    continue
+                sv = bindings.get(sp)
+                tv = bindings.get(tp)
+                if kind in ("disjoint_from", "complement_of") and isinstance(sv, str) and isinstance(tv, str) and _is_var(sv) and sv == tv:
+                    _add_violation(
+                        "relation_violated",
+                        f"Cell '{cell.cell_id}' relation '{kind}({sp}, {tp})' violated: both ports bound to identical variable '{sv}'.",
+                        cell_id=cell.cell_id,
+                        details={"relation": rel, "bound": sv},
+                    )
+                elif kind == "same_provenance" and isinstance(sv, str) and isinstance(tv, str) and sv in cell_producers and tv in cell_producers:
+                    ps_idx, ps_cell = cell_producers[sv]
+                    pt_idx, pt_cell = cell_producers[tv]
+                    if ps_cell.domain_name != pt_cell.domain_name:
+                        warnings.append(
+                            f"Cell '{cell.cell_id}' relation 'same_provenance({sp}, {tp})': "
+                            f"'{sv}' (from {ps_cell.cell_id}) and '{tv}' (from {pt_cell.cell_id}) span domains."
+                        )
+
+        # -----------------------------------------------------------------
         # Check 9: Prompt-clause coverage (corpus-derived, vocabulary-free).
         # "Sandbox exit code 0" proved nothing about whether the program does
         # what was asked; a path with no FFT or with an unrequested file sink
         # used to lint clean.
         # -----------------------------------------------------------------
-        try:
+        if not is_formal_pipeline:
             try:
-                from .token_evidence import audit as _cov_audit
-            except (ImportError, ValueError):
-                from token_evidence import audit as _cov_audit
-            _cells_for_cov = [b[0] for b in pipeline_bindings]
-            _cov = _cov_audit(_cells_for_cov, prompt, orchestrator=orchestrator)
-            for _iss in _cov.get("issues", []):
-                if _iss["kind"] == "clause_unserved":
-                    _add_violation(
-                        "clause_unserved",
-                        f"Prompt clause {_iss['clause_idx'] + 1} ({_iss['clause']!r}) is not served by any cell in the "
-                        f"pipeline (best on-path cell {_iss['best_on_path']} explains {_iss['path_recall']} of it; the lattice can explain {_iss['lattice_best_recall']}).",
-                        details=_iss)
-                elif _iss["kind"] == "unrequested_cell":
-                    _add_violation(
-                        "unrequested_cell",
-                        f"Cell '{_iss['cell']}' is not requested by the prompt: every clause it touches is better "
-                        f"explained by another cell ({_iss['winners']}) and it explains no remaining clause token.",
-                        cell_id=_iss["cell"], details=_iss)
-        except Exception as _cov_err:  # an audit crash must never silently pass or kill lint
-            warnings.append(f"coverage audit unavailable: {type(_cov_err).__name__}: {_cov_err}")
+                try:
+                    from .token_evidence import audit as _cov_audit
+                except (ImportError, ValueError):
+                    from token_evidence import audit as _cov_audit
+                _cells_for_cov = [b[0] for b in pipeline_bindings]
+                _cov = _cov_audit(
+                    _cells_for_cov,
+                    prompt,
+                    orchestrator=orchestrator,
+                    clause_semantic_scores=clause_semantic_scores,
+                )
+                for _iss in _cov.get("issues", []):
+                    if _iss["kind"] == "clause_unserved":
+                        _add_violation(
+                            "clause_unserved",
+                            f"Prompt clause {_iss['clause_idx'] + 1} ({_iss['clause']!r}) is not served by any cell in the "
+                            f"pipeline (best on-path cell {_iss['best_on_path']} explains {_iss['path_recall']} of it; the lattice can explain {_iss['lattice_best_recall']}).",
+                            details=_iss)
+                    elif _iss["kind"] == "unrequested_cell":
+                        _add_violation(
+                            "unrequested_cell",
+                            f"Cell '{_iss['cell']}' is not requested by the prompt: every clause it touches is better "
+                            f"explained by another cell ({_iss['winners']}) and it explains no remaining clause token.",
+                            cell_id=_iss["cell"], details=_iss)
+            except Exception as _cov_err:  # an audit crash must never silently pass or kill lint
+                warnings.append(f"coverage audit unavailable: {type(_cov_err).__name__}: {_cov_err}")
 
         is_valid = len(violations) == 0
         return PreflightLintResult(is_valid=is_valid, violations=violations, warnings=warnings, structured_violations=structured_violations)

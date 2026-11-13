@@ -33,7 +33,21 @@
           "port_role": "data_input",
           "structure_kind": "composite",
           "rank": 0,
-          "element_type": "composite_record"
+          "element_type": "composite_record",
+          "carrier": "AdjacencyGraph",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "graph.graph_ready",
+          "typestate": "graph::graph_ready",
+          "invariants": []
         },
         "source": {
           "name": "source",
@@ -44,7 +58,21 @@
           "port_role": "configuration",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "any"
+          "element_type": "any",
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "graph.vertex_id",
+          "typestate": "graph::vertex_id",
+          "invariants": []
         }
       },
       "outputs": {
@@ -56,7 +84,21 @@
           "port_role": "result",
           "structure_kind": "collection",
           "rank": 1,
-          "element_type": "any"
+          "element_type": "any",
+          "carrier": "NodeList",
+          "layout": {
+            "rank": 1,
+            "shape": null,
+            "dtype": "any",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "graph.traversal_order",
+          "typestate": "graph::traversal_order",
+          "invariants": []
         }
       },
       "code_template": "from collections import deque as _deque\n_adj = {graph} if isinstance({graph}, dict) else getattr({graph}, 'adj', {{}})\n_q = _deque([{source}]) if {source} in _adj else _deque(list(_adj.keys())[:1])\n_seen = []\nwhile _q:\n    _u = _q.popleft()\n    if _u not in _seen:\n        _seen.append(_u)\n        _q.extend(n for n in _adj.get(_u, []) if n not in _seen)\n{visited_order} = _seen",
@@ -66,7 +108,9 @@
         "source"
       ],
       "endable": true,
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "pure"
     }
   ],
   "mock_fixtures": [

@@ -8,7 +8,7 @@ via --allow-capabilities. Zero tolerance for low-level OS bypasses.
 from __future__ import annotations
 
 import ast
-from typing import Dict, FrozenSet, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 
 class SecurityViolationError(PermissionError):
@@ -18,7 +18,7 @@ class SecurityViolationError(PermissionError):
 
 # 1. Minimal, Non-Overridable Security Floor
 # No tree, capability, or user flag is permitted to override these restrictions.
-NON_OVERRIDABLE_BLOCKED_MODULES: FrozenSet[str] = frozenset({
+NON_OVERRIDABLE_BLOCKED_MODULES: Tuple[str, ...] = (
     "ctypes",
     "_ctypes",
     "pty",
@@ -26,9 +26,9 @@ NON_OVERRIDABLE_BLOCKED_MODULES: FrozenSet[str] = frozenset({
     "posix",
     "code",
     "codeop",
-})
+)
 
-NON_OVERRIDABLE_BLOCKED_ATTRS: FrozenSet[str] = frozenset({
+NON_OVERRIDABLE_BLOCKED_ATTRS: Tuple[str, ...] = (
     "__subclasses__",
     "__bases__",
     "__mro__",
@@ -36,19 +36,22 @@ NON_OVERRIDABLE_BLOCKED_ATTRS: FrozenSet[str] = frozenset({
     "__code__",
     "__closure__",
     "__builtins__",
+    "__import__",
+    "__loader__",
+    "__spec__",
     "gi_frame",
     "f_locals",
     "f_globals",
     "cr_frame",
-})
+)
 
-NON_OVERRIDABLE_BLOCKED_CALLS: FrozenSet[str] = frozenset({
+NON_OVERRIDABLE_BLOCKED_CALLS: Tuple[str, ...] = (
     "eval",
     "exec",
     "compile",
     "breakpoint",
     "input",
-})
+)
 
 # 2. Standard Default Capability Gating
 # Mapping of standard modules to their capability categories.
@@ -121,18 +124,28 @@ class SecurityPolicy:
 
 
 class _SecurityVisitor(ast.NodeVisitor):
-    def __init__(self, policy: SecurityPolicy) -> None:
+    """
+    Static analysis pass over synthesized code before execution.
+    Detects forbidden imports, dunder traversal exploits, dynamic string
+    obfuscation (BinOp/JoinedStr/Subscript/getattr), and forbidden builtins.
+    """
+
+    FORBIDDEN_ATTRIBUTES: Tuple[str, ...] = NON_OVERRIDABLE_BLOCKED_ATTRS
+    FORBIDDEN_CALLS: Tuple[str, ...] = NON_OVERRIDABLE_BLOCKED_CALLS
+
+    def __init__(self, policy: Optional[SecurityPolicy] = None) -> None:
         self.policy = policy
 
     def visit_Import(self, node: ast.Import) -> None:
-        for alias in node.names:
-            allowed, reason = self.policy.is_module_allowed(alias.name)
-            if not allowed:
-                raise SecurityViolationError(f"Line {node.lineno}: {reason}")
+        if self.policy is not None:
+            for alias in node.names:
+                allowed, reason = self.policy.is_module_allowed(alias.name)
+                if not allowed:
+                    raise SecurityViolationError(f"Line {node.lineno}: {reason}")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.module:
+        if self.policy is not None and node.module:
             allowed, reason = self.policy.is_module_allowed(node.module)
             if not allowed:
                 raise SecurityViolationError(f"Line {node.lineno}: {reason}")
@@ -146,8 +159,94 @@ class _SecurityVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, ast.Load) and node.id in NON_OVERRIDABLE_BLOCKED_CALLS:
+        if isinstance(node.ctx, ast.Load) and (
+            node.id in NON_OVERRIDABLE_BLOCKED_CALLS or node.id == "__builtins__"
+        ):
             raise SecurityViolationError(
                 f"Line {node.lineno}: Direct access to forbidden built-in '{node.id}' is blocked."
+            )
+        self.generic_visit(node)
+
+    @staticmethod
+    def _evaluate_constant_str(node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left = _SecurityVisitor._evaluate_constant_str(node.left)
+            right = _SecurityVisitor._evaluate_constant_str(node.right)
+            if left is not None and right is not None:
+                return left + right
+        if isinstance(node, ast.JoinedStr):
+            parts = []
+            for val in node.values:
+                s = _SecurityVisitor._evaluate_constant_str(val)
+                if s is None:
+                    return None
+                parts.append(s)
+            return "".join(parts)
+        if isinstance(node, ast.FormattedValue):
+            return _SecurityVisitor._evaluate_constant_str(node.value)
+        return None
+
+    def visit_BinOp(self, node: ast.BinOp) -> None:
+        if isinstance(node.op, ast.Add):
+            concat_str = self._evaluate_constant_str(node)
+            if concat_str is not None:
+                if concat_str in NON_OVERRIDABLE_BLOCKED_ATTRS or (
+                    concat_str.startswith("__") and concat_str.endswith("__")
+                ):
+                    raise SecurityViolationError(
+                        f"Line {getattr(node, 'lineno', 0)}: Dynamic concatenation producing forbidden dunder attribute '{concat_str}' is blocked."
+                    )
+            for side in (node.left, node.right):
+                side_str = self._evaluate_constant_str(side)
+                if side_str is not None and "__" in side_str:
+                    raise SecurityViolationError(
+                        f"Line {getattr(node, 'lineno', 0)}: Dynamic dunder string concatenation involving '{side_str}' is blocked."
+                    )
+        self.generic_visit(node)
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        eval_str = self._evaluate_constant_str(node)
+        if eval_str is not None and (
+            eval_str in NON_OVERRIDABLE_BLOCKED_ATTRS
+            or (eval_str.startswith("__") and eval_str.endswith("__"))
+        ):
+            raise SecurityViolationError(
+                f"Line {getattr(node, 'lineno', 0)}: Dynamic string formatting producing forbidden dunder attribute '{eval_str}' is blocked."
+            )
+        for val in node.values:
+            s = self._evaluate_constant_str(val)
+            if s is not None and "__" in s:
+                raise SecurityViolationError(
+                    f"Line {getattr(node, 'lineno', 0)}: Dynamic dunder string formatting involving '{s}' is blocked."
+                )
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if isinstance(node.func, ast.Name):
+            if node.func.id in NON_OVERRIDABLE_BLOCKED_CALLS:
+                raise SecurityViolationError(
+                    f"Line {node.lineno}: Direct access to forbidden built-in '{node.func.id}' is blocked."
+                )
+            if node.func.id in ("getattr", "hasattr", "setattr", "delattr") and len(node.args) >= 2:
+                arg_str = self._evaluate_constant_str(node.args[1])
+                if arg_str and (
+                    arg_str in NON_OVERRIDABLE_BLOCKED_ATTRS
+                    or (arg_str.startswith("__") and arg_str.endswith("__"))
+                ):
+                    raise SecurityViolationError(
+                        f"Line {node.lineno}: Dynamic access to forbidden dunder attribute '{arg_str}' via {node.func.id} is blocked."
+                    )
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        slice_str = self._evaluate_constant_str(node.slice)
+        if slice_str and (
+            slice_str in NON_OVERRIDABLE_BLOCKED_ATTRS
+            or (slice_str.startswith("__") and slice_str.endswith("__"))
+        ):
+            raise SecurityViolationError(
+                f"Line {getattr(node, 'lineno', 0)}: Subscription access to forbidden meta-attribute '{slice_str}' is blocked."
             )
         self.generic_visit(node)

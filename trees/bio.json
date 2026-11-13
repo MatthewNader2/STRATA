@@ -3,17 +3,17 @@
   "version": "1.0",
   "description": "Pluggable bioinformatics domain extension: fixtures and hints only.",
   "types": {
-    "Sequence": {
+    "BioSequence": {
       "parent": "str"
     },
     "DNASequence": {
-      "parent": "Sequence"
+      "parent": "BioSequence"
     },
     "RNASequence": {
-      "parent": "Sequence"
+      "parent": "BioSequence"
     },
     "ProteinSequence": {
-      "parent": "Sequence"
+      "parent": "BioSequence"
     }
   },
   "cells": [
@@ -40,7 +40,21 @@
           "port_role": "data_input",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "DNASequence",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.raw_dna",
+          "typestate": "bio::raw_dna",
+          "invariants": []
         }
       },
       "outputs": {
@@ -52,7 +66,21 @@
           "port_role": "data_output",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "RNASequence",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.transcribed_rna",
+          "typestate": "bio::transcribed_rna",
+          "invariants": []
         }
       },
       "code_template": "{rna_seq} = str({dna_seq}).upper().replace('T', 'U')",
@@ -60,7 +88,9 @@
         "rna_seq",
         "dna_seq"
       ],
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "BIO_REVERSE_COMPLEMENT",
@@ -84,7 +114,21 @@
           "port_role": "data_input",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "DNASequence",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.raw_dna",
+          "typestate": "bio::raw_dna",
+          "invariants": []
         }
       },
       "outputs": {
@@ -96,7 +140,21 @@
           "port_role": "data_output",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "DNASequence",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.complement_dna",
+          "typestate": "bio::complement_dna",
+          "invariants": []
         }
       },
       "code_template": "{rev_comp} = str({dna_seq}).upper().translate(str.maketrans('ATCG', 'TAGC'))[::-1]",
@@ -104,7 +162,9 @@
         "rev_comp",
         "dna_seq"
       ],
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "BIO_GC_CONTENT",
@@ -122,7 +182,7 @@
       "inputs": {
         "seq": {
           "name": "seq",
-          "type_name": "Sequence",
+          "type_name": "BioSequence",
           "state": "raw_dna",
           "accepted_states": [
             "complement_dna",
@@ -132,7 +192,21 @@
           "port_role": "data_input",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "string"
+          "element_type": "string",
+          "carrier": "BioSequence",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.raw_dna",
+          "typestate": "bio::raw_dna",
+          "invariants": []
         }
       },
       "outputs": {
@@ -144,7 +218,21 @@
           "port_role": "result",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "float64"
+          "element_type": "float64",
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "bio.gc_metric",
+          "typestate": "bio::gc_metric",
+          "invariants": []
         }
       },
       "code_template": "_s = str({seq}).upper()\n{gc_ratio} = (_s.count('G') + _s.count('C')) / max(len(_s), 1)",
@@ -153,7 +241,9 @@
         "seq"
       ],
       "endable": true,
-      "verified": true
+      "verified": true,
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "mock_fixtures": [

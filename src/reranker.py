@@ -2,6 +2,7 @@
 src/reranker.py - Neural Document Reranking for Layer 1 Semantic Tunneling
 Provides pluggable neural cross-encoder / listwise reranking (e.g. Jina Reranker v3.5).
 """
+import math
 import os
 import time
 from pathlib import Path
@@ -99,12 +100,35 @@ class LocalReranker:
         if in_t or out_t:
             parts.append(f'Type signature: {in_t} -> {out_t}')
         if keywords:
-            kw_list = sorted(str(k) for k in keywords) if isinstance(keywords, (set, frozenset)) else [str(k) for k in keywords]
-            parts.append(f'Keywords: {", ".join(kw_list[:8])}')
+            kw_list = sorted(str(k) for k in keywords) if isinstance(keywords, set) else [str(k) for k in keywords]
+            parts.append(f'Keywords: {", ".join(kw_list)}')
         if tags:
-            tag_list = sorted(str(t) for t in tags) if isinstance(tags, (set, frozenset)) else [str(t) for t in tags]
-            parts.append(f'Tags: {", ".join(tag_list[:6])}')
+            tag_list = sorted(str(t) for t in tags) if isinstance(tags, set) else [str(t) for t in tags]
+            parts.append(f'Tags: {", ".join(tag_list)}')
+        inputs = getattr(cell, 'inputs', {}) or {}
+        if isinstance(inputs, dict) and inputs:
+            in_descs = []
+            for p_sig in inputs.values():
+                p_desc = (getattr(p_sig, 'description', '') or getattr(p_sig, 'doc', '') or '').strip()
+                if p_desc:
+                    in_descs.append(p_desc)
+            if in_descs:
+                parts.append(f'Parameters: {" ".join(in_descs)}')
         return ' | '.join(parts)
+
+    @staticmethod
+    def _calibrate_score(raw_sc: float, is_cosine_model: bool = False) -> float:
+        """
+        Batch-independent monotonic sigmoid calibration mapping raw reranker scores to (0, 1).
+        Replaces batch min-max normalization so irrelevant batches are never inflated to 1.0.
+        For bounded cosine-based listwise rerankers (e.g. jina-reranker-v3.5 outputting [-1, 1]),
+        applies temperature-calibrated logistic scaling around empirical cosine separation.
+        For unbounded logit cross-encoders, applies standard logistic sigmoid sigma(logit).
+        """
+        val = float(raw_sc)
+        logit = (10.0 * (val - 0.05)) if is_cosine_model else val
+        logit = max(-60.0, min(60.0, logit))
+        return 1.0 / (1.0 + math.exp(-logit))
 
     def rerank(
         self,
@@ -149,27 +173,35 @@ class LocalReranker:
         old_ranks = {c.cell_id: i + 1 for i, c in enumerate(candidate_cells)}
         old_scores = {c.cell_id: float(relevance_map.get(c.cell_id, 0.0)) for c in candidate_cells}
 
-        reranked_target_cells = []
+        is_cosine_model = hasattr(self.model, "_calculate_cosine_scores") or "jina" in str(self.model_name).lower()
         new_scores: Dict[str, float] = dict(relevance_map)
-        telemetry: List[Dict[str, Any]] = []
+        scored_cells: List[Cell] = []
 
-        raw_scores = [r['relevance_score'] for r in results]
-        min_s = min(raw_scores) if raw_scores else 0.0
-        max_s = max(raw_scores) if raw_scores else 1.0
-        score_range = max_s - min_s if max_s > min_s else 1.0
-
-        for new_idx, res in enumerate(results):
+        for res in results:
             orig_doc_idx = res['index']
             cell = target_cells[orig_doc_idx]
-            raw_sc = res['relevance_score']
-            norm_sc = (raw_sc - min_s) / score_range
-            blended_sc = round(0.7 * norm_sc + 0.3 * old_scores.get(cell.cell_id, 0.0), 4)
-
+            calib_sc = self._calibrate_score(float(res['relevance_score']), is_cosine_model=is_cosine_model)
+            blended_sc = round(0.7 * calib_sc + 0.3 * old_scores.get(cell.cell_id, 0.0), 4)
             new_scores[cell.cell_id] = blended_sc
-            reranked_target_cells.append(cell)
+            scored_cells.append(cell)
 
+        calib_by_id: Dict[str, float] = {}
+        for res in results:
+            cell = target_cells[res['index']]
+            calib_by_id[cell.cell_id] = round(
+                self._calibrate_score(float(res['relevance_score']), is_cosine_model=is_cosine_model), 4
+            )
+
+        reranked_target_cells = sorted(
+            scored_cells,
+            key=lambda c: new_scores.get(c.cell_id, 0.0),
+            reverse=True,
+        )
+        telemetry: List[Dict[str, Any]] = []
+        for new_idx, cell in enumerate(reranked_target_cells):
             old_r = old_ranks.get(cell.cell_id, new_idx + 1)
             new_r = new_idx + 1
+            blended_sc = new_scores.get(cell.cell_id, 0.0)
             telemetry.append({
                 'cell_id': cell.cell_id,
                 'domain': getattr(cell, 'domain_name', ''),
@@ -177,6 +209,7 @@ class LocalReranker:
                 'new_rank': new_r,
                 'delta_rank': old_r - new_r,
                 'old_score': old_scores.get(cell.cell_id, 0.0),
+                'calibrated_score': calib_by_id.get(cell.cell_id, blended_sc),
                 'new_score': blended_sc,
                 'delta_score': round(blended_sc - old_scores.get(cell.cell_id, 0.0), 4),
             })
