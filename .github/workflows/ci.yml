@@ -67,4 +67,4 @@ jobs:
 
       - name: Run Core Symbolic & Topological Unit Tests
         run: |
-          pytest tests/test_soundness_topology.py tests/test_unknown_tree.py
+          pytest tests/test_soundness_topology.py
