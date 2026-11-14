@@ -192,11 +192,11 @@ def _create_mock_input_code(var_name: str, type_name: str, domain_name: str = ""
     t_low = (type_name or "").lower()
     abs_low = (abstract_type or "").lower()
 
-    if (reg and reg.is_subtype(t_low, "scalar")) or abs_low == "scalar" or t_low in ("scalar", "numeric", "float", "int", "number"):
+    if (reg and (reg.is_scalar_primitive(t_low) or reg.is_subtype(t_low, "scalar"))) or abs_low == "scalar":
         return f"{var_name} = 1.0"
-    elif (reg and reg.is_subtype(t_low, "text")) or abs_low == "text" or t_low in ("text", "str", "string"):
+    elif (reg and reg.is_subtype(t_low, "text")) or abs_low == "text" or t_low == "text":
         return f'{var_name} = "sample"'
-    elif (reg and reg.is_subtype(t_low, "collection")) or abs_low == "collection" or t_low in ("collection", "list", "sequence"):
+    elif (reg and reg.is_subtype(t_low, "collection")) or abs_low == "collection" or t_low == "collection":
         return f"{var_name} = [1.0, 2.0]"
 
     # Universal dynamic mock carrier fallback
@@ -280,7 +280,17 @@ class DynamicNodeResolver:
             return None
 
         clean_id = str(raw_id).strip().strip("\"'").lower()
-        if not clean_id or clean_id in ("finish", "done", "stop", "end", "none", "null"):
+        try:
+            from lattice import TypeRegistry
+            reg_nr = TypeRegistry.get_instance()
+        except Exception:
+            reg_nr = None
+        stop_toks = (
+            {str(t).lower() for t in (reg_nr.get_verification_semantics("stopping_tokens") or ())}
+            | {str(t).lower() for t in (reg_nr.get_verification_semantics("void_types") or ())}
+            | {str(t).lower() for t in (reg_nr.get_verification_semantics("bottom_types") or ())}
+        ) if reg_nr is not None else {None.__class__.__name__.lower()}
+        if not clean_id or clean_id in stop_toks:
             return None
 
         active_rag = rag or getattr(orchestrator, "rag", None)

@@ -29,8 +29,7 @@ import json
 from collections import deque
 from typing import Dict, List, Optional, Any, Set
 
-from .base import RouteMethod, _bridge_roles, tokenize_alphanumeric
-from .m1_clause_anchor import M1ClauseAnchorRouteMethod
+from .base import RouteMethod, _bridge_roles, tokenize_alphanumeric, is_macro_cell, _fmt_port_sig
 from lattice import Cell, LatticeOrchestrator, TypeRegistry
 from unification import ExecutionContext
 from inference import ModelManager
@@ -80,13 +79,6 @@ SYSTEM_PROMPT_MILESTONES = (
 )
 
 
-def _fmt_port_sig(p: Any) -> str:
-    sig = getattr(p, "signature", None)
-    tn = str(getattr(sig, "type_name", "") or getattr(p, "abstract_type", "") or "any")
-    st = str(getattr(sig, "state", "") or "")
-    return f"{tn}[{st}]" if st and st not in ("any", "none") else tn
-
-
 def _format_cell_signature(cell: Cell) -> str:
     req_in = [f"{n}:{_fmt_port_sig(p)}" for n, p in cell.inputs.items() if getattr(p, "required", False)]
     opt_in = [f"{n}:{_fmt_port_sig(p)}?" for n, p in cell.inputs.items() if not getattr(p, "required", False)]
@@ -122,16 +114,24 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
         prev_path: Optional[List[Cell]] = None
     ) -> Optional[List[Cell]]:
         """
-        Searches for a short unifying path from src to dst through candidate_pool.
+        Searches for a short unifying path from src to dst using indexed lattice adjacency
+        (self.orchestrator._adjacency) filtered to valid bridgeable cells.
         Returns the intermediate nodes [B1, B2, ...] excluding src and dst.
         """
         base_scope = prev_path if prev_path else [src]
         queue = deque([(src, [])])
         visited: Set[str] = {src.cell_id}
 
-        prompt_str = getattr(self, "_current_prompt", "") or ""
-        prompt_toks = set(tokenize_alphanumeric(str(prompt_str).lower()))
-        declared_bridge_roles = _bridge_roles()
+        orch = self.orchestrator
+        pool_by_id: Dict[str, Cell] = {c.cell_id: c for c in candidate_pool}
+        if orch and hasattr(orch, "loaded_cells"):
+            for cid, c in orch.loaded_cells.items():
+                pool_by_id.setdefault(cid, c)
+        adj = getattr(orch, "_adjacency", None) or {}
+        reg = TypeRegistry.get_instance()
+        comb_roles = set(reg.get_verification_semantics("combinator_roles") or ())
+        comb_topologies = set(reg.get_verification_semantics("combinator_topologies") or ())
+        destructive_names = set(reg.get_verification_semantics("destructive_effects") or ())
 
         while queue:
             curr, intermediates = queue.popleft()
@@ -139,18 +139,26 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 continue
 
             current_scope = base_scope + intermediates
-            for cand in candidate_pool:
+            # Prefer precompiled indexed adjacency over full candidate pool scan
+            adj_ids = adj.get(curr.cell_id)
+            if adj_ids:
+                nbr_cands = [pool_by_id[nid] for nid in adj_ids if nid in pool_by_id]
+                if dst.cell_id not in adj_ids:
+                    nbr_cands.append(dst)
+            else:
+                nbr_cands = list(candidate_pool)
+                if dst not in nbr_cands:
+                    nbr_cands.append(dst)
+
+            for cand in nbr_cands:
                 if cand.cell_id == dst.cell_id:
-                    if self.step_unifies(curr, dst, prev_path=current_scope):
+                    if self.step_unifies(curr, dst, prev_path=current_scope) or self.step_unifies_dag(dst, current_scope):
                         return intermediates
                     continue
 
-                if cand.cell_id in visited or self.is_ingress_node(cand):
+                if cand.cell_id in visited or self.is_ingress_node(cand, orch):
                     continue
 
-                reg = TypeRegistry.get_instance()
-                comb_roles = set(reg.get_verification_semantics("combinator_roles") or ())
-                comb_topologies = set(reg.get_verification_semantics("combinator_topologies") or ())
                 cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
                 cand_topology = str(getattr(cand, "topology_type", "") or getattr(cand, "node_type", "") or "").lower()
                 if (
@@ -160,7 +168,6 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 ):
                     continue
 
-                destructive_names = set(reg.get_verification_semantics("destructive_effects"))
                 effects = getattr(cand, "effects", []) or []
                 has_destructive_effect = any(
                     (isinstance(e, dict) and e.get("name") in destructive_names)
@@ -170,21 +177,8 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 if has_destructive_effect:
                     continue
 
-                cand_toks = set(getattr(cand, "token_set", set())) | set(getattr(cand, "keywords", []) or []) | set(getattr(cand, "semantic_tags", []) or [])
-                cand_toks = {str(t).lower() for t in cand_toks}
-                bridge_tokens = set(reg.get_verification_semantics("bridge_tokens") or ())
-                is_declared_bridge = (
-                    cand_role in declared_bridge_roles
-                    or getattr(cand, "node_type", "") in ("tunnel", "bridge")
-                    or bool(bridge_tokens & cand_toks)
-                )
-
-                if not is_declared_bridge and not (cand_toks & prompt_toks):
-                    continue
-
                 if self.step_unifies(curr, cand, prev_path=current_scope):
                     visited.add(cand.cell_id)
-                    # Check if cand can directly reach dst
                     if self.step_unifies(cand, dst, prev_path=current_scope + [cand]):
                         return intermediates + [cand]
                     queue.append((cand, intermediates + [cand]))
@@ -222,8 +216,7 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
                 )
             )
@@ -232,10 +225,9 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
         has_llm = mm.can_synthesize()
 
         def _fallback(reason):
-            return self._delegate_to_m1(
-                reason, prompt, tunnel, relevance_map, orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-            )
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         if not has_llm:
             return _fallback("no LLM loaded in this profile")
@@ -480,6 +472,20 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
 
         if len(chain) < 2:
             return _fallback("verified chain shorter than 2 cells")
+
+        try:
+            from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
+            _gate = UnificationGate(orchestrator=orch)
+            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
+            _ur = _gate.unify_pipeline(chain, _tctx, extract_llm_slots=False)
+            has_unresolved = bool(
+                getattr(_ur, "value", None)
+                and any(v is UNRESOLVED_PORT for _, b in _ur.value for v in b.values())
+            )
+            if _ur.is_bottom() or not getattr(_ur, "value", None) or has_unresolved:
+                return _fallback("M9 milestone path failed UnificationGate or left unresolved ports")
+        except Exception:
+            pass
 
         self.tag_cells_with_clause_indices(chain, prompt)
         clauses = self.segment_prompt_clauses(prompt)

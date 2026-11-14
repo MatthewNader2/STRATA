@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 import numpy as np
 
-from .base import RouteMethod
+from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell
 
 try:
     from ..lattice import Cell, LatticeOrchestrator, TypeRegistry
@@ -24,7 +24,6 @@ try:
         get_latent_scoring_weights,
     )
     from ..log_config import get_logger
-    from .m1_clause_anchor import _clause_has_egress_intent
 except (ImportError, ValueError):
     from lattice import Cell, LatticeOrchestrator, TypeRegistry
     from tokenizer import CellTokenizer
@@ -36,10 +35,6 @@ except (ImportError, ValueError):
         get_latent_scoring_weights,
     )
     from log_config import get_logger
-    try:
-        from .m1_clause_anchor import _clause_has_egress_intent
-    except (ImportError, ValueError):
-        from route_methods.m1_clause_anchor import _clause_has_egress_intent
 
 logger = get_logger("m11_latent_cognitive")
 
@@ -146,11 +141,9 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
                 "profile 0 is pure symbolic."
             )
             self.fallback_reason = err_msg
-            logger.warning("[M11] Neural model unavailable: delegating to M1 (%s)", err_msg)
-            return self._delegate_to_m1(
-                err_msg, prompt, tunnel, relevance_map, orch=orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms, **kwargs
-            )
+            self._trace("method_failure", requested=type(self).__name__, reason=err_msg)
+            logger.warning("[M11] Neural model unavailable: %s", err_msg)
+            return []
 
         if not tunnel:
             return []
@@ -163,8 +156,7 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (
                         getattr(c, "is_combinator", False)
                         or getattr(c, "node_role", "") == "combinator"
@@ -242,114 +234,41 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
         prompt_tokens = _ev.clause_tokens(prompt) if _ev is not None else CellTokenizer.tokenize_prompt(prompt)
         covered_tokens: Set[str] = set(getattr(best_entry, "identity_tokens", best_entry.token_set) & prompt_tokens)
 
-        # Precompute clause anchors using canonical token evidence rule
-        clause_anchors: Dict[int, List[Cell]] = {}
-        if _ev is not None and clauses:
-            try:
-                try:
-                    from token_evidence import anchors_for_clause
-                except (ImportError, ValueError):
-                    from ..token_evidence import anchors_for_clause
-                for j, cl in enumerate(clauses):
-                    stage_pool = [c for c in candidates if (self.is_ingress_node(c, orch) if (j == 0 and len(clauses) > 1) else not self.is_ingress_node(c, orch))] or candidates
-                    acc = anchors_for_clause(_ev, cl, stage_pool, relevance_map, clause_idx=j)
-                    clause_anchors[j] = [c for c, _ in acc]
-            except Exception as _e:
-                logger.debug("[M11] Error pre-computing clause anchors: %s", _e)
-
         num_clauses = len(clauses)
         max_steps = min(20, max(num_clauses + 6, max_transforms + 4))
 
         stratified_cands = self.select_stratified_candidates(prompt, candidates, relevance_map, orchestrator=orch)
         non_bridge_pool = stratified_cands if stratified_cands else candidates
 
-        # 3. Latent Geodesic Path Progression
+        # 3. Continuous Latent Geodesic Path Progression (without M1 anchor/exact_target overrides)
         for step in range(max_steps):
             curr = committed_path[-1]
 
-            # Terminal check via registry/vocabulary sink semantics
             if _is_sink_node(curr, orch) and len(committed_path) > 1:
                 if step >= max(1, num_clauses - 1) or not (prompt_tokens - covered_tokens):
                     break
 
-            def _cand_clause(c: Cell) -> Optional[int]:
-                idx = getattr(c, "matched_clause_idx", None)
-                if idx is not None:
-                    return idx
-                for j, anchors in clause_anchors.items():
-                    if any(a.cell_id == c.cell_id for a in anchors):
-                        return j
-                if _ev is not None and clauses:
-                    best_j, best_rank = None, (-1.0, -1.0, -1.0)
-                    for j, cl in enumerate(clauses):
-                        cl_t = _ev.clause_tokens(cl)
-                        if not cl_t:
-                            continue
-                        ov = _ev.identity_overlap(cl_t, c)
-                        prim = clause_anchors.get(j, [None])[0] if clause_anchors.get(j) else None
-                        if prim is not None:
-                            prim_ov = _ev.identity_overlap(cl_t, prim)
-                            if ov["rank"] < prim_ov["rank"] and ov["f"] < prim_ov["f"]:
-                                continue
-                        if ov["hit"] > 0.0 and ov["rank"] > best_rank:
-                            best_j, best_rank = j, ov["rank"]
-                    return best_j
-                return None
-
-            covered_indices = {
-                _cand_clause(c) for c in committed_path if _cand_clause(c) is not None
-            }
-            if _ev is not None:
-                for j, cl in enumerate(clauses):
-                    cl_toks = _ev.clause_tokens(cl)
-                    if cl_toks and (cl_toks & covered_tokens) and len(cl_toks & covered_tokens) / len(cl_toks) >= 0.5:
-                        covered_indices.add(j)
-            uncovered_indices = [j for j in range(len(clauses)) if j not in covered_indices]
-            target_cl_idx = min(uncovered_indices) if uncovered_indices else (num_clauses - 1)
-
+            target_cl_idx = min(step + 1, num_clauses - 1)
             target_cl = clauses[target_cl_idx] if target_cl_idx < num_clauses else prompt
-            target_is_egress = _clause_has_egress_intent(target_cl)
+            remaining_clauses = max(0, (num_clauses - 1) - target_cl_idx)
+            target_is_egress = _clause_has_egress_intent(target_cl) or (
+                self.requested_sink(target_cl, non_bridge_pool) is not None
+            )
 
             valid_next = []
             for c in non_bridge_pool:
-                if c.cell_id in visited_ids:
+                if c.cell_id in visited_ids or _is_ingress_node(c, orch):
                     continue
-                if _is_sink_node(c, orch) and not target_is_egress and uncovered_indices:
+                if _is_sink_node(c, orch) and not target_is_egress and remaining_clauses > 0:
                     continue
 
                 if self.step_unifies(curr, c, prev_path=committed_path) or self.step_unifies_dag(c, committed_path, ctx=ctx):
                     valid_next.append(c)
 
-            target_anchors = clause_anchors.get(target_cl_idx, [])
-            if not target_anchors:
-                target_anchors = [c for c in non_bridge_pool if c.cell_id not in visited_ids and _cand_clause(c) == target_cl_idx]
-
-            has_target_in_valid = any(
-                (_cand_clause(c) == target_cl_idx or any(a.cell_id == c.cell_id for a in target_anchors))
-                for c in valid_next
-            )
-            if not has_target_in_valid or not any(any(a.cell_id == c.cell_id for a in target_anchors) for c in valid_next):
-                for target_cand in target_anchors:
-                    if target_cand.cell_id in visited_ids:
-                        continue
-                    if _is_sink_node(target_cand, orch) and not target_is_egress and uncovered_indices:
-                        continue
-                    prod = self._find_type_producer(target_cand, committed_path, non_bridge_pool, clauses, orch)
-                    if prod is not None and prod.cell_id not in visited_ids and prod not in valid_next:
-                        valid_next.append(prod)
-                    bridge = self.find_bridge(curr, target_cand, candidates, orch, prev_path=committed_path)
-                    if not bridge and orch and hasattr(orch, "loaded_cells"):
-                        bridge = self.find_bridge(curr, target_cand, list(orch.loaded_cells.values()), orch, prev_path=committed_path)
-                    if bridge is not None and bridge.cell_id not in visited_ids and bridge not in valid_next:
-                        if not hasattr(bridge, "matched_clause_idx") or bridge.matched_clause_idx is None:
-                            bridge.matched_clause_idx = target_cl_idx
-                        valid_next.append(bridge)
-
             if not valid_next:
                 break
 
-            cl_idx = target_cl_idx
-            target_cl_vec = clause_vecs[cl_idx] if cl_idx < len(clause_vecs) else goal_vec
+            target_cl_vec = clause_vecs[target_cl_idx] if target_cl_idx < len(clause_vecs) else goal_vec
             _requested_sink = self.requested_sink(prompt, candidates)
 
             def _score_cand(cand: Cell) -> Tuple[Any, ...]:
@@ -390,39 +309,16 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
                     and self.clause_fit(target_cl, cand)[0] <= 0.0
                 )
 
-                cand_cl = _cand_clause(cand)
-                is_inversion = bool(cand_cl is not None and uncovered_indices and cand_cl < min(uncovered_indices))
-                is_target_cl = bool(
-                    (cand_cl is not None and cand_cl == target_cl_idx)
-                    or any(a.cell_id == cand.cell_id for a in target_anchors)
-                )
-
-                # Linear handle continuity
                 handle_score = self.linear_handle_score(cand, committed_path)
-
                 sae_bonus = 0.25 * sae_boosts.get(cand.cell_id, 0.0)
                 mk_bonus = 0.20 * markov_potentials.get(cand.cell_id, 0.0)
                 composite_latent = (
                     (w_cl * latent_cl_h + w_goal * latent_goal_h + w_struct * (aff + rel)) / w_total
                 ) + sae_bonus + mk_bonus
-                return (0 if unrequested_egress else (0 if is_inversion else 1), 1 if is_target_cl else 0, handle_score, composite_latent, progress)
+                return (0 if unrequested_egress else 1, handle_score, composite_latent, progress)
 
-            valid_forward = [
-                c for c in valid_next
-                if not (_cand_clause(c) is not None and uncovered_indices and _cand_clause(c) < min(uncovered_indices))
-            ]
-            exact_target = [
-                c for c in valid_forward
-                if _cand_clause(c) == target_cl_idx or any(a.cell_id == c.cell_id for a in target_anchors)
-            ]
-            target_forward = exact_target if exact_target else [
-                c for c in valid_forward if _cand_clause(c) is None
-            ]
-            active_next = target_forward if target_forward else valid_forward
-            if not active_next:
-                active_next = valid_next
-            active_next.sort(key=_score_cand, reverse=True)
-            best_next = active_next[0]
+            valid_next.sort(key=_score_cand, reverse=True)
+            best_next = valid_next[0]
             committed_path.append(best_next)
             visited_ids.add(best_next.cell_id)
             covered_tokens.update(getattr(best_next, "identity_tokens", best_next.token_set) & prompt_tokens)
@@ -431,81 +327,50 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
             next_vec = self.pathfinder.get_cell_vector(best_next)
             current_vec = self.pathfinder.update_state_vector(current_vec, next_vec, momentum=momentum)
 
-            if not uncovered_indices and len(committed_path) >= num_clauses:
+            if (prompt_tokens - covered_tokens) == set() and len(committed_path) >= num_clauses:
                 break
-
-            if step >= num_clauses - 1:
-                try:
-                    from token_evidence import audit as _audit
-                except (ImportError, ValueError):
-                    try:
-                        from ..token_evidence import audit as _audit
-                    except (ImportError, ValueError):
-                        _audit = None
-                if _audit is not None:
-                    _res = _audit(committed_path, prompt, orch)
-                    if _res.get("available") and not any(i["kind"] == "clause_unserved" for i in _res.get("issues", [])):
-                        self._trace("m11_goal_reached", step=step, path_len=len(committed_path))
-                        break
 
             if (prompt_tokens - covered_tokens) == set() and _is_sink_node(best_next, orch):
                 break
 
         self.tag_cells_with_clause_indices(committed_path, prompt, orchestrator=orch)
 
-        # 1. Coverage audit check
+        # Monadic unification and Preflight lint check (never delegate to M1)
         try:
             try:
-                from token_evidence import audit as _audit
-            except (ImportError, ValueError):
-                try:
-                    from ..token_evidence import audit as _audit
-                except (ImportError, ValueError):
-                    _audit = None
-            if _audit is not None:
-                _cov = _audit(committed_path, prompt, orch)
-                if _cov.get("available") and any(i["kind"] == "clause_unserved" for i in _cov.get("issues", [])):
-                    unserved_reasons = [i.get("message", "unserved clause") for i in _cov.get("issues", []) if i.get("kind") == "clause_unserved"]
-                    return self._delegate_to_m1(
-                        f"M11 path has unserved clauses: {'; '.join(unserved_reasons[:2])}",
-                        prompt, tunnel, relevance_map, orch=orch, ctx=ctx,
-                        start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms, **kwargs
-                    )
-        except Exception as _cov_exc:
-            logger.debug("[M11] Coverage audit check skipped: %s", _cov_exc)
-
-        # 2. Monadic unification and Preflight lint check
-        try:
-            try:
-                from unification import UnificationGate, ExecutionContext
+                from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
                 from preflight import PreflightLinter
             except (ImportError, ValueError):
                 try:
-                    from ..unification import UnificationGate, ExecutionContext
+                    from ..unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
                     from ..preflight import PreflightLinter
                 except (ImportError, ValueError):
                     UnificationGate = None
                     ExecutionContext = None
                     PreflightLinter = None
+                    UNRESOLVED_PORT = None
 
             if UnificationGate is not None and PreflightLinter is not None:
                 _gate = UnificationGate(orchestrator=orch)
                 _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
                 _ur = _gate.unify_pipeline(committed_path, _tctx, extract_llm_slots=False)
-                if _ur.is_bottom() or not getattr(_ur, "value", None):
-                    return self._delegate_to_m1(
-                        "M11 path does not unify (bottom)",
-                        prompt, tunnel, relevance_map, orch=orch, ctx=ctx,
-                        start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms, **kwargs
-                    )
+                has_unresolved = bool(
+                    UNRESOLVED_PORT is not None
+                    and getattr(_ur, "value", None)
+                    and any(v is UNRESOLVED_PORT for _, b in _ur.value for v in b.values())
+                )
+                if _ur.is_bottom() or not getattr(_ur, "value", None) or has_unresolved:
+                    reason = "M11 path does not unify or left unresolved input ports"
+                    self.fallback_reason = reason
+                    self._trace("method_failure", requested=type(self).__name__, reason=reason)
+                    return []
                 _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
                 _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code, orchestrator=orch)
                 if not _lint.is_valid:
-                    return self._delegate_to_m1(
-                        f"M11 path failed pre-flight lint: {'; '.join(_lint.violations[:2])}",
-                        prompt, tunnel, relevance_map, orch=orch, ctx=ctx,
-                        start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms, **kwargs
-                    )
+                    reason = f"M11 path failed pre-flight lint: {'; '.join(_lint.violations[:2])}"
+                    self.fallback_reason = reason
+                    self._trace("method_failure", requested=type(self).__name__, reason=reason)
+                    return []
         except Exception as _chk_exc:
             logger.debug("[M11] Pre-flight verification check skipped: %s", _chk_exc)
 

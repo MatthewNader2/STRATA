@@ -102,7 +102,7 @@ class LatentVectorExtractor:
 
     def is_available(self) -> bool:
         """Returns True iff a real neural embedding backend is loaded and active."""
-        return self._backend in ("sentence_transformers", "llama_cpp") and self._model is not None
+        return self._backend in ("sentence_transformers", "llama_cpp", "profile_embedder") and self._model is not None
 
     def _init_model(self, model_name: Optional[str] = None) -> None:
         emb_dir = os.path.join(MODELS_DIR, "embeddings")
@@ -134,7 +134,8 @@ class LatentVectorExtractor:
             logger.info("[COGNITIVE PATHFINDER] Profile 0 configured: neural latent extractor disabled.")
             return
 
-        # 1. First check if ModelManager already has an active profile with an embedder
+        # 1. Check ModelManager active profile boundaries before standalone loading
+        active_profile_present = False
         try:
             try:
                 from .inference import ModelManager
@@ -142,8 +143,16 @@ class LatentVectorExtractor:
                 from inference import ModelManager
             mm = ModelManager.get_instance()
             if mm.profile is not None:
+                active_profile_present = True
+                emb_name = str(getattr(mm.profile, "embedder_name", "") or "").lower()
+                if getattr(mm.profile, "autoencoder", None) is not None or emb_name == "transition_autoencoder":
+                    self._model = None
+                    self._backend = "unavailable"
+                    self._init_error = "Profile AE uses structural transition autoencoder only; neural text latent extractor disabled."
+                    logger.info("[COGNITIVE PATHFINDER] Profile AE active: standalone neural latent extractor disabled.")
+                    return
                 active_emb = getattr(mm.profile, "model", None) or getattr(mm.profile, "embedder", None)
-                if active_emb is not None:
+                if active_emb is not None and hasattr(active_emb, "encode"):
                     self._model = active_emb
                     self._backend = "sentence_transformers"
                     self._dim = int(mm.embedding_dimension)
@@ -152,8 +161,28 @@ class LatentVectorExtractor:
                         self._dim,
                     )
                     return
+                if callable(getattr(mm.profile, "get_embeddings", None)) and (
+                    getattr(mm.profile, "llm", None) is not None
+                    or getattr(mm.profile, "model", None) is not None
+                ):
+                    self._model = mm.profile
+                    self._backend = "profile_embedder"
+                    self._dim = int(mm.embedding_dimension)
+                    logger.info(
+                        "[COGNITIVE PATHFINDER] Reusing active ModelManager profile embedder (dim=%d)",
+                        self._dim,
+                    )
+                    return
         except Exception as e:
             errors.append(f"ModelManager reuse: {e}")
+
+        if active_profile_present:
+            self._backend = "unavailable"
+            self._model = None
+            self._dim = 0
+            self._init_error = "Active ModelManager profile does not expose a neural text embedder."
+            logger.info("[COGNITIVE PATHFINDER] %s", self._init_error)
+            return
 
         # 2. Try optimal local SentenceTransformer embedding model
         try:
@@ -261,6 +290,12 @@ class LatentVectorExtractor:
                 norm = float(np.linalg.norm(pooled))
                 norm_vec = pooled / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
 
+            elif self._backend == "profile_embedder" and self._model is not None:
+                vecs = self._model.get_embeddings([text], mode="document")
+                raw = np.array(vecs[0], dtype=np.float32) if vecs else np.zeros(self._dim, dtype=np.float32)
+                norm = float(np.linalg.norm(raw))
+                norm_vec = raw / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
+
             else:
                 raise ModelUnavailableError("Neural embedding backend is not initialized.")
 
@@ -293,6 +328,14 @@ class LatentVectorExtractor:
             if uncached_texts:
                 if self._backend == "sentence_transformers" and self._model is not None:
                     vecs = self._model.encode(uncached_texts, normalize_embeddings=True)
+                    for idx, vec in zip(uncached_indices, vecs):
+                        raw_vec = np.array(vec, dtype=np.float32)
+                        norm = float(np.linalg.norm(raw_vec))
+                        norm_vec = raw_vec / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
+                        self._cache[texts[idx]] = norm_vec
+                        results[idx] = norm_vec
+                elif self._backend == "profile_embedder" and self._model is not None:
+                    vecs = self._model.get_embeddings(uncached_texts, mode="document")
                     for idx, vec in zip(uncached_indices, vecs):
                         raw_vec = np.array(vec, dtype=np.float32)
                         norm = float(np.linalg.norm(raw_vec))
@@ -413,7 +456,7 @@ class CognitivePathfinder:
         if norm_curr > 1e-6:
             u_curr = current_vec / norm_curr
             tangent_goal = u_goal - float(np.dot(u_goal, u_curr)) * u_curr
-            tangent_step = u_cand - u_curr
+            tangent_step = u_cand - float(np.dot(u_cand, u_curr)) * u_curr
             norm_tg = float(np.linalg.norm(tangent_goal))
             norm_ts = float(np.linalg.norm(tangent_step))
             if norm_tg > 1e-6 and norm_ts > 1e-6:

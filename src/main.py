@@ -117,9 +117,12 @@ def _ensure_base_engine_loaded():
             if _orchestrator is None:
                 logger.info(f"[*] Preloading STRATA Lattice Database from '{DB_PATH}'...")
                 t0 = time.perf_counter()
-                orch = LatticeOrchestrator()
-                orch.load_from_database(DB_PATH)
-                orch.build_topology()
+                orch = LatticeOrchestrator(db_path=DB_PATH, auto_load=False)
+                if os.path.exists(DB_PATH):
+                    orch.load_from_database(DB_PATH)
+                else:
+                    orch.load_all_json_trees()
+                    orch.build_topology()
                 _orchestrator = orch
                 _gate = UnificationGate(orchestrator=_orchestrator)
                 _sandbox = GEVRSandbox()
@@ -226,6 +229,8 @@ def initialize_engine(
         llm_dev = llm_device
 
     p_norm = prof.strip().upper()
+    if p_norm in ("OMEGA", "Ω"):
+        p_norm = "O"
     with _engine_lock:
         _engine_ready = False
         _ensure_base_engine_loaded()
@@ -234,8 +239,15 @@ def initialize_engine(
             _active_profile = "0"
             _active_embedder = "none"
             _active_llm = "none"
+            os.environ["NSTL_PROFILE"] = "0"
+            try:
+                settings.profile = "0"
+            except Exception:
+                pass
+            mm = ModelManager.get_instance()
+            mm.initialize_profile("0")
             _internal_rag = None
-            _router = LatticeRouter(orchestrator=_orchestrator, internal_rag=None)
+            _router = LatticeRouter(orchestrator=_orchestrator, internal_rag=None, use_reranker=False)
             _gate = UnificationGate(orchestrator=_orchestrator)
             _engine_ready = True
             logger.info("[✓] STRATA Engine configured for Profile 0 (Pure Symbolic).")
@@ -248,7 +260,7 @@ def initialize_engine(
                 "nodes": len(_orchestrator.loaded_cells)
             }
 
-        # Neural profiles: A, B, C, D, E, S, U, AE
+        # Neural profiles: A, B, C, D, E, S, U, AE, O (Omega)
         try:
             from .router import HardwareProfiler
         except (ImportError, ValueError):
@@ -270,7 +282,7 @@ def initialize_engine(
             embedder_name=optimal_emb,
             llm_name=llm_m or ""
         )
-        _active_llm = llm_m or getattr(mm.active_profile, "llm_name", "none")
+        _active_llm = getattr(mm.active_profile, "llm_name", "none") or "none"
 
         _internal_rag = LocalRAG(trees_dir=str(settings.trees_dir), orchestrator=_orchestrator)
         _router = LatticeRouter(orchestrator=_orchestrator, internal_rag=_internal_rag)
@@ -333,12 +345,28 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
 
     req_ctx = ExecutionContext(prompt=effective_prompt)
     if intent_data and isinstance(intent_data, dict):
+        req_ctx.intent_data = dict(intent_data)
+        if hasattr(req_ctx, "blackboard") and req_ctx.blackboard is not None:
+            req_ctx.blackboard.lock_from_intent(intent_data)
+            if req_ctx.blackboard.locked_by_neural:
+                if req_ctx.blackboard.target_sink:
+                    req_ctx.parameters["target_sink"] = req_ctx.blackboard.target_sink
         if intent_data.get("operations") and isinstance(intent_data["operations"], list):
             req_ctx.operations = [str(op).replace("_", " ").strip() for op in intent_data["operations"] if str(op).strip()]
         if intent_data.get("hyperparameters") and isinstance(intent_data["hyperparameters"], dict):
             req_ctx.hyperparameters = dict(intent_data["hyperparameters"])
         if intent_data.get("slots") and isinstance(intent_data["slots"], dict):
             req_ctx.llm_slots = dict(intent_data["slots"])
+        if intent_data.get("variables") and isinstance(intent_data["variables"], list):
+            req_ctx.variables_spec = [str(v).strip() for v in intent_data["variables"] if str(v).strip()]
+            req_ctx.llm_slots.setdefault("variables", req_ctx.variables_spec)
+        if hasattr(req_ctx, "sync_llm_slots"):
+            req_ctx.sync_llm_slots()
+        tgt = intent_data.get("target_sink") or intent_data.get("target_key") or intent_data.get("deliverable")
+        if tgt:
+            req_ctx.target_key = str(tgt).strip()
+            req_ctx.target_literals.add(req_ctx.target_key)
+            req_ctx.parameters["target_sink"] = req_ctx.target_key
         if intent_data.get("parameters") and isinstance(intent_data["parameters"], dict):
             for p_key, p_val in intent_data["parameters"].items():
                 if p_key:
@@ -404,27 +432,10 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
         except Exception as _lint_err:
             logger.debug(f"Preflight linting error: {_lint_err}")
 
-    # Deterministic Bridge Insertion for Pre-Flight Lint Violations
-    if lint_violations and cells:
-        try:
-            from route_methods.m1_clause_anchor import M1ClauseAnchorRouteMethod
-            _bridge_router = M1ClauseAnchorRouteMethod(orchestrator=_orchestrator)
-            repaired_cells = _bridge_router.insert_property_bridges(cells, prompt=prompt, ctx=req_ctx, trace=False)
-            if [c.cell_id for c in repaired_cells] != [c.cell_id for c in cells]:
-                rep_code = local_gate.unify_and_emit(repaired_cells, prompt, intent_data=intent_payload)
-                rep_lint = PreflightLinter.lint(local_gate.last_pipeline_bindings, prompt=prompt, code_str=rep_code, orchestrator=_orchestrator)
-                if rep_lint.is_valid:
-                    cells = repaired_cells
-                    code = rep_code
-                    lint_violations = []
-                    logger.info("Deterministic bridge inserted successfully, preflight passed.")
-        except Exception as _bridge_err:
-            logger.debug(f"Deterministic bridge insertion failed: {_bridge_err}")
-
     # Layer 5 Self-Repair for Pre-Flight Lint Violations
-    # Strictly disabled in symbolic/retrieval profiles (0, A, D) to prevent benchmark backdoor cheating.
+    # Strictly disabled in symbolic/retrieval profiles (0, B, A, D, AE) to prevent benchmark backdoor cheating.
     repaired_via_feedback = False
-    if lint_violations and _active_profile not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check():
+    if lint_violations and _active_profile not in ("0", "B", "A", "D", "AE") and ModelManager.get_instance().can_feedback_check():
         mm = ModelManager.get_instance()
         if mm.profile and mm.can_feedback_check():
             err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_violations)

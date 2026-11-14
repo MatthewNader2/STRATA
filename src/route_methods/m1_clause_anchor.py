@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
 from log_config import get_logger
-from .base import RouteMethod, STOPWORDS
+from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell
 
 logger = get_logger("m1_clause_anchor")
 
@@ -20,18 +20,6 @@ except (ImportError, ValueError):
     from lattice import Cell, LatticeOrchestrator, TypeRegistry
     from tokenizer import CellTokenizer
     from unification import unify, ExecutionContext
-
-
-def _clause_has_egress_intent(clause: str) -> bool:
-    """Language-level materialization intent for a clause: declared egress
-    verbs (planner.EGRESS_INTENT_TOKENS) when not an in-memory variable target."""
-    try:
-        from ..planner import EGRESS_INTENT_TOKENS
-    except (ImportError, ValueError):
-        from planner import EGRESS_INTENT_TOKENS
-    target = ExecutionContext._extract_target_sink(clause)
-    toks = set(CellTokenizer.tokenize_prompt(clause.lower()))
-    return bool(toks & EGRESS_INTENT_TOKENS) and not target
 
 
 class M1ClauseAnchorRouteMethod(RouteMethod):
@@ -61,7 +49,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
         if len(tunnel) == 1:
             return [tunnel[0]]
 
-        candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not c.cell_id.startswith("MACRO_")]
+        candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not is_macro_cell(c)]
         if not candidates:
             return [tunnel[0]]
 
@@ -71,7 +59,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
 
         # 1. Identify anchor cells for each clause via semantic set-covering and stage awareness
         for idx, cl in enumerate(clauses):
-            cl_tokens = CellTokenizer.tokenize_prompt(cl) - STOPWORDS
+            cl_tokens = CellTokenizer.tokenize_prompt(cl)
             if not cl_tokens:
                 continue
 
@@ -308,73 +296,35 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                     routed_path.extend([producer, next_anchor])
                     connected = True
                 else:
-                    curr_out = getattr(curr_cell, "primary_output", None) or (
-                        list(curr_cell.outputs.values())[0] if curr_cell.outputs else None
-                    )
-                    curr_out_sig = getattr(curr_out, "signature", curr_out)
-                    c_rank = getattr(curr_out_sig, "canonical_rank", None)
-                    c_sk = str(getattr(curr_out, "structure_kind", "") or getattr(curr_out_sig, "structure_kind", "") or "").lower()
-                    c_role = str(getattr(curr_cell, "node_role", "") or "").lower()
-                    is_curr_reduction = (c_rank == 0) or (c_sk == "scalar") or (c_role == "reduction")
-
-                    next_in = getattr(next_anchor, "primary_input", None) or (
-                        list(next_anchor.inputs.values())[0] if next_anchor.inputs else None
-                    )
-                    next_in_sig = getattr(next_in, "signature", next_in)
-                    n_rank = getattr(next_in_sig, "canonical_rank", None)
-                    n_sk = str(getattr(next_in, "structure_kind", "") or getattr(next_in_sig, "structure_kind", "") or "").lower()
-                    requires_tensor = (n_rank is not None and n_rank >= 1) or (n_sk in ("tensor", "collection", "composite"))
-
-                    if is_curr_reduction and requires_tensor:
-                        # Dimensional rank reduction: curr_cell is a scalar measurement (rank 0).
-                        # The carrier tensor remains in the monoidal DAG scope.
-                        # Check if next_anchor unifies or bridges from DAG scope.
-                        if self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                            self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
-                            routed_path.append(next_anchor)
-                            connected = True
-                        else:
-                            for ancestor in reversed(routed_path[:-1]):
-                                if self.step_unifies(ancestor, next_anchor, prev_path=routed_path):
-                                    routed_path.append(next_anchor)
-                                    connected = True
-                                    break
-                                anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
-                                if anc_bridge:
-                                    anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                                    anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
-                                    routed_path.extend([anc_bridge, next_anchor])
-                                    connected = True
-                                    break
+                    # Lawful monoidal DAG fork/join or sequential bridge chain
+                    bridges = self.find_bridge_chain(curr_cell, next_anchor, candidates, prev_path=routed_path)
+                    if bridges and (
+                        self.step_unifies(bridges[-1], next_anchor, prev_path=routed_path + bridges)
+                        or self.step_unifies_dag(next_anchor, routed_path + bridges, ctx=ctx)
+                    ):
+                        for b in bridges:
+                            b.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
+                            b.clause_literals = getattr(next_anchor, "clause_literals", {})
+                        routed_path.extend(bridges)
+                        routed_path.append(next_anchor)
+                        connected = True
+                    elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                        self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
+                        routed_path.append(next_anchor)
+                        connected = True
                     else:
-                        # Sequential carrier continuity takes precedence over DAG-scope fallback
-                        bridges = self.find_bridge_chain(curr_cell, next_anchor, candidates, prev_path=routed_path)
-                        if bridges:
-                            for b in bridges:
-                                b.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                                b.clause_literals = getattr(next_anchor, "clause_literals", {})
-                            routed_path.extend(bridges)
-                            routed_path.append(next_anchor)
-                            connected = True
-                        elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                            self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
-                            routed_path.append(next_anchor)
-                            connected = True
-                        else:
-                            # In a DAG, if next_anchor does not unify directly with curr_cell,
-                            # check if next_anchor unifies or bridges from any earlier ancestor in routed_path
-                            for ancestor in reversed(routed_path[:-1]):
-                                if self.step_unifies(ancestor, next_anchor, prev_path=routed_path) or self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                                    routed_path.append(next_anchor)
-                                    connected = True
-                                    break
-                                anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
-                                if anc_bridge:
-                                    anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                                    anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
-                                    routed_path.extend([anc_bridge, next_anchor])
-                                    connected = True
-                                    break
+                        for ancestor in reversed(routed_path[:-1]):
+                            if self.step_unifies(ancestor, next_anchor, prev_path=routed_path) or self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                                routed_path.append(next_anchor)
+                                connected = True
+                                break
+                            anc_bridge = self.find_bridge(ancestor, next_anchor, candidates, orch, prev_path=routed_path)
+                            if anc_bridge:
+                                anc_bridge.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
+                                anc_bridge.clause_literals = getattr(next_anchor, "clause_literals", {})
+                                routed_path.extend([anc_bridge, next_anchor])
+                                connected = True
+                                break
 
             if not connected:
                 cl_idx = getattr(next_anchor, "matched_clause_idx", None)
@@ -388,7 +338,10 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                         self._trace("anchor_alternative_connected", clause_idx=cl_idx, original=next_anchor.cell_id, cell=alt.cell_id, via="direct")
                         break
                     alt_bridges = self.find_bridge_chain(curr_cell, alt, candidates, prev_path=routed_path)
-                    if alt_bridges:
+                    if alt_bridges and (
+                        self.step_unifies(alt_bridges[-1], alt, prev_path=routed_path + alt_bridges)
+                        or self.step_unifies_dag(alt, routed_path + alt_bridges, ctx=ctx)
+                    ):
                         for b in alt_bridges:
                             b.matched_clause_idx = getattr(alt, "matched_clause_idx", None)
                             b.clause_literals = getattr(alt, "clause_literals", {})

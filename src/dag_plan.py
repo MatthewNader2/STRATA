@@ -105,12 +105,9 @@ class TypedHole:
 
 class TypedHoleCell(MicroCell):
     """
-    Solves Issue 5 (Open-World Lattice Synthesis):
-    A first-class `Cell` representing an open-world typed morphism H: T_in -> T_out
-    that can be proposed mid-search by the Planner or RouteMethods when no
-    pre-harvested cell in `loaded_cells` covers a clause or bridges a type gap.
-    During `emit_code()`, `UnificationGate` synthesizes its body via
-    `InductiveKernelGenerator` and validates it with `ASTCapabilityValidator`.
+    A structural placeholder `Cell` representing a typed subgoal hole H: T_in -> T_out
+    awaiting recursive decomposition into verified domain / control-flow cells.
+    Raw unconstrained LLM code emission for unfilled holes is strictly prohibited.
     """
 
     def __init__(
@@ -123,12 +120,14 @@ class TypedHoleCell(MicroCell):
         out_port_name: Optional[str] = None,
         stage: Optional[int] = None,
     ) -> None:
-        if in_port_name is None:
-            t_in = str(getattr(in_sig, "type_name", "in") or "in").lower().replace("-", "_")
-            in_port_name = f"{t_in}_in" if t_in not in ("any", "*", "top", "⊤") else "in_0"
-        if out_port_name is None:
-            t_out = str(getattr(out_sig, "type_name", "out") or "out").lower().replace("-", "_")
-            out_port_name = f"{t_out}_out" if t_out not in ("any", "*", "top", "⊤") else "out_0"
+        if in_port_name is None or out_port_name is None:
+            reg_dp = TypeRegistry.get_instance()
+            if in_port_name is None:
+                t_in = str(getattr(in_sig, "type_name", "in") or "in").lower().replace("-", "_")
+                in_port_name = f"{t_in}_in" if not reg_dp.is_declared_top(t_in) else "in_0"
+            if out_port_name is None:
+                t_out = str(getattr(out_sig, "type_name", "out") or "out").lower().replace("-", "_")
+                out_port_name = f"{t_out}_out" if not reg_dp.is_declared_top(t_out) else "out_0"
         if stage is None:
             try:
                 from .planner import _active_vocab
@@ -493,43 +492,10 @@ def fill_typed_hole(
     sandbox: Optional[Any] = None,
     test_inputs: Optional[Dict[str, Any]] = None,
 ) -> TypedHole:
-    """Unified Hole-Filling Synthesis Protocol."""
-    if kernel_generator is None:
-        try:
-            from .synthesis import InductiveKernelGenerator
-        except (ImportError, ValueError):
-            from synthesis import InductiveKernelGenerator
-        kernel_generator = InductiveKernelGenerator()
-
-    state_in = {k: sig.type_name for k, sig in hole.input_ports.items()}
-    state_out = {k: sig.type_name for k, sig in hole.output_ports.items()}
-    domain_ctx = "\n".join(hole.invariants) if hole.invariants else None
-
-    code = kernel_generator.generate_kernel(
-        task_description=hole.task_description,
-        state_inputs=state_in,
-        state_outputs=state_out,
-        domain_context=domain_ctx,
-    )
-
-    if sandbox is not None:
-        code, _res = sandbox.execute_with_cegis(
-            code=code,
-            task_description=hole.task_description,
-            state_inputs=state_in,
-            state_outputs=state_out,
-            context=test_inputs or {},
-            kernel_generator=kernel_generator,
-        )
-
-    return TypedHole(
-        hole_id=hole.hole_id,
-        task_description=hole.task_description,
-        input_ports=hole.input_ports,
-        output_ports=hole.output_ports,
-        invariants=hole.invariants,
-        topology_kind=hole.topology_kind,
-        synthesized_code=code,
+    """Raw unconstrained inductive kernel generation is disabled in STRATA."""
+    raise RuntimeError(
+        f"Cannot fill typed hole '{hole.hole_id}' via raw LLM code generation: "
+        "all programs must compose verified lattice and control-flow cells."
     )
 
 

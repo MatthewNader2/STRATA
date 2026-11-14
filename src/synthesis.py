@@ -1,6 +1,6 @@
 """
 src/synthesis.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
-Dynamic MicroCell Synthesizer & Capability-Sandboxed Inductive Kernel Generator.
+Dynamic MicroCell Synthesizer & Deterministic Structural Cell Renderer.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from log_config import get_logger
 try:
     from .external_rag import LiveDocFetcher
     from .inference import ModelManager
+    from .lattice import TypeRegistry
     from .utils import (
         extract_json_from_llm,
         validate_code_template,
@@ -25,6 +26,7 @@ try:
 except (ImportError, ValueError):
     from external_rag import LiveDocFetcher
     from inference import ModelManager
+    from lattice import TypeRegistry
     from utils import (
         extract_json_from_llm,
         validate_code_template,
@@ -367,7 +369,9 @@ class SynthesisEngine:
                 except RuntimeError:
                     loop = None
                 if loop and loop.is_running():
-                    live_docs = asyncio.run_coroutine_threadsafe(live_docs, loop).result()
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+                        live_docs = _pool.submit(asyncio.run, live_docs).result()
                 else:
                     live_docs = asyncio.run(live_docs)
             if not isinstance(live_docs, str):
@@ -552,333 +556,6 @@ def synthesize_and_register(
 
 
 # --------------------------------------------------------------------------- #
-# Inductive State Kernel Synthesizer (Pillar 2: Cognitive State Morphisms)
-# --------------------------------------------------------------------------- #
-
-class InductiveKernelGenerator:
-    """
-    Inductive State Kernel Synthesizer.
-    Synthesizes pure mathematical / algorithmic state transition kernels (f: State -> State)
-    for typed holes within category-theoretic macro envelopes (e.g. game loop update,
-    simulation step, algorithmic transformations).
-
-    Guarantees:
-      - Capability-based AST Permit-List validation (zero imports, I/O, or dunder bypasses).
-      - Explicit statement unwrapping (strips `def` wrappers, `return`, `assert`, and `print()`).
-      - Counter-Example Guided Inductive Synthesis (CEGIS) repair hook (`repair_kernel`).
-      - Fails loudly with `KernelSynthesisError` instead of emitting dummy zero-values.
-    """
-
-    def __init__(self, model_manager: Optional[ModelManager] = None):
-        self._model_manager = model_manager
-        self._validator = ASTCapabilityValidator()
-
-    @property
-    def model_manager(self) -> ModelManager:
-        if self._model_manager is None:
-            self._model_manager = ModelManager.get_instance()
-        return self._model_manager
-
-    def validate_safety(self, code: str, allowed_vars: Optional[Set[str]] = None) -> Tuple[bool, Optional[str]]:
-        """
-        Validates that a code snippet is a pure, capability-safe state transition
-        using ASTCapabilityValidator.
-        """
-        if not code or not code.strip():
-            return False, "Empty kernel code"
-        try:
-            tree = ast.parse(code)
-        except SyntaxError as e:
-            return False, f"SyntaxError in kernel code: {e}"
-
-        if not tree.body:
-            return False, "Kernel AST contains no executable statements"
-
-        return self._validator.validate(tree, allowed_vars=allowed_vars)
-
-    def generate_kernel(
-        self,
-        task_description: str,
-        state_inputs: Dict[str, str],
-        state_outputs: Dict[str, str],
-        domain_context: Optional[str] = None,
-        max_tokens: int = 512,
-    ) -> str:
-        """
-        Synthesizes a pure Python state transition snippet for the given task and state signatures.
-        Raises KernelSynthesisError if no valid, capability-safe kernel can be synthesized.
-        """
-        in_lines = "\n".join(f"- {name}: {t}" for name, t in state_inputs.items()) or "- (none)"
-        out_lines = "\n".join(f"- {name}: {t}" for name, t in state_outputs.items()) or "- (none)"
-        ctx_text = f"\nContext & Constants:\n{domain_context}" if domain_context else ""
-
-        system_prompt = (
-            "You are an expert computational kernel synthesizer.\n"
-            "Synthesize a PURE Python code snippet implementing an inductive state transition function.\n"
-            "STRICT RULES:\n"
-            "1. Output ONLY executable Python code statements. No markdown code fences, no explanations, no def function wrappers.\n"
-            "2. PURE LOGIC ONLY: Read from input state variables and update/assign output state variables.\n"
-            "3. NO I/O, NO print(), NO assert, NO input(), NO imports of any module.\n"
-            "4. Keep code clean, bounded, and mathematically correct."
-        )
-
-        user_prompt = (
-            f"State Transition Goal: {task_description}\n\n"
-            f"Input State Variables:\n{in_lines}\n\n"
-            f"Output State Variables to Update/Assign:\n{out_lines}"
-            f"{ctx_text}\n\n"
-            f"Write the pure Python statements:"
-        )
-
-        raw_code = ""
-        mgr = self.model_manager
-        if mgr.profile is not None:
-            try:
-                response = mgr.generate_text(
-                    user_prompt,
-                    max_tokens=max_tokens,
-                    system_prompt=system_prompt,
-                )
-                raw_code = extract_code_from_llm_response(response).strip()
-            except Exception as e:
-                logger.warning("[INDUCTIVE KERNEL] ModelManager generation failed: %s", e)
-
-        if not raw_code:
-            raw_code = self._try_direct_local_generation(user_prompt, system_prompt, max_tokens)
-
-        if not raw_code:
-            raise KernelSynthesisError(
-                f"Inductive synthesis failed for '{task_description}': no LLM output generated."
-            )
-
-        clean_code = self._sanitize_and_unwrap_kernel(raw_code, state_outputs)
-        allowed_state_vars = set(state_inputs.keys()) | set(state_outputs.keys())
-        is_safe, error_msg = self.validate_safety(clean_code, allowed_vars=allowed_state_vars)
-        if not is_safe:
-            logger.error("[INDUCTIVE KERNEL] Synthesized code failed capability check: %s", error_msg)
-            raise KernelSynthesisError(
-                f"Synthesized kernel for '{task_description}' violated capability safety: {error_msg}"
-            )
-
-        logger.info("[INDUCTIVE KERNEL] Successfully synthesized and validated kernel for '%s'", task_description)
-        return clean_code
-
-    def repair_kernel(
-        self,
-        failing_code: str,
-        task_description: str,
-        traceback_error: str,
-        state_inputs: Dict[str, str],
-        state_outputs: Dict[str, str],
-        failing_inputs: Optional[Dict[str, Any]] = None,
-        max_tokens: int = 512,
-    ) -> str:
-        """
-        Counter-Example Guided Inductive Synthesis (CEGIS) kernel repair (Track 8.1).
-        Accepts a failing kernel snippet, target invariant/goal, runtime traceback,
-        and optional counter-example input values, returning a surgically repaired
-        and capability-validated kernel.
-        """
-        in_lines = "\n".join(f"- {name}: {t}" for name, t in state_inputs.items()) or "- (none)"
-        out_lines = "\n".join(f"- {name}: {t}" for name, t in state_outputs.items()) or "- (none)"
-        ce_text = f"\nFailing Counter-Example Inputs:\n{failing_inputs}" if failing_inputs else ""
-
-        system_prompt = (
-            "You are an expert CEGIS (Counter-Example Guided Inductive Synthesis) repair engine.\n"
-            "Fix the runtime error or invariant violation in the provided pure Python state transition kernel.\n"
-            "STRICT RULES:\n"
-            "1. Output ONLY the corrected executable Python statements. No markdown, no explanations, no def wrappers.\n"
-            "2. Preserve all required output state variable assignments.\n"
-            "3. NO imports, NO print(), NO assert, NO I/O, NO dunder attributes."
-        )
-
-        user_prompt = (
-            f"State Transition Goal: {task_description}\n\n"
-            f"Input State Variables:\n{in_lines}\n\n"
-            f"Required Output State Variables:\n{out_lines}"
-            f"{ce_text}\n\n"
-            f"Failing Kernel Code:\n{failing_code}\n\n"
-            f"Runtime Exception / Traceback:\n{traceback_error}\n\n"
-            f"Write the corrected pure Python statements:"
-        )
-
-        raw_code = ""
-        mgr = self.model_manager
-        if mgr.profile is not None:
-            try:
-                response = mgr.generate_text(
-                    user_prompt,
-                    max_tokens=max_tokens,
-                    system_prompt=system_prompt,
-                )
-                raw_code = extract_code_from_llm_response(response).strip()
-            except Exception as e:
-                logger.warning("[INDUCTIVE KERNEL] CEGIS repair generation failed: %s", e)
-
-        if not raw_code:
-            raw_code = self._try_direct_local_generation(user_prompt, system_prompt, max_tokens)
-
-        if not raw_code:
-            raise KernelSynthesisError(
-                f"CEGIS repair failed for '{task_description}': model produced no repair candidate."
-            )
-
-        clean_code = self._sanitize_and_unwrap_kernel(raw_code, state_outputs)
-        allowed_state_vars = set(state_inputs.keys()) | set(state_outputs.keys())
-        is_safe, error_msg = self.validate_safety(clean_code, allowed_vars=allowed_state_vars)
-        if not is_safe:
-            raise KernelSynthesisError(
-                f"CEGIS repaired kernel for '{task_description}' failed capability validation: {error_msg}"
-            )
-
-        return clean_code
-
-    def _sanitize_and_unwrap_kernel(self, code: str, state_outputs: Dict[str, str]) -> str:
-        """
-        Extracts clean, pure executable statements from LLM output.
-        If the model wrapped the logic in a `def func(...):` or appended `assert` statements
-        or `print()` calls, this strips them and extracts only the core state-transition statements.
-        """
-        dedented = textwrap.dedent(code).strip()
-        try:
-            tree = ast.parse(dedented)
-        except SyntaxError:
-            return code
-
-        out_var = list(state_outputs.keys())[0] if state_outputs else None
-
-        def _filter_statements(stmts: List[ast.stmt]) -> List[ast.stmt]:
-            cleaned: List[ast.stmt] = []
-            has_out_assign = any(
-                isinstance(s, (ast.Assign, ast.AnnAssign))
-                and any(
-                    (isinstance(t, ast.Name) and t.id == out_var)
-                    for t in (s.targets if isinstance(s, ast.Assign) else [s.target])
-                )
-                for s in stmts
-            )
-            for stmt in stmts:
-                # 1. Strip `assert ...` statements (ast.Assert is a statement, not ast.Call)
-                if isinstance(stmt, ast.Assert):
-                    continue
-                # 2. Convert or strip `return ...` statements from unwrapped functions
-                if isinstance(stmt, ast.Return):
-                    if stmt.value is not None and out_var and not has_out_assign:
-                        cleaned.append(
-                            ast.Assign(
-                                targets=[ast.Name(id=out_var, ctx=ast.Store())],
-                                value=stmt.value,
-                            )
-                        )
-                        has_out_assign = True
-                    continue
-                # 3. Strip standalone docstrings and `print(...)` call expressions
-                if isinstance(stmt, ast.Expr):
-                    if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
-                        continue
-                    if isinstance(stmt.value, ast.Call):
-                        func = stmt.value.func
-                        if isinstance(func, ast.Name) and func.id == "print":
-                            continue
-                cleaned.append(stmt)
-            return cleaned
-
-        # If top-level contains a FunctionDef, unwrap its body statements
-        fn_nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
-        if fn_nodes:
-            fn = fn_nodes[0]
-            body_stmts = _filter_statements(fn.body)
-            if body_stmts:
-                try:
-                    mod = ast.Module(body=body_stmts, type_ignores=[])
-                    return ast.unparse(mod)
-                except Exception as e:
-                    logger.debug("[INDUCTIVE KERNEL] Function unwrap unparse fallback: %s", e)
-
-        clean_stmts = _filter_statements(tree.body)
-        try:
-            if clean_stmts:
-                mod = ast.Module(body=clean_stmts, type_ignores=[])
-                return ast.unparse(mod)
-            return ""
-        except Exception as e:
-            logger.debug("[INDUCTIVE KERNEL] Statement unparse fallback: %s", e)
-            return code
-
-    def _try_direct_local_generation(self, user_prompt: str, system_prompt: str, max_tokens: int) -> str:
-        """Attempts direct generation via local sub-1B GGUF model if ModelManager had no active profile."""
-        try:
-            from config import MODELS_DIR
-            from llama_cpp import Llama
-            from inference import select_optimal_llm
-            try:
-                from .router import HardwareProfiler
-            except (ImportError, ValueError):
-                try:
-                    from router import HardwareProfiler
-                except Exception:
-                    HardwareProfiler = None
-
-            device = HardwareProfiler.get_llm_device() if HardwareProfiler else "cpu"
-            n_gpu = -1 if device in ("cuda", "mps") else 0
-
-            best_llm = select_optimal_llm()
-            llm_dir = os.path.join(MODELS_DIR, "llms", best_llm)
-            if os.path.isdir(llm_dir):
-                ggufs = [f for f in os.listdir(llm_dir) if f.endswith(".gguf")]
-                if ggufs:
-                    chosen_gguf = next((f for f in ggufs if "shard" not in f), ggufs[0])
-                    model_path = os.path.join(llm_dir, chosen_gguf)
-                    llm = Llama(model_path=model_path, n_ctx=2048, n_gpu_layers=n_gpu, verbose=False)
-                    res = llm.create_chat_completion(
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=max_tokens,
-                        temperature=0.2,
-                    )
-                    text = res["choices"][0]["message"]["content"]
-                    return extract_code_from_llm_response(text).strip()
-        except Exception as e:
-            logger.debug("[INDUCTIVE KERNEL] Direct local generation fallback: %s", e)
-        return ""
-
-    def splice_kernel(self, envelope_template: str, slot_name: str, kernel_code: str) -> str:
-        """
-        Splices an inductive state kernel into a macro envelope template at `{slot_name}`
-        with exact indentation alignment and AST validation.
-        """
-        placeholder = f"{{{slot_name}}}"
-        if placeholder not in envelope_template:
-            return envelope_template
-
-        base_indent = ""
-        target_line = None
-        for line in envelope_template.splitlines():
-            stripped = line.lstrip(" \t")
-            if stripped.startswith(placeholder):
-                base_indent = line[: len(line) - len(stripped)]
-                target_line = line
-                break
-
-        indented_lines = []
-        for line in kernel_code.splitlines():
-            if line.strip():
-                indented_lines.append(base_indent + line)
-            else:
-                indented_lines.append("")
-        indented_kernel = "\n".join(indented_lines)
-
-        if target_line:
-            spliced = envelope_template.replace(target_line, indented_kernel)
-        else:
-            spliced = envelope_template.replace(placeholder, indented_kernel)
-
-        return spliced
-
-
-# --------------------------------------------------------------------------- #
 # Loop rendering helpers (all data-driven, zero hard-coded variable names)
 # --------------------------------------------------------------------------- #
 
@@ -962,12 +639,81 @@ def _sanitize_template_for_ast(template: str) -> str:
     return sanitized
 
 
-def _template_initializes_container(template: str) -> Optional[str]:
+def _unsanitize_ast_source(expr: str) -> str:
+    """Restores `_nstl_ph_<name>` tokens back to `{<name>}` placeholders."""
+    phs = []
+    idx = 0
+    marker = "_nstl_ph_"
+    while True:
+        pos = expr.find(marker, idx)
+        if pos == -1:
+            phs.append(expr[idx:])
+            break
+        phs.append(expr[idx:pos])
+        end = pos + len(marker)
+        while end < len(expr) and (expr[end].isalnum() or expr[end] == "_"):
+            end += 1
+        name = expr[pos + len(marker):end]
+        phs.append(f"{{{name}}}" if name else marker)
+        idx = end
+    return "".join(phs)
+
+
+def _template_assigns_var(rendered: str, var_name: str) -> bool:
+    """AST check: returns True iff `var_name` is assigned as a top-level target in `rendered`."""
+    if not rendered or not var_name:
+        return False
+    try:
+        parsed = ast.parse(_sanitize_template_for_ast(rendered))
+    except SyntaxError:
+        return False
+    for stmt in parsed.body:
+        if isinstance(stmt, ast.Assign):
+            for tgt in stmt.targets:
+                if isinstance(tgt, ast.Name) and tgt.id == var_name:
+                    return True
+        elif isinstance(stmt, ast.AnnAssign):
+            if isinstance(stmt.target, ast.Name) and stmt.target.id == var_name and stmt.value is not None:
+                return True
+    return False
+
+
+def _format_default_value(p_sig: Any, reg: Optional[Any] = None) -> str:
+    """Formats a port's declared `default_value` using TypeRegistry subtype checks."""
+    dv = getattr(p_sig, "default_value", None)
+    if reg is None and "TypeRegistry" in globals():
+        try:
+            reg = TypeRegistry.get_instance()
+        except Exception:
+            reg = None
+    p_tn = str(
+        getattr(getattr(p_sig, "signature", None), "type_name", "")
+        or getattr(p_sig, "type_name", "")
+        or ""
+    ).strip().lower()
+    is_str_type = (
+        reg.is_subtype(p_tn, "str")
+        if (reg is not None and p_tn)
+        else (p_tn == str.__name__)
+    )
+    if isinstance(dv, str) and is_str_type:
+        try:
+            evaled = ast.literal_eval(dv.strip())
+            if isinstance(evaled, str):
+                return dv.strip()
+        except Exception:
+            pass
+        return repr(dv)
+    return str(dv)
+
+
+def _template_initializes_container(template: str, primary_out_name: Optional[str] = None) -> Optional[str]:
     """
     AST inspection: detect whether the template initializes the output
-    container variable (_nstl_ph_output_var) to an empty container and return its container kind.
+    container variable (`_nstl_ph_output_var` or `_nstl_ph_<primary_out_name>`)
+    to an empty container and return its container kind.
     """
-    if not template or "{output_var}" not in template:
+    if not template or not template.strip():
         return None
     sanitized = _sanitize_template_for_ast(template)
     try:
@@ -975,8 +721,12 @@ def _template_initializes_container(template: str) -> Optional[str]:
     except Exception:
         return None
 
+    target_ids = {"_nstl_ph_output_var"}
+    if primary_out_name:
+        target_ids.add(f"_nstl_ph_{primary_out_name}")
+
     constructors = {
-        "set": "set", "frozenset": "set",
+        "set": "set",
         "dict": "dict", "OrderedDict": "dict", "defaultdict": "dict", "Counter": "dict",
         "list": "list", "tuple": "tuple", "deque": "deque",
     }
@@ -984,7 +734,7 @@ def _template_initializes_container(template: str) -> Optional[str]:
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             is_out = any(
-                isinstance(t, ast.Name) and t.id == "_nstl_ph_output_var"
+                isinstance(t, ast.Name) and t.id in target_ids
                 for t in targets
             )
             if not is_out:
@@ -1011,10 +761,10 @@ def _template_initializes_container(template: str) -> Optional[str]:
 
 def _detect_loop_item_var(template: str) -> Optional[str]:
     """
-    AST inspection: scans the sanitized template AST for an `ast.For` node
-    and extracts the loop variable name from node.target.
+    AST inspection: scans the sanitized template AST for an `ast.For` or `ast.AsyncFor`
+    node and extracts the loop variable name from node.target.
     """
-    if not template or ("for " not in template and "for\t" not in template):
+    if not template or not template.strip():
         return None
     sanitized = _sanitize_template_for_ast(template)
     try:
@@ -1023,7 +773,7 @@ def _detect_loop_item_var(template: str) -> Optional[str]:
         return None
 
     for node in ast.walk(parsed):
-        if isinstance(node, ast.For):
+        if isinstance(node, (ast.For, ast.AsyncFor)):
             target = node.target
             target_name = None
             if isinstance(target, ast.Name):
@@ -1114,10 +864,15 @@ def render_cell(
     Recursively renders child sub-pipelines in bound_slots at indent_level + 1.
     """
     try:
-        from .unification import UnificationGate, unify, Substitution
+        from .unification import TypeTerm, GenericTypeTerm, UnificationGate, unify, Substitution
     except (ImportError, ValueError):
-        from unification import UnificationGate, unify, Substitution
+        from unification import TypeTerm, GenericTypeTerm, UnificationGate, unify, Substitution
+    try:
+        from .coalgebraic_unfolder import is_macro_combinator_cell
+    except (ImportError, ValueError):
+        from coalgebraic_unfolder import is_macro_combinator_cell
 
+    reg_syn = TypeRegistry.get_instance() if "TypeRegistry" in globals() else None
     indent_prefix = "    " * indent_level
     template = cell.code_template.strip()
     if not template:
@@ -1125,14 +880,16 @@ def render_cell(
 
     slots = getattr(cell, "slots", {}) or {}
     bound_slots = getattr(cell, "bound_slots", {}) or {}
+    prim_out_obj = getattr(cell, "primary_output", None)
+    prim_out_name_outer = getattr(prim_out_obj, "name", None) if prim_out_obj else None
 
     out_var = bindings.get(
         "output_var",
-        f"_{getattr(cell.primary_output, 'state', None) or 'out'}",
+        f"_{getattr(prim_out_obj, 'state', None) or 'out'}",
     )
 
     loop_kind = _declared_loop_kind(cell)
-    init_container = _template_initializes_container(template)
+    init_container = _template_initializes_container(template, primary_out_name=prim_out_name_outer)
     if loop_kind == "extremum":
         is_extremum_loop, is_collect_loop, is_fold_loop = True, False, False
     elif loop_kind == "collect":
@@ -1160,27 +917,19 @@ def render_cell(
     )
 
     slot_rendered: Dict[str, str] = {}
+    slot_last_out: Dict[str, str] = {}
+    cell_inputs = getattr(cell, "inputs", {}) or {}
     slots_items = slots.items() if isinstance(slots, dict) else [(s, {}) for s in slots]
-    for slot_name, slot_spec in slots_items:
+    macro_slot_items = [
+        (sn, sp)
+        for sn, sp in slots_items
+        if (str(sn) in bound_slots) or (str(sn) not in cell_inputs)
+    ]
+    for slot_name, slot_spec in macro_slot_items:
         child_nodes = bound_slots.get(slot_name, [])
         if not child_nodes:
-            # Unified Continuum (Track 6.2): if no lattice cell filled this macro slot,
-            # synthesize a capability-sandboxed kernel for the typed hole if an LLM is active.
-            prompt_str = getattr(context, "prompt", "") if context is not None else ""
-            if prompt_str:
-                try:
-                    gen = InductiveKernelGenerator()
-                    if gen.model_manager.can_synthesize():
-                        in_sigs = {k: p.type_name for k, p in getattr(cell, "inputs", {}).items()}
-                        out_sigs = {out_var: getattr(cell.primary_output, "type_name", "any")}
-                        slot_rendered[slot_name] = gen.generate_kernel(
-                            task_description=f"{prompt_str} (slot: {slot_name})",
-                            state_inputs=in_sigs,
-                            state_outputs=out_sigs,
-                        )
-                        continue
-                except Exception as synth_err:
-                    logger.debug("[SYNTHESIS] Slot kernel generation fallback: %s", synth_err)
+            # Every macro slot must be grounded in verified lattice / control-flow cells;
+            # raw unconstrained LLM code generation is never invoked here.
             slot_rendered[slot_name] = "pass"
             continue
 
@@ -1194,11 +943,28 @@ def render_cell(
         child_lines: List[str] = []
         last_metric: Optional[str] = None
         enclosing_known_vars: Set[str] = set()
+        # Track active typed outputs produced within this slot (and from parent context)
+        # so multi-step slot sub-pipelines wire type-compatibly without hardcodes.
+        slot_typed_vars: List[Tuple[Any, str]] = []
         if context is not None:
-            if hasattr(context, "variables") and isinstance(context.variables, dict):
-                enclosing_known_vars.update(context.variables.keys())
+            for ctx_attr in ("variables", "var_types"):
+                ctx_map = getattr(context, ctx_attr, None)
+                if isinstance(ctx_map, dict):
+                    if ctx_attr == "variables":
+                        enclosing_known_vars.update(ctx_map.keys())
+                    for v_name, v_entry in ctx_map.items():
+                        v_port = v_entry[0] if isinstance(v_entry, tuple) and v_entry else v_entry
+                        v_sig = getattr(v_port, "signature", v_port)
+                        if v_sig is not None:
+                            slot_typed_vars.append((v_sig, v_name))
             if hasattr(context, "active_variables") and isinstance(context.active_variables, (set, list)):
                 enclosing_known_vars.update(context.active_variables)
+        for p_in_name, p_in_sig in cell_inputs.items():
+            if p_in_name in bindings and isinstance(bindings[p_in_name], str):
+                b_clean = bindings[p_in_name].strip().strip("'\"")
+                if b_clean.isidentifier():
+                    in_sig = getattr(p_in_sig, "signature", p_in_sig)
+                    slot_typed_vars.append((in_sig, b_clean))
         for v in bindings.values():
             if isinstance(v, str):
                 v_clean = v.strip().strip("'\"")
@@ -1209,9 +975,9 @@ def render_cell(
         if out_var and out_var.isidentifier():
             enclosing_known_vars.add(out_var)
 
-        for child in child_nodes:
+        for child_idx, child in enumerate(child_nodes):
             child_bindings: Dict[str, Any] = {}
-            for p_name, p_sig in child.inputs.items():
+            for p_name, p_sig in (getattr(child, "inputs", {}) or {}).items():
                 bound = False
                 if item_type is not None:
                     child_sig = getattr(p_sig, "signature", None)
@@ -1235,20 +1001,106 @@ def render_cell(
                         continue
                 if p_name in bindings:
                     child_bindings[p_name] = bindings[p_name]
+                    continue
+                # Match compatible upstream output variable inside slot by type/carrier
+                p_role = str(getattr(p_sig, "port_role", "") or "").lower()
+                child_in_sig = getattr(p_sig, "signature", None)
+                matched_slot_var = None
+                literal_roles = (
+                    set(reg_syn.get_verification_semantics("literal_roles") or ())
+                    if reg_syn is not None else set()
+                )
+                is_literal_port = (
+                    p_role in literal_roles
+                    or (reg_syn.is_config_role(p_role) if reg_syn is not None and p_role else False)
+                )
+                if not is_literal_port and child_in_sig is not None:
+                    in_t = str(getattr(child_in_sig, "type_name", "") or "").lower()
+                    is_prim_or_top = (
+                        not in_t
+                        or (
+                            (reg_syn.is_declared_top(in_t) or reg_syn.is_scalar_primitive(in_t))
+                            if reg_syn is not None else False
+                        )
+                    )
+                    if not is_prim_or_top:
+                        for prev_sig, prev_var in reversed(slot_typed_vars):
+                            try:
+                                if (
+                                    unify(prev_sig, child_in_sig, Substitution()) is not None
+                                    or unify(child_in_sig, prev_sig, Substitution()) is not None
+                                ):
+                                    matched_slot_var = prev_var
+                                    break
+                            except Exception:
+                                continue
+                if matched_slot_var is not None:
+                    child_bindings[p_name] = matched_slot_var
                 elif p_name in enclosing_known_vars:
                     child_bindings[p_name] = p_name
-                elif getattr(p_sig, "default_value", None) is not None:
-                    child_bindings[p_name] = str(p_sig.default_value)
+                else:
+                    lit_bound = None
+                    if context is not None and hasattr(context, "resolve_literal_for_port"):
+                        prev_cl = getattr(context, "current_cell_clause_idx", None)
+                        ch_cl = getattr(child, "matched_clause_idx", None)
+                        if ch_cl is not None:
+                            context.current_cell_clause_idx = ch_cl
+                        try:
+                            lit_bound = context.resolve_literal_for_port(p_sig, cell=child)
+                        except Exception:
+                            lit_bound = None
+                        finally:
+                            context.current_cell_clause_idx = prev_cl
+                    if lit_bound is not None:
+                        child_bindings[p_name] = lit_bound
+                        continue
+                    try:
+                        try:
+                            from .unification import resolve_synthetic_boundary_io
+                        except (ImportError, ValueError):
+                            from unification import resolve_synthetic_boundary_io
+                        synth_io = resolve_synthetic_boundary_io(p_sig, cell=child, ctx=context)
+                    except Exception:
+                        synth_io = None
+                    if synth_io is not None:
+                        child_bindings[p_name] = synth_io
+                        continue
+                    if getattr(p_sig, "default_value", None) is not None:
+                        child_bindings[p_name] = _format_default_value(p_sig, reg=reg_syn)
+                    else:
+                        try:
+                            try:
+                                from .unification import _pointed_default
+                            except (ImportError, ValueError):
+                                from unification import _pointed_default
+                            eta_v = _pointed_default(p_sig, child)
+                            if eta_v is not None:
+                                child_bindings[p_name] = eta_v
+                        except Exception:
+                            pass
 
-            child_out_var = _unique_var(child, "out")
+            child_out_var = f"{_unique_var(child, 'out')}_{child_idx}"
             child_bindings["output_var"] = child_out_var
             last_metric = child_out_var
             enclosing_known_vars.add(child_out_var)
 
+            child_outputs = getattr(child, "outputs", {}) or {}
+            prim_out = getattr(child, "primary_output", None)
+            prim_out_name = getattr(prim_out, "name", None) if prim_out else None
+            for out_p_name, out_p_sig in child_outputs.items():
+                if len(child_outputs) == 1 or out_p_name == prim_out_name:
+                    ov = child_out_var
+                else:
+                    ov = f"{_unique_var(child, out_p_name)}_{child_idx}"
+                child_bindings[out_p_name] = ov
+                enclosing_known_vars.add(ov)
+                out_sig_obj = getattr(out_p_sig, "signature", out_p_sig)
+                if out_sig_obj is not None:
+                    slot_typed_vars.append((out_sig_obj, ov))
+
             if (
                 bool(getattr(child, "bound_slots", None))
-                or getattr(child, "node_type", "") == "macro"
-                or bool(getattr(child, "slots", None))
+                or is_macro_combinator_cell(child)
             ):
                 child_text = render_cell(
                     child,
@@ -1279,10 +1131,17 @@ def render_cell(
             container_type = init_container
             if container_type is None:
                 out_sig = getattr(cell, "primary_output", None)
-                t_name = str(getattr(out_sig, "type_name", "") or "").lower()
-                if "set" in t_name:
+                t_name = str(getattr(out_sig, "type_name", "") or "").strip().lower()
+                base_t = t_name
+                try:
+                    t_parsed = TypeTerm.from_string(t_name) if t_name else None
+                    if isinstance(t_parsed, GenericTypeTerm):
+                        base_t = str(t_parsed.base or t_name).strip().lower()
+                except Exception:
+                    base_t = t_name.split("[", 1)[0].strip() if "[" in t_name else t_name
+                if reg_syn is not None and (base_t == "set" or reg_syn.is_subtype(base_t, "set")):
                     container_type = "set"
-                elif "dict" in t_name or "map" in t_name:
+                elif reg_syn is not None and (base_t in ("dict", "mapping") or reg_syn.is_subtype(base_t, "dict") or reg_syn.is_subtype(base_t, "mapping")):
                     container_type = "dict"
                 else:
                     container_type = "list"
@@ -1307,40 +1166,145 @@ def render_cell(
                 child_lines.append(f"{out_var} = {last_metric} if {out_var} is None else ({out_var} + {last_metric})")
 
         slot_rendered[slot_name] = "\n".join(child_lines) if child_lines else "pass"
+        if last_metric is not None:
+            slot_last_out[slot_name] = last_metric
 
     rendered = template
-    if is_extremum_loop and f"{metric_var} = None" not in rendered:
+    if is_extremum_loop and not _template_assigns_var(rendered, metric_var):
         rendered = f"{metric_var} = None\n" + rendered
-    elif is_fold_loop and f"{out_var} = " not in rendered and f"{out_var}=" not in rendered:
+    elif is_fold_loop and not _template_assigns_var(rendered, out_var):
         init_val = getattr(cell, "init_val", None)
         if init_val is None and isinstance(getattr(cell, "tree_meta", None), dict):
             init_val = cell.tree_meta.get("init_val") or cell.tree_meta.get("initial_value")
         init_expr = str(init_val) if init_val is not None else "None"
         rendered = f"{out_var} = {init_expr}\n" + rendered
 
-    for slot_name, slot_code in slot_rendered.items():
-        placeholder = f"{{{slot_name}}}"
-        if placeholder not in rendered:
-            continue
-        base_indent = "    "
-        found_target = None
-        for line in rendered.splitlines():
-            stripped = line.lstrip(" \t")
-            if stripped.startswith(placeholder):
-                base_indent = line[: len(line) - len(stripped)]
-                found_target = base_indent + placeholder
-                break
-
-        indented_slot = "\n".join(
-            (base_indent + line if line.strip() else line)
-            for line in slot_code.splitlines()
+    # Map macro slot names to non-predicate HOF ports when the template uses
+    # functional call syntax (e.g. ({body_fn})(_state)) rather than {body}.
+    action_op_ports: List[str] = []
+    for p_name, p_sig in cell_inputs.items():
+        p_role = str(getattr(p_sig, "port_role", "") or "").strip().lower()
+        is_hof = (
+            reg_syn.is_hof_role(p_role)
+            if (reg_syn is not None and p_role)
+            else False
         )
-        if found_target and found_target in rendered:
-            rendered = rendered.replace(found_target, indented_slot)
-        else:
-            rendered = rendered.replace(placeholder, indented_slot)
+        if is_hof:
+            t_str = str(getattr(getattr(p_sig, "signature", None), "type_name", "") or getattr(p_sig, "type_name", "") or "").strip()
+            is_bool_predicate = False
+            if t_str:
+                try:
+                    t_term = TypeTerm.from_string(t_str)
+                    if isinstance(t_term, GenericTypeTerm) and t_term.args:
+                        ret_term = t_term.args[-1]
+                        ret_name = str(getattr(ret_term, "name", None) or getattr(ret_term, "base", None) or ret_term).strip().lower()
+                        is_bool_predicate = (
+                            reg_syn.is_subtype(ret_name, "bool")
+                            if reg_syn is not None
+                            else (ret_name == bool.__name__)
+                        )
+                except Exception:
+                    is_bool_predicate = False
+            if is_bool_predicate:
+                continue
+            action_op_ports.append(p_name)
 
-    rendered = safe_substitute_template(rendered, bindings)
+    def _resolve_op_port_for_slot(s_name: str, s_idx: int) -> Optional[str]:
+        s_low = s_name.lower()
+        s_stem = s_low.split("_")[0]
+        for op_p in action_op_ports:
+            op_low = op_p.lower()
+            if op_low == s_low or op_low.startswith(s_stem):
+                return op_p
+        if len(action_op_ports) == 1 and len(slot_rendered) == 1:
+            return action_op_ports[0]
+        if s_idx < len(action_op_ports):
+            return action_op_ports[s_idx]
+        return None
+
+    for s_idx, (slot_name, slot_code) in enumerate(slot_rendered.items()):
+        placeholder = f"{{{slot_name}}}"
+        if placeholder in rendered:
+            base_indent = "    "
+            found_target = None
+            for line in rendered.splitlines():
+                stripped = line.lstrip(" \t")
+                if stripped.startswith(placeholder):
+                    base_indent = line[: len(line) - len(stripped)]
+                    found_target = base_indent + placeholder
+                    break
+
+            indented_slot = "\n".join(
+                (base_indent + line if line.strip() else line)
+                for line in slot_code.splitlines()
+            )
+            if found_target and found_target in rendered:
+                rendered = rendered.replace(found_target, indented_slot)
+            else:
+                rendered = rendered.replace(placeholder, indented_slot)
+            continue
+
+        # Fallback: template uses functional_operator call placeholder ({body_fn}) etc.
+        if not bound_slots.get(slot_name):
+            continue
+        op_port = _resolve_op_port_for_slot(slot_name, s_idx)
+        if not op_port:
+            continue
+        op_ph = f"{{{op_port}}}"
+        if op_ph not in rendered:
+            continue
+        new_lines: List[str] = []
+        replaced = False
+        for line in rendered.splitlines():
+            if not replaced and op_ph in line:
+                stripped = line.lstrip(" \t")
+                base_indent = line[: len(line) - len(stripped)] or "    "
+                indented_slot = "\n".join(
+                    (base_indent + sl if sl.strip() else sl)
+                    for sl in slot_code.splitlines()
+                )
+                new_lines.append(indented_slot)
+                slot_out_var = slot_last_out.get(slot_name)
+                # Inspect the sanitized AST statement to preserve `return` or assignment LHS
+                stmt_node = None
+                try:
+                    src_probe = _sanitize_template_for_ast(stripped)
+                    if stripped.endswith(":"):
+                        src_probe = src_probe + "\n    pass"
+                    parsed_stmt = ast.parse(src_probe)
+                    stmt_node = parsed_stmt.body[0] if parsed_stmt.body else None
+                except SyntaxError:
+                    stmt_node = None
+                if isinstance(stmt_node, ast.Return):
+                    ret_expr = slot_out_var or bindings.get("output_var") or "None"
+                    new_lines.append(f"{base_indent}return {ret_expr}")
+                elif isinstance(stmt_node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                    raw_tgt = stmt_node.targets[0] if isinstance(stmt_node, ast.Assign) else stmt_node.target
+                    lhs_target = _unsanitize_ast_source(ast.unparse(raw_tgt)).strip()
+                    if lhs_target and slot_out_var and lhs_target != slot_out_var:
+                        new_lines.append(f"{base_indent}{lhs_target} = {slot_out_var}")
+                replaced = True
+            else:
+                new_lines.append(line)
+        if replaced:
+            rendered = "\n".join(new_lines)
+
+    render_bindings = dict(bindings)
+    for p_name, p_sig in cell_inputs.items():
+        if p_name not in render_bindings or render_bindings[p_name] is None:
+            if getattr(p_sig, "default_value", None) is not None:
+                render_bindings[p_name] = _format_default_value(p_sig, reg=reg_syn)
+    cell_outputs = getattr(cell, "outputs", {}) or {}
+    prim_out = getattr(cell, "primary_output", None)
+    prim_out_name = getattr(prim_out, "name", None) if prim_out else None
+    for out_p_name in cell_outputs.keys():
+        if out_p_name not in render_bindings or not render_bindings[out_p_name]:
+            if len(cell_outputs) == 1 or out_p_name == prim_out_name:
+                render_bindings[out_p_name] = out_var
+            else:
+                render_bindings[out_p_name] = _unique_var(cell, out_p_name)
+
+    rendered = safe_substitute_template(rendered, render_bindings)
 
     if indent_level > 0:
         rendered = "\n".join(
@@ -1358,5 +1322,4 @@ __all__ = [
     "synthesize_and_register",
     "render_cell",
     "import_stmt_for",
-    "InductiveKernelGenerator",
 ]

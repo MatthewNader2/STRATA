@@ -113,10 +113,12 @@ def bootstrap_runtime_poset(registry: Any) -> None:
     (`builtins`, `collections.abc`, `numbers`, `os.PathLike`, and loaded modules).
     Operates purely at the lowest level of types: zero domain vocabulary, zero hardcoded strings.
     """
-    # 1. Universal top and algebraic symbols
-    for sym in ("any", "object", "*", "top", "unknown", "⊤"):
+    # 1. Universal top and algebraic symbols (NOTE: 'object' is the Python poset root,
+    #    never a wildcard Top that erases typestate/qualifier constraints)
+    for sym in ("any", "*", "top", "unknown", "⊤"):
         registry.register_top(sym)
         registry.register_top_state(sym)
+    registry.register_type("object", None)
     registry.register_type_vars(["T", "U", "V", "R", "K", "State"])
     for prod_c in ("tuple", "product", "pair"):
         registry.register_product_constructor(prod_c)
@@ -155,9 +157,11 @@ def infer_abstract_carrier(type_name: str, registry: Any = None) -> Optional[str
     registered abstract carriers in the lattice (populated by domain trees).
     """
     tn = str(type_name).strip().lower()
-    if not tn or tn in ("any", "object", "*", "top", "unknown", "none"):
+    if not tn or tn == "object":
         return None
-    if registry:
+    if registry is not None:
+        if registry.is_declared_top(tn) or registry.is_void_type(tn):
+            return None
         for abs_c in registry.get_abstract_carriers():
             if tn == abs_c or registry.is_subtype(tn, abs_c):
                 return abs_c
@@ -193,10 +197,14 @@ def classify_cell_structural_role(cell: Any, registry: Any = None) -> str:
     template = getattr(cell, "code_template", "") or ""
     effects = getattr(cell, "effects", []) or []
 
-    key_roles = set(registry.get_verification_semantics("key_roles")) if registry else set()
-    key_roles |= {"key", "column_key", "field_key", "attr_key", "index_key", "coordinate"}
-    val_roles = set(registry.get_verification_semantics("assigned_value_roles")) if registry else set()
-    val_roles |= {"assigned_value", "column_value", "field_value", "value"}
+    explicit_optic = str(getattr(cell, "optic_role", "") or "").strip().lower()
+    if explicit_optic and registry and explicit_optic in set(registry.get_verification_semantics("optic_roles") or ()):
+        return explicit_optic
+
+    key_roles = set(registry.get_verification_semantics("key_roles")) | set(registry.get_verification_semantics("key_binds")) if registry else set()
+    val_roles = set(registry.get_verification_semantics("assigned_value_roles")) | set(registry.get_verification_semantics("assigned_value_binds")) if registry else set()
+    carrier_binds = set(registry.get_verification_semantics("carrier_binds")) if registry else set()
+    receiver_roles = set(registry.get_verification_semantics("receiver_roles")) if registry else set()
 
     has_carrier_in = False
     has_key_in = False
@@ -204,14 +212,14 @@ def classify_cell_structural_role(cell: Any, registry: Any = None) -> str:
     carrier_in_type = None
 
     for p in inputs.values():
-        bind = getattr(p, "binds", None)
-        role = getattr(p, "port_role", None) or getattr(p, "derived_role", "")
-        if bind in ("data_carrier", "receiver", "carrier", "primary_operand", "state") or role in ("receiver", "carrier", "primary_operand", "state"):
+        bind = str(getattr(p, "binds", None) or "").lower()
+        role = str(getattr(p, "port_role", None) or getattr(p, "derived_role", "") or "").lower()
+        if (bind and bind in carrier_binds) or (role and role in receiver_roles) or (role and role in carrier_binds):
             has_carrier_in = True
             carrier_in_type = str(getattr(getattr(p, "signature", p), "type_name", "") or "").lower()
-        if bind in key_roles or role in key_roles:
+        if (bind and bind in key_roles) or (role and role in key_roles):
             has_key_in = True
-        if bind in val_roles or role in val_roles:
+        if (bind and bind in val_roles) or (role and role in val_roles):
             has_val_in = True
 
     prim_out = getattr(cell, "primary_output", None)
@@ -231,16 +239,17 @@ def classify_cell_structural_role(cell: Any, registry: Any = None) -> str:
         return "source"
 
     path_tokens = registry.get_path_port_tokens() if registry else set()
-    source_roles = set(registry.get_verification_semantics("source_roles")) if registry else {"source", "ingress", "source_data"}
+    source_roles = set(registry.get_verification_semantics("source_roles")) if registry else set()
+    source_states = set(registry.get_verification_semantics("source_states")) if registry else set()
     in_is_locator = False
     for p in inputs.values():
         p_tn = str(getattr(getattr(p, "signature", p), "type_name", "") or "").lower()
         p_st = str(getattr(getattr(p, "signature", p), "state", "") or "").lower()
-        p_role = getattr(p, "port_role", None) or getattr(p, "derived_role", "")
-        if p_st in ("source_identifier", "input_path", "source_path") or p_role in source_roles or p_tn in path_tokens:
+        p_role = str(getattr(p, "port_role", None) or getattr(p, "derived_role", "") or "").lower()
+        if (p_st and p_st in source_states) or (p_role and p_role in source_roles) or (p_tn and p_tn in path_tokens):
             in_is_locator = True
             break
-        if registry and any(registry.is_subtype(p_tn, pt) for pt in path_tokens):
+        if registry and p_tn and any(registry.is_subtype(p_tn, pt) for pt in path_tokens):
             in_is_locator = True
             break
 
@@ -251,9 +260,10 @@ def classify_cell_structural_role(cell: Any, registry: Any = None) -> str:
     # 3. Egress (sink) / Terminal Morphism
     mat_states = registry.get_materialization_states() if registry else set()
     term_states = registry.get_terminal_states() if registry else set()
+    void_types = set(registry.get_verification_semantics("void_types")) if registry else {None.__class__.__name__.lower(), ""}
     has_lhs = ("=" in template and any(ch not in ("=", "!", "<", ">") for ch in template[:template.index("=")].strip())) if template else False
 
-    if not outputs or out_tn in ("none", "void", "unit", ""):
+    if not outputs or out_tn in void_types:
         return "sink"
     if out_state in mat_states or out_state in term_states:
         return "sink"

@@ -7,7 +7,7 @@ Anchors source entry and sink exit morphisms and searches bidirectionally.
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
-from .base import RouteMethod, STOPWORDS
+from .base import RouteMethod, is_macro_cell
 from log_config import get_logger
 
 logger = get_logger("m2_endpoint_anchor")
@@ -57,8 +57,7 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
                 )
             )
@@ -127,10 +126,21 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         elif dst_lit is not None:
             eligible_sinks = [c for c in sink_pool if self.file_compat(c, dst_lit) > 0]
         else:
-            eligible_sinks = []
+            # Generalized co-terminal anchor: in memory-only or open pipelines,
+            # terminal cells or evaluators matching the final clause serve as the sink anchor.
+            terminal_roles = set(TypeRegistry.get_instance().get_terminal_roles_set())
+            eligible_sinks = [
+                c for c in candidates
+                if (getattr(c, "node_role", "") in terminal_roles or self.clause_fit(last_clause, c)[0] > 0)
+                and not self.is_ingress_node(c, orch)
+            ]
         best_sink: Optional[Cell] = max(
             eligible_sinks,
-            key=lambda c: (self.file_compat(c, dst_lit), self.clause_fit(last_clause, c), relevance_map.get(c.cell_id, 0.0)),
+            key=lambda c: (
+                self.file_compat(c, dst_lit) if dst_lit is not None else 0,
+                self.clause_fit(last_clause, c),
+                relevance_map.get(c.cell_id, 0.0),
+            ),
         ) if eligible_sinks else None
         self._trace("m2_endpoints", source=best_source.cell_id if best_source else None,
                     sink=best_sink.cell_id if best_sink else None,
@@ -139,168 +149,216 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         if not best_source:
             best_source = candidates[0]
 
-        # Single-node pipeline if source is also sink or only one anchor makes sense
+        # Single-node pipeline if source is also sink
         if best_sink and best_source.cell_id == best_sink.cell_id:
             return [best_source]
 
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
         num_clauses = len(clauses) if clauses else 1
 
-        # 3. For multi-clause compound prompts (> 2 clauses), chain forward through intermediate transformations
-        if num_clauses > 2:
-            path = [best_source]
-            curr = best_source
-            max_steps = max(2, min(16, max(max_transforms + 2, num_clauses + 3)))
-            _ev = self._evidence()
-            _last_toks = _ev.clause_tokens(clauses[-1]) if _ev is not None else set()
-            _covered_last: set = set()
-            for cl_idx in range(1, num_clauses + 2):
-                if self.is_sink_node(curr, orch) or (best_sink and curr.cell_id == best_sink.cell_id):
-                    break
-                valid_next = [
-                    c for c in candidates
-                    if c.cell_id != curr.cell_id and c.cell_id not in [p.cell_id for p in path]
-                    and (self.step_unifies(curr, c, prev_path=path) or self.step_unifies_dag(c, path, ctx=ctx))
-                ]
-                if cl_idx >= num_clauses and _ev is not None:
-                    # every clause has had its turn: only continue for last-clause tokens nothing explained yet
-                    _resid = _last_toks - _covered_last
-                    valid_next = [c for c in valid_next if _ev.identity_overlap(_resid, c)["hit"] > 0.0]
-                if not valid_next:
-                    if best_sink and (self.step_unifies(curr, best_sink, prev_path=path) or self.step_unifies_dag(best_sink, path, ctx=ctx)) and best_sink.cell_id not in [p.cell_id for p in path]:
-                        path.append(best_sink)
-                    break
+        if not best_sink:
+            # No explicit/co-terminal sink found: select highest-scoring non-ingress candidate as target endpoint
+            non_ing = [c for c in candidates if c.cell_id != best_source.cell_id and not self.is_ingress_node(c, orch)]
+            if non_ing:
+                best_sink = max(
+                    non_ing,
+                    key=lambda c: (self.clause_fit(last_clause, c), relevance_map.get(c.cell_id, 0.0)),
+                )
+            else:
+                return [best_source]
 
-                target_cl = clauses[min(cl_idx, num_clauses - 1)] if cl_idx < num_clauses else ""
-                target_toks = _ev.clause_tokens(target_cl or prompt) if _ev is not None else set()
+        # 3. True Bidirectional Meet-in-the-Middle Search from c_start to c_end for arbitrary K >= 1
+        # Uses indexed orchestrator adjacency / reverse_adjacency, restricted to tunnel candidates.
+        cand_by_id: Dict[str, Cell] = {c.cell_id: c for c in candidates}
+        cand_by_id.setdefault(best_source.cell_id, best_source)
+        cand_by_id.setdefault(best_sink.cell_id, best_sink)
 
-                def _score_step(c: Cell):
-                    # Identity evidence (recall, name-precision, F) > retrieval + edge affinity > sink tie-break
-                    if _ev is not None and target_toks:
-                        ov = _ev.identity_overlap(target_toks, c)
-                        fit = ov["rank"]
-                    else:
-                        fit = self.clause_fit(target_cl or prompt, c)
-                    rel = relevance_map.get(c.cell_id, 0.0)
-                    aff = self.calculate_edge_affinity(curr, c, orch, relevance_map=relevance_map)
-                    is_snk = 1.0 if (best_sink and c.cell_id == best_sink.cell_id and cl_idx >= num_clauses - 1) else 0.0
-                    return (fit, rel + aff, is_snk)
+        orch_adj = getattr(orch, "_adjacency", None) or {}
+        orch_rev = getattr(orch, "_reverse_adjacency", None) or {}
 
-                valid_next.sort(key=_score_step, reverse=True)
-                nxt = valid_next[0]
-                self._trace("m2_step", step=cl_idx, target_clause=min(cl_idx, num_clauses - 1) + 1, chosen=nxt.cell_id,
-                            fit=tuple(round(x, 3) for x in _score_step(nxt)[0]),
-                            runners_up=[(c.cell_id, tuple(round(x, 3) for x in _score_step(c)[0])) for c in valid_next[1:3]],
-                            candidates_after_filter=len(valid_next))
-                path.append(nxt)
-                curr = nxt
-                if _ev is not None and cl_idx >= num_clauses - 1:
-                    _covered_last |= set(_ev.identity_overlap(_last_toks, nxt)["tokens"])
+        fwd_adj: Dict[str, List[Cell]] = {}
+        rev_adj: Dict[str, List[Cell]] = {}
+        pool_cells = list(cand_by_id.values())
 
-            if best_sink and path[-1].cell_id != best_sink.cell_id:
-                if self.step_unifies(path[-1], best_sink, prev_path=path) or self.step_unifies_dag(best_sink, path, ctx=ctx):
-                    path.append(best_sink)
-
-            self.tag_cells_with_clause_indices(path, prompt, orchestrator=orch)
-            try:
-                from ..token_evidence import audit as _audit
-                _cov = _audit(path, prompt, orch)
-                if _cov.get("available") and any(i["kind"] == "clause_unserved" for i in _cov.get("issues", [])):
-                    return self._delegate_to_m1(
-                        "M2 compound path has unserved clauses", prompt, tunnel, relevance_map,
-                        orch=orch, ctx=ctx, **kwargs
-                    )
-            except Exception as _cov_exc:
-                logger.debug("[M2] Coverage audit check skipped: %s", _cov_exc)
-
-            try:
-                from ..unification import UnificationGate, ExecutionContext
-                from ..preflight import PreflightLinter
-                _gate = UnificationGate(orchestrator=orch)
-                _ur = _gate.unify_pipeline(path, ctx=ctx or ExecutionContext(prompt=prompt))
-                if _ur is not None and getattr(_ur, "value", None):
-                    _lint = PreflightLinter.lint(_ur.value, prompt=prompt, orchestrator=orch)
-                    if not _lint.is_valid:
-                        return self._delegate_to_m1(
-                            f"M2 path failed pre-flight lint: {'; '.join(_lint.violations[:2])}",
-                            prompt, tunnel, relevance_map, orch=orch, ctx=ctx, **kwargs
-                        )
-            except Exception as _chk_exc:
-                logger.debug("[M2] Pre-flight verification check skipped: %s", _chk_exc)
-
-            return path
-
-        # Bidirectional Meeting-in-the-Middle through intermediate transforms (short prompts)
-        transforms = [c for c in candidates if self.is_transform_node(c, orch)]
-        transforms.sort(key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)
-        max_tf = settings.m2_max_candidate_transforms
-        if len(transforms) > max_tf:
-            self._trace("m2_transforms_truncated", total_candidates=len(transforms), cap=max_tf)
-            transforms = transforms[:max_tf]
-
-        if best_sink and transforms:
-            # Look for 1-hop bridge: source -> T -> sink
-            best_mid: Optional[Cell] = None
-            best_mid_score = ((-1.0, -1.0, -1.0), -1.0)
-            for t in transforms:
-                if self.step_unifies(best_source, t) and self.step_unifies(t, best_sink, prev_path=[best_source, t]):
-                    sc = (
-                        self.clause_fit(prompt, t),
-                        relevance_map.get(t.cell_id, 0.0)
-                        + self.calculate_edge_affinity(best_source, t, orch, relevance_map=relevance_map)
-                        + self.calculate_edge_affinity(t, best_sink, orch, relevance_map=relevance_map)
-                        + (1.0 if t.domain_name == best_source.domain_name else 0.0),
-                    )
-                    if sc > best_mid_score:
-                        best_mid_score = sc
-                        best_mid = t
-            if best_mid:
-                return [best_source, best_mid, best_sink]
-
-            # Look for 2-hop bridge: source -> T1 -> T2 -> sink
-            best_pair: Optional[Tuple[Cell, Cell]] = None
-            best_pair_score = ((-1.0, -1.0, -1.0), -1.0)
-            for t1 in transforms:
-                if not self.step_unifies(best_source, t1):
-                    continue
-                for t2 in transforms:
-                    if t1.cell_id == t2.cell_id:
-                        continue
-                    if self.step_unifies(t1, t2, prev_path=[best_source, t1]) and self.step_unifies(t2, best_sink, prev_path=[best_source, t1, t2]):
-                        f1, f2 = self.clause_fit(prompt, t1), self.clause_fit(prompt, t2)
-                        sc = (
-                            tuple(a + b for a, b in zip(f1, f2)),
-                            relevance_map.get(t1.cell_id, 0.0) + relevance_map.get(t2.cell_id, 0.0)
-                            + self.calculate_edge_affinity(best_source, t1, orch, relevance_map=relevance_map)
-                            + self.calculate_edge_affinity(t1, t2, orch, relevance_map=relevance_map)
-                            + self.calculate_edge_affinity(t2, best_sink, orch, relevance_map=relevance_map),
-                        )
-                        if sc > best_pair_score:
-                            best_pair_score = sc
-                            best_pair = (t1, t2)
-            if best_pair:
-                return [best_source, best_pair[0], best_pair[1], best_sink]
-
-        # If direct unification is valid when no transform found and prompt is trivial
-        if best_sink and self.step_unifies(best_source, best_sink) and num_clauses <= 1:
-            return [best_source, best_sink]
-
-        # Fallback forward chaining
-        path = [best_source]
-        curr = best_source
-        max_steps = max(32, num_clauses * 4 + 4, max_transforms + 8)
-        for _ in range(max_steps):
-            valid_next = [c for c in candidates if c.cell_id != curr.cell_id and self.step_unifies(curr, c)]
-            if not valid_next:
-                break
-            valid_next.sort(
-                key=lambda c: relevance_map.get(c.cell_id, 0.0) + self.calculate_edge_affinity(curr, c, orch, relevance_map=relevance_map),
-                reverse=True
+        def _get_fwd_neighbors(cid: str) -> List[Cell]:
+            cached = fwd_adj.get(cid)
+            if cached is not None:
+                return cached
+            src_c = cand_by_id[cid]
+            nbrs: List[Cell] = []
+            seen: Set[str] = {cid}
+            for nid in orch_adj.get(cid, ()):
+                nc = cand_by_id.get(nid)
+                if nc is not None and nid not in seen and self.step_unifies(src_c, nc, prev_path=[src_c]):
+                    seen.add(nid)
+                    nbrs.append(nc)
+            for nc in pool_cells:
+                if nc.cell_id not in seen and self.step_unifies(src_c, nc, prev_path=[src_c]):
+                    seen.add(nc.cell_id)
+                    nbrs.append(nc)
+            nbrs.sort(
+                key=lambda c: (
+                    self.calculate_edge_affinity(src_c, c, orch, relevance_map=relevance_map),
+                    relevance_map.get(c.cell_id, 0.0),
+                ),
+                reverse=True,
             )
-            nxt = valid_next[0]
-            path.append(nxt)
-            curr = nxt
-            if self.is_sink_node(curr, orch):
+            fwd_adj[cid] = nbrs
+            return nbrs
+
+        def _get_rev_neighbors(cid: str) -> List[Cell]:
+            cached = rev_adj.get(cid)
+            if cached is not None:
+                return cached
+            dst_c = cand_by_id[cid]
+            nbrs: List[Cell] = []
+            seen: Set[str] = {cid}
+            for pid in orch_rev.get(cid, ()):
+                pc = cand_by_id.get(pid)
+                if pc is not None and pid not in seen and self.step_unifies(pc, dst_c, prev_path=[pc]):
+                    seen.add(pid)
+                    nbrs.append(pc)
+            for pc in pool_cells:
+                if pc.cell_id not in seen and self.step_unifies(pc, dst_c, prev_path=[pc]):
+                    seen.add(pc.cell_id)
+                    nbrs.append(pc)
+            nbrs.sort(
+                key=lambda c: (
+                    self.calculate_edge_affinity(c, dst_c, orch, relevance_map=relevance_map),
+                    relevance_map.get(c.cell_id, 0.0),
+                ),
+                reverse=True,
+            )
+            rev_adj[cid] = nbrs
+            return nbrs
+
+        max_total_len = max(4, min(14, max_transforms + num_clauses + 2))
+        beam_limit = max(16, getattr(settings, "m2_max_candidate_transforms", 24))
+        half_steps = max(2, (max_total_len // 2) + 1)
+
+        # Frontier maps endpoint_id -> list of partial paths ending (or starting) at endpoint_id
+        fwd_paths: Dict[str, List[List[Cell]]] = {best_source.cell_id: [[best_source]]}
+        bwd_paths: Dict[str, List[List[Cell]]] = {best_sink.cell_id: [[best_sink]]}
+        fwd_frontier: List[List[Cell]] = [[best_source]]
+        bwd_frontier: List[List[Cell]] = [[best_sink]]
+
+        meeting_candidates: List[List[Cell]] = []
+        seen_signatures: Set[Tuple[str, ...]] = set()
+
+        def _record_meeting(fp: List[Cell], bp: List[Cell]) -> None:
+            # fp ends with M, bp starts with M
+            merged = fp + bp[1:]
+            if len(merged) > max_total_len or len(merged) < 2:
+                return
+            sig = tuple(c.cell_id for c in merged)
+            if sig in seen_signatures:
+                return
+            # Ensure linear/DAG step unification across full merged path
+            if len({c.cell_id for c in merged}) != len(merged):
+                return
+            if self.chain_is_valid(merged, prompt=prompt):
+                seen_signatures.add(sig)
+                meeting_candidates.append(merged)
+
+        # Check trivial 1-hop bridge edge (direct edge fwd[0] -> bwd[0])
+        if self.step_unifies(best_source, best_sink, prev_path=[best_source]):
+            _record_meeting([best_source, best_sink], [best_sink])
+
+        for _step in range(half_steps):
+            # Check intersections between current fwd_paths and bwd_paths
+            for mid_id in set(fwd_paths.keys()) & set(bwd_paths.keys()):
+                for fp in fwd_paths[mid_id][:4]:
+                    for bp in bwd_paths[mid_id][:4]:
+                        _record_meeting(fp, bp)
+
+            if not fwd_frontier and not bwd_frontier:
                 break
 
-        return path
+            # Alternate expanding smaller active frontier (pure Meet-in-the-Middle)
+            expand_fwd = bool(fwd_frontier) and (not bwd_frontier or len(fwd_frontier) <= len(bwd_frontier))
+            if expand_fwd:
+                next_fwd: List[List[Cell]] = []
+                for fp in fwd_frontier:
+                    tail = fp[-1]
+                    fp_ids = {c.cell_id for c in fp}
+                    for nxt in _get_fwd_neighbors(tail.cell_id):
+                        if nxt.cell_id in fp_ids:
+                            continue
+                        if not (self.step_unifies(tail, nxt, prev_path=fp) or self.step_unifies_dag(nxt, fp, ctx=ctx)):
+                            continue
+                        new_fp = fp + [nxt]
+                        fwd_paths.setdefault(nxt.cell_id, []).append(new_fp)
+                        next_fwd.append(new_fp)
+                        if nxt.cell_id in bwd_paths:
+                            for bp in bwd_paths[nxt.cell_id][:4]:
+                                _record_meeting(new_fp, bp)
+                next_fwd.sort(
+                    key=lambda p: sum(relevance_map.get(c.cell_id, 0.0) for c in p) / len(p),
+                    reverse=True,
+                )
+                fwd_frontier = next_fwd[:beam_limit]
+            else:
+                next_bwd: List[List[Cell]] = []
+                for bp in bwd_frontier:
+                    head = bp[0]
+                    bp_ids = {c.cell_id for c in bp}
+                    for prev_c in _get_rev_neighbors(head.cell_id):
+                        if prev_c.cell_id in bp_ids:
+                            continue
+                        if not self.step_unifies(prev_c, head, prev_path=[prev_c]):
+                            continue
+                        new_bp = [prev_c] + bp
+                        bwd_paths.setdefault(prev_c.cell_id, []).append(new_bp)
+                        next_bwd.append(new_bp)
+                        if prev_c.cell_id in fwd_paths:
+                            for fp in fwd_paths[prev_c.cell_id][:4]:
+                                _record_meeting(fp, new_bp)
+                next_bwd.sort(
+                    key=lambda p: sum(relevance_map.get(c.cell_id, 0.0) for c in p) / len(p),
+                    reverse=True,
+                )
+                bwd_frontier = next_bwd[:beam_limit]
+
+        # Final sweep of direct edges between any fwd leaf and bwd root (odd-length meets without shared node)
+        for fid, fps in fwd_paths.items():
+            for fp in fps[:3]:
+                for nbr in _get_fwd_neighbors(fid):
+                    if nbr.cell_id in bwd_paths:
+                        for bp in bwd_paths[nbr.cell_id][:3]:
+                            _record_meeting(fp, bp)
+
+        if not meeting_candidates:
+            reason = f"Bidirectional Meet-in-the-Middle found no connecting path between {best_source.cell_id} and {best_sink.cell_id}"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
+
+        _ev = self._evidence()
+        p_toks = _ev.clause_tokens(prompt) if _ev is not None else prompt_tokens
+        cl_tok_sets = [(_ev.clause_tokens(cl) if _ev is not None else CellTokenizer.tokenize_prompt(cl)) for cl in clauses]
+
+        def _score_meeting(m_path: List[Cell]) -> Tuple[Any, ...]:
+            served_cl = 0
+            for cl_t in cl_tok_sets:
+                if cl_t and any((getattr(c, "identity_tokens", c.token_set) & cl_t) for c in m_path):
+                    served_cl += 1
+            path_toks = set().union(*(getattr(c, "identity_tokens", c.token_set) for c in m_path))
+            tok_cov = len(path_toks & p_toks) / max(len(p_toks), 1)
+            aff_sum = sum(
+                self.calculate_edge_affinity(m_path[i], m_path[i + 1], orch, relevance_map=relevance_map)
+                for i in range(len(m_path) - 1)
+            )
+            rel_sum = sum(relevance_map.get(c.cell_id, 0.0) for c in m_path)
+            has_mid = 1 if (len(m_path) > 2 or num_clauses <= 2) else 0
+            return (served_cl, has_mid, round(tok_cov, 4), (aff_sum + rel_sum) / len(m_path), -len(m_path))
+
+        meeting_candidates.sort(key=_score_meeting, reverse=True)
+        best_path = meeting_candidates[0]
+        self._trace(
+            "m2_mitm_selected",
+            source=best_source.cell_id,
+            sink=best_sink.cell_id,
+            candidates_found=len(meeting_candidates),
+            path=[c.cell_id for c in best_path],
+        )
+        return best_path[:max(32, num_clauses * 4 + 4, max_transforms + 8)]

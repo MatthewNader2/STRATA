@@ -32,29 +32,50 @@ except (ImportError, ValueError):
     from config import settings
 
 
+def _is_profile_zero() -> bool:
+    try:
+        from .inference import ModelManager
+    except (ImportError, ValueError):
+        try:
+            from inference import ModelManager
+        except Exception:
+            return False
+    try:
+        return getattr(ModelManager.get_instance(), "current_profile_name", None) == "0"
+    except Exception:
+        return False
+
+
 class TokenEvidence:
-    def __init__(self, orchestrator: Any):
+    def __init__(self, orchestrator: Any, pure_symbolic: Optional[bool] = None):
         self.orch = orchestrator
+        self._pure_symbolic = _is_profile_zero() if pure_symbolic is None else bool(pure_symbolic)
         cells = list(getattr(orchestrator, "loaded_cells", {}).values())
         self.n = max(len(cells), 1)
         df: Dict[str, int] = {}
         identity_df: Dict[str, int] = {}
+        formal_df: Dict[str, int] = {}
         for c in cells:
             for t in c.token_set:
                 df[t] = df.get(t, 0) + 1
             for t in getattr(c, "identity_tokens", ()) or ():
                 identity_df[t] = identity_df.get(t, 0) + 1
-        self._df = df
-        self._identity_df = identity_df
+            for t in getattr(c, "formal_identifiers", ()) or (str(getattr(c, "cell_id", "")).lower(),):
+                formal_df[t] = formal_df.get(t, 0) + 1
+        self._df = formal_df if self._pure_symbolic else df
+        self._identity_df = formal_df if self._pure_symbolic else identity_df
         self._idf_cache: Dict[str, float] = {}
         self._skip: Optional[Set[str]] = None
 
     def idf(self, tok: str) -> float:
-        """0.0 for tokens no cell can match; log-IDF otherwise."""
+        """0.0 for tokens no cell can match in neural/hybrid profiles; strict OOV penalty mass in Profile 0."""
         v = self._idf_cache.get(tok)
         if v is None:
             d = self._df.get(tok, 0)
-            v = 0.0 if d == 0 else math.log(1.0 + (self.n + 1) / (d + 1.0))
+            if d == 0:
+                v = math.log(1.0 + (self.n + 1) / 1.0) if self._pure_symbolic else 0.0
+            else:
+                v = math.log(1.0 + (self.n + 1) / (d + 1.0))
             self._idf_cache[tok] = v
         return v
 
@@ -78,10 +99,14 @@ class TokenEvidence:
         return self._skip
 
     def clause_tokens(self, clause: str) -> Set[str]:
+        if self._pure_symbolic:
+            # Strict Profile 0: preserve every token (zero-IDF conversational prose is NOT stripped),
+            # only preserving compound formal identifiers without keyword/synonym expansion.
+            return {t for t in CellTokenizer.tokenize_prompt(clause) if len(t) > 1}
         skip = self._non_evidence()
         toks = {
             t for t in CellTokenizer.tokenize_prompt(clause)
-            if len(t) > 2 and self.idf(t) > 0.0 and self._identity_df.get(t, 0) > 0 and t not in skip
+            if len(t) > 2 and self.idf(t) > 0.0 and t not in skip
         }
         try:
             from unification import ExecutionContext
@@ -123,6 +148,27 @@ class TokenEvidence:
         recall    = share of the clause's mass explained by the cell identity
         precision = share of the cell identity's mass mentioned by the clause
         """
+        if self._pure_symbolic:
+            ident = set(getattr(cell, "formal_identifiers", None) or {str(getattr(cell, "cell_id", "")).lower()})
+            hit = clause_toks & ident
+            hit_mass = self.mass(hit)
+            c_mass = self.mass(clause_toks)
+            i_mass = self.mass(ident)
+            recall = hit_mass / c_mass if c_mass > 0 else 0.0
+            precision = hit_mass / i_mass if i_mass > 0 else 0.0
+            denom = precision + recall
+            f = (2 * precision * recall / denom) if denom > 0 else 0.0
+            name_prec = 1.0 if hit else 0.0
+            return {
+                "hit": hit_mass,
+                "recall": recall,
+                "precision": precision,
+                "f": f,
+                "name_precision": name_prec,
+                "rank": (recall, name_prec, f),
+                "tokens": sorted(hit),
+            }
+
         ident = set(getattr(cell, "identity_tokens", None) or set())
         hit = clause_toks & ident
         hit_mass = self.mass(hit)
@@ -147,7 +193,7 @@ class TokenEvidence:
 
 import threading
 
-_CACHE: Dict[int, "TokenEvidence"] = {}
+_CACHE: Dict[Tuple[int, bool], "TokenEvidence"] = {}
 _LOCK = threading.RLock()
 
 
@@ -157,14 +203,15 @@ def last_orchestrator() -> Any:
 
 
 def get_evidence(orchestrator: Any) -> Optional[TokenEvidence]:
-    """Per-orchestrator singleton, rebuilt if the loaded cell count changes."""
+    """Per-orchestrator, per-profile-mode singleton, rebuilt if the loaded cell count changes."""
     if orchestrator is None or not getattr(orchestrator, "loaded_cells", None):
         return None
-    key = id(orchestrator)
+    is_p0 = _is_profile_zero()
+    key = (id(orchestrator), is_p0)
     with _LOCK:
         ev = _CACHE.get(key)
-        if ev is None or ev.n != max(len(orchestrator.loaded_cells), 1):
-            ev = TokenEvidence(orchestrator)
+        if ev is None or ev.n != max(len(orchestrator.loaded_cells), 1) or ev._pure_symbolic != is_p0:
+            ev = TokenEvidence(orchestrator, pure_symbolic=is_p0)
             _CACHE[key] = ev
         return ev
 
@@ -207,6 +254,13 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                 residual["f"] >= min_f
                 or (primary_f is not None and residual["f"] >= primary_f * f_ratio)
             )
+            # Single-token residual verbs (e.g. "apply") require strong dominance or high name specificity
+            # so they don't falsely split single-operation clauses.
+            if ok and len(residual["tokens"]) < 2:
+                ok = bool(
+                    (primary_f is not None and residual["f"] >= primary_f * 0.70)
+                    or (residual["name_precision"] >= 0.25 and residual["recall"] >= 0.50)
+                )
             if ok and accepted:
                 # Category-theoretic reachability: a secondary anchor in the same clause
                 # must compose with or share a carrier with an accepted anchor in the clause,
@@ -260,7 +314,27 @@ def _clauses(prompt: str) -> List[str]:
     return RouteMethod.segment_prompt_clauses(prompt)
 
 
-def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = None) -> Dict[str, Any]:
+def _resolve_clause_semantic_scores(
+    orchestrator: Any,
+    prompt: str,
+    clause_semantic_scores: Optional[List[Dict[str, float]]] = None,
+) -> Optional[List[Dict[str, float]]]:
+    if clause_semantic_scores is not None:
+        return clause_semantic_scores
+    if orchestrator is None:
+        return None
+    cached = getattr(orchestrator, "_last_clause_semantic_scores", None)
+    if isinstance(cached, tuple) and len(cached) == 2 and cached[0] == (prompt or "").strip():
+        return cached[1]
+    return None
+
+
+def audit_clause_coverage(
+    cells: List[Any],
+    prompt: str,
+    orchestrator: Any = None,
+    clause_semantic_scores: Optional[List[Dict[str, float]]] = None,
+) -> Dict[str, Any]:
     """
     Prompt-clause <-> pipeline-cell coverage audit. Corpus-derived (token_evidence), vocabulary-free.
     Used by PreflightLinter (hard checks) and debug panels.
@@ -272,10 +346,14 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
     clauses = _clauses(prompt)
     ctoks = [ev.clause_tokens(c) for c in clauses]
     table = [[ev.identity_overlap(t, c) if t else None for t in ctoks] for c in cells]
+    clause_sem = None if ev._pure_symbolic else _resolve_clause_semantic_scores(orchestrator, prompt, clause_semantic_scores)
+    if clause_sem is not None and len(clause_sem) != len(clauses):
+        clause_sem = None
     out["available"] = True
 
     # 1. evidence winner of every clause among the path's cells
     winners: Dict[int, int] = {}
+    sem_winners: Dict[int, int] = {}
     for j in range(len(clauses)):
         best_i, best_rank = None, None
         for i in range(len(cells)):
@@ -284,6 +362,17 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
                 best_i, best_rank = i, o["rank"]
         if best_i is not None:
             winners[j] = best_i
+        elif clause_sem is not None:
+            sem_map = clause_sem[j] or {}
+            max_sem_j = max(sem_map.values(), default=0.0)
+            if max_sem_j >= 0.35:
+                best_si, best_sval = None, 0.0
+                for i, c in enumerate(cells):
+                    sv = float(sem_map.get(c.cell_id, 0.0) or 0.0)
+                    if sv >= 0.35 and sv >= 0.70 * max_sem_j and sv > best_sval:
+                        best_si, best_sval = i, sv
+                if best_si is not None:
+                    sem_winners[j] = best_si
 
     # 2. which clauses does each cell CLAIM? An explicit assignment (planner / tagger) is authoritative;
     #    otherwise a cell claims the clauses it wins plus those where it explains tokens the winner left over.
@@ -302,6 +391,7 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
     for i, cell in enumerate(cells):
         touched = [j for j in range(len(clauses)) if table[i][j] and table[i][j]["hit"] > 0.0]
         won = [j for j in touched if winners.get(j) == i]
+        sem_won = [j for j, wi in sem_winners.items() if wi == i]
         residual_serves = []
         for j in touched:
             if j in won:
@@ -310,16 +400,21 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
             if ev.identity_overlap(ctoks[j] - set(w["tokens"]), cell)["hit"] > 0.0:
                 residual_serves.append(j)
         tagged = getattr(cell, "matched_clause_idx", None)
-        mine = {tagged} if tagged is not None else (set(won) | set(residual_serves))
+        tagged_valid = (
+            {tagged}
+            if (tagged is not None and 0 <= tagged < len(table[i]) and table[i][tagged]["hit"] > 0.0)
+            else set()
+        )
+        mine = tagged_valid | set(won) | set(sem_won) | set(residual_serves)
         claims.append(mine)
         role = str(getattr(cell, "node_role", "") or "").lower()
         if mine:
             status = "serves"
-        elif not touched or role in bridge_roles:
+        elif not touched or role in bridge_roles or getattr(cell, "_auto_inserted_bridge", False):
             status = "connector"
         else:
             status = "UNREQUESTED"
-        cell_rows.append({"cell": cell.cell_id, "wins": sorted(set(won) | ({tagged} if tagged is not None else set())),
+        cell_rows.append({"cell": cell.cell_id, "wins": sorted(set(won) | set(sem_won) | ({tagged} if tagged is not None else set())),
                           "residual_serves": residual_serves, "touches": touched, "status": status})
         if status == "UNREQUESTED":
             out["issues"].append({"kind": "unrequested_cell", "cell": cell.cell_id, "outranked_on": touched,
@@ -334,7 +429,7 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
         lattice_best = lattice_best_fit = 0.0
         if toks:
             memo = ev.__dict__.setdefault("_lattice_best_memo", {})
-            key = frozenset(toks)
+            key = tuple(sorted(toks))
             if key not in memo:
                 lb = lbf = 0.0
                 for lc in getattr(ev.orch, "loaded_cells", {}).values():
@@ -353,7 +448,18 @@ def audit_clause_coverage(cells: List[Any], prompt: str, orchestrator: Any = Non
             status = "no-evidence" if not toks else "unservable"
         else:
             status = "served" if path_best >= lattice_best - 1e-9 else "UNSERVED"
-        best_i = winners.get(j)
+        if status != "served" and clause_sem is not None and j < len(clause_sem):
+            sem_map = clause_sem[j] or {}
+            max_sem_j = max(sem_map.values(), default=0.0)
+            claimed_any = [i for i in range(len(cells)) if j in claims[i]]
+            claimed_sem = max((float(sem_map.get(cells[i].cell_id, 0.0) or 0.0) for i in claimed_any), default=0.0)
+            sem_floor = 0.70 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.35
+            sem_rel = 0.88 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.70
+            if claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:
+                status = "served"
+                path_best = max(path_best, claimed_sem)
+                quality = max(quality, claimed_sem / max_sem_j)
+        best_i = winners.get(j, sem_winners.get(j))
         out["clauses"].append({
             "idx": j, "text": clauses[j], "tokens": sorted(toks),
             "winner": cells[best_i].cell_id if best_i is not None else None,

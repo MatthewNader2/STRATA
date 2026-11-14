@@ -396,9 +396,13 @@ def fetch_docs_sync(
         loop = None
 
     if loop and loop.is_running():
-        # Running inside existing event loop
-        return asyncio.run_coroutine_threadsafe(
-            default_registry.fetch(query, domain_context, context), loop
-        ).result()
+        # Run inside a dedicated worker thread so synchronous callers invoked from
+        # within an active event loop never deadlock on the same loop thread.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
+            return _pool.submit(
+                asyncio.run,
+                default_registry.fetch(query, domain_context, context),
+            ).result()
     else:
         return asyncio.run(default_registry.fetch(query, domain_context, context))

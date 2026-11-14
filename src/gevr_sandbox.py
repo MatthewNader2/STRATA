@@ -60,9 +60,16 @@ logger = logging.getLogger(__name__)
 # Security Exceptions & AST Validator
 # ============================================================================
 
-class SecurityViolationError(PermissionError):
-    """Raised when executed code violates sandbox security constraints."""
-    pass
+try:
+    from .security_policy import (
+        SecurityViolationError,
+        _SecurityVisitor as _UnifiedSecurityASTVisitor,
+    )
+except (ImportError, ValueError):
+    from security_policy import (
+        SecurityViolationError,
+        _SecurityVisitor as _UnifiedSecurityASTVisitor,
+    )
 
 
 class SandboxTimeoutError(TimeoutError):
@@ -70,123 +77,10 @@ class SandboxTimeoutError(TimeoutError):
     pass
 
 
-class _SecurityASTVisitor(ast.NodeVisitor):
-    """
-    Static analysis pass over synthesized code before execution.
-    Detects dunder traversal exploits, bytecode manipulation, and forbidden builtins.
-    """
-
-    FORBIDDEN_ATTRIBUTES: frozenset[str] = frozenset({
-        "__subclasses__",
-        "__bases__",
-        "__mro__",
-        "__globals__",
-        "__code__",
-        "__closure__",
-        "__builtins__",
-        "__import__",
-        "__loader__",
-        "__spec__",
-        "gi_frame",
-        "f_locals",
-        "f_globals",
-        "cr_frame",
-    })
-
-    FORBIDDEN_CALLS: frozenset[str] = frozenset({
-        "eval",
-        "exec",
-        "compile",
-        "breakpoint",
-        "input",
-    })
-
-    def visit_Attribute(self, node: ast.Attribute) -> None:
-        if node.attr in self.FORBIDDEN_ATTRIBUTES:
-            raise SecurityViolationError(
-                f"Access to restricted meta-attribute '{node.attr}' at line {node.lineno} is forbidden."
-            )
-        self.generic_visit(node)
-
-    def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, ast.Load) and node.id in self.FORBIDDEN_CALLS:
-            raise SecurityViolationError(
-                f"Direct access to forbidden built-in '{node.id}' at line {node.lineno} is blocked."
-            )
-        self.generic_visit(node)
-
-    @staticmethod
-    def _evaluate_constant_str(node: ast.AST) -> Optional[str]:
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return node.value
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-            left = _SecurityASTVisitor._evaluate_constant_str(node.left)
-            right = _SecurityASTVisitor._evaluate_constant_str(node.right)
-            if left is not None and right is not None:
-                return left + right
-        if isinstance(node, ast.JoinedStr):
-            parts = []
-            for val in node.values:
-                s = _SecurityASTVisitor._evaluate_constant_str(val)
-                if s is None:
-                    return None
-                parts.append(s)
-            return "".join(parts)
-        if isinstance(node, ast.FormattedValue):
-            return _SecurityASTVisitor._evaluate_constant_str(node.value)
-        return None
-
-    def visit_BinOp(self, node: ast.BinOp) -> None:
-        if isinstance(node.op, ast.Add):
-            concat_str = self._evaluate_constant_str(node)
-            if concat_str is not None:
-                if concat_str in self.FORBIDDEN_ATTRIBUTES or (concat_str.startswith("__") and concat_str.endswith("__")):
-                    raise SecurityViolationError(
-                        f"Dynamic concatenation producing forbidden dunder attribute '{concat_str}' at line {getattr(node, 'lineno', 0)} is blocked."
-                    )
-            for side in (node.left, node.right):
-                side_str = self._evaluate_constant_str(side)
-                if side_str is not None and "__" in side_str:
-                    raise SecurityViolationError(
-                        f"Dynamic dunder string concatenation involving '{side_str}' at line {getattr(node, 'lineno', 0)} is blocked."
-                    )
-        self.generic_visit(node)
-
-    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
-        eval_str = self._evaluate_constant_str(node)
-        if eval_str is not None and (eval_str in self.FORBIDDEN_ATTRIBUTES or (eval_str.startswith("__") and eval_str.endswith("__"))):
-            raise SecurityViolationError(
-                f"Dynamic string formatting producing forbidden dunder attribute '{eval_str}' at line {getattr(node, 'lineno', 0)} is blocked."
-            )
-        for val in node.values:
-            s = self._evaluate_constant_str(val)
-            if s is not None and "__" in s:
-                raise SecurityViolationError(
-                    f"Dynamic dunder string formatting involving '{s}' at line {getattr(node, 'lineno', 0)} is blocked."
-                )
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call) -> None:
-        if isinstance(node.func, ast.Name):
-            if node.func.id in self.FORBIDDEN_CALLS:
-                raise SecurityViolationError(
-                    f"Direct access to forbidden built-in '{node.func.id}' at line {node.lineno} is blocked."
-                )
-            if node.func.id in ("getattr", "hasattr", "setattr", "delattr") and len(node.args) >= 2:
-                arg_str = self._evaluate_constant_str(node.args[1])
-                if arg_str and (arg_str in self.FORBIDDEN_ATTRIBUTES or (arg_str.startswith("__") and arg_str.endswith("__"))):
-                    raise SecurityViolationError(
-                        f"Dynamic access to forbidden dunder attribute '{arg_str}' via {node.func.id} at line {node.lineno} is blocked."
-                    )
-        self.generic_visit(node)
-
-    def visit_Subscript(self, node: ast.Subscript) -> None:
-        slice_str = self._evaluate_constant_str(node.slice)
-        if slice_str and (slice_str in self.FORBIDDEN_ATTRIBUTES or (slice_str.startswith("__") and slice_str.endswith("__"))):
-            raise SecurityViolationError(
-                f"Subscription access to forbidden meta-attribute '{slice_str}' at line {getattr(node, 'lineno', 0)} is blocked."
-            )
-        self.generic_visit(node)
+class _SecurityASTVisitor(_UnifiedSecurityASTVisitor):
+    """Unified AST security visitor backed by security_policy._SecurityVisitor."""
+    def __init__(self, policy: Optional[Any] = None) -> None:
+        super().__init__(policy=policy)
 
 
 # ============================================================================
@@ -215,7 +109,12 @@ class StateProtocolRegistry:
 
     def _register_default_predicates(self) -> None:
         def _callable_check(obj: Any) -> bool:
-            for attr in ("is_fitted", "is_ready", "is_converged"):
+            try:
+                from lattice import TypeRegistry
+                state_methods = TypeRegistry.get_instance().get_verification_semantics("state_check_methods") or ()
+            except Exception:
+                state_methods = ()
+            for attr in state_methods:
                 method = getattr(obj, attr, None)
                 if callable(method):
                     return bool(method())
@@ -275,12 +174,31 @@ class PostconditionRegistry:
 
             return _get_depth(val) == expected
 
+        def _reduce_any_bool(obj: Any) -> bool:
+            cur = obj
+            for _ in range(4):
+                if isinstance(cur, bool) or getattr(cur, "ndim", 1) == 0:
+                    break
+                any_fn = getattr(cur, "any", None)
+                if not callable(any_fn):
+                    break
+                nxt = any_fn()
+                if nxt is cur:
+                    break
+                cur = nxt
+            return bool(cur)
+
         def _has_nans_evaluator(val: Any, expected: Any) -> bool:
-            for method_name in ("isna", "isnull"):
+            try:
+                from lattice import TypeRegistry
+                nan_methods = TypeRegistry.get_instance().get_verification_semantics("missing_value_methods") or ()
+            except Exception:
+                nan_methods = ()
+            for method_name in nan_methods:
                 method = getattr(val, method_name, None)
                 if callable(method):
                     res = method()
-                    has_nan = bool(getattr(res, "any", lambda: res)())
+                    has_nan = _reduce_any_bool(res)
                     return has_nan == expected
             try:
                 import math
@@ -294,10 +212,20 @@ class PostconditionRegistry:
             return False == expected
 
         def _dedup_evaluator(val: Any, expected: Any) -> bool:
-            if hasattr(val, "duplicated"):
-                dups = val.duplicated()
-                is_unique = not bool(getattr(dups, "any", lambda: dups)())
-                return is_unique == expected
+            try:
+                try:
+                    from .lattice import TypeRegistry
+                except ImportError:
+                    from lattice import TypeRegistry
+                dup_methods = TypeRegistry.get_instance().get_verification_semantics("duplicate_check_methods") or ()
+            except Exception:
+                dup_methods = ()
+            for method_name in dup_methods:
+                method = getattr(val, method_name, None)
+                if callable(method):
+                    dups = method()
+                    is_unique = not _reduce_any_bool(dups)
+                    return is_unique == expected
             try:
                 seq = list(val)
                 return (len(seq) == len(set(seq))) == expected
@@ -373,25 +301,43 @@ class TerminalIntentRegistry:
             def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
                 if output is None:
                     return IntentVerificationResult(valid=False, reason="Artifact output is None")
-                has_render_hook = any(
-                    hasattr(output, attr) for attr in ("canvas", "savefig", "render", "show", "to_image")
-                )
-                if has_render_hook or type(output).__name__ in ("Figure", "Image", "Plot"):
+                try:
+                    from lattice import TypeRegistry
+                    reg = TypeRegistry.get_instance()
+                    render_hooks = set(reg.get_verification_semantics("render_hooks") or ())
+                    visual_types = set(reg.get_verification_semantics("visual_types") or ())
+                except Exception:
+                    render_hooks, visual_types = set(), set()
+                has_render_hook = any(hasattr(output, attr) for attr in render_hooks)
+                if has_render_hook or type(output).__name__ in visual_types:
                     return IntentVerificationResult(valid=True, reason="Visual artifact verified")
                 return IntentVerificationResult(valid=False, reason="Object lacks visual artifact rendering protocol")
 
-        self.register("model_fit_split", PartitionIntentVerifier())
-        self.register("structured_carrier_egress", StructuredDataVerifier())
-        self.register("tabular_egress", StructuredDataVerifier())
-        self.register("image_annotation_egress", StructuredDataVerifier())
-        self.register("visualization_egress", VisualArtifactVerifier())
+        try:
+            try:
+                from .lattice import TypeRegistry
+            except ImportError:
+                from lattice import TypeRegistry
+            reg = TypeRegistry.get_instance()
+            partition_keys = reg.get_verification_semantics("partition_intent_keys") or ()
+            carrier_keys = reg.get_verification_semantics("structured_carrier_intent_keys") or ()
+            visual_keys = reg.get_verification_semantics("visual_intent_keys") or ()
+        except Exception:
+            partition_keys, carrier_keys, visual_keys = (), (), ()
+
+        for key in partition_keys:
+            self.register(key, PartitionIntentVerifier())
+        for key in carrier_keys:
+            self.register(key, StructuredDataVerifier())
+        for key in visual_keys:
+            self.register(key, VisualArtifactVerifier())
 
 
 # ============================================================================
 # Hardened Worker Execution Layer (Track 5: RLIMIT, Network & FS Confinement)
 # ============================================================================
 
-_BLOCKED_MODULES = frozenset({
+_BLOCKED_MODULES = (
     "subprocess",
     "shutil",
     "socket",
@@ -407,7 +353,7 @@ _BLOCKED_MODULES = frozenset({
     "pty",
     "commands",
     "multiprocessing",
-})
+)
 
 
 def _enforce_posix_resource_limits(max_memory_mb: int = 16384, max_cpu_seconds: int = 10) -> None:
@@ -609,7 +555,8 @@ def _sandbox_worker_exec(
     # Step 0: Configure headless environment for GUI, Audio, and Plotting
     try:
         from lattice import TypeRegistry
-        env_specs = TypeRegistry.get_instance().get_verification_semantics("headless_environment")
+        reg = TypeRegistry.get_instance()
+        env_specs = list(reg.get_capabilities().get("headless_environment", []) or []) + list(reg.get_verification_semantics("headless_environment"))
         for spec in env_specs:
             if "=" in spec:
                 k, v = spec.split("=", 1)
@@ -848,16 +795,28 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
             except Exception:
                 continue
 
+            try:
+                from lattice import TypeRegistry
+                reg_io = TypeRegistry.get_instance()
+                is_term_role = reg_io.is_terminal_role(c_role)
+                is_in_role = reg_io.is_ingress_role(c_role)
+                dest_states = (
+                    set(reg_io.get_materialization_states() or ())
+                    | set(reg_io.get_terminal_states() or ())
+                    | set(reg_io.get_verification_semantics("destination_states") or ())
+                )
+            except Exception:
+                is_term_role, is_in_role, dest_states = False, False, set()
             is_sink = (
                 getattr(cell, "is_endable", False)
                 or not getattr(cell, "outputs", None)
-                or c_role in ("sink", "egress", "terminal")
-                or any(str(getattr(getattr(p, "signature", p), "state", "")).lower() in ("materialization", "destination", "serialized", "sink") for p in getattr(cell, "inputs", {}).values())
+                or is_term_role
+                or any(str(getattr(getattr(p, "signature", p), "state", "")).lower() in dest_states for p in getattr(cell, "inputs", {}).values())
             )
             is_ingress = (
                 getattr(cell, "is_ingress", False)
                 or (len(getattr(cell, "inputs", {})) == 0)
-                or c_role in ("source", "ingress")
+                or is_in_role
             )
 
             for c_node in ast.walk(c_ast):
@@ -1037,6 +996,7 @@ class GEVRSandbox:
                             identical = bool(expected_val == actual_val)
                         except Exception:
                             identical = False
+                    if not identical:
                         violations.append(
                             f"Terminal check '{check.get('type', 'unknown')}' failed: "
                             f"'{actual_var}' does not carry the value declared for '{expected_var}'."
@@ -1090,11 +1050,16 @@ class GEVRSandbox:
             parsed_ast = ast.parse(code)
 
             # Incorporate any egress/sink bindings from pipeline_bindings
+            try:
+                from lattice import TypeRegistry
+                _reg_sb = TypeRegistry.get_instance()
+            except Exception:
+                _reg_sb = None
             for b in kwargs.get("pipeline_bindings") or []:
                 if isinstance(b, dict):
                     c_role = str(b.get("role", "") or b.get("node_role", "")).lower()
                     c_stage = b.get("stage")
-                    if c_role in ("sink", "egress", "terminal") or (c_stage is not None and c_stage >= 3):
+                    if (_reg_sb is not None and _reg_sb.is_terminal_role(c_role)) or (c_stage is not None and c_stage >= 3):
                         for v in b.values():
                             if isinstance(v, str) and not v.startswith("var_"):
                                 cln = v.strip("'\"")
@@ -1183,7 +1148,7 @@ class GEVRSandbox:
                 "success": False,
                 "skipped": True,
                 "status": "SKIPPED",
-                "returncode": 0,
+                "returncode": -1,
                 "stdout": "",
                 "stderr": "",
                 "error": f"SKIPPED: input '{missing_file}' not provided",
@@ -1203,7 +1168,7 @@ class GEVRSandbox:
         allowed_caps = kwargs.get("allowed_capabilities")
         if allowed_caps is None:
             allowed_caps = getattr(self, "allowed_capabilities", set())
-        if isinstance(allowed_caps, (set, frozenset, list, tuple)):
+        if isinstance(allowed_caps, (set, list, tuple)):
             allowed_caps = list(allowed_caps)
         else:
             allowed_caps = []
@@ -1345,51 +1310,12 @@ class GEVRSandbox:
         **kwargs,
     ) -> Tuple[str, Dict[str, Any]]:
         """
-        Track 8.2: Closed-Loop CEGIS (Counter-Example Guided Inductive Synthesis) Gate.
-        Executes `code` in the isolated sandbox; if a non-extrinsic runtime exception
-        or contract violation occurs, routes the traceback and failing inputs into
-        `InductiveKernelGenerator.repair_kernel()` up to `max_cegis_rounds` times.
-        Returns `(final_code, final_sandbox_envelope)`.
+        Executes `code` in the isolated sandbox and returns `(code, sandbox_envelope)`
+        without unconstrained inductive kernel rewriting.
         """
-        current_code = code
-        res = self.execute(current_code, context=context, timeout=timeout, **kwargs)
-        if res.get("success") or res.get("skipped") or res.get("extrinsic"):
-            res["cegis_rounds"] = 0
-            return current_code, res
-
-        if kernel_generator is None:
-            try:
-                from .synthesis import InductiveKernelGenerator
-            except (ImportError, ValueError):
-                from synthesis import InductiveKernelGenerator
-            kernel_generator = InductiveKernelGenerator()
-
-        for round_idx in range(1, max_cegis_rounds + 1):
-            err_trace = res.get("error") or res.get("stderr") or "Runtime verification failure"
-            try:
-                repaired = kernel_generator.repair_kernel(
-                    failing_code=current_code,
-                    task_description=task_description,
-                    traceback_error=err_trace,
-                    state_inputs=state_inputs,
-                    state_outputs=state_outputs,
-                    failing_inputs=context,
-                )
-            except Exception as repair_exc:
-                logger.warning("[CEGIS] Round %d repair aborted: %s", round_idx, repair_exc)
-                break
-
-            if not repaired or repaired.strip() == current_code.strip():
-                break
-
-            current_code = repaired
-            res = self.execute(current_code, context=context, timeout=timeout, **kwargs)
-            res["cegis_rounds"] = round_idx
-            if res.get("success") or res.get("extrinsic"):
-                return current_code, res
-
-        res.setdefault("cegis_rounds", max_cegis_rounds)
-        return current_code, res
+        res = self.execute(code, context=context, timeout=timeout, **kwargs)
+        res["cegis_rounds"] = 0
+        return code, res
 
     def verify_postcondition(self, property_name: str, target: Any, expected: Any) -> bool:
         return self.postconditions.evaluate(property_name, target, expected)
