@@ -19,6 +19,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Enforce Release Flow (Only dev -> main)
+        if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref != 'dev'
+        run: |
+          echo "::error::Pull requests targeting 'main' must originate from 'dev' (got '${{ github.head_ref }}'). Please merge into 'dev' first."
+          exit 1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -35,9 +41,17 @@ jobs:
         run: |
           python scripts/check_static.py
 
+      - name: Enforce Zero frozenset in src/ and scripts/
+        run: |
+          python -c "import ast, pathlib, sys; hits = [f'{p}:{n.lineno}' for d in ('src', 'scripts') for p in sorted(pathlib.Path(d).rglob('*.py')) for n in ast.walk(ast.parse(p.read_text(encoding='utf-8'), str(p))) if isinstance(n, ast.Name) and n.id == 'frozenset']; print('frozenset hits:', hits) if hits else print('ZERO_FROZENSET_OK'); sys.exit(1 if hits else 0)"
+
       - name: Domain Tree Schema & Integrity Linting
         run: |
           python scripts/lint_trees.py
+
+      - name: Strict Five-Axis Tree Audit
+        run: |
+          python scripts/audit_trees.py --strict-five-axis
 
       - name: Compile Domain Trees to SQLite Lattice
         run: |
@@ -53,4 +67,4 @@ jobs:
 
       - name: Run Core Symbolic & Topological Unit Tests
         run: |
-          pytest tests/test_soundness_topology.py
+          pytest tests/test_soundness_topology.py tests/test_unknown_tree.py
