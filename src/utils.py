@@ -34,8 +34,8 @@ def extract_template_placeholders(template: str) -> List[str]:
                 inner = template[i + 1:j]
                 if inner.isidentifier():
                     placeholders.append(inner)
-                i = j + 1
-                continue
+                    i = j + 1
+                    continue
         i += 1
     return placeholders
 
@@ -57,6 +57,8 @@ def safe_substitute_template(template: str, bindings: Dict[str, Any]) -> str:
     res = []
     i = 0
     n = len(template)
+    scope_fns = set()
+    scope_vars = set()
     while i < n:
         if template[i] == "{":
             j = template.find("}", i + 1)
@@ -64,13 +66,34 @@ def safe_substitute_template(template: str, bindings: Dict[str, Any]) -> str:
                 inner = template[i + 1:j]
                 if inner.isidentifier() and inner in bindings and bindings[inner] is not None:
                     val = bindings[inner]
-                    is_callee = j + 1 < n and template[j + 1] == "("
-                    if is_callee and isinstance(val, str):
+                    if isinstance(val, str):
                         stripped = val.strip()
                         if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in ("'", '"'):
-                            stripped = stripped[1:-1]
-                        if stripped.isidentifier():
-                            val = stripped
+                            unquoted = stripped[1:-1].strip()
+                            # Host-language Python identifier positions: callee, def name, def params, except type,
+                            # or reference to a function/param declared earlier in this same template block.
+                            cur_line = "".join(res).rsplit("\n", 1)[-1]
+                            cur_lstrip = cur_line.lstrip()
+                            is_callee = j + 1 < n and template[j + 1] == "("
+                            is_def_name = cur_lstrip == "def "
+                            is_def_params = cur_lstrip.startswith("def ") and "(" in cur_lstrip and ")" not in cur_lstrip
+                            is_except_type = cur_lstrip == "except "
+                            if is_def_name and unquoted.isidentifier():
+                                val = unquoted
+                                scope_fns.add(unquoted)
+                            elif is_def_params:
+                                parts = [p.strip() for p in unquoted.split(",") if p.strip()]
+                                if parts and all(p.isidentifier() for p in parts):
+                                    val = ", ".join(parts)
+                                    scope_vars.update(parts)
+                            elif (is_callee or is_except_type) and unquoted.isidentifier():
+                                val = unquoted
+                            elif unquoted in scope_fns:
+                                val = unquoted
+                            else:
+                                parts = [p.strip() for p in unquoted.split(",") if p.strip()]
+                                if parts and all(p in scope_vars for p in parts):
+                                    val = ", ".join(parts)
                     res.append(str(val))
                     i = j + 1
                     continue

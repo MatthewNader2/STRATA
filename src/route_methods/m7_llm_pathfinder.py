@@ -27,8 +27,7 @@ set.
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
 
-from .base import RouteMethod
-from .m1_clause_anchor import M1ClauseAnchorRouteMethod
+from .base import RouteMethod, is_macro_cell, _fmt_port_sig
 from lattice import Cell, LatticeOrchestrator
 from unification import ExecutionContext
 from inference import ModelManager
@@ -84,13 +83,6 @@ SYSTEM_PROMPT = (
 )
 
 
-def _fmt_port_sig(p: Any) -> str:
-    sig = getattr(p, "signature", None)
-    tn = str(getattr(sig, "type_name", "") or getattr(p, "abstract_type", "") or "any")
-    st = str(getattr(sig, "state", "") or "")
-    return f"{tn}[{st}]" if st and st not in ("any", "none") else tn
-
-
 def _format_cell_signature(cell: Cell) -> str:
     """One compact, type-bearing line per cell with short summary."""
     req_in = [f"{n}:{_fmt_port_sig(p)}" for n, p in cell.inputs.items() if getattr(p, "required", False)]
@@ -139,8 +131,7 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
                 )
             )
@@ -149,10 +140,9 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
         has_llm = mm.can_synthesize()
 
         def _fallback(reason):
-            return self._delegate_to_m1(
-                reason, prompt, tunnel, relevance_map, orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-            )
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         if not has_llm:
             return _fallback("no LLM loaded in this profile")
@@ -193,52 +183,6 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
 
         if not proposed:
             return _fallback("LLM proposed no resolvable cell ids")
-
-        # Prune redundant alternative proposed cells targeting the same prompt clause
-        if len(proposed) > 1:
-            try:
-                from token_evidence import get_evidence
-                ev = get_evidence(orch)
-                if ev is not None:
-                    p_clauses = self.segment_prompt_clauses(prompt)
-                    pruned_proposed: List[Cell] = []
-                    clause_winners: Dict[int, Cell] = {}
-                    for m in proposed:
-                        best_cl_idx = None
-                        best_f = -1.0
-                        for idx, cl in enumerate(p_clauses):
-                            toks = ev.clause_tokens(cl)
-                            o = ev.identity_overlap(toks, m)
-                            if o["f"] > best_f and o["recall"] > 0.0:
-                                best_f = o["f"]
-                                best_cl_idx = idx
-                        if best_cl_idx is not None and best_f > 0.0:
-                            if best_cl_idx not in clause_winners:
-                                clause_winners[best_cl_idx] = m
-                                pruned_proposed.append(m)
-                            else:
-                                prev_w = clause_winners[best_cl_idx]
-                                prev_toks = ev.clause_tokens(p_clauses[best_cl_idx])
-                                prev_o = ev.identity_overlap(prev_toks, prev_w)
-                                prev_f = prev_o["f"]
-                                if best_f > prev_f:
-                                    pruned_proposed[pruned_proposed.index(prev_w)] = m
-                                    clause_winners[best_cl_idx] = m
-                                elif self.step_unifies(prev_w, m) or self.step_unifies(m, prev_w):
-                                    pruned_proposed.append(m)
-                        else:
-                            b_roles = set()
-                            try:
-                                from lattice import TypeRegistry
-                                b_roles = {str(r).lower() for r in TypeRegistry.get_instance().get_verification_semantics("bridge_roles")}
-                            except Exception:
-                                pass
-                            if str(getattr(m, "node_role", "") or "").lower() in b_roles or getattr(m, "node_type", "") in ("bridge", "tunnel"):
-                                pruned_proposed.append(m)
-                    if pruned_proposed:
-                        proposed = pruned_proposed
-            except Exception:
-                pass
 
         # Re-verify the model's proposed order against real type unification
         # rather than trusting it -- same machinery every other route method

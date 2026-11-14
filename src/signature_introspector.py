@@ -300,7 +300,7 @@ def infer_abstract_carrier(anno: Any, param_name: str = "") -> Optional[str]:
                 dict,
                 set,
                 tuple,
-                frozenset,
+                collections.abc.Set,
                 collections.abc.Sequence,
                 collections.abc.Mapping,
                 collections.abc.Iterable,
@@ -347,7 +347,7 @@ def infer_abstract_carrier(anno: Any, param_name: str = "") -> Optional[str]:
                     tuple,
                     dict,
                     set,
-                    frozenset,
+                    collections.abc.Set,
                 ),
             ):
                 return "collection"
@@ -432,7 +432,6 @@ def infer_abstract_carrier(anno: Any, param_name: str = "") -> Optional[str]:
             "list",
             "tuple",
             "set",
-            "frozenset",
             "dict",
             "mapping",
             "map",

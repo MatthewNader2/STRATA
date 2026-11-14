@@ -9,11 +9,12 @@ Conforms strictly to Sections 3.1, 3.2, and 3.4 of the STRATA paper:
 """
 
 from __future__ import annotations
+import collections.abc as _collections_abc
 import copy
 import math
 import os
 import time
-from typing import Dict, FrozenSet, List, Optional, Sequence, Set, Tuple, Any
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Any
 
 from log_config import get_logger
 
@@ -45,27 +46,34 @@ logger = get_logger('planner')
 
 registry = TypeRegistry.get_instance()
 
-# Purged: Zero hardcoded lexical cheats
-STOPWORDS: FrozenSet[str] = frozenset()
-_WILDCARD_CARRIERS: FrozenSet[str] = frozenset()
+def _is_wildcard_carrier(t: Any, reg: Optional[TypeRegistry] = None) -> bool:
+    s = str(t or "").strip().lower()
+    if not s:
+        return True
+    return (reg or TypeRegistry.get_instance()).is_declared_top(s)
 
-class DynamicEgressTokens(frozenset):
+
+class DynamicEgressTokens(_collections_abc.Set):
     """Dynamic egress intent verbs harvested from stage-3 sink cells across loaded domain trees."""
+    @staticmethod
+    def _from_iterable(it):
+        return set(it)
     def __contains__(self, item):
         return str(item).lower() in TypeRegistry.get_instance().get_egress_tokens()
     def __iter__(self):
         return iter(TypeRegistry.get_instance().get_egress_tokens())
     def __len__(self):
         return len(TypeRegistry.get_instance().get_egress_tokens())
-    def __and__(self, other):
-        return (set(other) if not isinstance(other, set) else other) & TypeRegistry.get_instance().get_egress_tokens()
-    def __rand__(self, other):
-        return (set(other) if not isinstance(other, set) else other) & TypeRegistry.get_instance().get_egress_tokens()
+
 
 EGRESS_INTENT_TOKENS = DynamicEgressTokens()
 
-class DynamicMaterializationStates(frozenset):
+
+class DynamicMaterializationStates(_collections_abc.Set):
     """Dynamic materialization states harvested from output typestates of sink cells."""
+    @staticmethod
+    def _from_iterable(it):
+        return set(it)
     def __contains__(self, item):
         return str(item).lower() in TypeRegistry.get_instance().get_materialization_states()
     def __iter__(self):
@@ -210,7 +218,7 @@ class LatticeVocabulary:
                 and getattr(c, "cell_type", "") != "macro" and not getattr(c, "is_macro", False)]
 
     @property
-    def ingress_roles(self) -> FrozenSet[str]:
+    def ingress_roles(self) -> Set[str]:
         """Node roles that occur ONLY at the ingress stage."""
         def build():
             ing = self.ingress_stage
@@ -220,11 +228,11 @@ class LatticeVocabulary:
                 r = str(getattr(c, "node_role", "") or "").lower()
                 if r:
                     (at_ing if getattr(c, "stage", None) == ing else elsewhere).add(r)
-            return frozenset(at_ing - elsewhere)
+            return set(at_ing - elsewhere)
         return self._get("ingress_roles", build)
 
     @property
-    def terminal_roles(self) -> FrozenSet[str]:
+    def terminal_roles(self) -> Set[str]:
         """Node roles that occur ONLY at the terminal stage."""
         def build():
             ts = self.terminal_stage
@@ -235,22 +243,22 @@ class LatticeVocabulary:
                 if not r:
                     continue
                 (at_terminal if getattr(c, "stage", None) == ts else elsewhere).add(r)
-            return frozenset(at_terminal - elsewhere) if ts is not None else frozenset()
+            return set(at_terminal - elsewhere) if ts is not None else set()
         return self._get("terminal_roles", build)
 
     @property
-    def sequential_topologies(self) -> FrozenSet[Any]:
-        return self._get("sequential_topologies", lambda: frozenset(
+    def sequential_topologies(self) -> Set[Any]:
+        return self._get("sequential_topologies", lambda: {
             getattr(c, "topology_type", None) for c in self._terminal_cells()
-        ) | frozenset({None}))
+        } | {None})
 
     @property
-    def join_topologies(self) -> FrozenSet[str]:
+    def join_topologies(self) -> Set[str]:
         def build():
-            return frozenset(
+            return {
                 str(getattr(c, "topology_type", "") or "") for c in self._cells()
                 if len(getattr(c, "inputs", {}) or {}) >= 2 and getattr(c, "topology_type", None)
-            ) - frozenset(str(t) for t in self.sequential_topologies if t)
+            } - {str(t) for t in self.sequential_topologies if t}
         return self._get("join_topologies", build)
 
     def is_ingress(self, cell: Any) -> bool:
@@ -293,7 +301,7 @@ class LatticeVocabulary:
 
     # -- token vocabularies ------------------------------------------------ #
     @property
-    def namespace_tokens(self) -> FrozenSet[str]:
+    def namespace_tokens(self) -> Set[str]:
         """Library/namespace tokens: a domain's own name plus every token that a
         majority of that domain's cell ids share (e.g. a prefix convention)."""
         def build():
@@ -313,11 +321,11 @@ class LatticeVocabulary:
                         for t in s:
                             counts[t] = counts.get(t, 0) + 1
                     out |= {t for t, n in counts.items() if 2 * n > len(tok_sets)}
-            return frozenset(out)
+            return out
         return self._get("namespace_tokens", build)
 
     @property
-    def op_tokens(self) -> FrozenSet[str]:
+    def op_tokens(self) -> Set[str]:
         """Operation vocabulary: identifier/keyword/tag tokens of every non-ingress cell,
         minus namespace tokens."""
         def build():
@@ -334,10 +342,10 @@ class LatticeVocabulary:
                     out |= {t.lower() for t in CellTokenizer.tokenize_identifier(str(kw)) if len(t) >= 2}
                 for tag in getattr(c, "semantic_tags", ()) or ():
                     out |= {t.lower() for t in CellTokenizer.tokenize_identifier(str(tag)) if len(t) >= 2}
-            return frozenset(out)
+            return out
         return self._get("op_tokens", build)
 
-    def _identity_vocab(self) -> FrozenSet[str]:
+    def _identity_vocab(self) -> Set[str]:
         def build():
             out: Set[str] = set()
             for c in self._cells():
@@ -349,46 +357,46 @@ class LatticeVocabulary:
                 for pn, p in list((getattr(c, "inputs", {}) or {}).items()) + list((getattr(c, "outputs", {}) or {}).items()):
                     out |= {t.lower() for t in CellTokenizer.tokenize_identifier(str(pn))}
                     out |= {t.lower() for t in CellTokenizer.tokenize_identifier(_port_type(p))}
-            return frozenset(out)
+            return out
         return self._get("identity_vocab", build)
 
     @property
-    def function_words(self) -> FrozenSet[str]:
+    def function_words(self) -> Set[str]:
         """Corpus function words: the registry's set when the router has built it; otherwise
         derived here as tokens that are far more frequent than average across the lattice's
         text yet never name an operation (absent from every cell id / keyword / tag)."""
         def build():
-            reg_fw = frozenset(str(w).lower() for w in TypeRegistry.get_instance().get_function_words())
+            reg_fw = {str(w).lower() for w in TypeRegistry.get_instance().get_function_words()}
             if reg_fw:
                 return reg_fw
-            return frozenset(t for t in self.frequent_tokens if t not in self._identity_vocab())
+            return {t for t in self.frequent_tokens if t not in self._identity_vocab()}
         return self._get("function_words", build)
 
     @property
-    def connectives(self) -> FrozenSet[str]:
+    def connectives(self) -> Set[str]:
         """Sentence connectives exactly as the registry learned them (no static fallback)."""
         def build():
             raw = getattr(TypeRegistry.get_instance(), "_sentence_connectives", None) or ()
-            return frozenset(str(w).lower() for w in raw)
+            return {str(w).lower() for w in raw}
         return self._get("connectives", build)
 
     @property
-    def frequent_tokens(self) -> FrozenSet[str]:
+    def frequent_tokens(self) -> Set[str]:
         """Tokens whose document frequency is more than one standard deviation above the mean."""
         def build():
             idx = getattr(self.orchestrator, "token_index", None) or {}
             dfs = {t: len(v) for t, v in idx.items()}
             if not dfs:
-                return frozenset()
+                return set()
             vals = list(dfs.values())
             mean = sum(vals) / len(vals)
             cut = mean + math.sqrt(sum((v - mean) ** 2 for v in vals) / len(vals))
-            return frozenset(str(t).lower() for t, v in dfs.items() if v > cut)
+            return {str(t).lower() for t, v in dfs.items() if v > cut}
         return self._get("frequent_tokens", build)
 
     @property
-    def egress_tokens(self) -> FrozenSet[str]:
-        return frozenset(str(w).lower() for w in TypeRegistry.get_instance().get_egress_tokens())
+    def egress_tokens(self) -> Set[str]:
+        return {str(w).lower() for w in TypeRegistry.get_instance().get_egress_tokens()}
 
     def is_key_port(self, p: Any) -> bool:
         self._check_stamp()
@@ -419,7 +427,7 @@ class LatticeVocabulary:
         return bool(toks & proj)
 
     @property
-    def relational_tokens(self) -> FrozenSet[str]:
+    def relational_tokens(self) -> Set[str]:
         """Name tokens of the lattice's key ports: a prompt preposition equal to one of
         them binds its object to that port."""
         def build():
@@ -428,7 +436,7 @@ class LatticeVocabulary:
                 for pn, p in (getattr(c, "inputs", {}) or {}).items():
                     if self.is_key_port(p):
                         out |= {t.lower() for t in CellTokenizer.tokenize_identifier(str(pn))}
-            return frozenset(out)
+            return out
         return self._get("relational_tokens", build)
 
     def _role_census(self) -> Dict[str, List[Tuple[bool, bool]]]:
@@ -444,12 +452,12 @@ class LatticeVocabulary:
                     if not r:
                         continue
                     t = _port_type(p)
-                    literalish = t in _WILDCARD_CARRIERS or any(reg.is_subtype(t, f) for f in ("scalar", "numeric", "str", "bool"))
+                    literalish = _is_wildcard_carrier(t, reg) or reg.is_scalar_primitive(t) or reg.is_subtype(t, "numeric")
                     census.setdefault(r, []).append((literalish, pn in names))
             return census
         return self._get("role_census", build)
 
-    def _minority_roles(self, idx: int) -> FrozenSet[str]:
+    def _minority_roles(self, idx: int) -> Set[str]:
         census = self._role_census()
         total = sum(len(v) for v in census.values()) or 1
         out = set()
@@ -458,24 +466,25 @@ class LatticeVocabulary:
                 continue
             if all(row[idx] for row in rows):
                 out.add(r)
-        return frozenset(out)
+        return out
 
     @property
-    def literal_roles(self) -> FrozenSet[str]:
+    def literal_roles(self) -> Set[str]:
         """Non-default port roles whose ports are mostly scalar/textual/logical/wildcard
         carriers: their values come from prompt literals, not from upstream wires."""
         return self._get("literal_roles", lambda: self._minority_roles(0))
 
     @property
-    def slot_roles(self) -> FrozenSet[str]:
+    def slot_roles(self) -> Set[str]:
         """Non-default port roles whose ports are mostly declared macro slots."""
         return self._get("slot_roles", lambda: self._minority_roles(1))
 
-    def role_tokens(self, role: str) -> FrozenSet[str]:
+    def role_tokens(self, role: str) -> Set[str]:
         """Vocabulary the lattice uses for ports of a declared role: identifier tokens of
         those ports' names and states (plus normalised stems), minus function words."""
         def build():
             fw = self.function_words
+            reg_rt = TypeRegistry.get_instance()
             out: Set[str] = set()
             for c in self._cells():
                 for pn, p in (getattr(c, "inputs", {}) or {}).items():
@@ -484,19 +493,19 @@ class LatticeVocabulary:
                     st = str(getattr(getattr(p, "signature", p), "state", "") or "")
                     for t in list(CellTokenizer.tokenize_identifier(pn)) + list(CellTokenizer.tokenize_identifier(st)):
                         t = t.lower()
-                        if len(t) >= 2 and t not in fw and t not in ("any", "default"):
+                        if len(t) >= 2 and t not in fw and not reg_rt.is_declared_top(t) and t != "default":
                             out.add(t)
                             out.add(normalize_token(t))
-            return frozenset(out)
+            return out
         return self._get("role_tokens:" + role, build)
 
     @property
-    def generic_tokens(self) -> FrozenSet[str]:
+    def generic_tokens(self) -> Set[str]:
         return self.frequent_tokens
 
     # -- type structure ---------------------------------------------------- #
     @property
-    def universal_supertypes(self) -> FrozenSet[str]:
+    def universal_supertypes(self) -> Set[str]:
         def build():
             reg = TypeRegistry.get_instance()
             names: Set[str] = set()
@@ -512,14 +521,15 @@ class LatticeVocabulary:
                         tops.add(t)
                 except Exception:
                     continue
-            return frozenset(tops)
+            return tops
         return self._get("universal_supertypes", build)
 
     @property
-    def neutral_domains(self) -> FrozenSet[str]:
+    def neutral_domains(self) -> Set[str]:
         """Utility domains: those whose ports are mostly wildcard / generic-typed (type
         variables, generic containers).  Hopping through them is not domain dispersion."""
         def build():
+            reg = TypeRegistry.get_instance()
             wild: Dict[str, List[bool]] = {}
             for c in self._cells():
                 dom = str(getattr(c, "domain_name", "") or "")
@@ -527,9 +537,9 @@ class LatticeVocabulary:
                     continue
                 for p in list((getattr(c, "inputs", {}) or {}).values()) + list((getattr(c, "outputs", {}) or {}).values()):
                     t = _port_type(p)
-                    is_w = (t in _WILDCARD_CARRIERS) or "[" in t or (len(t) == 1 and t.isalpha())
+                    is_w = _is_wildcard_carrier(t, reg) or "[" in t or (len(t) == 1 and t.isalpha())
                     wild.setdefault(dom, []).append(is_w)
-            return frozenset(d for d, flags in wild.items() if flags and 2 * sum(flags) > len(flags))
+            return {d for d, flags in wild.items() if flags and 2 * sum(flags) > len(flags)}
         return self._get("neutral_domains", build)
 
     def is_bridge(self, cell: Any) -> bool:
@@ -545,7 +555,7 @@ class LatticeVocabulary:
         tout = _port_type(getattr(cell, "primary_output", None))
         res = bool(
             tin and tout and tin != tout
-            and tin not in _WILDCARD_CARRIERS and tout not in _WILDCARD_CARRIERS
+            and not _is_wildcard_carrier(tin, reg) and not _is_wildcard_carrier(tout, reg)
             and not reg.is_subtype(tin, tout) and not reg.is_subtype(tout, tin)
         )
         self._bridge_cache[cid] = res
@@ -556,10 +566,11 @@ class LatticeVocabulary:
         """Concrete input signatures consumed by terminal sinks: a value whose carrier
         unifies with one of these still has somewhere to land."""
         def build():
+            reg = TypeRegistry.get_instance()
             sigs = []
             for c in self._terminal_cells():
                 for p in (getattr(c, "inputs", {}) or {}).values():
-                    if _port_type(p) not in _WILDCARD_CARRIERS:
+                    if not _is_wildcard_carrier(_port_type(p), reg):
                         sigs.append(getattr(p, "signature", p))
             return tuple(sigs)
         return self._get("sink_input_signatures", build)
@@ -570,13 +581,13 @@ class LatticeVocabulary:
         hit = self._port_memo.get(key)
         if hit is None:
             sig = getattr(out_port, "signature", out_port)
-            hit = (_port_type(out_port) not in _WILDCARD_CARRIERS
+            hit = (not _is_wildcard_carrier(_port_type(out_port))
                    and any(unify(sig, s) is not None for s in self.sink_input_signatures))
             self._port_memo[key] = hit
         return hit
 
     @property
-    def handle_types(self) -> FrozenSet[str]:
+    def handle_types(self) -> Set[str]:
         """Carriers produced by self-contained ingress generators (no file port), that
         no file-backed ingress produces, and that some downstream cell requires."""
         def build():
@@ -595,15 +606,15 @@ class LatticeVocabulary:
                         generated |= {_port_type(o) for o in outs}
                 else:
                     consumed |= {_port_type(p) for p in ins if p.required}
-            return frozenset(
+            return {
                 t for t in generated
-                if t and "[" not in t and t not in file_backed and t not in _WILDCARD_CARRIERS
+                if t and "[" not in t and t not in file_backed and not _is_wildcard_carrier(t, reg)
                 and any(reg.is_subtype(t, ct) for ct in consumed)
-            )
+            }
         return self._get("handle_types", build)
 
     @property
-    def terminal_states(self) -> FrozenSet[str]:
+    def terminal_states(self) -> Set[str]:
         """Output states that terminal sinks declare, plus the registry's materialization states."""
         def build():
             out: Set[str] = {str(s).lower() for s in TypeRegistry.get_instance().get_materialization_states()}
@@ -613,7 +624,7 @@ class LatticeVocabulary:
                     st = str(getattr(getattr(o, "signature", o), "state", "") or "").lower()
                     if st:
                         out.add(st)
-            return frozenset(out)
+            return out
         return self._get("terminal_states", build)
 
     def is_informative_token(self, token: str) -> bool:
@@ -773,7 +784,7 @@ def _literal_groundable(p_sig: Any, cand: Any, quoted_str_literals: Sequence[Any
     # expression, declared enum choices, and untyped wildcards. Everything else
     # (class instances, containers of class instances, handles) requires a wire.
     carrier_literal_capable = (
-        t in _WILDCARD_CARRIERS
+        _is_wildcard_carrier(t, registry)
         or registry.is_subtype(t, "scalar")
         or registry.is_subtype(t, "str")
         or registry.is_subtype(t, "text")
@@ -1154,21 +1165,24 @@ class LatticePlanner:
                     used_col_keys += 1
         return consumed / max(len(universal_literals), 1)
 
-    def _clause_coverage_of(self, path, clause_tokens_list):
+    def _clause_coverage_of(self, path, clause_tokens_list, cell_covered: Optional[Dict[str, Set[int]]] = None):
         if not clause_tokens_list:
             return 1.0
         covered = set()
         for c in path:
-            c_toks = c.token_set
-            id_toks = getattr(c, "identity_tokens", c_toks)
-            for gi, cl_toks in enumerate(clause_tokens_list):
-                if cl_toks & id_toks:
-                    covered.add(gi)
+            if cell_covered is not None:
+                covered |= cell_covered.get(c.cell_id, set())
+            else:
+                c_toks = c.token_set
+                id_toks = getattr(c, "identity_tokens", c_toks)
+                for gi, cl_toks in enumerate(clause_tokens_list):
+                    if cl_toks & id_toks:
+                        covered.add(gi)
         return len(covered) / len(clause_tokens_list)
 
     def _hard_constraint_filter(self, candidates, universal_literals,
                                 numeric_literals, quoted_str_literals, identifier_literals,
-                                clause_tokens_list, **_ignored):
+                                clause_tokens_list, cell_covered: Optional[Dict[str, Set[int]]] = None, **_ignored):
         """Reject-level constraints derived from the candidate set itself (no floors):
         keep the paths that consume the most prompt literals, and among those the upper
         half by clause coverage (>= the median coverage of that group)."""
@@ -1176,7 +1190,7 @@ class LatticePlanner:
             return candidates, 3
         scored = []
         for it in candidates:
-            cov = self._clause_coverage_of(it[0], clause_tokens_list)
+            cov = self._clause_coverage_of(it[0], clause_tokens_list, cell_covered=cell_covered)
             lit = self._literal_consumption_of(it[0], universal_literals,
                                                numeric_literals, quoted_str_literals,
                                                identifier_literals)
@@ -1210,28 +1224,42 @@ class LatticePlanner:
             return [], 4
         return keep, (0 if best_lit >= 1.0 else 1)
 
-    def _cells_connect(self, c1: Cell, c2: Cell) -> bool:
-        """Evaluates whether any output of c1 can unify with any input of c2, or if a bridge connects them."""
+    def _cells_connect(self, c1: Cell, c2: Cell, allow_bridge: bool = False) -> bool:
+        """Evaluates whether any output of c1 unifies directly with any input of c2 (or via bridge if allow_bridge=True)."""
         pair = (c1.cell_id, c2.cell_id)
         can_feed = self._cells_connect_cache.get(pair)
         if can_feed is None:
-            can_feed = any(
-                unify(
-                    out_sig.signature if hasattr(out_sig, "signature") else out_sig,
-                    p_sig.signature if hasattr(p_sig, "signature") else p_sig,
-                ) is not None
-                for out_sig in c1.outputs.values()
-                for p_sig in c2.inputs.values()
-            )
-            if not can_feed and self.orchestrator and hasattr(self.orchestrator, "find_shortest_bridge_path"):
-                bridge_chain = self.orchestrator.find_shortest_bridge_path(c1, c2, max_hops=3)
-                can_feed = bool(bridge_chain)
+            if self.orchestrator and hasattr(self.orchestrator, "cells_directly_unify"):
+                can_feed = bool(self.orchestrator.cells_directly_unify(c1, c2))
+            else:
+                can_feed = any(
+                    unify(
+                        out_sig.signature if hasattr(out_sig, "signature") else out_sig,
+                        p_sig.signature if hasattr(p_sig, "signature") else p_sig,
+                    ) is not None
+                    for out_sig in c1.outputs.values()
+                    for p_sig in c2.inputs.values()
+                )
             self._cells_connect_cache[pair] = can_feed
-        return can_feed
+        if can_feed or not allow_bridge:
+            return can_feed
+        b_cache = getattr(self, "_cells_bridge_connect_cache", None)
+        if b_cache is None:
+            b_cache = {}
+            self._cells_bridge_connect_cache = b_cache
+        b_hit = b_cache.get(pair)
+        if b_hit is None:
+            if self.orchestrator and hasattr(self.orchestrator, "find_shortest_bridge_path"):
+                bridge_chain = self.orchestrator.find_shortest_bridge_path(c1, c2, max_hops=3)
+                b_hit = bool(bridge_chain)
+            else:
+                b_hit = False
+            b_cache[pair] = b_hit
+        return b_hit
 
     def find_bridge_chain(self, c1: Cell, c2: Cell, max_hops: int = 4) -> List[Cell]:
         """Unified Shortest-Path Precondition Bridge Closure."""
-        if self._cells_connect(c1, c2):
+        if self._cells_connect(c1, c2, allow_bridge=False):
             return []
         if self.orchestrator and hasattr(self.orchestrator, "find_shortest_bridge_path"):
             return self.orchestrator.find_shortest_bridge_path(c1, c2, max_hops=max_hops)
@@ -1280,8 +1308,40 @@ class LatticePlanner:
             return cached
 
         res = self._compute_edge_affinity_raw(src_cell, dst_cell)
+        t_ae = self._latent_transition_score(src_cell, dst_cell)
+        if t_ae is not None:
+            res = (0.7 * res + 0.3 * t_ae) if res > 0.0 else (0.5 * t_ae)
         self._affinity_cache[key] = res
         return res
+
+    def _latent_transition_score(self, src_cell: Cell, dst_cell: Cell) -> Optional[float]:
+        """Queries active profile's structural transition manifold when available (e.g. Profile AE)."""
+        try:
+            try:
+                from inference import ModelManager
+            except (ImportError, ValueError):
+                from .inference import ModelManager
+            mm = ModelManager.get_instance()
+            if mm is None or getattr(mm, "current_profile_name", None) == "0":
+                return None
+            prof = getattr(mm, "active_profile", None)
+            if prof is None or not hasattr(prof, "score_transition"):
+                return None
+
+            src_in = getattr(src_cell, "primary_input", None)
+            src_in_sig = getattr(src_in, "signature", src_in) if src_in is not None else "__start__"
+            src_out = getattr(src_cell, "primary_output", None)
+            src_out_sig = getattr(src_out, "signature", src_out) if src_out is not None else "__end__"
+            dst_in = getattr(dst_cell, "primary_input", None)
+            dst_in_sig = getattr(dst_in, "signature", dst_in) if dst_in is not None else "__start__"
+            dst_out = getattr(dst_cell, "primary_output", None)
+            dst_out_sig = getattr(dst_out, "signature", dst_out) if dst_out is not None else "__end__"
+
+            s_fwd = float(mm.score_transition(src_out_sig, dst_cell.cell_id, dst_out_sig))
+            s_chain = float(mm.score_transition(src_in_sig, src_cell.cell_id, dst_in_sig))
+            return max(0.0, min(1.0, 0.5 * (0.5 * (s_fwd + s_chain) + 1.0)))
+        except Exception:
+            return None
 
     # ---- empirical scales (replace the fixed affinity tiers / stage tables) ---- #
     _AFFINITY_TIERS = 8  # macro synapse, declared, reverse, join, stage-advance, bridge, adjacency, same-domain
@@ -1489,6 +1549,8 @@ class LatticePlanner:
 
         req_floor = kwargs.get("require_coverage_floor", getattr(self, "require_coverage_floor", True))
         floor_frac = float(kwargs.get("coverage_floor_fraction", getattr(self, "coverage_floor_fraction", 0.85)))
+        allow_greedy_completion = bool(kwargs.get("allow_greedy_completion", True))
+        allow_m1_tagging = bool(kwargs.get("allow_m1_tagging", True))
 
         # Wall-clock search budget: the beam must never run unbounded.
         if "planner_time_budget_ms" in kwargs:
@@ -1555,12 +1617,6 @@ class LatticePlanner:
             if kind in ("file_asset", "identifier", "quoted_str", "numeric")
             and not (kind == "identifier" and target_sink and str(val).lower() == str(target_sink).lower())
         ]
-        literal_positions = {
-            (kind, val): pos
-            for pos, kind, val in l0_extracted_literals
-            if kind in ("file_asset", "identifier", "quoted_str", "numeric")
-            and not (kind == "identifier" and target_sink and str(val).lower() == str(target_sink).lower())
-        }
         identifier_role_map = ExecutionContext._build_identifier_role_map(prompt or "")
         self._last_identifier_roles = identifier_role_map
         file_literals = [
@@ -1613,14 +1669,15 @@ class LatticePlanner:
                     if "*" not in clean_fmts and ext not in clean_fmts:
                         return False
                 tn = str(getattr(p, "type_name", "") or "").strip()
+                reg = TypeRegistry.get_instance()
+                loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
                 if "[" in tn and tn.endswith("]"):
                     ctor, _, inner = tn[:-1].partition("[")
-                    if ctor.strip().lower() in ("file", "stream", "path", "asset"):
+                    if ctor.strip().lower() in loc_ctors:
                         parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
                         if len(parts) >= 2:
                             fmt = parts[1]
-                            reg = TypeRegistry.get_instance()
-                            if fmt in ("any", "generic", "*", ""):
+                            if not fmt or fmt == "generic" or reg.is_declared_top(fmt):
                                 carrier = parts[0]
                                 try:
                                     placeholder = reg.get_asset_placeholder(carrier, "")
@@ -1646,7 +1703,7 @@ class LatticePlanner:
                         elif len(parts) == 1:
                             target = parts[0]
                             reg = TypeRegistry.get_instance()
-                            if target in ("any", "generic", "*", ""):
+                            if not target or target == "generic" or reg.is_declared_top(target):
                                 return True
                             if ext == target or target in ext or ext in target or reg.is_subtype(ext, target) or reg.is_subtype(target, ext):
                                 return True
@@ -1689,7 +1746,7 @@ class LatticePlanner:
                 t_low = str(tag).lower()
                 for r in mut_excl_roles:
                     r_low = r.lower()
-                    if r_low == t_low or (len(r_low) >= 4 and t_low.startswith(r_low[:4])):
+                    if r_low == t_low or normalize_token(t_low) == normalize_token(r_low) or registry.is_subtype(t_low, r_low):
                         roles.add(r)
             for r_attr in (getattr(cell, "node_role", ""), getattr(cell, "role", "")):
                 if r_attr:
@@ -1772,8 +1829,8 @@ class LatticePlanner:
             for pt, sigs in _prod_idx.items():
                 if (
                     pt == t
-                    or pt in _WILDCARD_CARRIERS
-                    or t in _WILDCARD_CARRIERS
+                    or _is_wildcard_carrier(pt, registry)
+                    or _is_wildcard_carrier(t, registry)
                     or (len(pt) == 1 and pt.isalpha())
                     or (len(t) == 1 and t.isalpha())
                     or "[" in pt or "[" in t
@@ -1813,7 +1870,7 @@ class LatticePlanner:
                     out.append((p_name, p_sig))
                     continue
                 t = str(p_sig.signature.type_name)
-                if t.lower() in _WILDCARD_CARRIERS:
+                if _is_wildcard_carrier(t, registry):
                     continue
                 if _is_table_groundable_target_port(p_sig, [], quoted_str_literals, identifier_literals):
                     continue
@@ -1970,8 +2027,9 @@ class LatticePlanner:
 
             if matching_s1:
                 matching_s1.sort(key=lambda c: (
-                    getattr(c, "source_priority", 100),
-                    -(relevance_map.get(c.cell_id, 0.0) * (1.0 + len(clause_tokens & getattr(c, "identity_tokens", c.token_set))))
+                    -(relevance_map.get(c.cell_id, 0.0) * (1.0 + len(clause_tokens & getattr(c, "identity_tokens", c.token_set)))),
+                    0 if getattr(c, "is_public", True) else 1,
+                    str(getattr(c, "cell_id", "")).count("."),
                 ))
                 candidate_entries = matching_s1[:budget.entry_limit]
             elif file_literals and s1_entries:
@@ -1981,8 +2039,9 @@ class LatticePlanner:
                 ]
                 entries_to_score = compat_s1 if compat_s1 else s1_entries
                 entries_to_score.sort(key=lambda c: (
-                    getattr(c, "source_priority", 100),
-                    -relevance_map.get(c.cell_id, 0.0)
+                    -relevance_map.get(c.cell_id, 0.0),
+                    0 if getattr(c, "is_public", True) else 1,
+                    str(getattr(c, "cell_id", "")).count("."),
                 ))
                 candidate_entries = entries_to_score[:budget.entry_limit]
             else:
@@ -2007,9 +2066,26 @@ class LatticePlanner:
                     candidate_entries = list(candidate_entries) + self_contained_entries
 
         # Clauses and tokens for sequential alignment and concept coverage
-        clauses = _segment_prompt_clauses(prompt)
-        clause_tokens_list = [CellTokenizer.tokenize_prompt(cl) - set(STOPWORDS) for cl in clauses]
-        clause_tokens_list = [t for t in clause_tokens_list if t]
+        try:
+            from inference import ModelManager as _MM_p0
+            _is_p0 = _MM_p0.get_instance().current_profile_name == "0"
+        except Exception:
+            try:
+                from .inference import ModelManager as _MM_p0
+                _is_p0 = _MM_p0.get_instance().current_profile_name == "0"
+            except Exception:
+                _is_p0 = False
+
+        raw_clauses = _segment_prompt_clauses(prompt)
+        clause_tokens_list = []
+        clause_orig_indices = []
+        for gi, cl in enumerate(raw_clauses):
+            toks = CellTokenizer.tokenize_prompt(cl)
+            if toks:
+                clause_tokens_list.append(toks)
+                clause_orig_indices.append(gi)
+        clauses = [raw_clauses[gi] for gi in clause_orig_indices] if clause_orig_indices else raw_clauses
+        clause_semantic_scores = kwargs.get("clause_semantic_scores") if not _is_p0 else None
         content_prompt_tokens = set().union(*clause_tokens_list) if clause_tokens_list else (CellTokenizer.tokenize_prompt(prompt) if prompt else set())
         p_len = max(len(content_prompt_tokens), 1)
         num_clauses = max(len(clause_tokens_list), 1)
@@ -2030,18 +2106,29 @@ class LatticePlanner:
 
         def _idf(tok: str) -> float:
             df = len(token_index_for_idf.get(tok, ()))
+            if _is_p0 and df == 0:
+                return math.log(1.0 + (corpus_size_for_idf + 1) / 1.0)
             return math.log(1.0 + (corpus_size_for_idf + 1) / (df + 1.0))
 
         idf_of_prompt = {tok: _idf(tok) for tok in content_prompt_tokens}
         total_prompt_idf = sum(idf_of_prompt.values()) or 1.0
-        # Clause weight counts only MATCHABLE vocabulary: a token no lattice cell
-        # declares (df == 0 — quoted file names, bare identifiers, phrasing noise)
-        # can never be matched by any cell, so counting it in the clause's weight
-        # only inflates the evidence floor past what the best possible explainer
-        # could reach (R6-5: clause 0's 'inputcsv' made even PD_READ_CSV fail).
-        def _cl_weight(cl_toks: Set[str]) -> float:
-            return sum(_idf(t) for t in cl_toks if t in token_index_for_idf)
-        clause_weights = [_cl_weight(cl_toks) for cl_toks in clause_tokens_list]
+        # Clause weight counts only MATCHABLE vocabulary in neural/hybrid profiles;
+        # in Profile 0 (pure formal symbolic), OOV casual words retain full weight so
+        # non-formal English fails recall as intended.
+        def _cl_weight(cl_idx: int, cl_toks: Set[str]) -> float:
+            if _is_p0:
+                return sum(_idf(t) for t in cl_toks)
+            lex_w = sum(_idf(t) for t in cl_toks if t in token_index_for_idf)
+            if lex_w > 0.0:
+                return lex_w
+            if clause_semantic_scores and cl_idx < len(clause_orig_indices):
+                orig_gi = clause_orig_indices[cl_idx]
+                if orig_gi < len(clause_semantic_scores):
+                    sem_m = clause_semantic_scores[orig_gi] or {}
+                    if sem_m and max(sem_m.values(), default=0.0) >= 0.35:
+                        return max(sum(_idf(t) for t in cl_toks), 1.0)
+            return lex_w
+        clause_weights = [_cl_weight(gi, cl_toks) for gi, cl_toks in enumerate(clause_tokens_list)]
         total_clause_weight = sum(clause_weights) or 1.0
 
         # Token provenance weighting: a cell's IDENTITY tokens (cell_id + declared
@@ -2050,13 +2137,15 @@ class LatticePlanner:
         # down-weighted — descriptive vocabulary (e.g. a splitter's docstring
         # mentioning "train/test") must not outrank another cell's identifier.
         def _identity_tokens(cell: Cell) -> Set[str]:
+            if _is_p0:
+                return set(getattr(cell, "formal_identifiers", None) or {cell.cell_id.lower()})
             toks = CellTokenizer.tokenize_identifier(cell.cell_id)
             for kw in getattr(cell, "keywords", ()) or ():
                 toks.update(CellTokenizer.tokenize_identifier(kw))
             for p in list(cell.inputs.values()) + list(cell.outputs.values()):
                 sig = getattr(p, "signature", p)
                 tn = str(getattr(sig, "type_name", "") or "")
-                if tn and tn.lower() not in _WILDCARD_CARRIERS:
+                if tn and not _is_wildcard_carrier(tn, registry):
                     toks.update(CellTokenizer.tokenize_identifier(tn))
             return toks
 
@@ -2072,6 +2161,8 @@ class LatticePlanner:
         # this separation, a cell whose only operative overlap with a clause is a
         # generic port name plus a verb can falsely claim that clause's coverage.
         def _core_identity_tokens(cell: Cell) -> Set[str]:
+            if _is_p0:
+                return set(getattr(cell, "formal_identifiers", None) or {cell.cell_id.lower()})
             toks = CellTokenizer.tokenize_cell(cell.cell_id, getattr(cell, "keywords", ()) or ())
             if getattr(cell, "domain_name", None) and cell.domain_name != "generic":
                 toks = toks - CellTokenizer.tokenize_identifier(cell.domain_name)
@@ -2110,7 +2201,7 @@ class LatticePlanner:
 
         def _is_wildcarrier(cell: Cell) -> bool:
             t = str(getattr(getattr(cell, "primary_output", None), "type_name", "") or "").lower()
-            return t in _WILDCARD_CARRIERS
+            return _is_wildcard_carrier(t, registry)
 
         # ---- Precomputed per-cell scoring tables (make path scoring O(k)) ----
         # clause_mass[cell]: per-clause match masses, plus the covered-clause set.
@@ -2133,7 +2224,7 @@ class LatticePlanner:
             for tok in CellTokenizer.tokenize_identifier(sval):
                 if tok and tok.lower() not in ext_toks:
                     literal_prompt_tokens.add(tok)
-        non_literal_prompt_tokens = content_prompt_tokens - literal_prompt_tokens - set(STOPWORDS)
+        non_literal_prompt_tokens = content_prompt_tokens - literal_prompt_tokens
 
         # Clause-coverage significance: a cell covers a clause iff its identity evidence for that
         # clause is above what the candidate set typically shows (mean + one standard deviation
@@ -2183,10 +2274,30 @@ class LatticePlanner:
         for cl_toks in clause_tokens_list:
             demanded = next((
                 r for r in mut_excl_roles
-                if any(normalize_token(t)[:5] == normalize_token(r)[:5] or (len(t) >= 4 and t.lower().startswith(r.lower()[:4])) for t in cl_toks)
+                if any(normalize_token(t) == normalize_token(r) or t.lower() == r.lower() for t in cl_toks)
             ), None)
             clause_demanded_roles.append(demanded)
         pipeline_demanded_roles = {r for r in clause_demanded_roles if r}
+
+        clause_max_sem: List[float] = []
+        if not _is_p0 and clause_semantic_scores:
+            for cl_idx in range(len(clause_tokens_list)):
+                orig_gi = clause_orig_indices[cl_idx] if cl_idx < len(clause_orig_indices) else cl_idx
+                sem_map = clause_semantic_scores[orig_gi] if orig_gi < len(clause_semantic_scores) else {}
+                demanded = clause_demanded_roles[cl_idx] if cl_idx < len(clause_demanded_roles) else None
+                best_sem = 0.0
+                if sem_map:
+                    for c in candidates:
+                        if demanded:
+                            c_excl = _cell_mutually_exclusive_roles(c)
+                            if c_excl and any(r != demanded for r in c_excl):
+                                continue
+                        sv = float(sem_map.get(c.cell_id, 0.0) or 0.0)
+                        if sv > best_sem:
+                            best_sem = sv
+                clause_max_sem.append(best_sem)
+        else:
+            clause_max_sem = [0.0 for _ in clause_tokens_list]
 
         for c in candidates:
             c_toks = c.token_set
@@ -2212,12 +2323,22 @@ class LatticePlanner:
                     continue
                 _name_prec = (sum(_idf(t) for t in (cl_toks & _cid_toks)) / _cid_mass) if _cid_mass > 0 else 0.0
                 m = _match_mass(cl_toks, c_toks, id_toks) * (1.0 + 0.25 * _name_prec)
+                sem_covered = False
+                if not _is_p0 and clause_semantic_scores and cl_idx < len(clause_orig_indices):
+                    orig_gi = clause_orig_indices[cl_idx]
+                    sem_map = clause_semantic_scores[orig_gi] if orig_gi < len(clause_semantic_scores) else {}
+                    sem_sc = float(sem_map.get(c.cell_id, 0.0) or 0.0)
+                    max_s_cl = clause_max_sem[cl_idx] if cl_idx < len(clause_max_sem) else 0.0
+                    if sem_sc >= 0.35 and max_s_cl > 0.0 and sem_sc >= 0.75 * max_s_cl:
+                        sem_covered = True
+                        w_cl = clause_weights[cl_idx] if cl_idx < len(clause_weights) and clause_weights[cl_idx] > 0.0 else 1.0
+                        m = max(m, sem_sc * w_cl)
                 masses.append(m)
                 # Intent coverage: With empirical edge affinity dominating path selection,
                 # the legacy id_mass clamp is replaced with calibrated clause matching and precision.
                 c_prec = _prec_by_cell[c.cell_id][cl_idx]
                 r_mass = _raw_by_cell[c.cell_id][cl_idx]
-                if (
+                if sem_covered or (
                     r_mass > 0
                     and r_mass >= clause_min_evidence[cl_idx]
                     and c_prec >= clause_min_precision[cl_idx]
@@ -2344,7 +2465,7 @@ class LatticePlanner:
         for c in candidates:
             sigs = [
                 p.signature for p in c.inputs.values()
-                if str(p.signature.type_name).lower() not in _WILDCARD_CARRIERS
+                if not _is_wildcard_carrier(p.signature.type_name, registry)
             ]
             cell_concrete_in_sigs[c.cell_id] = sigs
 
@@ -2377,7 +2498,7 @@ class LatticePlanner:
                 is_instance_receiver = _is_receiver_port(p_sig, c)
                 t = str(p_sig.signature.type_name)
                 if not is_instance_receiver:
-                    if t.lower() in _WILDCARD_CARRIERS or _port_literal_groundable(t, p_sig):
+                    if _is_wildcard_carrier(t, registry) or _port_literal_groundable(t, p_sig):
                         continue
                 sigs.append(p_sig.signature)
             cell_receiver_sigs[c.cell_id] = sigs
@@ -2507,7 +2628,7 @@ class LatticePlanner:
                 if unify(out_sig, p.signature) is None:
                     continue
                 t = str(p.signature.type_name).lower()
-                if t in _WILDCARD_CARRIERS:
+                if _is_wildcard_carrier(t, registry):
                     has_any = True
                 else:
                     has_strong = True
@@ -2535,9 +2656,13 @@ class LatticePlanner:
             return hit
 
         def _is_bridge_or_carrier(c: Cell) -> bool:
+            c_nr = str(getattr(c, "node_role", "") or "").lower()
+            c_nt = str(getattr(c, "node_type", "") or "").lower()
             return (
-                getattr(c, "node_type", "") == "bridge"
-                or getattr(c, "node_role", "") in ("bridge", "source", "sink", "adaptor")
+                registry.is_bridge_role(c_nt)
+                or registry.is_bridge_role(c_nr)
+                or registry.is_ingress_role(c_nr)
+                or registry.is_terminal_role(c_nr)
                 or (vocab is not None and vocab.is_bridge(c))
             )
 
@@ -2604,21 +2729,25 @@ class LatticePlanner:
                 weak_tokens = prev_st["weak_tokens"] | cell_cov_weak.get(new_c.cell_id, set())
                 covered_clauses = prev_st["covered_clauses"] | cell_covered.get(new_c.cell_id, set())
 
+                c_cov = cell_covered.get(new_c.cell_id, set())
                 masses = cell_clause_mass.get(new_c.cell_id, [])
                 dp = prev_st["dp"]
                 inversions = prev_st["inversions"]
-                if masses:
-                    max_m = max(masses)
-                    if max_m > 0:
-                        cands = {g for g, m in enumerate(masses) if m > 0 and m == max_m}
-                        if cands:
-                            if dp is None:
-                                dp = {g: 0 for g in cands}
-                                inversions = 0
-                            else:
-                                next_dp = {g: min(dp[prev_g] + (1 if prev_g > g else 0) for prev_g in dp) for g in cands}
-                                inversions = min(next_dp.values())
-                                dp = next_dp
+                if c_cov and masses:
+                    max_m = max((masses[g] for g in c_cov if g < len(masses)), default=0.0)
+                    cands = (
+                        {g for g in c_cov if g < len(masses) and masses[g] == max_m}
+                        if max_m > 0
+                        else set(c_cov)
+                    )
+                    if cands:
+                        if dp is None:
+                            dp = {g: 0 for g in cands}
+                            inversions = 0
+                        else:
+                            next_dp = {g: min(dp[prev_g] + (1 if prev_g > g else 0) for prev_g in dp) for g in cands}
+                            inversions = min(next_dp.values())
+                            dp = next_dp
 
                 parents = [path[i] for i in range(k - 1) if _cells_connect(path[i], new_c)]
                 bound_p = getattr(new_c, "bound_parent_ids", None)
@@ -2661,14 +2790,18 @@ class LatticePlanner:
                 for c in path:
                     strong_tokens |= cell_cov_strong.get(c.cell_id, set())
                     weak_tokens |= cell_cov_weak.get(c.cell_id, set())
-                    covered_clauses |= cell_covered.get(c.cell_id, set())
+                    c_cov = cell_covered.get(c.cell_id, set())
+                    covered_clauses |= c_cov
                     masses = cell_clause_mass.get(c.cell_id, [])
-                    if masses:
-                        max_m = max(masses)
-                        if max_m > 0:
-                            cands = {g for g, m in enumerate(masses) if m > 0 and m == max_m}
-                            if cands:
-                                steps_candidate_clauses.append(cands)
+                    if c_cov and masses:
+                        max_m = max((masses[g] for g in c_cov if g < len(masses)), default=0.0)
+                        cands = (
+                            {g for g in c_cov if g < len(masses) and masses[g] == max_m}
+                            if max_m > 0
+                            else set(c_cov)
+                        )
+                        if cands:
+                            steps_candidate_clauses.append(cands)
 
                 inversions = 0
                 dp = None
@@ -2805,11 +2938,12 @@ class LatticePlanner:
                     if any(vocab.is_materializable_carrier(o) for o in terminal.outputs.values()):
                         goal -= 1
             unrequested = sum(1 for c in path[1:] if _unrequested(c))
+            non_tr_roles = registry.get_bridge_roles_set() | registry.get_ingress_roles_set() | registry.get_terminal_roles_set()
             unrequested_transforms = sum(
                 1 for c in path[1:]
                 if _unrequested_narrow(c)
-                and getattr(c, "node_role", "") not in ("bridge", "source", "sink")
-                and getattr(c, "node_type", "") != "tunnel"
+                and str(getattr(c, "node_role", "") or "").lower() not in non_tr_roles
+                and not registry.is_bridge_role(getattr(c, "node_type", ""))
             )
 
             weak_total = sum(1 for c in path if _is_wildcarrier(c)) + weak_edges
@@ -2940,7 +3074,7 @@ class LatticePlanner:
                                 st = str(getattr(p_sig.signature, "state", "")).lower()
                                 proj_port_tokens |= set(CellTokenizer.tokenize_identifier(st))
                                 proj_port_tokens |= {t for t in CellTokenizer.tokenize_identifier(str(getattr(c, "cell_id", "")).lower())}
-                    raw_proj_tokens = TypeRegistry.get_instance().get_column_projection_tokens()
+                    raw_proj_tokens = TypeRegistry.get_instance().get_projection_tokens()
                     proj_port_tokens |= set(raw_proj_tokens)
                     proj_port_tokens |= {normalize_token(t) for t in raw_proj_tokens}
                 # Declared relational-trigger ports: a port NAMED for the
@@ -2963,12 +3097,17 @@ class LatticePlanner:
                     for c in path for p in c.inputs.values()
                 )
                 identifier_role_map = getattr(self, "_last_identifier_roles", None)
+                all_declared_lit_roles: Set[str] = set()
+                if identifier_role_map:
+                    for _roles in identifier_role_map.values():
+                        for _r in (_roles or ()):
+                            all_declared_lit_roles.add(_r)
+                            all_declared_lit_roles.add(normalize_token(_r))
+                dest_lit_set = {str(d).lower().strip("'\"") for d in (dest_file_literals or ())}
                 for kind, lit in universal_literals:
                     lit_clean = str(lit).lower().strip("'\"")
                     if kind == "file_asset":
-                        lit_pos = literal_positions.get((kind, lit), 0)
-                        lit_dir = ExecutionContext._asset_direction(prompt or "", lit_pos)
-                        if lit_dir == "dest":
+                        if lit_clean in dest_lit_set:
                             if used_egress_file_ports < path_egress_file_ports:
                                 consumed_count += 1
                                 used_egress_file_ports += 1
@@ -2977,13 +3116,6 @@ class LatticePlanner:
                                 consumed_count += 1
                                 used_ingress_file_ports += 1
                     elif kind == "numeric":
-                        lit_pos = literal_positions.get((kind, lit))
-                        pre_mod: Set[str] = set()
-                        if lit_pos is not None:
-                            prev_chunk = (prompt or "")[:lit_pos].rstrip()
-                            toks = CellTokenizer.tokenize_prompt(prev_chunk)
-                            pre_mod = {t for t in toks if vocab.is_informative_token(t)}
-
                         num_port_matched = False
                         path_has_num_port = False
                         for c in path:
@@ -3003,44 +3135,27 @@ class LatticePlanner:
                                     port_ev |= set(CellTokenizer.tokenize_identifier(doc))
                                 for kw in getattr(c, "keywords", []):
                                     port_ev |= set(CellTokenizer.tokenize_identifier(str(kw).lower()))
-                                if pre_mod and (port_ev & pre_mod):
+                                if non_literal_prompt_tokens and (port_ev & non_literal_prompt_tokens):
                                     num_port_matched = True
                                     break
                             if num_port_matched:
                                 break
 
-                        if pre_mod:
-                            if num_port_matched:
-                                consumed_count += 1
-                        else:
-                            if path_has_num_port:
-                                consumed_count += 1
+                        if num_port_matched or path_has_num_port:
+                            consumed_count += 1
                     else:
                         if lit_clean in path_ports or any(lit_clean in p for p in path_ports):
                             consumed_count += 1
                         else:
-                            lit_pos = literal_positions.get((kind, lit))
-                            lit_roles = set(identifier_role_map.get(lit_pos, frozenset())) if (identifier_role_map and lit_pos is not None) else set()
-                            stemmed_lit_roles = {normalize_token(r) for r in lit_roles} | lit_roles
                             if proj_port_tokens and (
-                                (stemmed_lit_roles & proj_port_tokens)
+                                (all_declared_lit_roles & proj_port_tokens)
                                 or (proj_port_tokens & {t for t in CellTokenizer.tokenize_identifier(lit_clean)})
                             ):
                                 consumed_count += 1
-                            elif path_has_target and (stemmed_lit_roles & target_role_tokens):
+                            elif path_has_target and (all_declared_lit_roles & target_role_tokens):
                                 consumed_count += 1
-                            elif trigger_port_tokens:
-                                # Prepositional-object referent: consumed iff the
-                                # path declares a relational-trigger port whose
-                                # binding preposition matches the literal's.
-                                if lit_pos is not None:
-                                    prev_chunk = (prompt or "")[:lit_pos].rstrip()
-                                    toks = tokenize_alphanumeric(prev_chunk, min_len=1)
-                                    if toks:
-                                        prep = toks[-1].lower()
-                                        preps = registry.get_preposition_triggers() | registry.get_generic_prepositions()
-                                        if prep and prep in trigger_port_tokens and (not preps or prep in preps):
-                                            consumed_count += 1
+                            elif trigger_port_tokens and (content_prompt_tokens & trigger_port_tokens):
+                                consumed_count += 1
                 literal_consumption = consumed_count / len(universal_literals)
             else:
                 literal_consumption = 1.0
@@ -3113,6 +3228,23 @@ class LatticePlanner:
                 "goal:goal": float(goal),
                 "intent:likelihood": mean_log_prob,
             }
+            if not _is_p0 and clause_semantic_scores:
+                sem_num = 0.0
+                for cl_idx in range(len(clause_tokens_list)):
+                    orig_gi = clause_orig_indices[cl_idx] if cl_idx < len(clause_orig_indices) else cl_idx
+                    sem_map = clause_semantic_scores[orig_gi] if orig_gi < len(clause_semantic_scores) else {}
+                    best_cl_sem = max((float(sem_map.get(c.cell_id, 0.0) or 0.0) for c in path), default=0.0)
+                    w_cl = clause_weights[cl_idx] if cl_idx < len(clause_weights) else 1.0
+                    sem_num += w_cl * best_cl_sem
+                terms["semantic:clause_coverage"] = sem_num / total_clause_weight
+            if not _is_p0 and k >= 2:
+                ae_scores = []
+                for idx in range(k - 1):
+                    sc_ae = self._latent_transition_score(path[idx], path[idx + 1])
+                    if sc_ae is not None:
+                        ae_scores.append(sc_ae)
+                if ae_scores:
+                    terms["latent:transition_score"] = sum(ae_scores) / len(ae_scores)
             result = PathScore(defects, terms)
             if _debug_plan:
                 _component_trace[tuple(c.cell_id for c in path)] = {
@@ -3201,8 +3333,8 @@ class LatticePlanner:
                     if any(registry.is_state_compatible(
                         producer_state=out_s,
                         consumer_state=getattr(p_sig.signature, "state", "any"),
-                        producer_accepted=getattr(out_sig, "accepted_states", frozenset()),
-                        consumer_accepted=getattr(p_sig.signature, "accepted_states", frozenset()),
+                        producer_accepted=getattr(out_sig, "accepted_states", ()),
+                        consumer_accepted=getattr(p_sig.signature, "accepted_states", ()),
                         consumer_parent=getattr(p_sig.signature, "parent_state", None),
                         producer_parent=getattr(out_sig, "parent_state", None),
                     ) for p_sig in cand_in_ports):
@@ -3290,8 +3422,24 @@ class LatticePlanner:
             )
             # A "transformer" is any non-terminal-stage cell that still has a downstream
             # consumer in the lattice: it cannot end the pipeline before the last clause,
-            # unless its output satisfies an endable prediction/terminal typestate.
-            if _is_terminal_sink_cell(terminal) is False and _cells_connect_any(terminal) and not is_pred_terminal:
+            # unless its output satisfies an endable prediction/terminal typestate or the
+            # prompt has no egress intent and every clause (including the last) is covered.
+            transformer_completes_non_egress_prompt = (
+                not has_prompt_egress_intent
+                and goal_sig is None
+                and not dest_file_literals
+                and len(covered) >= max(num_clauses, 1)
+                and (
+                    (num_clauses <= 1 and bool(cell_covered.get(terminal.cell_id)))
+                    or ((num_clauses - 1) in cell_covered.get(terminal.cell_id, set()))
+                )
+            )
+            if (
+                _is_terminal_sink_cell(terminal) is False
+                and _cells_connect_any(terminal)
+                and not is_pred_terminal
+                and not transformer_completes_non_egress_prompt
+            ):
                 return False
 
             if is_pred_terminal:
@@ -3307,7 +3455,7 @@ class LatticePlanner:
                 for op in getattr(terminal, "outputs", {}).values()
             }
             if any(st in vocab.terminal_states or registry.state_ancestry_reaches(st, set(vocab.terminal_states))
-                   for st in out_states if st and st not in _WILDCARD_CARRIERS):
+                   for st in out_states if st and not registry.is_declared_top(st)):
                 return True
 
             return True
@@ -3362,6 +3510,7 @@ class LatticePlanner:
                 unrequested_check=_unrequested_narrow,
                 num_clauses=num_clauses,
                 cell_covered=cell_covered,
+                allow_greedy_completion=allow_greedy_completion,
             )
 
         # Filter and rank valid composition paths
@@ -3398,6 +3547,7 @@ class LatticePlanner:
             _il = [v for k, v in _ul if k == "identifier"]
             valid_candidates, _tier = self._hard_constraint_filter(
                 valid_candidates, _ul, _nl, _ql, _il, clause_tokens_list,
+                cell_covered=cell_covered,
             )
             # === end hard constraints ===
             scored_candidates = rank_items(valid_candidates, is_final=True)
@@ -3457,8 +3607,9 @@ class LatticePlanner:
                         sub = self.plan_sublattice(c, slot_name, slot_contract, tunnel, relevance_map, trial_sigma, prompt)
                         if sub:
                             slot_cells.extend(sub)   # counted for the trial only; nothing is stored
-                trial_slot_cells[prefix] = slot_cells
-                trial_items.append(it)
+                if slot_cells:
+                    trial_slot_cells[prefix] = slot_cells
+                    trial_items.append(it)
 
             if trial_slot_cells:
                 def _slot_terms(it):
@@ -3472,13 +3623,7 @@ class LatticePlanner:
                         clause_weights[g] for x in sc_cells for g in cell_covered.get(x.cell_id, set()) if g not in path_cov
                     ) / total_clause_weight
                     return {"intent:slot_mass": new_mass, "intent:slot_clauses": new_clause}
-                # Rank ONLY the tried candidates against each other with the slot terms added;
-                # untried candidates keep their relative order behind them.
-                reranked = rank_items(trial_items, is_final=True, extra_terms=_slot_terms)
-                tried = {tuple(c.cell_id for c in it[0]) for it in trial_items}
-                rest = [(it, a) for it, a in scored_candidates if tuple(c.cell_id for c in it[0]) not in tried]
-                head = [(it, a) for it, a in reranked]
-                scored_candidates = head + rest
+                scored_candidates = rank_items(valid_candidates, is_final=True, extra_terms=_slot_terms)
 
             if _debug_plan:
                 import sys as _sys
@@ -3492,9 +3637,9 @@ class LatticePlanner:
             # and are accepted as opaque single nodes).
             gate = UnificationGate(orchestrator=self.orchestrator)
             chosen_candidate = None
-            acceptance_deadline = min(getattr(self, "_plan_deadline", time.perf_counter() + 15.0), time.perf_counter() + max(15.0, float(getattr(self, "planner_greedy_budget_ms", 15000.0)) / 1000.0))
+            acceptance_deadline = min(getattr(self, "_plan_deadline", time.perf_counter() + 15.0), time.perf_counter() + 10.0)
             for cand_idx, (it, sc) in enumerate(scored_candidates):
-                if cand_idx >= 30 and time.perf_counter() > acceptance_deadline:
+                if cand_idx >= 5 and time.perf_counter() > acceptance_deadline:
                     logger.debug("[PLANNER] Plan deadline exceeded during candidate acceptance loop.")
                     break
                 cand_p = it[0]
@@ -3528,14 +3673,24 @@ class LatticePlanner:
                                 if sub_plan:
                                     sub_plan = self._bind_chain_slots(sub_plan, tunnel, relevance_map, it[1], prompt)
                                     c.bound_slots[slot_name] = sub_plan
-                    from route_methods.base import RouteMethod as _RM
-                    _RM.tag_cells_with_clause_indices(cand_private, prompt, orchestrator=self.orchestrator)
-                    cand_private = self._insert_property_bridges(cand_private)
+                    if allow_m1_tagging:
+                        from route_methods.base import RouteMethod as _RM
+                        _RM.tag_cells_with_clause_indices(
+                            cand_private, prompt, orchestrator=self.orchestrator,
+                            clause_semantic_scores=clause_semantic_scores,
+                        )
+                        cand_private = self._insert_property_bridges(cand_private)
 
                     emitted = gate.emit_code(cand_private, ExecutionContext(prompt=prompt), extract_llm_slots=False)
 
                     from preflight import PreflightLinter
-                    lint_res = PreflightLinter.lint(gate.last_pipeline_bindings, prompt=prompt, code_str=emitted, orchestrator=self.orchestrator)
+                    lint_res = PreflightLinter.lint(
+                        gate.last_pipeline_bindings,
+                        prompt=prompt,
+                        code_str=emitted,
+                        orchestrator=self.orchestrator,
+                        clause_semantic_scores=clause_semantic_scores,
+                    )
                     if not lint_res.is_valid:
                         raise ValueError(f"Preflight lint failed: {lint_res.violations}")
 
@@ -3635,8 +3790,12 @@ class LatticePlanner:
                             cell = _private_copy(cell, self.orchestrator)
                             best_path[pos] = cell
                         cell.matched_clause_idx = max(range(len(masses)), key=lambda idx: masses[idx])
-            from route_methods.base import RouteMethod as _RM
-            _RM.tag_cells_with_clause_indices(best_path, prompt, orchestrator=self.orchestrator)
+            if allow_m1_tagging:
+                from route_methods.base import RouteMethod as _RM
+                _RM.tag_cells_with_clause_indices(
+                    best_path, prompt, orchestrator=self.orchestrator,
+                    clause_semantic_scores=clause_semantic_scores,
+                )
 
             # R5-5 / R6-7: Coverage floor enforcement. The floor is computed from
             # the SAME precision-based cell_covered the explain table shows — the
@@ -3654,7 +3813,7 @@ class LatticePlanner:
                 cov_frac = len(covered_clauses) / total_clauses if total_clauses > 0 else 1.0
                 uncovered = [i for i in range(total_clauses) if i not in covered_clauses]
 
-                if cov_frac < floor_frac:
+                if cov_frac < floor_frac and allow_greedy_completion:
                     if uncovered and (time.perf_counter() < self._plan_deadline):
                         greedy_cfg_s = float(getattr(self, "planner_greedy_budget_ms", 1000.0)) / 1000.0
                         greedy_budget = min(greedy_cfg_s, max(0.0, self._plan_deadline - time.perf_counter()))
@@ -3674,7 +3833,7 @@ class LatticePlanner:
                             for cand in clause_cands:
                                 if time.perf_counter() > greedy_deadline:
                                     break
-                                v_res = self._cells_connect(best_path[-1], cand) if best_path else False
+                                v_res = self._cells_connect(best_path[-1], cand, allow_bridge=True) if best_path else False
                                 if v_res:
                                     best_path.append(cand)
                                     best_path_ids.add(cand.cell_id.lower())
@@ -3773,7 +3932,7 @@ class LatticePlanner:
 
         registry = TypeRegistry.get_instance()
 
-        def _is_witness(cell: Cell, role_tokens: FrozenSet[str]) -> bool:
+        def _is_witness(cell: Cell, role_tokens: Set[str]) -> bool:
             if getattr(cell, "replica_of", None):
                 return False
             # Only transform cells can be identifier multiplicity witnesses (never sinks or constructors)
@@ -3782,18 +3941,21 @@ class LatticePlanner:
             if getattr(cell, "node_type", "") == "constructor":
                 return False
             # Cells that accept collection or column projection inputs consume multiplicity directly
+            coll_types = set(registry.get_verification_semantics("collection_types") or ())
             for p_sig in cell.inputs.values():
                 t_name = str(p_sig.signature.type_name).lower()
                 if (
                     _is_col_projection_port(p_sig)
-                    or registry.is_subtype(t_name, "list")
-                    or registry.is_subtype(t_name, "collection")
-                    or registry.is_subtype(t_name, "sequence")
-                    or t_name in ("list", "sequence", "collection")
-                    or getattr(getattr(p_sig, "signature", p_sig), "abstract_type", None) == "collection"
+                    or any(registry.is_subtype(t_name, ct) for ct in coll_types)
+                    or t_name in coll_types
+                    or getattr(getattr(p_sig, "signature", p_sig), "abstract_type", None) in coll_types
                 ):
                     state = str(getattr(p_sig.signature, "state", "") or "").lower()
-                    st_tokens = CellTokenizer.tokenize_identifier(state) if state not in ("any", "default", "") else set()
+                    st_tokens = (
+                        CellTokenizer.tokenize_identifier(state)
+                        if state and state != "default" and not registry.is_declared_top(state)
+                        else set()
+                    )
                     if _is_col_projection_port(p_sig) or bool(role_tokens & st_tokens):
                         return False
             for p_sig in cell.inputs.values():
@@ -3805,13 +3967,16 @@ class LatticePlanner:
                     or registry.is_subtype(t_name, "list")
                     or registry.is_subtype(t_name, "collection")
                     or registry.is_subtype(t_name, "sequence")
-                    or t_name in ("list", "sequence", "collection")
                     or getattr(getattr(p_sig, "signature", p_sig), "abstract_type", None) == "collection"
                 ):
                     continue
-                strict_str = registry.is_subtype(t_name, "str") and t_name not in ("any", "*", "top", "")
+                strict_str = bool(t_name) and not registry.is_declared_top(t_name) and registry.is_subtype(t_name, "str")
                 state = str(getattr(p_sig.signature, "state", "") or "").lower()
-                st_tokens = CellTokenizer.tokenize_identifier(state) if state not in ("any", "default", "") else set()
+                st_tokens = (
+                    CellTokenizer.tokenize_identifier(state)
+                    if state and state != "default" and not registry.is_declared_top(state)
+                    else set()
+                )
                 role_state = bool(role_tokens & st_tokens)
                 if (strict_str or role_state) and bool(role_tokens & (cell.token_set | st_tokens)):
                     return True
@@ -4104,8 +4269,8 @@ class LatticePlanner:
                     if any(registry.is_state_compatible(
                         producer_state=out_s,
                         consumer_state=getattr(p_sig.signature, "state", "any"),
-                        producer_accepted=getattr(out_sig, "accepted_states", frozenset()),
-                        consumer_accepted=getattr(p_sig.signature, "accepted_states", frozenset()),
+                        producer_accepted=getattr(out_sig, "accepted_states", ()),
+                        consumer_accepted=getattr(p_sig.signature, "accepted_states", ()),
                         consumer_parent=getattr(p_sig.signature, "parent_state", None),
                         producer_parent=getattr(out_sig, "parent_state", None),
                     ) for p_sig in c.inputs.values()):
@@ -4240,6 +4405,7 @@ class LatticePlanner:
         unrequested_check: Optional[Any] = None,
         num_clauses: int = 1,
         cell_covered: Optional[Dict[str, Set[int]]] = None,
+        allow_greedy_completion: bool = True,
     ) -> List[Tuple[List[Cell], Substitution, float, int, int]]:
         """
         Monoidal Category Frontier DAG Planner (Default Approach).
@@ -4427,12 +4593,13 @@ class LatticePlanner:
             if unrequested_check is not None and unrequested_check(cand):
                 _cand_role = str(getattr(cand, "node_role", "") or "").lower()
                 _cand_type = str(getattr(cand, "node_type", "") or "").lower()
-                if _cand_role not in ("bridge", "source", "sink") and _cand_type != "tunnel":
+                _exempt_roles = registry.get_bridge_roles_set() | registry.get_ingress_roles_set() | registry.get_terminal_roles_set()
+                if _cand_role not in _exempt_roles and not registry.is_bridge_role(_cand_type):
                     cov_set = cell_covered.get(cand.cell_id, set()) if cell_covered else set()
                     if not cov_set:
                         return None
                 _out_t = str(getattr(getattr(cand, "primary_output", None), "type_name", "") or "").lower()
-                if _out_t in _WILDCARD_CARRIERS or (len(_out_t) == 1 and _out_t.isalpha()):
+                if _is_wildcard_carrier(_out_t, registry) or (len(_out_t) == 1 and _out_t.isalpha()):
                     return None
 
             # Wildcard-bridge guard: an unrequested morphism (its declared
@@ -4444,8 +4611,7 @@ class LatticePlanner:
             if bound_parents and unrequested_check is not None and unrequested_check(cand):
                 parents_by_id = {p.cell_id: p for p in prev_path}
                 typed_wire_exists = any(
-                    str(getattr(parents_by_id[pid].primary_output, "type_name", "") or "").lower()
-                    not in _WILDCARD_CARRIERS
+                    not _is_wildcard_carrier(getattr(parents_by_id[pid].primary_output, "type_name", ""), registry)
                     for pid in bound_parents
                     if pid in parents_by_id and parents_by_id[pid].primary_output is not None
                 )
@@ -4491,8 +4657,8 @@ class LatticePlanner:
                         if any(registry.is_state_compatible(
                             producer_state=out_s,
                             consumer_state=getattr(p_sig.signature, "state", "any"),
-                            producer_accepted=getattr(out_sig, "accepted_states", frozenset()),
-                            consumer_accepted=getattr(p_sig.signature, "accepted_states", frozenset()),
+                            producer_accepted=getattr(out_sig, "accepted_states", ()),
+                            consumer_accepted=getattr(p_sig.signature, "accepted_states", ()),
                             consumer_parent=getattr(p_sig.signature, "parent_state", None),
                             producer_parent=getattr(out_sig, "parent_state", None),
                         ) for p_sig in cand_in_ports):
@@ -4699,8 +4865,10 @@ class LatticePlanner:
                 for it in all_valid_paths
             )
 
-        should_greedy_complete = (not all_valid_paths and bool(current_beam)) or (
-            num_clauses > 1 and max_cov < num_clauses and (bool(all_valid_paths) or bool(current_beam))
+        should_greedy_complete = allow_greedy_completion and (
+            (not all_valid_paths and bool(current_beam)) or (
+                num_clauses > 1 and max_cov < num_clauses and (bool(all_valid_paths) or bool(current_beam))
+            )
         )
 
         if should_greedy_complete:
@@ -4878,7 +5046,7 @@ class LatticePlanner:
                     return [best_child]
 
         # 2. State Loop / Fixed Point / While Loop / Repeat Until (Tr^{State}: State -> State)
-        elif topology in ("state_loop", "while_loop", "fixed_point", "repeat_until"):
+        elif topology in set(TypeRegistry.get_instance().get_verification_semantics("state_loop_topologies") or ()):
             s_in_contract = slot_contract.get("input_type") if isinstance(slot_contract, dict) else getattr(slot_contract, "input_type", None)
             u_raw = getattr(parent_cell, "feedback_state_type", None) or s_in_contract or "State"
             u_concrete = substitute_generics(str(u_raw), active_sigma)
@@ -4914,7 +5082,13 @@ class LatticePlanner:
                         in_unified = True
                         cand_sub = u_cand
                         break
-                if in_unified or getattr(cand, "domain_name", "") == parent_cell.domain_name or u_concrete in ("State", "any"):
+                _reg_sl = TypeRegistry.get_instance()
+                if (
+                    in_unified
+                    or getattr(cand, "domain_name", "") == parent_cell.domain_name
+                    or _reg_sl.is_type_variable(u_concrete)
+                    or _reg_sl.is_declared_top(u_concrete)
+                ):
                     rel = relevance_map.get(cand.cell_id, 0.0)
                     cand_id_toks = getattr(cand, "identity_tokens", getattr(cand, "token_set", set()))
                     tok_ov = len(target_tokens & cand_id_toks)

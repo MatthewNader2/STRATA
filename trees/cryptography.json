@@ -81,14 +81,14 @@
       },
       {
         "name": "authenticated_ciphertext",
-        "parent_state": null,
+        "parent_state": "raw_bytes",
         "carrier_type": "ciphertext",
         "description": "Encrypted ciphertext with appended 16-byte authentication tag.",
         "properties": {}
       },
       {
         "name": "base64_encoded",
-        "parent_state": null,
+        "parent_state": "raw_bytes",
         "carrier_type": "bytes",
         "description": "Standard Base64-encoded bytes.",
         "properties": {}
@@ -215,7 +215,7 @@
       },
       {
         "name": "encrypted_token",
-        "parent_state": null,
+        "parent_state": "raw_bytes",
         "carrier_type": "ciphertext",
         "description": "Authenticated encrypted ciphertext token.",
         "properties": {}
@@ -360,10 +360,6 @@
         "carrier_type": "bytes",
         "description": "Generated cryptographically secure random bytes.",
         "properties": {}
-      },
-      {
-        "name": "raw",
-        "description": "Unprocessed or raw primitive byte stream."
       },
       {
         "name": "raw_bytes",
@@ -549,7 +545,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.fernet_key_bytes",
+          "typestate": "cryptography::fernet_key_bytes",
+          "invariants": []
         }
       },
       "code_template": "{key} = Fernet.generate_key()",
@@ -557,7 +567,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": null,
-      "primary_out": "key"
+      "primary_out": "key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_INIT",
@@ -585,7 +597,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.fernet_key_bytes",
+          "typestate": "cryptography::fernet_key_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -598,7 +624,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         }
       },
       "code_template": "{cipher} = Fernet({key})",
@@ -606,7 +637,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "key",
-      "primary_out": "cipher"
+      "primary_out": "cipher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_ENCRYPT",
@@ -633,10 +666,15 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         },
         "data": {
-          "type_name": "plaintext",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "required": true,
@@ -646,7 +684,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -659,7 +711,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "code_template": "{ciphertext} = {cipher}.encrypt({data})",
@@ -667,7 +733,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "data",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_DECRYPT",
@@ -694,7 +762,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -707,7 +780,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "outputs": {
@@ -720,7 +807,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{plaintext} = {cipher}.decrypt({ciphertext})",
@@ -728,7 +829,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "plaintext"
+      "primary_out": "plaintext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_ENCRYPT_AT_TIME",
@@ -755,7 +858,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         },
         "data": {
           "type_name": "plaintext",
@@ -768,7 +876,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         },
         "current_time": {
           "type_name": "int",
@@ -781,7 +903,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.timestamp",
+          "typestate": "cryptography::timestamp",
+          "invariants": []
         }
       },
       "outputs": {
@@ -794,7 +930,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "code_template": "{ciphertext} = {cipher}.encrypt_at_time({data}, current_time={current_time})",
@@ -802,7 +952,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "data",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_EXTRACT_TIMESTAMP",
@@ -828,7 +980,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -841,7 +998,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "outputs": {
@@ -854,7 +1025,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.timestamp",
+          "typestate": "cryptography::timestamp",
+          "invariants": []
         }
       },
       "code_template": "{timestamp} = {cipher}.extract_timestamp({ciphertext})",
@@ -862,7 +1047,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "timestamp"
+      "primary_out": "timestamp",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_FERNET_DECRYPT_AT_TIME",
@@ -889,7 +1076,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.fernet_instance",
+          "typestate": "cryptography::fernet_instance",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -902,7 +1094,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         },
         "ttl": {
           "type_name": "int",
@@ -915,7 +1121,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 60
+          "default_value": 60,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.seconds",
+          "typestate": "cryptography::seconds",
+          "invariants": []
         },
         "current_time": {
           "type_name": "int",
@@ -928,7 +1148,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0
+          "default_value": 0,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.timestamp",
+          "typestate": "cryptography::timestamp",
+          "invariants": []
         }
       },
       "outputs": {
@@ -941,7 +1175,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{plaintext} = {cipher}.decrypt_at_time({ciphertext}, ttl={ttl}, current_time={current_time})",
@@ -949,7 +1197,9 @@
         "from cryptography.fernet import Fernet"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "plaintext"
+      "primary_out": "plaintext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_MULTI_FERNET_INIT",
@@ -986,7 +1236,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.cipher_collection",
+          "typestate": "cryptography::cipher_collection",
+          "invariants": []
         }
       },
       "outputs": {
@@ -999,7 +1265,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.multi_fernet_instance",
+          "typestate": "cryptography::multi_fernet_instance",
+          "invariants": []
         }
       },
       "code_template": "{multi_cipher} = MultiFernet({fernet_instances})",
@@ -1007,7 +1278,9 @@
         "from cryptography.fernet import MultiFernet"
       ],
       "primary_in": "fernet_instances",
-      "primary_out": "multi_cipher"
+      "primary_out": "multi_cipher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_MULTI_FERNET_ROTATE",
@@ -1034,7 +1307,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.multi_fernet_instance",
+          "typestate": "cryptography::multi_fernet_instance",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -1047,7 +1325,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1060,7 +1352,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "code_template": "{rotated_token} = {multi_cipher}.rotate({ciphertext})",
@@ -1068,7 +1374,9 @@
         "from cryptography.fernet import MultiFernet"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "rotated_token"
+      "primary_out": "rotated_token",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA256_INIT",
@@ -1095,7 +1403,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.sha256_state",
+          "typestate": "cryptography::sha256_state",
+          "invariants": []
         }
       },
       "code_template": "{hasher} = hashlib.sha256()",
@@ -1103,7 +1416,9 @@
         "import hashlib"
       ],
       "primary_in": null,
-      "primary_out": "hasher"
+      "primary_out": "hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA512_INIT",
@@ -1130,7 +1445,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.sha512_state",
+          "typestate": "cryptography::sha512_state",
+          "invariants": []
         }
       },
       "code_template": "{hasher} = hashlib.sha512()",
@@ -1138,7 +1458,9 @@
         "import hashlib"
       ],
       "primary_in": null,
-      "primary_out": "hasher"
+      "primary_out": "hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA3_256_INIT",
@@ -1166,7 +1488,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.sha3_256_state",
+          "typestate": "cryptography::sha3_256_state",
+          "invariants": []
         }
       },
       "code_template": "{hasher} = hashlib.sha3_256()",
@@ -1174,7 +1501,9 @@
         "import hashlib"
       ],
       "primary_in": null,
-      "primary_out": "hasher"
+      "primary_out": "hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_BLAKE2B_INIT",
@@ -1202,7 +1531,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.blake2b_state",
+          "typestate": "cryptography::blake2b_state",
+          "invariants": []
         }
       },
       "code_template": "{hasher} = hashlib.blake2b()",
@@ -1210,7 +1544,9 @@
         "import hashlib"
       ],
       "primary_in": null,
-      "primary_out": "hasher"
+      "primary_out": "hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_MD5_INIT",
@@ -1238,7 +1574,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.md5_state",
+          "typestate": "cryptography::md5_state",
+          "invariants": []
         }
       },
       "code_template": "{hasher} = hashlib.md5()",
@@ -1246,7 +1587,9 @@
         "import hashlib"
       ],
       "primary_in": null,
-      "primary_out": "hasher"
+      "primary_out": "hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HASHER_UPDATE",
@@ -1273,7 +1616,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "chunk": {
           "type_name": "bytes",
@@ -1286,7 +1634,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1299,7 +1661,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "cryptography.updated",
+          "typestate": "cryptography::updated",
+          "invariants": []
         }
       },
       "code_template": "{hasher}.update({chunk})\n{updated_hasher} = {hasher}",
@@ -1307,7 +1674,9 @@
         "import hashlib"
       ],
       "primary_in": "chunk",
-      "primary_out": "updated_hasher"
+      "primary_out": "updated_hasher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HASHER_HEXDIGEST",
@@ -1334,7 +1703,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1347,7 +1721,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hash_digest",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "code_template": "{hexdigest} = {hasher}.hexdigest()",
@@ -1355,7 +1743,9 @@
         "import hashlib"
       ],
       "primary_in": "hasher",
-      "primary_out": "hexdigest"
+      "primary_out": "hexdigest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HASHER_DIGEST",
@@ -1382,12 +1772,17 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hasher",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
         "digest": {
-          "type_name": "hash_digest",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "port_role": "data_output",
@@ -1395,7 +1790,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{digest} = {hasher}.digest()",
@@ -1403,7 +1812,9 @@
         "import hashlib"
       ],
       "primary_in": "hasher",
-      "primary_out": "digest"
+      "primary_out": "digest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA256_ONESHOT_HEX",
@@ -1431,7 +1842,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1444,7 +1869,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hash_digest",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "code_template": "{hexdigest} = hashlib.sha256({data}).hexdigest()",
@@ -1452,7 +1891,9 @@
         "import hashlib"
       ],
       "primary_in": "data",
-      "primary_out": "hexdigest"
+      "primary_out": "hexdigest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA512_ONESHOT_HEX",
@@ -1480,7 +1921,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1493,7 +1948,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hash_digest",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "code_template": "{hexdigest} = hashlib.sha512({data}).hexdigest()",
@@ -1501,7 +1970,9 @@
         "import hashlib"
       ],
       "primary_in": "data",
-      "primary_out": "hexdigest"
+      "primary_out": "hexdigest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA256_ONESHOT_DIGEST",
@@ -1529,12 +2000,26 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
         "digest": {
-          "type_name": "hash_digest",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "port_role": "data_output",
@@ -1542,7 +2027,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{digest} = hashlib.sha256({data}).digest()",
@@ -1550,7 +2049,9 @@
         "import hashlib"
       ],
       "primary_in": "data",
-      "primary_out": "digest"
+      "primary_out": "digest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SHA512_ONESHOT_DIGEST",
@@ -1578,12 +2079,26 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
         "digest": {
-          "type_name": "hash_digest",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "port_role": "data_output",
@@ -1591,7 +2106,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{digest} = hashlib.sha512({data}).digest()",
@@ -1599,7 +2128,9 @@
         "import hashlib"
       ],
       "primary_in": "data",
-      "primary_out": "digest"
+      "primary_out": "digest",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HMAC_INIT",
@@ -1627,7 +2158,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         },
         "digestmod": {
           "type_name": "str",
@@ -1640,7 +2185,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "sha256"
+          "default_value": "sha256",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.algorithm_name",
+          "typestate": "cryptography::algorithm_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1653,7 +2212,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hmac_signer",
+          "layout": null,
+          "semantics": "cryptography.initialized",
+          "typestate": "cryptography::initialized",
+          "invariants": []
         }
       },
       "code_template": "{hmac_signer} = hmac.new({key}, digestmod={digestmod})",
@@ -1661,7 +2225,9 @@
         "import hmac"
       ],
       "primary_in": "key",
-      "primary_out": "hmac_signer"
+      "primary_out": "hmac_signer",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HMAC_UPDATE",
@@ -1688,7 +2254,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hmac_signer",
+          "layout": null,
+          "semantics": "cryptography.initialized",
+          "typestate": "cryptography::initialized",
+          "invariants": []
         },
         "data": {
           "type_name": "bytes",
@@ -1701,7 +2272,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1714,7 +2299,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hmac_signer",
+          "layout": null,
+          "semantics": "cryptography.updated",
+          "typestate": "cryptography::updated",
+          "invariants": []
         }
       },
       "code_template": "{hmac_signer}.update({data})\n{updated_signer} = {hmac_signer}",
@@ -1722,7 +2312,9 @@
         "import hmac"
       ],
       "primary_in": "data",
-      "primary_out": "updated_signer"
+      "primary_out": "updated_signer",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HMAC_HEXDIGEST",
@@ -1749,7 +2341,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hmac_signer",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1762,7 +2359,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "code_template": "{mac_hex} = {hmac_signer}.hexdigest()",
@@ -1770,7 +2381,9 @@
         "import hmac"
       ],
       "primary_in": "hmac_signer",
-      "primary_out": "mac_hex"
+      "primary_out": "mac_hex",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HMAC_DIGEST",
@@ -1797,7 +2410,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "hmac_signer",
+          "layout": null,
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1810,7 +2428,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{mac_bytes} = {hmac_signer}.digest()",
@@ -1818,7 +2450,9 @@
         "import hmac"
       ],
       "primary_in": "hmac_signer",
-      "primary_out": "mac_bytes"
+      "primary_out": "mac_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_COMPARE_DIGEST",
@@ -1846,7 +2480,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.digest_or_tag",
+          "typestate": "cryptography::digest_or_tag",
+          "invariants": []
         },
         "b": {
           "type_name": "bytes",
@@ -1859,7 +2507,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.digest_or_tag",
+          "typestate": "cryptography::digest_or_tag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1872,7 +2534,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.comparison_result",
+          "typestate": "cryptography::comparison_result",
+          "invariants": []
         }
       },
       "code_template": "{is_equal} = hmac.compare_digest({a}, {b})",
@@ -1880,7 +2556,9 @@
         "import hmac"
       ],
       "primary_in": "a",
-      "primary_out": "is_equal"
+      "primary_out": "is_equal",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RANDOM_BYTES",
@@ -1909,7 +2587,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.byte_count",
+          "typestate": "cryptography::byte_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1922,7 +2614,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.random_entropy",
+          "typestate": "cryptography::random_entropy",
+          "invariants": []
         }
       },
       "code_template": "{random_bytes} = os.urandom({n_bytes})",
@@ -1930,7 +2636,9 @@
         "import os"
       ],
       "primary_in": "n_bytes",
-      "primary_out": "random_bytes"
+      "primary_out": "random_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RANDOM_TOKEN_HEX",
@@ -1959,7 +2667,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.byte_count",
+          "typestate": "cryptography::byte_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1972,7 +2694,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_token",
+          "typestate": "cryptography::hex_token",
+          "invariants": []
         }
       },
       "code_template": "{token_hex} = secrets.token_hex({n_bytes})",
@@ -1980,7 +2716,9 @@
         "import secrets"
       ],
       "primary_in": "n_bytes",
-      "primary_out": "token_hex"
+      "primary_out": "token_hex",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RANDOM_TOKEN_URLSAFE",
@@ -2009,7 +2747,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.byte_count",
+          "typestate": "cryptography::byte_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2022,7 +2774,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.urlsafe_token",
+          "typestate": "cryptography::urlsafe_token",
+          "invariants": []
         }
       },
       "code_template": "{token_urlsafe} = secrets.token_urlsafe({n_bytes})",
@@ -2030,7 +2796,9 @@
         "import secrets"
       ],
       "primary_in": "n_bytes",
-      "primary_out": "token_urlsafe"
+      "primary_out": "token_urlsafe",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_PBKDF2_INIT",
@@ -2058,7 +2826,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "salt",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.salt_bytes",
+          "typestate": "cryptography::salt_bytes",
+          "invariants": []
         },
         "length": {
           "type_name": "int",
@@ -2071,7 +2853,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.key_length",
+          "typestate": "cryptography::key_length",
+          "invariants": []
         },
         "iterations": {
           "type_name": "int",
@@ -2084,7 +2880,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 100000
+          "default_value": 100000,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.iteration_count",
+          "typestate": "cryptography::iteration_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2097,7 +2907,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.pbkdf2_instance",
+          "typestate": "cryptography::pbkdf2_instance",
+          "invariants": []
         }
       },
       "code_template": "{kdf} = PBKDF2HMAC(algorithm=hashes.SHA256(), length={length}, salt={salt}, iterations={iterations})",
@@ -2106,7 +2921,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "salt",
-      "primary_out": "kdf"
+      "primary_out": "kdf",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_PBKDF2_DERIVE",
@@ -2133,7 +2950,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.pbkdf2_instance",
+          "typestate": "cryptography::pbkdf2_instance",
+          "invariants": []
         },
         "password": {
           "type_name": "bytes",
@@ -2146,7 +2968,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.password_bytes",
+          "typestate": "cryptography::password_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2159,7 +2995,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.derived_bytes",
+          "typestate": "cryptography::derived_bytes",
+          "invariants": []
         }
       },
       "code_template": "{derived_key} = {kdf}.derive({password})",
@@ -2167,7 +3017,9 @@
         "from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC"
       ],
       "primary_in": "password",
-      "primary_out": "derived_key"
+      "primary_out": "derived_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_PBKDF2_VERIFY",
@@ -2194,7 +3046,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.pbkdf2_instance",
+          "typestate": "cryptography::pbkdf2_instance",
+          "invariants": []
         },
         "password": {
           "type_name": "bytes",
@@ -2207,7 +3064,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.password_bytes",
+          "typestate": "cryptography::password_bytes",
+          "invariants": []
         },
         "expected_key": {
           "type_name": "secret_key",
@@ -2220,7 +3091,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.derived_bytes",
+          "typestate": "cryptography::derived_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2233,7 +3118,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verification_status",
+          "typestate": "cryptography::verification_status",
+          "invariants": []
         }
       },
       "code_template": "try:\n    {kdf}.verify({password}, {expected_key})\n    {is_valid} = True\nexcept Exception:\n    {is_valid} = False",
@@ -2241,7 +3140,9 @@
         "from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC"
       ],
       "primary_in": "password",
-      "primary_out": "is_valid"
+      "primary_out": "is_valid",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HKDF_INIT",
@@ -2269,7 +3170,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "salt",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.salt_bytes",
+          "typestate": "cryptography::salt_bytes",
+          "invariants": []
         },
         "length": {
           "type_name": "int",
@@ -2282,7 +3197,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.key_length",
+          "typestate": "cryptography::key_length",
+          "invariants": []
         },
         "info": {
           "type_name": "bytes",
@@ -2295,7 +3224,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.context_info",
+          "typestate": "cryptography::context_info",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2308,7 +3251,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.hkdf_instance",
+          "typestate": "cryptography::hkdf_instance",
+          "invariants": []
         }
       },
       "code_template": "{hkdf} = HKDF(algorithm=hashes.SHA256(), length={length}, salt={salt}, info={info})",
@@ -2317,7 +3265,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "salt",
-      "primary_out": "hkdf"
+      "primary_out": "hkdf",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HKDF_DERIVE",
@@ -2344,7 +3294,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.hkdf_instance",
+          "typestate": "cryptography::hkdf_instance",
+          "invariants": []
         },
         "key_material": {
           "type_name": "bytes",
@@ -2357,7 +3312,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.input_key_material",
+          "typestate": "cryptography::input_key_material",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2370,7 +3339,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.derived_bytes",
+          "typestate": "cryptography::derived_bytes",
+          "invariants": []
         }
       },
       "code_template": "{derived_key} = {hkdf}.derive({key_material})",
@@ -2378,7 +3361,9 @@
         "from cryptography.hazmat.primitives.kdf.hkdf import HKDF"
       ],
       "primary_in": "key_material",
-      "primary_out": "derived_key"
+      "primary_out": "derived_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HKDF_VERIFY",
@@ -2405,7 +3390,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.hkdf_instance",
+          "typestate": "cryptography::hkdf_instance",
+          "invariants": []
         },
         "key_material": {
           "type_name": "bytes",
@@ -2418,7 +3408,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.input_key_material",
+          "typestate": "cryptography::input_key_material",
+          "invariants": []
         },
         "expected_key": {
           "type_name": "secret_key",
@@ -2431,7 +3435,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.derived_bytes",
+          "typestate": "cryptography::derived_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2444,7 +3462,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verification_status",
+          "typestate": "cryptography::verification_status",
+          "invariants": []
         }
       },
       "code_template": "try:\n    {hkdf}.verify({key_material}, {expected_key})\n    {is_valid} = True\nexcept Exception:\n    {is_valid} = False",
@@ -2452,7 +3484,9 @@
         "from cryptography.hazmat.primitives.kdf.hkdf import HKDF"
       ],
       "primary_in": "key_material",
-      "primary_out": "is_valid"
+      "primary_out": "is_valid",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_B64_ENCODE",
@@ -2480,7 +3514,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2493,7 +3541,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.base64_encoded",
+          "typestate": "cryptography::base64_encoded",
+          "invariants": []
         }
       },
       "code_template": "{b64_bytes} = base64.b64encode({data})",
@@ -2501,7 +3563,9 @@
         "import base64"
       ],
       "primary_in": "data",
-      "primary_out": "b64_bytes"
+      "primary_out": "b64_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_B64_DECODE",
@@ -2529,7 +3593,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.base64_encoded",
+          "typestate": "cryptography::base64_encoded",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2542,7 +3620,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{data} = base64.b64decode({b64_data})",
@@ -2550,7 +3642,9 @@
         "import base64"
       ],
       "primary_in": "b64_data",
-      "primary_out": "data"
+      "primary_out": "data",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_URLSAFE_B64_ENCODE",
@@ -2578,7 +3672,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2591,7 +3699,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.urlsafe_base64_encoded",
+          "typestate": "cryptography::urlsafe_base64_encoded",
+          "invariants": []
         }
       },
       "code_template": "{b64_bytes} = base64.urlsafe_b64encode({data})",
@@ -2599,7 +3721,9 @@
         "import base64"
       ],
       "primary_in": "data",
-      "primary_out": "b64_bytes"
+      "primary_out": "b64_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_URLSAFE_B64_DECODE",
@@ -2627,7 +3751,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.urlsafe_base64_encoded",
+          "typestate": "cryptography::urlsafe_base64_encoded",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2640,7 +3778,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{data} = base64.urlsafe_b64decode({b64_data})",
@@ -2648,7 +3800,9 @@
         "import base64"
       ],
       "primary_in": "b64_data",
-      "primary_out": "data"
+      "primary_out": "data",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_HEX_TO_BYTES",
@@ -2676,7 +3830,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2689,13 +3857,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{raw_bytes} = bytes.fromhex({hex_str})",
       "dependencies": [],
       "primary_in": "hex_str",
-      "primary_out": "raw_bytes"
+      "primary_out": "raw_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_BYTES_TO_HEX",
@@ -2723,7 +3907,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2736,13 +3934,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.hex_string",
+          "typestate": "cryptography::hex_string",
+          "invariants": []
         }
       },
       "code_template": "{hex_str} = {raw_bytes}.hex()",
       "dependencies": [],
       "primary_in": "raw_bytes",
-      "primary_out": "hex_str"
+      "primary_out": "hex_str",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_GENERATE_SALT",
@@ -2770,7 +3984,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 32
+          "default_value": 32,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.byte_count",
+          "typestate": "cryptography::byte_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2783,7 +4011,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "salt",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.salt_bytes",
+          "typestate": "cryptography::salt_bytes",
+          "invariants": []
         }
       },
       "code_template": "{salt} = os.urandom({n_bytes})",
@@ -2791,7 +4033,9 @@
         "import os"
       ],
       "primary_in": "n_bytes",
-      "primary_out": "salt"
+      "primary_out": "salt",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SCRYPT_DERIVE",
@@ -2819,7 +4063,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.password_bytes",
+          "typestate": "cryptography::password_bytes",
+          "invariants": []
         },
         "salt": {
           "type_name": "salt",
@@ -2832,7 +4090,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "salt",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.salt_bytes",
+          "typestate": "cryptography::salt_bytes",
+          "invariants": []
         },
         "n": {
           "type_name": "int",
@@ -2845,7 +4117,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 16384
+          "default_value": 16384,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.cpu_cost",
+          "typestate": "cryptography::cpu_cost",
+          "invariants": []
         },
         "r": {
           "type_name": "int",
@@ -2858,7 +4144,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 8
+          "default_value": 8,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.block_size",
+          "typestate": "cryptography::block_size",
+          "invariants": []
         },
         "p": {
           "type_name": "int",
@@ -2871,7 +4171,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.parallelization",
+          "typestate": "cryptography::parallelization",
+          "invariants": []
         },
         "maxmem": {
           "type_name": "int",
@@ -2884,7 +4198,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 33554432
+          "default_value": 33554432,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.memory_limit",
+          "typestate": "cryptography::memory_limit",
+          "invariants": []
         },
         "dklen": {
           "type_name": "int",
@@ -2897,7 +4225,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 64
+          "default_value": 64,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.key_length",
+          "typestate": "cryptography::key_length",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2910,7 +4252,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.derived_bytes",
+          "typestate": "cryptography::derived_bytes",
+          "invariants": []
         }
       },
       "code_template": "{key} = hashlib.scrypt({password}, salt={salt}, n={n}, r={r}, p={p}, maxmem={maxmem}, dklen={dklen})",
@@ -2918,7 +4274,9 @@
         "import hashlib"
       ],
       "primary_in": "password",
-      "primary_out": "key"
+      "primary_out": "key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SAVE_KEY_TO_FILE",
@@ -2947,7 +4305,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "key_path": {
           "type_name": "File[key_file]",
@@ -2961,7 +4333,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[key_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.destination_path",
+          "typestate": "cryptography::destination_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2976,13 +4362,29 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[key_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.written",
+          "typestate": "cryptography::written",
+          "invariants": []
         }
       },
       "code_template": "with open({key_path}, 'wb') as _f:\n    _f.write({key})\n{out_path} = {key_path}",
       "dependencies": [],
       "primary_in": "key",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "CRYPTO_LOAD_KEY_FROM_FILE",
@@ -3012,7 +4414,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[key_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.source_path",
+          "typestate": "cryptography::source_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3025,13 +4441,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "with open({key_path}, 'rb') as _f:\n    {key} = _f.read()",
       "dependencies": [],
       "primary_in": "key_path",
-      "primary_out": "key"
+      "primary_out": "key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SAVE_CIPHERTEXT_TO_FILE",
@@ -3059,7 +4491,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         },
         "dest_path": {
           "type_name": "File[ciphertext_file]",
@@ -3073,7 +4519,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[ciphertext_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.destination_path",
+          "typestate": "cryptography::destination_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3088,13 +4548,29 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[ciphertext_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.written",
+          "typestate": "cryptography::written",
+          "invariants": []
         }
       },
       "code_template": "with open({dest_path}, 'wb') as _f:\n    _f.write({ciphertext})\n{out_path} = {dest_path}",
       "dependencies": [],
       "primary_in": "ciphertext",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "CRYPTO_LOAD_CIPHERTEXT_FROM_FILE",
@@ -3123,7 +4599,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[ciphertext_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.source_path",
+          "typestate": "cryptography::source_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3136,13 +4626,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.encrypted_token",
+          "typestate": "cryptography::encrypted_token",
+          "invariants": []
         }
       },
       "code_template": "with open({src_path}, 'rb') as _f:\n    {ciphertext} = _f.read()",
       "dependencies": [],
       "primary_in": "src_path",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_COMPARE_DIGEST_RESULT",
@@ -3170,7 +4676,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false
+          "default_value": false,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.comparison_result",
+          "typestate": "cryptography::comparison_result",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3183,13 +4703,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verified",
+          "typestate": "cryptography::verified",
+          "invariants": []
         }
       },
       "code_template": "{status} = bool({is_equal})",
       "dependencies": [],
       "primary_in": "is_equal",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "CRYPTO_AESGCM_KEY_GEN",
@@ -3216,7 +4752,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aes_key_bytes",
+          "typestate": "cryptography::aes_key_bytes",
+          "invariants": []
         }
       },
       "code_template": "{key} = AESGCM.generate_key(bit_length=256)",
@@ -3224,7 +4774,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import AESGCM"
       ],
       "primary_in": null,
-      "primary_out": "key"
+      "primary_out": "key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_AESGCM_INIT",
@@ -3252,7 +4804,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aes_key_bytes",
+          "typestate": "cryptography::aes_key_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3265,7 +4831,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.aesgcm_instance",
+          "typestate": "cryptography::aesgcm_instance",
+          "invariants": []
         }
       },
       "code_template": "{cipher} = AESGCM({key})",
@@ -3273,7 +4844,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import AESGCM"
       ],
       "primary_in": "key",
-      "primary_out": "cipher"
+      "primary_out": "cipher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_AESGCM_ENCRYPT",
@@ -3300,11 +4873,19 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.aesgcm_instance",
+          "typestate": "cryptography::aesgcm_instance",
+          "invariants": []
         },
         "nonce": {
           "type_name": "bytes",
           "state": "nonce_bytes",
+          "accepted_states": [
+            "random_entropy"
+          ],
           "abstract_type": "scalar",
           "required": true,
           "port_role": "data_input",
@@ -3313,10 +4894,24 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.nonce_bytes",
+          "typestate": "cryptography::nonce_bytes",
+          "invariants": []
         },
         "data": {
-          "type_name": "plaintext",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "required": true,
@@ -3326,20 +4921,48 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         },
         "associated_data": {
           "type_name": "bytes",
           "state": "aad_bytes",
           "abstract_type": "scalar",
-          "required": true,
+          "required": false,
           "port_role": "data_input",
           "description": "Additional authenticated data (AAD) or empty bytes.",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "None",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aad_bytes",
+          "typestate": "cryptography::aad_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3352,7 +4975,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.authenticated_ciphertext",
+          "typestate": "cryptography::authenticated_ciphertext",
+          "invariants": []
         }
       },
       "code_template": "{ciphertext} = {cipher}.encrypt({nonce}, {data}, {associated_data})",
@@ -3360,7 +4997,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import AESGCM"
       ],
       "primary_in": "data",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_AESGCM_DECRYPT",
@@ -3387,7 +5026,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.aesgcm_instance",
+          "typestate": "cryptography::aesgcm_instance",
+          "invariants": []
         },
         "nonce": {
           "type_name": "bytes",
@@ -3400,7 +5044,24 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "accepted_states": [
+            "random_entropy"
+          ],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.nonce_bytes",
+          "typestate": "cryptography::nonce_bytes",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -3413,20 +5074,48 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.authenticated_ciphertext",
+          "typestate": "cryptography::authenticated_ciphertext",
+          "invariants": []
         },
         "associated_data": {
           "type_name": "bytes",
           "state": "aad_bytes",
           "abstract_type": "scalar",
-          "required": true,
+          "required": false,
           "port_role": "data_input",
           "description": "Additional authenticated data (AAD) matched against encryption.",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "None",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aad_bytes",
+          "typestate": "cryptography::aad_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3439,7 +5128,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{plaintext} = {cipher}.decrypt({nonce}, {ciphertext}, {associated_data})",
@@ -3447,7 +5150,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import AESGCM"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "plaintext"
+      "primary_out": "plaintext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_CHACHA20_KEY_GEN",
@@ -3474,7 +5179,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.chacha_key_bytes",
+          "typestate": "cryptography::chacha_key_bytes",
+          "invariants": []
         }
       },
       "code_template": "{key} = ChaCha20Poly1305.generate_key()",
@@ -3482,7 +5201,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305"
       ],
       "primary_in": null,
-      "primary_out": "key"
+      "primary_out": "key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_CHACHA20_INIT",
@@ -3510,7 +5231,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.chacha_key_bytes",
+          "typestate": "cryptography::chacha_key_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3523,7 +5258,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.chacha_instance",
+          "typestate": "cryptography::chacha_instance",
+          "invariants": []
         }
       },
       "code_template": "{cipher} = ChaCha20Poly1305({key})",
@@ -3531,7 +5271,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305"
       ],
       "primary_in": "key",
-      "primary_out": "cipher"
+      "primary_out": "cipher",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_CHACHA20_ENCRYPT",
@@ -3558,7 +5300,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.chacha_instance",
+          "typestate": "cryptography::chacha_instance",
+          "invariants": []
         },
         "nonce": {
           "type_name": "bytes",
@@ -3571,10 +5318,27 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "accepted_states": [
+            "random_entropy"
+          ],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.nonce_bytes",
+          "typestate": "cryptography::nonce_bytes",
+          "invariants": []
         },
         "data": {
-          "type_name": "plaintext",
+          "type_name": "bytes",
           "state": "raw_bytes",
           "abstract_type": "scalar",
           "required": true,
@@ -3584,20 +5348,48 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         },
         "associated_data": {
           "type_name": "bytes",
           "state": "aad_bytes",
           "abstract_type": "scalar",
-          "required": true,
+          "required": false,
           "port_role": "data_input",
           "description": "Additional authenticated data.",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "None",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aad_bytes",
+          "typestate": "cryptography::aad_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3610,7 +5402,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.authenticated_ciphertext",
+          "typestate": "cryptography::authenticated_ciphertext",
+          "invariants": []
         }
       },
       "code_template": "{ciphertext} = {cipher}.encrypt({nonce}, {data}, {associated_data})",
@@ -3618,7 +5424,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305"
       ],
       "primary_in": "data",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_CHACHA20_DECRYPT",
@@ -3645,7 +5453,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cipher",
+          "layout": null,
+          "semantics": "cryptography.chacha_instance",
+          "typestate": "cryptography::chacha_instance",
+          "invariants": []
         },
         "nonce": {
           "type_name": "bytes",
@@ -3658,7 +5471,24 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "accepted_states": [
+            "random_entropy"
+          ],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.nonce_bytes",
+          "typestate": "cryptography::nonce_bytes",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -3671,20 +5501,48 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": null,
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.authenticated_ciphertext",
+          "typestate": "cryptography::authenticated_ciphertext",
+          "invariants": []
         },
         "associated_data": {
           "type_name": "bytes",
           "state": "aad_bytes",
           "abstract_type": "scalar",
-          "required": true,
+          "required": false,
           "port_role": "data_input",
           "description": "Additional authenticated data.",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "None",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.aad_bytes",
+          "typestate": "cryptography::aad_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3697,7 +5555,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{plaintext} = {cipher}.decrypt({nonce}, {ciphertext}, {associated_data})",
@@ -3705,7 +5577,9 @@
         "from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "plaintext"
+      "primary_out": "plaintext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_GENERATE_KEY",
@@ -3733,7 +5607,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 2048
+          "default_value": 2048,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.bit_size",
+          "typestate": "cryptography::bit_size",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3746,7 +5634,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         }
       },
       "code_template": "{private_key} = rsa.generate_private_key(public_exponent=65537, key_size={key_size})",
@@ -3754,7 +5647,9 @@
         "from cryptography.hazmat.primitives.asymmetric import rsa"
       ],
       "primary_in": "key_size",
-      "primary_out": "private_key"
+      "primary_out": "private_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_GET_PUBLIC_KEY",
@@ -3781,7 +5676,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3794,7 +5694,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_public_key",
+          "typestate": "cryptography::rsa_public_key",
+          "invariants": []
         }
       },
       "code_template": "{public_key} = {private_key}.public_key()",
@@ -3802,7 +5707,9 @@
         "from cryptography.hazmat.primitives.asymmetric import rsa"
       ],
       "primary_in": "private_key",
-      "primary_out": "public_key"
+      "primary_out": "public_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_ENCRYPT_OAEP",
@@ -3829,7 +5736,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_public_key",
+          "typestate": "cryptography::rsa_public_key",
+          "invariants": []
         },
         "data": {
           "type_name": "plaintext",
@@ -3842,7 +5754,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3855,7 +5781,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.rsa_ciphertext",
+          "typestate": "cryptography::rsa_ciphertext",
+          "invariants": []
         }
       },
       "code_template": "{ciphertext} = {public_key}.encrypt({data}, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None))",
@@ -3864,7 +5804,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "data",
-      "primary_out": "ciphertext"
+      "primary_out": "ciphertext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_DECRYPT_OAEP",
@@ -3891,7 +5833,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         },
         "ciphertext": {
           "type_name": "ciphertext",
@@ -3904,7 +5851,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "ciphertext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.rsa_ciphertext",
+          "typestate": "cryptography::rsa_ciphertext",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3917,7 +5878,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "plaintext",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "code_template": "{plaintext} = {private_key}.decrypt({ciphertext}, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None))",
@@ -3926,7 +5901,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "ciphertext",
-      "primary_out": "plaintext"
+      "primary_out": "plaintext",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_SIGN_PSS",
@@ -3953,7 +5930,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         },
         "data": {
           "type_name": "bytes",
@@ -3966,7 +5948,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3979,7 +5975,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.rsa_pss_signature",
+          "typestate": "cryptography::rsa_pss_signature",
+          "invariants": []
         }
       },
       "code_template": "{signature} = {private_key}.sign({data}, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())",
@@ -3988,7 +5998,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "data",
-      "primary_out": "signature"
+      "primary_out": "signature",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_VERIFY_PSS",
@@ -4015,7 +6027,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_public_key",
+          "typestate": "cryptography::rsa_public_key",
+          "invariants": []
         },
         "signature": {
           "type_name": "signature",
@@ -4028,7 +6045,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.rsa_pss_signature",
+          "typestate": "cryptography::rsa_pss_signature",
+          "invariants": []
         },
         "data": {
           "type_name": "bytes",
@@ -4041,7 +6072,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4054,7 +6099,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verification_status",
+          "typestate": "cryptography::verification_status",
+          "invariants": []
         }
       },
       "code_template": "try:\n    {public_key}.verify({signature}, {data}, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())\n    {is_valid} = True\nexcept Exception:\n    {is_valid} = False",
@@ -4063,7 +6122,9 @@
         "from cryptography.hazmat.primitives import hashes"
       ],
       "primary_in": "signature",
-      "primary_out": "is_valid"
+      "primary_out": "is_valid",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_EXPORT_PRIVATE_PEM",
@@ -4090,7 +6151,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4103,7 +6169,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.pem_encoded_private",
+          "typestate": "cryptography::pem_encoded_private",
+          "invariants": []
         }
       },
       "code_template": "{pem_bytes} = {private_key}.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption())",
@@ -4111,7 +6191,9 @@
         "from cryptography.hazmat.primitives import serialization"
       ],
       "primary_in": "private_key",
-      "primary_out": "pem_bytes"
+      "primary_out": "pem_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_EXPORT_PUBLIC_PEM",
@@ -4138,7 +6220,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_public_key",
+          "typestate": "cryptography::rsa_public_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4151,7 +6238,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.pem_encoded_public",
+          "typestate": "cryptography::pem_encoded_public",
+          "invariants": []
         }
       },
       "code_template": "{pem_bytes} = {public_key}.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)",
@@ -4159,7 +6260,9 @@
         "from cryptography.hazmat.primitives import serialization"
       ],
       "primary_in": "public_key",
-      "primary_out": "pem_bytes"
+      "primary_out": "pem_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_LOAD_PRIVATE_PEM",
@@ -4187,7 +6290,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.pem_encoded_private",
+          "typestate": "cryptography::pem_encoded_private",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4200,7 +6317,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_private_key",
+          "typestate": "cryptography::rsa_private_key",
+          "invariants": []
         }
       },
       "code_template": "{private_key} = serialization.load_pem_private_key({pem_bytes}, password=None)",
@@ -4208,7 +6330,9 @@
         "from cryptography.hazmat.primitives import serialization"
       ],
       "primary_in": "pem_bytes",
-      "primary_out": "private_key"
+      "primary_out": "private_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_RSA_LOAD_PUBLIC_PEM",
@@ -4236,7 +6360,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.pem_encoded_public",
+          "typestate": "cryptography::pem_encoded_public",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4249,7 +6387,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.rsa_public_key",
+          "typestate": "cryptography::rsa_public_key",
+          "invariants": []
         }
       },
       "code_template": "{public_key} = serialization.load_pem_public_key({pem_bytes})",
@@ -4257,7 +6400,9 @@
         "from cryptography.hazmat.primitives import serialization"
       ],
       "primary_in": "pem_bytes",
-      "primary_out": "public_key"
+      "primary_out": "public_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_GENERATE_KEY",
@@ -4285,7 +6430,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_private_key",
+          "typestate": "cryptography::ed25519_private_key",
+          "invariants": []
         }
       },
       "code_template": "{private_key} = ed25519.Ed25519PrivateKey.generate()",
@@ -4293,7 +6443,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": null,
-      "primary_out": "private_key"
+      "primary_out": "private_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_GET_PUBLIC_KEY",
@@ -4320,7 +6472,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_private_key",
+          "typestate": "cryptography::ed25519_private_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4333,7 +6490,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_public_key",
+          "typestate": "cryptography::ed25519_public_key",
+          "invariants": []
         }
       },
       "code_template": "{public_key} = {private_key}.public_key()",
@@ -4341,7 +6503,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "private_key",
-      "primary_out": "public_key"
+      "primary_out": "public_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_SIGN",
@@ -4368,7 +6532,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_private_key",
+          "typestate": "cryptography::ed25519_private_key",
+          "invariants": []
         },
         "data": {
           "type_name": "bytes",
@@ -4381,7 +6550,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4394,7 +6577,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.ed25519_signature",
+          "typestate": "cryptography::ed25519_signature",
+          "invariants": []
         }
       },
       "code_template": "{signature} = {private_key}.sign({data})",
@@ -4402,7 +6599,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "data",
-      "primary_out": "signature"
+      "primary_out": "signature",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_VERIFY",
@@ -4429,7 +6628,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_public_key",
+          "typestate": "cryptography::ed25519_public_key",
+          "invariants": []
         },
         "signature": {
           "type_name": "signature",
@@ -4442,7 +6646,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.ed25519_signature",
+          "typestate": "cryptography::ed25519_signature",
+          "invariants": []
         },
         "data": {
           "type_name": "bytes",
@@ -4455,7 +6673,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_bytes",
+          "typestate": "cryptography::raw_bytes",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4468,7 +6700,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verification_status",
+          "typestate": "cryptography::verification_status",
+          "invariants": []
         }
       },
       "code_template": "try:\n    {public_key}.verify({signature}, {data})\n    {is_valid} = True\nexcept Exception:\n    {is_valid} = False",
@@ -4476,7 +6722,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "signature",
-      "primary_out": "is_valid"
+      "primary_out": "is_valid",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_EXPORT_RAW_PRIVATE",
@@ -4502,7 +6750,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_private_key",
+          "typestate": "cryptography::ed25519_private_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4515,7 +6768,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_ed25519_seed",
+          "typestate": "cryptography::raw_ed25519_seed",
+          "invariants": []
         }
       },
       "code_template": "{raw_bytes} = {private_key}.private_bytes_raw()",
@@ -4523,7 +6790,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "private_key",
-      "primary_out": "raw_bytes"
+      "primary_out": "raw_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_EXPORT_RAW_PUBLIC",
@@ -4549,7 +6818,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_public_key",
+          "typestate": "cryptography::ed25519_public_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4562,7 +6836,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_ed25519_pub",
+          "typestate": "cryptography::raw_ed25519_pub",
+          "invariants": []
         }
       },
       "code_template": "{raw_bytes} = {public_key}.public_bytes_raw()",
@@ -4570,7 +6858,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "public_key",
-      "primary_out": "raw_bytes"
+      "primary_out": "raw_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_LOAD_RAW_PRIVATE",
@@ -4597,7 +6887,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_ed25519_seed",
+          "typestate": "cryptography::raw_ed25519_seed",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4610,7 +6914,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_private_key",
+          "typestate": "cryptography::ed25519_private_key",
+          "invariants": []
         }
       },
       "code_template": "{private_key} = ed25519.Ed25519PrivateKey.from_private_bytes({raw_bytes})",
@@ -4618,7 +6927,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "raw_bytes",
-      "primary_out": "private_key"
+      "primary_out": "private_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_ED25519_LOAD_RAW_PUBLIC",
@@ -4645,7 +6956,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.raw_ed25519_pub",
+          "typestate": "cryptography::raw_ed25519_pub",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4658,7 +6983,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.ed25519_public_key",
+          "typestate": "cryptography::ed25519_public_key",
+          "invariants": []
         }
       },
       "code_template": "{public_key} = ed25519.Ed25519PublicKey.from_public_bytes({raw_bytes})",
@@ -4666,7 +6996,9 @@
         "from cryptography.hazmat.primitives.asymmetric import ed25519"
       ],
       "primary_in": "raw_bytes",
-      "primary_out": "public_key"
+      "primary_out": "public_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_X25519_GENERATE_KEY",
@@ -4694,7 +7026,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.x25519_private_key",
+          "typestate": "cryptography::x25519_private_key",
+          "invariants": []
         }
       },
       "code_template": "{private_key} = x25519.X25519PrivateKey.generate()",
@@ -4702,7 +7039,9 @@
         "from cryptography.hazmat.primitives.asymmetric import x25519"
       ],
       "primary_in": null,
-      "primary_out": "private_key"
+      "primary_out": "private_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_X25519_GET_PUBLIC_KEY",
@@ -4729,7 +7068,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.x25519_private_key",
+          "typestate": "cryptography::x25519_private_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4742,7 +7086,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.x25519_public_key",
+          "typestate": "cryptography::x25519_public_key",
+          "invariants": []
         }
       },
       "code_template": "{public_key} = {private_key}.public_key()",
@@ -4750,7 +7099,9 @@
         "from cryptography.hazmat.primitives.asymmetric import x25519"
       ],
       "primary_in": "private_key",
-      "primary_out": "public_key"
+      "primary_out": "public_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_X25519_EXCHANGE",
@@ -4777,7 +7128,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.x25519_private_key",
+          "typestate": "cryptography::x25519_private_key",
+          "invariants": []
         },
         "peer_public_key": {
           "type_name": "object",
@@ -4789,7 +7145,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": null,
+          "semantics": "cryptography.x25519_public_key",
+          "typestate": "cryptography::x25519_public_key",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4802,7 +7163,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "secret_key",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.shared_secret_bytes",
+          "typestate": "cryptography::shared_secret_bytes",
+          "invariants": []
         }
       },
       "code_template": "{shared_key} = {private_key}.exchange({peer_public_key})",
@@ -4810,7 +7185,9 @@
         "from cryptography.hazmat.primitives.asymmetric import x25519"
       ],
       "primary_in": "peer_public_key",
-      "primary_out": "shared_key"
+      "primary_out": "shared_key",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "CRYPTO_SAVE_SIGNATURE_TO_FILE",
@@ -4838,7 +7215,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "signature",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         },
         "sig_path": {
           "type_name": "File[sig_file]",
@@ -4852,7 +7243,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[sig_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.destination_path",
+          "typestate": "cryptography::destination_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4867,13 +7272,29 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[sig_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.written",
+          "typestate": "cryptography::written",
+          "invariants": []
         }
       },
       "code_template": "with open({sig_path}, 'wb') as _f:\n    _f.write({signature})\n{out_path} = {sig_path}",
       "dependencies": [],
       "primary_in": "signature",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "CRYPTO_SAVE_PEM_TO_FILE",
@@ -4901,7 +7322,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.pem_encoded",
+          "typestate": "cryptography::pem_encoded",
+          "invariants": []
         },
         "dest_path": {
           "type_name": "File[pem_file]",
@@ -4915,7 +7350,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[pem_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.destination_path",
+          "typestate": "cryptography::destination_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4930,13 +7379,29 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "File[pem_file]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.written",
+          "typestate": "cryptography::written",
+          "invariants": []
         }
       },
       "code_template": "with open({dest_path}, 'wb') as _f:\n    _f.write({pem_bytes})\n{out_path} = {dest_path}",
       "dependencies": [],
       "primary_in": "pem_bytes",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "CRYPTO_ASSERT_VERIFICATION",
@@ -4964,7 +7429,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false
+          "default_value": false,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verification_status",
+          "typestate": "cryptography::verification_status",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4977,13 +7456,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "cryptography.verified",
+          "typestate": "cryptography::verified",
+          "invariants": []
         }
       },
       "code_template": "if not {is_valid}:\n    raise ValueError('Cryptographic verification failed.')\n{status} = True",
       "dependencies": [],
       "primary_in": "is_valid",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     }
   ]
 }

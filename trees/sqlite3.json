@@ -84,6 +84,13 @@
     "domain": "sqlite3",
     "states": [
       {
+        "name": "unbound",
+        "parent_state": null,
+        "carrier_type": "callable",
+        "description": "Unbound transaction body slot awaiting macro expansion.",
+        "properties": {}
+      },
+      {
         "name": "active",
         "parent_state": null,
         "carrier_type": "cursor",
@@ -296,7 +303,21 @@
             "db",
             "sqlite",
             "sqlite3"
-          ]
+          ],
+          "carrier": "db_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.db_file",
+          "typestate": "sqlite3::db_file",
+          "invariants": []
         }
       },
       "outputs": {
@@ -309,7 +330,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection} = sqlite3.connect({database_path})",
@@ -317,7 +343,9 @@
         "import sqlite3"
       ],
       "primary_in": "database_path",
-      "primary_out": "connection"
+      "primary_out": "connection",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_CONNECT_MEMORY",
@@ -344,7 +372,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection} = sqlite3.connect(\":memory:\")",
@@ -352,7 +385,9 @@
         "import sqlite3"
       ],
       "primary_in": null,
-      "primary_out": "connection"
+      "primary_out": "connection",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_CONNECT_URI",
@@ -379,7 +414,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.uri_identifier",
+          "typestate": "sqlite3::uri_identifier",
+          "invariants": []
         }
       },
       "outputs": {
@@ -392,7 +441,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection} = sqlite3.connect({uri}, uri=True)",
@@ -400,7 +454,9 @@
         "import sqlite3"
       ],
       "primary_in": "uri",
-      "primary_out": "connection"
+      "primary_out": "connection",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_ROW_FACTORY_DICT",
@@ -427,7 +483,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -440,7 +501,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.row_factory = sqlite3.Row\n{out_connection} = {connection}",
@@ -448,7 +514,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_SET_ISOLATION_LEVEL",
@@ -474,7 +542,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "isolation_level": {
           "type_name": "Optional[str]",
@@ -487,7 +560,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "DEFERRED"
+          "default_value": "DEFERRED",
+          "carrier": "Optional[str]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -500,7 +587,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.isolation_level = {isolation_level}\n{out_connection} = {connection}",
@@ -508,7 +600,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_SET_TIMEOUT",
@@ -535,7 +629,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "timeout_seconds": {
           "type_name": "float",
@@ -548,7 +647,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 5.0
+          "default_value": 5.0,
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -561,7 +674,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.execute(\"PRAGMA busy_timeout = \" + str(int({timeout_seconds} * 1000)))\n{out_connection} = {connection}",
@@ -569,7 +687,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CURSOR",
@@ -595,7 +715,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -608,10 +733,17 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         }
       },
-      "code_template": "{cursor} = {connection}.cursor()"
+      "code_template": "{cursor} = {connection}.cursor()",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CURSOR_CLOSE",
@@ -637,7 +769,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -650,7 +787,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.closed",
+          "typestate": "sqlite3::closed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.close()\n{status} = True",
@@ -658,7 +809,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_CREATE_TABLE",
@@ -685,7 +838,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -698,7 +856,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "schema_ddl": {
           "type_name": "str",
@@ -711,7 +883,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id INTEGER PRIMARY KEY, value TEXT"
+          "default_value": "id INTEGER PRIMARY KEY, value TEXT",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.raw_ddl",
+          "typestate": "sqlite3::raw_ddl",
+          "invariants": []
         }
       },
       "outputs": {
@@ -724,7 +910,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"CREATE TABLE IF NOT EXISTS \" + str({table_name}) + \" (\" + str({schema_ddl}) + \")\")\n{out_cursor} = {cursor}",
@@ -732,7 +923,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_DROP_TABLE",
@@ -758,7 +951,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -771,7 +969,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -784,7 +996,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"DROP TABLE IF EXISTS \" + str({table_name}))\n{out_cursor} = {cursor}",
@@ -792,7 +1009,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CREATE_INDEX",
@@ -819,7 +1038,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "index_name": {
           "type_name": "str",
@@ -832,7 +1056,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "idx_data"
+          "default_value": "idx_data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -845,7 +1083,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "columns": {
           "type_name": "str",
@@ -858,7 +1110,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id"
+          "default_value": "id",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -871,7 +1137,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"CREATE INDEX IF NOT EXISTS \" + str({index_name}) + \" ON \" + str({table_name}) + \" (\" + str({columns}) + \")\")\n{out_cursor} = {cursor}",
@@ -879,7 +1150,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_ALTER_TABLE_ADD_COLUMN",
@@ -906,7 +1179,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -919,7 +1197,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "column_def": {
           "type_name": "str",
@@ -932,7 +1224,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "col TEXT"
+          "default_value": "col TEXT",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.raw_ddl",
+          "typestate": "sqlite3::raw_ddl",
+          "invariants": []
         }
       },
       "outputs": {
@@ -945,7 +1251,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"ALTER TABLE \" + str({table_name}) + \" ADD COLUMN \" + str({column_def}))\n{out_cursor} = {cursor}",
@@ -953,7 +1264,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_GET_TABLE_NAMES",
@@ -980,7 +1293,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1003,7 +1321,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[str]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.records",
+          "typestate": "sqlite3::records",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'\")\n{table_names} = [row[0] for row in {cursor}.fetchall()]",
@@ -1011,7 +1345,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "table_names"
+      "primary_out": "table_names",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_GET_TABLE_SCHEMA",
@@ -1038,7 +1374,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -1051,7 +1392,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1064,7 +1419,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "record_list",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.records",
+          "typestate": "sqlite3::records",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"PRAGMA table_info(\" + str({table_name}) + \")\")\n{schema_info} = {cursor}.fetchall()",
@@ -1072,7 +1441,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "schema_info"
+      "primary_out": "schema_info",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_EXECUTE",
@@ -1099,7 +1470,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "sql": {
           "type_name": "sql_query",
@@ -1112,7 +1488,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1"
+          "default_value": "SELECT 1",
+          "carrier": "sql_query",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.raw_query",
+          "typestate": "sqlite3::raw_query",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1125,7 +1515,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute({sql})\n{out_cursor} = {cursor}",
@@ -1133,7 +1528,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_EXECUTE_PARAMS",
@@ -1161,7 +1558,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "sql": {
           "type_name": "sql_query",
@@ -1174,7 +1576,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1"
+          "default_value": "SELECT 1",
+          "carrier": "sql_query",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameterized",
+          "typestate": "sqlite3::parameterized",
+          "invariants": []
         },
         "parameters": {
           "type_name": "Tuple[Any, ...]",
@@ -1186,7 +1602,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[Any, ...]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameter_values",
+          "typestate": "sqlite3::parameter_values",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1199,7 +1629,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute({sql}, {parameters})\n{out_cursor} = {cursor}",
@@ -1207,7 +1642,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_EXECUTEMANY",
@@ -1234,7 +1671,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "sql": {
           "type_name": "sql_query",
@@ -1247,7 +1689,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1"
+          "default_value": "SELECT 1",
+          "carrier": "sql_query",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameterized",
+          "typestate": "sqlite3::parameterized",
+          "invariants": []
         },
         "seq_of_parameters": {
           "type_name": "Iterable[Tuple[Any, ...]]",
@@ -1259,7 +1715,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Iterable[Tuple[Any, ...]]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameter_values",
+          "typestate": "sqlite3::parameter_values",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1272,7 +1742,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.executemany({sql}, {seq_of_parameters})\n{out_cursor} = {cursor}",
@@ -1280,7 +1755,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_EXECUTESCRIPT",
@@ -1307,7 +1784,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "sql_script": {
           "type_name": "str",
@@ -1320,7 +1802,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "BEGIN; COMMIT;"
+          "default_value": "BEGIN; COMMIT;",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.script",
+          "typestate": "sqlite3::script",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1333,7 +1829,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.executescript({sql_script})\n{out_cursor} = {cursor}",
@@ -1341,7 +1842,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_INSERT_ROW",
@@ -1368,7 +1871,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -1381,7 +1889,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "columns": {
           "type_name": "str",
@@ -1394,7 +1916,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id"
+          "default_value": "id",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "values": {
           "type_name": "Tuple[Any, ...]",
@@ -1406,7 +1942,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[Any, ...]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameter_values",
+          "typestate": "sqlite3::parameter_values",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1419,7 +1969,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"INSERT INTO \" + str({table_name}) + \" (\" + str({columns}) + \") VALUES (\" + \",\".join([\"?\"] * len({values})) + \")\", {values})\n{out_cursor} = {cursor}",
@@ -1427,7 +1982,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_UPDATE_ROWS",
@@ -1454,7 +2011,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -1467,7 +2029,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "set_clause": {
           "type_name": "str",
@@ -1480,7 +2056,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "value = ?"
+          "default_value": "value = ?",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "where_clause": {
           "type_name": "str",
@@ -1493,7 +2083,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id = ?"
+          "default_value": "id = ?",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "parameters": {
           "type_name": "Tuple[Any, ...]",
@@ -1505,7 +2109,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[Any, ...]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameter_values",
+          "typestate": "sqlite3::parameter_values",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1518,7 +2136,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"UPDATE \" + str({table_name}) + \" SET \" + str({set_clause}) + \" WHERE \" + str({where_clause}), {parameters})\n{out_cursor} = {cursor}",
@@ -1526,7 +2149,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_DELETE_ROWS",
@@ -1553,7 +2178,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.active",
+          "typestate": "sqlite3::active",
+          "invariants": []
         },
         "table_name": {
           "type_name": "str",
@@ -1566,7 +2196,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data"
+          "default_value": "data",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "where_clause": {
           "type_name": "str",
@@ -1579,7 +2223,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id = ?"
+          "default_value": "id = ?",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "parameters": {
           "type_name": "Tuple[Any, ...]",
@@ -1591,7 +2249,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[Any, ...]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.parameter_values",
+          "typestate": "sqlite3::parameter_values",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1604,7 +2276,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "code_template": "{cursor}.execute(\"DELETE FROM \" + str({table_name}) + \" WHERE \" + str({where_clause}), {parameters})\n{out_cursor} = {cursor}",
@@ -1612,7 +2289,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "out_cursor"
+      "primary_out": "out_cursor",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_FETCHONE",
@@ -1639,7 +2318,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1652,7 +2336,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[row]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.raw_tuple",
+          "typestate": "sqlite3::raw_tuple",
+          "invariants": []
         }
       },
       "code_template": "{row} = {cursor}.fetchone()",
@@ -1660,7 +2358,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "row"
+      "primary_out": "row",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_FETCHALL",
@@ -1687,7 +2387,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1700,7 +2405,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "record_list",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.records",
+          "typestate": "sqlite3::records",
+          "invariants": []
         }
       },
       "code_template": "{rows} = {cursor}.fetchall()",
@@ -1708,7 +2427,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "rows"
+      "primary_out": "rows",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_FETCHMANY",
@@ -1735,7 +2456,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         },
         "size": {
           "type_name": "int",
@@ -1748,7 +2474,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10
+          "default_value": 10,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1761,7 +2501,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "record_list",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.batch",
+          "typestate": "sqlite3::batch",
+          "invariants": []
         }
       },
       "code_template": "{rows} = {cursor}.fetchmany({size})",
@@ -1769,7 +2523,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "rows"
+      "primary_out": "rows",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_ROWCOUNT",
@@ -1796,7 +2552,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1809,7 +2570,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "code_template": "{count} = {cursor}.rowcount",
@@ -1817,7 +2592,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "count"
+      "primary_out": "count",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_LASTROWID",
@@ -1844,7 +2621,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "cursor",
+          "layout": null,
+          "semantics": "sqlite3.executed",
+          "typestate": "sqlite3::executed",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1857,7 +2639,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[int]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "code_template": "{last_id} = {cursor}.lastrowid",
@@ -1865,7 +2661,9 @@
         "import sqlite3"
       ],
       "primary_in": "cursor",
-      "primary_out": "last_id"
+      "primary_out": "last_id",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_ROWS_TO_DICTS",
@@ -1892,7 +2690,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "record_list",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.named_row",
+          "typestate": "sqlite3::named_row",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1915,7 +2727,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[Dict[str, Any]]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.dict_record",
+          "typestate": "sqlite3::dict_record",
+          "invariants": []
         }
       },
       "code_template": "{dict_records} = [dict(r) for r in {rows}]",
@@ -1923,7 +2751,9 @@
         "import sqlite3"
       ],
       "primary_in": "rows",
-      "primary_out": "dict_records"
+      "primary_out": "dict_records",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_COMMIT",
@@ -1950,7 +2780,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.in_transaction",
+          "typestate": "sqlite3::in_transaction",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1963,7 +2798,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.committed",
+          "typestate": "sqlite3::committed",
+          "invariants": []
         }
       },
       "code_template": "{connection}.commit()\n{out_connection} = {connection}",
@@ -1971,7 +2811,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_ROLLBACK",
@@ -1998,7 +2840,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.in_transaction",
+          "typestate": "sqlite3::in_transaction",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2011,7 +2858,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.rolled_back",
+          "typestate": "sqlite3::rolled_back",
+          "invariants": []
         }
       },
       "code_template": "{connection}.rollback()\n{out_connection} = {connection}",
@@ -2019,7 +2871,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_TRANSACTION_CONTEXT",
@@ -2049,7 +2903,39 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
+        },
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2062,7 +2948,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.committed",
+          "typestate": "sqlite3::committed",
+          "invariants": []
         }
       },
       "code_template": "with {connection}:\n    {body}\n{out_conn} = {connection}",
@@ -2070,7 +2961,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_conn"
+      "primary_out": "out_conn",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_PRAGMA_SET",
@@ -2097,7 +2990,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "pragma_name": {
           "type_name": "str",
@@ -2110,7 +3008,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "foreign_keys"
+          "default_value": "foreign_keys",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "pragma_value": {
           "type_name": "str",
@@ -2123,7 +3035,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "ON"
+          "default_value": "ON",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2136,7 +3062,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.execute(\"PRAGMA \" + str({pragma_name}) + \" = \" + str({pragma_value}))\n{out_connection} = {connection}",
@@ -2144,7 +3075,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_PRAGMA_GET",
@@ -2170,7 +3103,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "pragma_name": {
           "type_name": "str",
@@ -2183,7 +3121,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "foreign_keys"
+          "default_value": "foreign_keys",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2196,7 +3148,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Any",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "code_template": "{result} = ({connection}.execute(\"PRAGMA \" + str({pragma_name})).fetchone() or [None])[0]",
@@ -2204,7 +3170,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "result"
+      "primary_out": "result",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CREATE_FUNCTION",
@@ -2231,7 +3199,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "function_name": {
           "type_name": "str",
@@ -2244,7 +3217,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "custom_fn"
+          "default_value": "custom_fn",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "num_params": {
           "type_name": "int",
@@ -2257,7 +3244,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "func": {
           "type_name": "Callable[..., Any]",
@@ -2269,7 +3270,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[..., Any]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2282,7 +3288,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.create_function({function_name}, {num_params}, {func})\n{out_connection} = {connection}",
@@ -2290,7 +3301,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CREATE_AGGREGATE",
@@ -2317,7 +3330,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "aggregate_name": {
           "type_name": "str",
@@ -2330,7 +3348,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "custom_agg"
+          "default_value": "custom_agg",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "num_params": {
           "type_name": "int",
@@ -2343,7 +3375,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1
+          "default_value": 1,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "aggregate_class": {
           "type_name": "Type[Any]",
@@ -2355,7 +3401,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Type[Any]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2368,7 +3419,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.create_aggregate({aggregate_name}, {num_params}, {aggregate_class})\n{out_connection} = {connection}",
@@ -2376,7 +3432,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_CREATE_COLLATION",
@@ -2403,7 +3461,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "collation_name": {
           "type_name": "str",
@@ -2416,7 +3479,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "nocase"
+          "default_value": "nocase",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         },
         "callable_func": {
           "type_name": "Callable[[str, str], int]",
@@ -2428,7 +3505,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Callable[[str, str], int]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2441,7 +3523,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.create_collation({collation_name}, {callable_func})\n{out_connection} = {connection}",
@@ -2449,7 +3536,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_SET_TRACE_CALLBACK",
@@ -2476,7 +3565,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "trace_callback": {
           "type_name": "Optional[Callable[[str], None]]",
@@ -2488,7 +3582,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[Callable[[str], None]]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2501,7 +3600,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.set_trace_callback({trace_callback})\n{out_connection} = {connection}",
@@ -2509,7 +3613,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_SET_PROGRESS_HANDLER",
@@ -2536,7 +3642,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "handler": {
           "type_name": "Optional[Callable[[], int]]",
@@ -2548,7 +3659,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[Callable[[], int]]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "n_instructions": {
           "type_name": "int",
@@ -2561,7 +3677,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 100
+          "default_value": 100,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2574,7 +3704,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.set_progress_handler({handler}, {n_instructions})\n{out_connection} = {connection}",
@@ -2582,7 +3717,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_SET_AUTHORIZER",
@@ -2609,7 +3746,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "authorizer_callback": {
           "type_name": "Optional[Callable[..., int]]",
@@ -2621,7 +3763,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Optional[Callable[..., int]]",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2634,7 +3781,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.set_authorizer({authorizer_callback})\n{out_connection} = {connection}",
@@ -2642,7 +3794,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_ENABLE_LOAD_EXTENSION",
@@ -2669,7 +3823,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "enabled": {
           "type_name": "bool",
@@ -2682,7 +3841,21 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": true
+          "default_value": true,
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2695,7 +3868,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.enable_load_extension({enabled})\n{out_connection} = {connection}",
@@ -2703,7 +3881,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_LOAD_EXTENSION",
@@ -2730,7 +3910,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "extension_path": {
           "type_name": "str",
@@ -2746,7 +3931,21 @@
             "db",
             "sqlite",
             "sqlite3"
-          ]
+          ],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.filesystem_path",
+          "typestate": "sqlite3::filesystem_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2759,7 +3958,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "code_template": "{connection}.load_extension({extension_path})\n{out_connection} = {connection}",
@@ -2767,7 +3971,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "out_connection"
+      "primary_out": "out_connection",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_TOTAL_CHANGES",
@@ -2794,7 +4000,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2807,7 +4018,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "code_template": "{total_changes} = {connection}.total_changes",
@@ -2815,7 +4040,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "total_changes"
+      "primary_out": "total_changes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_IN_TRANSACTION",
@@ -2841,7 +4068,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2854,7 +4086,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.scalar",
+          "typestate": "sqlite3::scalar",
+          "invariants": []
         }
       },
       "code_template": "{is_in_tx} = {connection}.in_transaction",
@@ -2862,7 +4108,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "is_in_tx"
+      "primary_out": "is_in_tx",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_DUMP_SQL",
@@ -2889,7 +4137,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2902,7 +4155,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.dump_stream",
+          "typestate": "sqlite3::dump_stream",
+          "invariants": []
         }
       },
       "code_template": "{dump_sql} = chr(10).join({connection}.iterdump())",
@@ -2910,7 +4177,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "dump_sql"
+      "primary_out": "dump_sql",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_INTERRUPT",
@@ -2937,7 +4206,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2950,7 +4224,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.closed",
+          "typestate": "sqlite3::closed",
+          "invariants": []
         }
       },
       "code_template": "{connection}.interrupt()\n{interrupted} = True",
@@ -2958,7 +4246,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "interrupted"
+      "primary_out": "interrupted",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_BACKUP",
@@ -2985,7 +4275,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "target_conn": {
           "type_name": "connection",
@@ -2997,7 +4292,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3010,7 +4310,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.committed",
+          "typestate": "sqlite3::committed",
+          "invariants": []
         }
       },
       "code_template": "{source_conn}.backup({target_conn})\n{status} = True",
@@ -3018,7 +4332,9 @@
         "import sqlite3"
       ],
       "primary_in": "source_conn",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SQLITE_BACKUP_TO_FILE",
@@ -3045,7 +4361,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         },
         "target_db_path": {
           "type_name": "db_path",
@@ -3061,7 +4382,21 @@
             "db",
             "sqlite",
             "sqlite3"
-          ]
+          ],
+          "carrier": "db_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.filesystem_path",
+          "typestate": "sqlite3::filesystem_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3074,7 +4409,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.closed",
+          "typestate": "sqlite3::closed",
+          "invariants": []
         }
       },
       "code_template": "_dest_conn = sqlite3.connect({target_db_path})\ntry:\n    {source_conn}.backup(_dest_conn)\n    {backup_success} = True\nfinally:\n    _dest_conn.close()",
@@ -3082,7 +4431,9 @@
         "import sqlite3"
       ],
       "primary_in": "source_conn",
-      "primary_out": "backup_success"
+      "primary_out": "backup_success",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SQLITE_CLOSE",
@@ -3109,7 +4460,12 @@
           "structure_kind": "handle",
           "rank": null,
           "element_type": "opaque",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "connection",
+          "layout": null,
+          "semantics": "sqlite3.open",
+          "typestate": "sqlite3::open",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3122,7 +4478,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "sqlite3.closed",
+          "typestate": "sqlite3::closed",
+          "invariants": []
         }
       },
       "code_template": "{connection}.close()\n{status} = True",
@@ -3130,7 +4500,9 @@
         "import sqlite3"
       ],
       "primary_in": "connection",
-      "primary_out": "status"
+      "primary_out": "status",
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "supported_formats": [

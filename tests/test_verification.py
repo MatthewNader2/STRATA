@@ -25,7 +25,7 @@ from lattice import LatticeOrchestrator, Cell, MicroCell, AlgebraicSignature, Po
 from preflight import PreflightLinter, VariableSchema
 from unification import UnificationGate, ExecutionContext, TypedBindingRecord, resolve_typed_binding_record
 from tokenizer import CellTokenizer
-from planner import LatticePlanner, _segment_prompt_clauses, STOPWORDS
+from planner import LatticePlanner, _segment_prompt_clauses
 
 
 class TestRound5Verification(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestRound5Verification(unittest.TestCase):
         """
         prompt = "fit linear regression model"
         clauses = _segment_prompt_clauses(prompt)
-        clause_toks = set(CellTokenizer.tokenize_prompt(clauses[0])) - set(STOPWORDS)
+        clause_toks = set(CellTokenizer.tokenize_prompt(clauses[0]))
 
         # Cell A: generic estimator tool sharing 'model' with many other tokens
         cell_a = Cell(

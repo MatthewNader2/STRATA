@@ -10,6 +10,8 @@ Provides toggleable experimental engines for empirical tinkering and ablation st
 """
 
 from __future__ import annotations
+from collections import deque
+import collections.abc
 import math
 import time
 from dataclasses import dataclass, field
@@ -46,8 +48,9 @@ class ExperimentConfig:
     use_puct_mcts: bool = True                   # Uses AlphaZero PUCT formula instead of classical UCT
     c_puct: float = 1.5
 
-    # 5. Fast O(|V|) indexed topology builder
+    # 5. Fast O(|V|) indexed topology builder & dual static/live 5-axis edge calculator
     use_indexed_topology: bool = True
+    edge_mode: str = "live"  # 'live' (LazyAdjacencyMap + step-conditioned) or 'static' (eager precomputed 5-axis)
 
 
 ACTIVE_EXPERIMENTS = ExperimentConfig()
@@ -317,33 +320,233 @@ class AbsorbingMarkovRouter:
 # 4. O(|V|) Bucketed Hash-Join Topology Builder (Fixes O(|V|^2) Bottleneck)
 # ============================================================================
 
+def _freeze_edge_val(v: Any) -> Any:
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return v
+    if isinstance(v, (tuple, list)):
+        return tuple(_freeze_edge_val(x) for x in v)
+    if isinstance(v, set):
+        return tuple(sorted((_freeze_edge_val(x) for x in v), key=lambda z: repr(z)))
+    if isinstance(v, dict):
+        return tuple(sorted((str(k), _freeze_edge_val(val)) for k, val in v.items()))
+    return ("__obj__", id(v))
+
+
+def _port_edge_key(p: Any, gen: int, registry: Any, is_path_fn: Any) -> Tuple[Any, ...]:
+    cached_p = p._cached_is_path_port
+    if cached_p is not None and cached_p[0] == gen:
+        is_p = cached_p[1]
+    else:
+        is_p = is_path_fn(p, registry)
+    return (
+        p.signature,
+        p.domain or "",
+        p.port_role or "",
+        p.structure_kind or "",
+        p.abstract_type or "",
+        p.carrier or "",
+        p.nominal_type or "",
+        p.semantics or "",
+        p.typestate or "",
+        _freeze_edge_val(p.layout),
+        p.invariants,
+        p.rejected_qualifiers,
+        p.accepted_states,
+        p.parent_state,
+        p.rank,
+        p._cached_ndim,
+        _freeze_edge_val(p.shape_contract),
+        tuple(p.supported_formats) if p.supported_formats else (),
+        is_p,
+    )
+
+
+class LazyAdjacencyMap(collections.abc.MutableMapping):
+    """
+    On-demand adjacency mapping backed by an O(|V|) inverted (carrier, semantics) index.
+    Computes and memoizes neighbors only when queried, avoiding eager O(|V|^2) startup graphs.
+    """
+
+    def __init__(
+        self,
+        keys: Sequence[str],
+        seed_lists: Dict[str, List[str]],
+        compute_fn: Callable[[str], List[str]],
+    ):
+        self._keys: List[str] = list(keys)
+        self._key_set: Set[str] = set(keys)
+        self._seed_lists: Dict[str, List[str]] = seed_lists
+        self._compute_fn = compute_fn
+        self._cache: Dict[str, List[str]] = {}
+
+    def _resolve(self, cid: str) -> List[str]:
+        cached = self._cache.get(cid)
+        if cached is not None:
+            return cached
+        computed = self._compute_fn(cid)
+        seeds = self._seed_lists.get(cid)
+        if seeds:
+            seen = set(computed)
+            merged = list(computed)
+            for s in seeds:
+                if s not in seen:
+                    seen.add(s)
+                    merged.append(s)
+            self._cache[cid] = merged
+        else:
+            self._cache[cid] = computed
+        return self._cache[cid]
+
+    def __getitem__(self, key: str) -> List[str]:
+        if key not in self._key_set and key not in self._cache:
+            raise KeyError(key)
+        return self._resolve(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key not in self._key_set and key not in self._cache:
+            return default
+        return self._resolve(key)
+
+    def __setitem__(self, key: str, value: List[str]) -> None:
+        if key not in self._key_set:
+            self._keys.append(key)
+            self._key_set.add(key)
+        self._cache[key] = list(value)
+
+    def __delitem__(self, key: str) -> None:
+        self._cache.pop(key, None)
+        self._seed_lists.pop(key, None)
+        if key in self._key_set:
+            self._key_set.remove(key)
+            self._keys.remove(key)
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and (key in self._key_set or key in self._cache)
+
+    def __iter__(self):
+        return iter(self._keys)
+
+    def __len__(self) -> int:
+        return len(self._keys)
+
+    def clear(self) -> None:
+        self._keys.clear()
+        self._key_set.clear()
+        self._seed_lists.clear()
+        self._cache.clear()
+
+    def keys(self):
+        return iter(self._keys)
+
+    def values(self):
+        for k in self._keys:
+            yield self._resolve(k)
+
+    def items(self):
+        for k in self._keys:
+            yield k, self._resolve(k)
+
+
 def build_indexed_topology(
     all_cells: Sequence[Any],
     loaded_cells_map: Dict[str, Any],
     registry: Any,
-) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    edge_mode: Optional[str] = None,
+    use_indexed: Optional[bool] = None,
+) -> Tuple[Any, Any]:
     """
-    Replaces the O(|V|^2) double loop in `LatticeOrchestrator.build_topology()`
-    with carrier-bucketed indexing. Groups consumer cells by their canonical input
-    type and ancestor poset supertypes so producer cells only test unification
-    against compatible consumer buckets.
+    5-Axis Topological Edge Calculator supporting BOTH dual modes:
+      - 'static' : Eagerly materializes full Dict[str, List[str]] forward & reverse
+                   adjacency over 5-axis `is_edge_valid` (indexed when use_indexed=True,
+                   or direct O(|V|^2) pairwise scan when use_indexed=False).
+      - 'live'   : Returns LazyAdjacencyMap objects backed by the O(|V|) inverted
+                   carrier/ancestor index and evaluated on-demand via 5-axis unification.
     """
-    adjacency: Dict[str, List[str]] = {c.cell_id: [] for c in all_cells}
-    reverse_adjacency: Dict[str, List[str]] = {c.cell_id: [] for c in all_cells}
-    adj_sets: Dict[str, Set[str]] = {c.cell_id: set() for c in all_cells}
+    try:
+        from .lattice import PortSignature, is_path_port as _is_path_port
+    except (ImportError, ValueError):
+        from lattice import PortSignature, is_path_port as _is_path_port
 
-    # Index consumers by input carrier type
+    eff_mode = str(edge_mode or getattr(ACTIVE_EXPERIMENTS, "edge_mode", "live") or "live").strip().lower()
+    if eff_mode not in ("static", "live"):
+        eff_mode = "live"
+    eff_indexed = ACTIVE_EXPERIMENTS.use_indexed_topology if use_indexed is None else bool(use_indexed)
+
+    bottom_set = registry.get_bottom_types_set()
+    top_set = registry.get_top_types_set()
+    skip_in_set = bottom_set | top_set
+
+    cell_by_id: Dict[str, Any] = {c.cell_id: c for c in all_cells}
+    all_ids: List[str] = [c.cell_id for c in all_cells]
+    fwd_seeds: Dict[str, List[str]] = {}
+    rev_seeds: Dict[str, List[str]] = {}
+
+    if eff_mode == "static" and not eff_indexed:
+        static_adj: Dict[str, List[str]] = {cid: [] for cid in all_ids}
+        static_rev: Dict[str, List[str]] = {cid: [] for cid in all_ids}
+        adj_seen: Dict[str, Set[str]] = {cid: set() for cid in all_ids}
+        for u in all_cells:
+            uid = u.cell_id
+            for edge in getattr(u, "edges", []):
+                tgt_id = edge.get("target_cell_id") if isinstance(edge, dict) else getattr(edge, "target_cell_id", None)
+                tgt_cell = loaded_cells_map.get(tgt_id) if tgt_id else None
+                if tgt_cell and tgt_cell.cell_id not in adj_seen[uid]:
+                    if is_edge_valid(u.primary_output, tgt_cell.primary_input, producer_cell=u, consumer_cell=tgt_cell):
+                        adj_seen[uid].add(tgt_cell.cell_id)
+                        static_adj[uid].append(tgt_cell.cell_id)
+                        static_rev[tgt_cell.cell_id].append(uid)
+            out_p = getattr(u, "primary_output", None)
+            if not out_p:
+                continue
+            out_tn = str(getattr(out_p, "type_name", "") or "").strip().lower()
+            if out_tn in skip_in_set:
+                continue
+            for v in all_cells:
+                vid = v.cell_id
+                if vid == uid or vid in adj_seen[uid] or getattr(v, "stage", None) == 1 or not getattr(v, "inputs", None):
+                    continue
+                in_p = v.primary_input
+                if in_p and is_edge_valid(out_p, in_p, producer_cell=u, consumer_cell=v):
+                    adj_seen[uid].add(vid)
+                    static_adj[uid].append(vid)
+                    static_rev[vid].append(uid)
+        return static_adj, static_rev
+
+    # 1. O(|V|) Inverted consumer & producer indexes keyed by canonical carrier
     consumers_by_type: Dict[str, List[Any]] = {}
     wildcard_consumers: List[Any] = []
+    producers_by_type: Dict[str, List[Any]] = {}
+    wildcard_producers: List[Any] = []
 
     for v in all_cells:
+        # Explicit declared edges (O(|E_declared|))
+        for edge in getattr(v, "edges", []):
+            tgt_id = edge.get("target_cell_id") if isinstance(edge, dict) else getattr(edge, "target_cell_id", None)
+            if tgt_id:
+                tgt_cell = loaded_cells_map.get(tgt_id)
+                if tgt_cell and is_edge_valid(v.primary_output, tgt_cell.primary_input, producer_cell=v, consumer_cell=tgt_cell):
+                    fwd_seeds.setdefault(v.cell_id, []).append(tgt_cell.cell_id)
+                    rev_seeds.setdefault(tgt_cell.cell_id, []).append(v.cell_id)
+
+        # Index v as a producer (for reverse lookups)
+        out_p = getattr(v, "primary_output", None)
+        if out_p and getattr(out_p, "type_name", None):
+            out_tn = str(out_p.type_name).strip().lower()
+            if out_tn not in bottom_set:
+                canon_out = registry.canonical_name(out_tn).lower()
+                if out_tn in top_set or "[" in canon_out or registry.is_type_variable(out_p.type_name):
+                    wildcard_producers.append(v)
+                else:
+                    producers_by_type.setdefault(canon_out, []).append(v)
+
+        # Index v as a consumer (for forward lookups)
         if getattr(v, "stage", None) == 1 or not getattr(v, "inputs", None):
             continue
         in_p = v.primary_input
         if not in_p or not getattr(in_p, "type_name", None):
             continue
         in_tn = str(in_p.type_name).strip().lower()
-        if in_tn in ("none", "null", "undefined", "any", "*", ""):
+        if in_tn in skip_in_set:
             continue
         in_sig = in_p.signature
         if (hasattr(in_sig, "is_top") and in_sig.is_top()) or (hasattr(in_sig, "is_bottom") and in_sig.is_bottom()):
@@ -354,55 +557,168 @@ def build_indexed_topology(
         else:
             consumers_by_type.setdefault(canon_in, []).append(v)
 
-    for u in all_cells:
-        # 1. Explicit declared edges (validated)
-        for edge in getattr(u, "edges", []):
-            tgt_id = edge.get("target_cell_id") if isinstance(edge, dict) else getattr(edge, "target_cell_id", None)
-            if tgt_id:
-                tgt_cell = loaded_cells_map.get(tgt_id)
-                if tgt_cell and tgt_cell.cell_id not in adj_sets[u.cell_id]:
-                    if is_edge_valid(u.primary_output, tgt_cell.primary_input, producer_cell=u, consumer_cell=tgt_cell):
-                        adj_sets[u.cell_id].add(tgt_cell.cell_id)
-                        adjacency[u.cell_id].append(tgt_cell.cell_id)
-                        reverse_adjacency[tgt_cell.cell_id].append(u.cell_id)
+    parents_map = getattr(registry, "_parents", None) or getattr(registry, "poset", {}) or {}
+    children_map: Dict[str, List[str]] = {}
+    for ch, ps in parents_map.items():
+        ch_l = str(ch).lower()
+        for p_par in ps or ():
+            children_map.setdefault(str(p_par).lower(), []).append(ch_l)
 
-        # 2. Bucketed monadic type compatibility
-        out_p = u.primary_output
+    supertypes_cache: Dict[str, Tuple[str, ...]] = {}
+    subtypes_cache: Dict[str, Tuple[str, ...]] = {}
+    gen = getattr(registry, "_generation", 0)
+    in_key_by_port: Dict[int, Any] = {}
+    sig_pair_cache: Dict[Tuple[Any, Any], bool] = {}
+
+    def _get_supertypes(canon_t: str) -> Tuple[str, ...]:
+        cached = supertypes_cache.get(canon_t)
+        if cached is not None:
+            return cached
+        res: List[str] = [canon_t]
+        seen = {canon_t}
+        q = deque([canon_t])
+        while q:
+            curr = q.popleft()
+            for par in parents_map.get(curr, ()):
+                pl = str(par).lower()
+                if pl not in seen:
+                    seen.add(pl)
+                    res.append(pl)
+                    q.append(pl)
+        tup = tuple(res)
+        supertypes_cache[canon_t] = tup
+        return tup
+
+    def _get_subtypes(canon_t: str) -> Tuple[str, ...]:
+        cached = subtypes_cache.get(canon_t)
+        if cached is not None:
+            return cached
+        res: List[str] = [canon_t]
+        seen = {canon_t}
+        q = deque([canon_t])
+        while q:
+            curr = q.popleft()
+            for ch in children_map.get(curr, ()):
+                if ch not in seen:
+                    seen.add(ch)
+                    res.append(ch)
+                    q.append(ch)
+        tup = tuple(res)
+        subtypes_cache[canon_t] = tup
+        return tup
+
+    def _pair_valid(u: Any, out_p: Any, out_key: Any, u_has_post: bool, v: Any) -> bool:
+        v_in = v.primary_input
+        if out_key is not None and isinstance(v_in, PortSignature):
+            if not getattr(v, "preconditions", None):
+                v_in_pid = id(v_in)
+                in_key = in_key_by_port.get(v_in_pid)
+                if in_key is None:
+                    in_key = _port_edge_key(v_in, gen, registry, _is_path_port)
+                    in_key_by_port[v_in_pid] = in_key
+                pair_k = (out_key, in_key)
+                valid = sig_pair_cache.get(pair_k)
+                if valid is None:
+                    valid = is_edge_valid(out_p, v_in, producer_cell=u, consumer_cell=v)
+                    sig_pair_cache[pair_k] = valid
+                return valid
+            if not u_has_post:
+                pair_k = (out_key, "__vc__", v.cell_id)
+                valid = sig_pair_cache.get(pair_k)
+                if valid is None:
+                    valid = is_edge_valid(out_p, v_in, producer_cell=u, consumer_cell=v)
+                    sig_pair_cache[pair_k] = valid
+                return valid
+        return is_edge_valid(out_p, v_in, producer_cell=u, consumer_cell=v)
+
+    def _compute_forward(u_id: str) -> List[str]:
+        u = cell_by_id.get(u_id)
+        if u is None:
+            return []
+        out_p = getattr(u, "primary_output", None)
         if not out_p or not getattr(out_p, "type_name", None):
-            continue
+            return []
         out_tn = str(out_p.type_name).strip().lower()
-        if out_tn in ("none", "null", "undefined", "any", "*", ""):
-            continue
+        if out_tn in skip_in_set:
+            return []
         out_sig = out_p.signature
         if (hasattr(out_sig, "is_top") and out_sig.is_top()) or (hasattr(out_sig, "is_bottom") and out_sig.is_bottom()):
-            continue
-
+            return []
         canon_out = registry.canonical_name(out_tn).lower()
-        # Collect all poset supertypes of canon_out via BFS on registry._parents
-        candidate_buckets: Set[str] = {canon_out}
-        queue = [canon_out]
-        while queue:
-            curr = queue.pop(0)
-            for parent in registry.poset.get(curr, ()):
-                p_low = parent.lower()
-                if p_low not in candidate_buckets:
-                    candidate_buckets.add(p_low)
-                    queue.append(p_low)
-
         pool: List[Any] = list(wildcard_consumers)
-        for b_key in candidate_buckets:
-            pool.extend(consumers_by_type.get(b_key, ()))
-
+        for sup in _get_supertypes(canon_out):
+            pool.extend(consumers_by_type.get(sup, ()))
+        out_key = _port_edge_key(out_p, gen, registry, _is_path_port) if isinstance(out_p, PortSignature) else None
+        u_has_post = bool(getattr(u, "postconditions", None))
+        res: List[str] = []
+        seen: Set[str] = {u_id}
         for v in pool:
-            if u.cell_id == v.cell_id or v.cell_id in adj_sets[u.cell_id]:
+            vid = v.cell_id
+            if vid in seen:
                 continue
-            if not is_edge_valid(out_p, v.primary_input, producer_cell=u, consumer_cell=v):
+            if _pair_valid(u, out_p, out_key, u_has_post, v):
+                seen.add(vid)
+                res.append(vid)
+        return res
+
+    def _compute_reverse(v_id: str) -> List[str]:
+        v = cell_by_id.get(v_id)
+        if v is None or getattr(v, "stage", None) == 1 or not getattr(v, "inputs", None):
+            return []
+        v_in = v.primary_input
+        if not v_in or not getattr(v_in, "type_name", None):
+            return []
+        in_tn = str(v_in.type_name).strip().lower()
+        if in_tn in skip_in_set:
+            return []
+        canon_in = registry.canonical_name(in_tn).lower()
+        if "[" in canon_in or registry.is_type_variable(v_in.type_name):
+            pool = list(all_cells)
+        else:
+            pool = list(wildcard_producers)
+            for sub in _get_subtypes(canon_in):
+                pool.extend(producers_by_type.get(sub, ()))
+        res: List[str] = []
+        seen: Set[str] = {v_id}
+        for u in pool:
+            uid = u.cell_id
+            if uid in seen:
                 continue
+            out_p = getattr(u, "primary_output", None)
+            if not out_p:
+                continue
+            out_key = _port_edge_key(out_p, gen, registry, _is_path_port) if isinstance(out_p, PortSignature) else None
+            u_has_post = bool(getattr(u, "postconditions", None))
+            if _pair_valid(u, out_p, out_key, u_has_post, v):
+                seen.add(uid)
+                res.append(uid)
+        return res
 
-            adj_sets[u.cell_id].add(v.cell_id)
-            adjacency[u.cell_id].append(v.cell_id)
-            reverse_adjacency[v.cell_id].append(u.cell_id)
+    if eff_mode == "static":
+        static_adj: Dict[str, List[str]] = {cid: [] for cid in all_ids}
+        static_rev: Dict[str, List[str]] = {cid: [] for cid in all_ids}
+        adj_seen: Dict[str, Set[str]] = {cid: set() for cid in all_ids}
+        rev_seen: Dict[str, Set[str]] = {cid: set() for cid in all_ids}
+        for src_id, dsts in fwd_seeds.items():
+            for dst_id in dsts:
+                if dst_id not in adj_seen.get(src_id, ()):
+                    adj_seen.setdefault(src_id, set()).add(dst_id)
+                    static_adj.setdefault(src_id, []).append(dst_id)
+                if src_id not in rev_seen.get(dst_id, ()):
+                    rev_seen.setdefault(dst_id, set()).add(src_id)
+                    static_rev.setdefault(dst_id, []).append(src_id)
+        for src_id in all_ids:
+            for dst_id in _compute_forward(src_id):
+                if dst_id not in adj_seen[src_id]:
+                    adj_seen[src_id].add(dst_id)
+                    static_adj[src_id].append(dst_id)
+                if src_id not in rev_seen[dst_id]:
+                    rev_seen[dst_id].add(src_id)
+                    static_rev[dst_id].append(src_id)
+        return static_adj, static_rev
 
+    adjacency = LazyAdjacencyMap(all_ids, fwd_seeds, _compute_forward)
+    reverse_adjacency = LazyAdjacencyMap(all_ids, rev_seeds, _compute_reverse)
     return adjacency, reverse_adjacency
 
 

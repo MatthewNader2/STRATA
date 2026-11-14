@@ -6,20 +6,21 @@ M6: Flagship Hybrid — Clause Anchors + Endpoint Anchors + Beam Bridging + Pre-
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
-from .base import RouteMethod, STOPWORDS
+from .base import RouteMethod, is_macro_cell
+from log_config import get_logger
+
+logger = get_logger("route_methods.m6")
 
 try:
     from ..lattice import Cell, LatticeOrchestrator
     from ..tokenizer import CellTokenizer
     from ..unification import unify, UnificationGate, ExecutionContext
     from ..preflight import PreflightLinter
-    from ..planner import LatticePlanner
 except (ImportError, ValueError):
     from lattice import Cell, LatticeOrchestrator
     from tokenizer import CellTokenizer
     from unification import unify, UnificationGate, ExecutionContext
     from preflight import PreflightLinter
-    from planner import LatticePlanner
 
 
 class M6HybridAnchorsRouteMethod(RouteMethod):
@@ -49,7 +50,7 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
         if len(tunnel) == 1:
             return [tunnel[0]]
 
-        candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not c.cell_id.startswith("MACRO_")]
+        candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not is_macro_cell(c)]
         if not candidates:
             return [tunnel[0]]
 
@@ -102,11 +103,21 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             ]
             clause_cells: List[Cell] = []
             if _ev is not None:
+                locked_tau = 0.7
                 for c, _o in anchors_for_clause(_ev, cl, anchor_pool, relevance_map, on_event=self._trace, clause_idx=idx):
+                    conf = max(
+                        float(_o.get("name_precision", 0.0)),
+                        float(_o.get("precision", 0.0)),
+                        float(_o.get("f", 0.0)),
+                    )
+                    if conf <= locked_tau and len(anchor_pool) > 1:
+                        self._trace("m6_anchor_unlocked_low_precision", cell=c.cell_id, clause_idx=idx, confidence=round(conf, 3))
+                        continue
                     c_inst = c.clone() if hasattr(c, "clone") else c
                     c_inst.matched_clause_idx = idx
                     c_inst.clause_literals = cl_literals
                     clause_cells.append(c_inst)
+                    self._trace("m6_anchor_locked", cell=c.cell_id, clause_idx=idx, confidence=round(conf, 3))
             if not clause_cells and _ev is not None and _ev.clause_tokens(cl):
                 self._trace("clause_without_anchor", clause_idx=idx, clause=cl,
                             reason="no candidate cell carries identity evidence for this clause")
@@ -155,7 +166,53 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
         if not waypoints:
             waypoints = [candidates[0]]
 
-        # 5. Bridge gaps between waypoints using lattice search
+        # 5. Viterbi beam bridging across multi-hop gaps between locked waypoints
+        def _viterbi_beam_bridge(src: Cell, dst: Cell, base_scope: List[Cell], max_hops: int = 4, beam_width: int = 4) -> Optional[List[Cell]]:
+            used_ids = {c.cell_id for c in base_scope} | {dst.cell_id}
+            # Direct 1-hop bridge check first
+            b1 = self.find_bridge(src, dst, candidates, orch, prev_path=base_scope)
+            if b1 is not None and b1.cell_id not in used_ids:
+                return [b1]
+            # Multi-hop Viterbi beam search maximizing cumulative (edge_affinity + relevance)
+            beam: List[Tuple[float, List[Cell]]] = [(0.0, [])]
+            best_complete: Optional[Tuple[float, List[Cell]]] = None
+            pool = [c for c in candidates if c.cell_id not in used_ids]
+            for _hop in range(max_hops):
+                next_beam: List[Tuple[float, List[Cell]]] = []
+                for sc, mids in beam:
+                    tail = mids[-1] if mids else src
+                    scope = base_scope + mids
+                    mids_ids = {m.cell_id for m in mids}
+                    for cand in pool:
+                        if cand.cell_id in mids_ids:
+                            continue
+                        if not (self.step_unifies(tail, cand, prev_path=scope) or self.step_unifies_dag(cand, scope, ctx=ctx)):
+                            continue
+                        step_sc = (
+                            self.calculate_edge_affinity(tail, cand, orch, relevance_map=relevance_map)
+                            + relevance_map.get(cand.cell_id, 0.0)
+                        )
+                        new_mids = mids + [cand]
+                        new_sc = sc + step_sc
+                        new_scope = base_scope + new_mids
+                        if self.step_unifies(cand, dst, prev_path=new_scope) or self.step_unifies_dag(dst, new_scope, ctx=ctx):
+                            tot_sc = new_sc + self.calculate_edge_affinity(cand, dst, orch, relevance_map=relevance_map)
+                            if best_complete is None or tot_sc > best_complete[0]:
+                                best_complete = (tot_sc, new_mids)
+                        else:
+                            next_beam.append((new_sc, new_mids))
+                if best_complete is not None:
+                    return best_complete[1]
+                next_beam.sort(key=lambda x: x[0], reverse=True)
+                beam = next_beam[:beam_width]
+                if not beam:
+                    break
+            if orch and hasattr(orch, "find_shortest_bridge_path"):
+                shortest = orch.find_shortest_bridge_path(src, dst, max_hops=max_hops, candidate_pool=candidates)
+                if shortest:
+                    return shortest
+            return None
+
         bridged_path: List[Cell] = [waypoints[0]]
         for nxt in waypoints[1:]:
             curr = bridged_path[-1]
@@ -164,10 +221,15 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             if self.step_unifies(curr, nxt, prev_path=bridged_path) or self.step_unifies_dag(nxt, bridged_path, ctx=ctx):
                 bridged_path.append(nxt)
             else:
-                bridge = self.find_bridge(curr, nxt, candidates, orch, prev_path=bridged_path)
-                if bridge:
-                    bridged_path.append(bridge)
+                beam_mids = _viterbi_beam_bridge(curr, nxt, bridged_path, max_hops=4, beam_width=4)
+                if beam_mids:
+                    for bm in beam_mids:
+                        if getattr(bm, "matched_clause_idx", None) is None:
+                            bm.matched_clause_idx = getattr(nxt, "matched_clause_idx", None)
+                    bridged_path.extend(beam_mids)
                     bridged_path.append(nxt)
+                    self._trace("m6_beam_bridged", from_cell=curr.cell_id, to_cell=nxt.cell_id,
+                                via=[b.cell_id for b in beam_mids])
                 else:
                     connected = False
                     for ancestor in reversed(bridged_path[:-1]):
@@ -175,9 +237,9 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                             bridged_path.append(nxt)
                             connected = True
                             break
-                        anc_bridge = self.find_bridge(ancestor, nxt, candidates, orch, prev_path=bridged_path)
-                        if anc_bridge:
-                            bridged_path.extend([anc_bridge, nxt])
+                        anc_mids = _viterbi_beam_bridge(ancestor, nxt, bridged_path, max_hops=3, beam_width=3)
+                        if anc_mids:
+                            bridged_path.extend(anc_mids + [nxt])
                             connected = True
                             break
                     if not connected:
@@ -190,38 +252,34 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                             connected = True
                     if not connected:
                         self._trace("anchor_dropped", cell=nxt.cell_id, clause_idx=getattr(nxt, "matched_clause_idx", None),
-                                    reason="no direct unification, no DAG-scope unification, no bridge or producer from any ancestor",
+                                    reason="no direct unification, no DAG-scope unification, no Viterbi beam bridge",
                                     ancestors=[a.cell_id for a in bridged_path], needs=[], ancestor_outputs=[])
 
-        # 6. Pre-flight verification & path return
+        # 6. Pre-flight verification via UnificationGate & PreflightLinter
         num_clauses = len(clauses) if clauses else 1
         max_allowed = max(32, num_clauses * 4 + 4, max_transforms + 8)
+        bridged_path = bridged_path[:max_allowed]
 
-        if bridged_path and len(bridged_path) >= 2:
-            return bridged_path[:max_allowed]
+        if not bridged_path:
+            self.fallback_reason = "M6 hybrid anchor assembly produced empty path"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
-        # If waypoints failed to assemble, fallback to Trellis only if allow_fallback is enabled
         try:
-            from config import settings
-            allow_fb = settings.allow_fallback
-        except Exception:
-            try:
-                from ..config import settings
-                allow_fb = settings.allow_fallback
-            except Exception:
-                allow_fb = False
+            _gate = UnificationGate(orchestrator=orch)
+            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
+            _ur = _gate.unify_pipeline(bridged_path, _tctx, extract_llm_slots=False)
+            if _ur.is_bottom() or not getattr(_ur, "value", None):
+                self.fallback_reason = "M6 hybrid path failed UnificationGate (bottom)"
+                self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+                return []
+            _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
+            _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code, orchestrator=orch)
+            if not _lint.is_valid:
+                self.fallback_reason = f"M6 hybrid path failed PreflightLinter: {'; '.join(_lint.violations[:2])}"
+                self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+                return []
+        except Exception as _chk_exc:
+            logger.debug("[M6] Verification check exception: %s", _chk_exc)
 
-        if allow_fb and orch:
-            planner = LatticePlanner(orchestrator=orch)
-            m0_path = planner.plan(
-                prompt=prompt,
-                tunnel=tunnel,
-                relevance_map=relevance_map,
-                start_sig=start_sig,
-                goal_sig=goal_sig,
-                max_transforms=max_transforms
-            )
-            if m0_path:
-                return m0_path
-
-        return []
+        return bridged_path

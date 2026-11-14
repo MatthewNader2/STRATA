@@ -137,11 +137,6 @@
         "description": "Rendered visual image successfully written to storage disk."
       },
       {
-        "name": "rendered",
-        "description": "Waveform finalized and formatted for storage serialization.",
-        "parent_state": "floating_waveform"
-      },
-      {
         "name": "resampled",
         "description": "Audio waveform converted to a target sampling frequency.",
         "parent_state": "floating_waveform"
@@ -217,6 +212,13 @@
         "wav_read",
         "audio_ingress"
       ],
+      "keywords": [
+        "load",
+        "read",
+        "audio",
+        "soundfile",
+        "wav"
+      ],
       "inputs": {
         "filepath": {
           "type_name": "File[audio_format]",
@@ -234,7 +236,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.audio_file_path",
+          "typestate": "audio::audio_file_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -247,7 +263,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -258,7 +288,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "code_template": "{waveform}, {sample_rate} = sf.read({filepath})",
@@ -266,7 +310,9 @@
         "import soundfile as sf"
       ],
       "primary_in": "filepath",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_READ_SCIPY_WAV",
@@ -299,7 +345,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.audio_file_path",
+          "typestate": "audio::audio_file_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -312,7 +372,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -323,7 +397,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.integer_waveform",
+          "typestate": "audio::integer_waveform",
+          "invariants": []
         }
       },
       "code_template": "{sample_rate}, {waveform} = wavfile.read({filepath})",
@@ -331,7 +419,9 @@
         "from scipy.io import wavfile"
       ],
       "primary_in": "filepath",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GENERATE_SINE_WAVE",
@@ -359,7 +449,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "duration": {
           "type_name": "float",
@@ -372,7 +476,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -385,7 +503,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "amplitude": {
           "type_name": "float",
@@ -398,7 +530,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -411,7 +557,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.synthetic",
+          "typestate": "audio::synthetic",
+          "invariants": []
         }
       },
       "code_template": "_t = np.linspace(0.0, {duration}, int({sample_rate} * {duration}), endpoint=False)\n{waveform} = ({amplitude} * np.sin(2.0 * np.pi * {frequency} * _t)).astype(np.float32)",
@@ -419,7 +579,9 @@
         "import numpy as np"
       ],
       "primary_in": "duration",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GENERATE_SQUARE_WAVE",
@@ -447,7 +609,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "duration": {
           "type_name": "float",
@@ -460,7 +636,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -473,7 +663,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "amplitude": {
           "type_name": "float",
@@ -486,7 +690,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         },
         "duty": {
           "type_name": "float",
@@ -499,7 +717,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duty_cycle",
+          "typestate": "audio::duty_cycle",
+          "invariants": []
         }
       },
       "outputs": {
@@ -512,7 +744,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.synthetic",
+          "typestate": "audio::synthetic",
+          "invariants": []
         }
       },
       "code_template": "_t = np.linspace(0.0, {duration}, int({sample_rate} * {duration}), endpoint=False)\n{waveform} = ({amplitude} * signal.square(2.0 * np.pi * {frequency} * _t, duty={duty})).astype(np.float32)",
@@ -521,7 +767,9 @@
         "from scipy import signal"
       ],
       "primary_in": "duration",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GENERATE_WHITE_NOISE",
@@ -549,7 +797,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -562,7 +824,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "amplitude": {
           "type_name": "float",
@@ -575,7 +851,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -588,7 +878,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.synthetic",
+          "typestate": "audio::synthetic",
+          "invariants": []
         }
       },
       "code_template": "{waveform} = np.random.uniform(-{amplitude}, {amplitude}, int({sample_rate} * {duration})).astype(np.float32)",
@@ -596,7 +900,9 @@
         "import numpy as np"
       ],
       "primary_in": "duration",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GENERATE_SILENCE",
@@ -624,7 +930,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -637,7 +957,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "num_channels": {
           "type_name": "int",
@@ -650,7 +984,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.channel_count",
+          "typestate": "audio::channel_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -663,7 +1011,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.synthetic",
+          "typestate": "audio::synthetic",
+          "invariants": []
         }
       },
       "code_template": "_num_samples = int({sample_rate} * {duration})\n{waveform} = np.zeros((_num_samples, {num_channels}) if {num_channels} > 1 else (_num_samples,), dtype=np.float32)",
@@ -671,7 +1033,9 @@
         "import numpy as np"
       ],
       "primary_in": "duration",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GENERATE_CHIRP",
@@ -699,7 +1063,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "f1": {
           "type_name": "float",
@@ -712,7 +1090,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "duration": {
           "type_name": "float",
@@ -725,7 +1117,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -738,7 +1144,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -751,7 +1171,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.synthetic",
+          "typestate": "audio::synthetic",
+          "invariants": []
         }
       },
       "code_template": "_t = np.linspace(0.0, {duration}, int({sample_rate} * {duration}), endpoint=False)\n{waveform} = signal.chirp(_t, f0={f0}, t1={duration}, f1={f1}, method='linear').astype(np.float32)",
@@ -760,7 +1194,9 @@
         "from scipy import signal"
       ],
       "primary_in": "duration",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GET_DURATION",
@@ -787,7 +1223,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -800,7 +1250,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -813,13 +1277,36 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         }
       },
       "code_template": "{duration} = float(len({waveform}) / {sample_rate})",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "duration"
+      "primary_out": "duration",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_GET_SAMPLE_RATE",
@@ -847,7 +1334,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -860,13 +1361,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "code_template": "{sample_rate} = int({sample_rate_in})",
       "dependencies": [],
       "primary_in": "sample_rate_in",
-      "primary_out": "sample_rate"
+      "primary_out": "sample_rate",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GET_NUM_CHANNELS",
@@ -893,7 +1410,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -906,13 +1437,29 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.channel_count",
+          "typestate": "audio::channel_count",
+          "invariants": []
         }
       },
       "code_template": "{num_channels} = 1 if {waveform}.ndim == 1 else {waveform}.shape[1]",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "num_channels"
+      "primary_out": "num_channels",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GET_RMS_ENERGY",
@@ -939,7 +1486,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -952,7 +1513,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.energy_value",
+          "typestate": "audio::energy_value",
+          "invariants": []
         }
       },
       "code_template": "{rms} = float(np.sqrt(np.mean(np.square({waveform}))))",
@@ -960,7 +1535,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "rms"
+      "primary_out": "rms",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_GET_PEAK_AMPLITUDE",
@@ -987,7 +1564,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1000,7 +1591,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.amplitude_value",
+          "typestate": "audio::amplitude_value",
+          "invariants": []
         }
       },
       "code_template": "{peak} = float(np.max(np.abs({waveform})))",
@@ -1008,7 +1613,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "peak"
+      "primary_out": "peak",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_COMPUTE_ZERO_CROSSING_RATE",
@@ -1035,7 +1642,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1048,7 +1669,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.energy_value",
+          "typestate": "audio::energy_value",
+          "invariants": []
         }
       },
       "code_template": "_mono = {waveform}.mean(axis=1) if {waveform}.ndim > 1 else {waveform}\n{zcr} = float(np.mean(np.abs(np.diff(np.signbit(_mono)))))",
@@ -1056,7 +1691,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "zcr"
+      "primary_out": "zcr",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "AUDIO_STEREO_TO_MONO",
@@ -1083,7 +1720,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stereo_waveform",
+          "typestate": "audio::stereo_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1096,7 +1747,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         }
       },
       "code_template": "{mono_waveform} = np.mean({waveform}, axis=-1) if {waveform}.ndim > 1 else {waveform}",
@@ -1104,7 +1769,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "mono_waveform"
+      "primary_out": "mono_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_MONO_TO_STEREO",
@@ -1130,7 +1797,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1143,7 +1824,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stereo_waveform",
+          "typestate": "audio::stereo_waveform",
+          "invariants": []
         }
       },
       "code_template": "{stereo_waveform} = np.column_stack([{waveform}, {waveform}]) if {waveform}.ndim == 1 else {waveform}",
@@ -1151,7 +1846,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "stereo_waveform"
+      "primary_out": "stereo_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_SPLIT_CHANNELS",
@@ -1178,7 +1875,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stereo_waveform",
+          "typestate": "audio::stereo_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1191,7 +1902,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         },
         "right_channel": {
           "type_name": "audio_waveform",
@@ -1202,13 +1927,29 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         }
       },
       "code_template": "{left_channel} = {waveform}[:, 0]\n{right_channel} = {waveform}[:, 1]",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "left_channel"
+      "primary_out": "left_channel",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_MERGE_CHANNELS",
@@ -1235,7 +1976,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         },
         "right_channel": {
           "type_name": "audio_waveform",
@@ -1247,7 +2002,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mono_waveform",
+          "typestate": "audio::mono_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1260,7 +2029,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stereo_waveform",
+          "typestate": "audio::stereo_waveform",
+          "invariants": []
         }
       },
       "code_template": "{stereo_waveform} = np.column_stack([{left_channel}, {right_channel}])",
@@ -1268,7 +2051,9 @@
         "import numpy as np"
       ],
       "primary_in": "left_channel",
-      "primary_out": "stereo_waveform"
+      "primary_out": "stereo_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_NORMALIZE_PEAK",
@@ -1295,7 +2080,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.unnormalized",
+          "typestate": "audio::unnormalized",
+          "invariants": []
         },
         "target_peak": {
           "type_name": "float",
@@ -1308,7 +2107,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1321,7 +2134,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.peak_normalized",
+          "typestate": "audio::peak_normalized",
+          "invariants": []
         }
       },
       "code_template": "_max = np.max(np.abs({waveform}))\n{norm_waveform} = ({waveform} / _max * {target_peak}) if _max > 0 else {waveform}",
@@ -1329,7 +2156,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "norm_waveform"
+      "primary_out": "norm_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_NORMALIZE_RMS",
@@ -1356,7 +2185,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.unnormalized",
+          "typestate": "audio::unnormalized",
+          "invariants": []
         },
         "target_rms": {
           "type_name": "float",
@@ -1369,7 +2212,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.energy_value",
+          "typestate": "audio::energy_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1382,7 +2239,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.rms_normalized",
+          "typestate": "audio::rms_normalized",
+          "invariants": []
         }
       },
       "code_template": "_rms = np.sqrt(np.mean(np.square({waveform})))\n{norm_waveform} = ({waveform} / _rms * {target_rms}) if _rms > 0 else {waveform}",
@@ -1390,7 +2261,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "norm_waveform"
+      "primary_out": "norm_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_APPLY_GAIN_DB",
@@ -1417,7 +2290,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "gain_db": {
           "type_name": "float",
@@ -1430,7 +2317,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.db_scale",
+          "typestate": "audio::db_scale",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1443,13 +2344,29 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.gain_adjusted",
+          "typestate": "audio::gain_adjusted",
+          "invariants": []
         }
       },
       "code_template": "{gained_waveform} = {waveform} * (10.0 ** ({gain_db} / 20.0))",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "gained_waveform"
+      "primary_out": "gained_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_FADE_IN",
@@ -1476,7 +2393,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -1489,7 +2420,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "fade_duration": {
           "type_name": "float",
@@ -1502,7 +2447,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1515,7 +2474,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.faded",
+          "typestate": "audio::faded",
+          "invariants": []
         }
       },
       "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n_ramp = np.linspace(0.0, 1.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(0.0, 1.0, _samples)\n{faded_waveform} = {waveform}.copy()\n{faded_waveform}[:_samples] = {faded_waveform}[:_samples] * _ramp",
@@ -1523,7 +2496,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "faded_waveform"
+      "primary_out": "faded_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_FADE_OUT",
@@ -1550,7 +2532,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -1563,7 +2559,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "fade_duration": {
           "type_name": "float",
@@ -1576,7 +2586,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1589,7 +2613,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.faded",
+          "typestate": "audio::faded",
+          "invariants": []
         }
       },
       "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n_ramp = np.linspace(1.0, 0.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(1.0, 0.0, _samples)\n{faded_waveform} = {waveform}.copy()\n{faded_waveform}[-_samples:] = {faded_waveform}[-_samples:] * _ramp",
@@ -1597,7 +2635,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "faded_waveform"
+      "primary_out": "faded_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_HARD_CLIP",
@@ -1625,7 +2672,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "threshold": {
           "type_name": "float",
@@ -1638,7 +2699,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1651,7 +2726,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.clipped",
+          "typestate": "audio::clipped",
+          "invariants": []
         }
       },
       "code_template": "{clipped_waveform} = np.clip({waveform}, -{threshold}, {threshold})",
@@ -1659,7 +2748,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "clipped_waveform"
+      "primary_out": "clipped_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_TRIM_SLICE",
@@ -1686,7 +2777,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -1699,7 +2804,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "start_sec": {
           "type_name": "float",
@@ -1712,7 +2831,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "end_sec": {
           "type_name": "float",
@@ -1725,7 +2858,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1738,13 +2885,36 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.trimmed",
+          "typestate": "audio::trimmed",
+          "invariants": []
         }
       },
       "code_template": "_s = max(0, int({start_sec} * {sample_rate}))\n_e = min(len({waveform}), int({end_sec} * {sample_rate}))\n{sliced_waveform} = {waveform}[_s:_e]",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "sliced_waveform"
+      "primary_out": "sliced_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_TRIM_SILENCE",
@@ -1771,7 +2941,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "threshold": {
           "type_name": "float",
@@ -1784,7 +2968,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1797,7 +2995,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.trimmed",
+          "typestate": "audio::trimmed",
+          "invariants": []
         }
       },
       "code_template": "_mask = np.max(np.abs({waveform}), axis=-1) > {threshold} if {waveform}.ndim > 1 else np.abs({waveform}) > {threshold}\n_idx = np.where(_mask)[0]\n{trimmed_waveform} = {waveform}[_idx[0]:_idx[-1] + 1] if len(_idx) > 0 else {waveform}[:0]",
@@ -1805,7 +3017,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "trimmed_waveform"
+      "primary_out": "trimmed_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_CONCATENATE",
@@ -1832,7 +3046,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "waveform_b": {
           "type_name": "audio_waveform",
@@ -1844,7 +3072,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1857,7 +3099,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.concatenated",
+          "typestate": "audio::concatenated",
+          "invariants": []
         }
       },
       "code_template": "{concat_waveform} = np.concatenate([{waveform_a}, {waveform_b}], axis=0)",
@@ -1865,7 +3121,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform_a",
-      "primary_out": "concat_waveform"
+      "primary_out": "concat_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_TIME_REVERSE",
@@ -1892,7 +3150,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1905,13 +3177,29 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.reversed",
+          "typestate": "audio::reversed",
+          "invariants": []
         }
       },
       "code_template": "{reversed_waveform} = {waveform}[::-1]",
       "dependencies": [],
       "primary_in": "waveform",
-      "primary_out": "reversed_waveform"
+      "primary_out": "reversed_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_TIME_PAD",
@@ -1938,7 +3226,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -1951,7 +3253,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "pad_start_sec": {
           "type_name": "float",
@@ -1964,7 +3280,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "pad_end_sec": {
           "type_name": "float",
@@ -1977,7 +3307,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1990,7 +3334,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.padded",
+          "typestate": "audio::padded",
+          "invariants": []
         }
       },
       "code_template": "_n_start = int({pad_start_sec} * {sample_rate})\n_n_end = int({pad_end_sec} * {sample_rate})\n_pad_width = ((_n_start, _n_end), (0, 0)) if {waveform}.ndim > 1 else ((_n_start, _n_end),)\n{padded_waveform} = np.pad({waveform}, _pad_width, mode='constant')",
@@ -1998,7 +3356,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "padded_waveform"
+      "primary_out": "padded_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_RESAMPLE_SCIPY",
@@ -2025,7 +3392,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "orig_sr": {
           "type_name": "sample_rate",
@@ -2038,7 +3419,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "target_sr": {
           "type_name": "sample_rate",
@@ -2051,7 +3446,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 22050
+          "default_value": 22050,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2064,7 +3473,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.resampled",
+          "typestate": "audio::resampled",
+          "invariants": []
         },
         "new_sr": {
           "type_name": "sample_rate",
@@ -2075,7 +3498,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "code_template": "_target_num = int(round(len({waveform}) * float({target_sr}) / float({orig_sr})))\n{resampled_waveform} = signal.resample({waveform}, _target_num, axis=0).astype({waveform}.dtype)\n{new_sr} = int({target_sr})",
@@ -2083,7 +3520,9 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "resampled_waveform"
+      "primary_out": "resampled_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_ADD_ECHO",
@@ -2110,7 +3549,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2123,7 +3576,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "delay_sec": {
           "type_name": "float",
@@ -2136,7 +3603,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "decay": {
           "type_name": "float",
@@ -2149,7 +3630,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.max_amplitude",
+          "typestate": "audio::max_amplitude",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2162,7 +3657,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "code_template": "_delay_samples = int({delay_sec} * {sample_rate})\n_pad_shape = (_delay_samples, {waveform}.shape[1]) if {waveform}.ndim > 1 else (_delay_samples,)\n_delayed = np.concatenate([np.zeros(_pad_shape, dtype={waveform}.dtype), {waveform}], axis=0)\n_original = np.concatenate([{waveform}, np.zeros(_pad_shape, dtype={waveform}.dtype)], axis=0)\n{echo_waveform} = _original + {decay} * _delayed",
@@ -2170,7 +3679,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "echo_waveform"
+      "primary_out": "echo_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_COMPUTE_STFT",
@@ -2197,7 +3715,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2210,7 +3742,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "nperseg": {
           "type_name": "int",
@@ -2223,7 +3769,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.window_size",
+          "typestate": "audio::window_size",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2236,7 +3796,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ndarray",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "times": {
           "type_name": "ndarray",
@@ -2247,7 +3821,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ndarray",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "zxx": {
           "type_name": "stft_matrix",
@@ -2258,7 +3846,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "stft_matrix",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stft_complex",
+          "typestate": "audio::stft_complex",
+          "invariants": []
         }
       },
       "code_template": "{freqs}, {times}, {zxx} = signal.stft({waveform}, fs={sample_rate}, nperseg={nperseg})",
@@ -2266,7 +3868,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "zxx"
+      "primary_out": "zxx",
+      "effects": [],
+      "mutation_type": "io",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_COMPUTE_ISTFT",
@@ -2293,7 +3904,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "stft_matrix",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.stft_complex",
+          "typestate": "audio::stft_complex",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2306,7 +3931,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2319,7 +3958,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ndarray",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -2330,7 +3983,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "code_template": "{times}, {waveform} = signal.istft({zxx}, fs={sample_rate})",
@@ -2338,7 +4005,9 @@
         "from scipy import signal"
       ],
       "primary_in": "zxx",
-      "primary_out": "waveform"
+      "primary_out": "waveform",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "AUDIO_COMPUTE_SPECTROGRAM",
@@ -2365,7 +4034,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2378,7 +4061,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "nperseg": {
           "type_name": "int",
@@ -2391,7 +4088,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.window_size",
+          "typestate": "audio::window_size",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2404,7 +4115,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ndarray",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "times": {
           "type_name": "ndarray",
@@ -2415,7 +4140,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "ndarray",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.duration_sec",
+          "typestate": "audio::duration_sec",
+          "invariants": []
         },
         "spectrogram": {
           "type_name": "spectrogram",
@@ -2426,7 +4165,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.spectrogram_magnitude",
+          "typestate": "audio::spectrogram_magnitude",
+          "invariants": []
         }
       },
       "code_template": "{freqs}, {times}, {spectrogram} = signal.spectrogram({waveform}, fs={sample_rate}, nperseg={nperseg})",
@@ -2434,7 +4187,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "spectrogram"
+      "primary_out": "spectrogram",
+      "effects": [],
+      "mutation_type": "io",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_COMPUTE_MEL_FILTERBANK",
@@ -2461,7 +4223,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.spectrogram_magnitude",
+          "typestate": "audio::spectrogram_magnitude",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2474,7 +4250,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "n_mels": {
           "type_name": "int",
@@ -2487,7 +4277,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.channel_count",
+          "typestate": "audio::channel_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2500,7 +4304,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.mel_spectrum",
+          "typestate": "audio::mel_spectrum",
+          "invariants": []
         }
       },
       "code_template": "_n_freqs = {spectrogram}.shape[0]\n_m_pts = np.linspace(0.0, 2595.0 * np.log10(1.0 + ({sample_rate} / 2.0) / 700.0), {n_mels} + 2)\n_hz_pts = 700.0 * (10.0 ** (_m_pts / 2595.0) - 1.0)\n_bins = np.clip(np.floor((_n_freqs - 1) * 2 * _hz_pts / {sample_rate}).astype(int), 0, _n_freqs - 1)\n_fb = np.zeros(({n_mels}, _n_freqs), dtype=np.float32)\nfor _i in range(1, {n_mels} + 1):\n    if _bins[_i] > _bins[_i - 1]:\n        _fb[_i - 1, _bins[_i - 1]:_bins[_i]] = np.linspace(0.0, 1.0, _bins[_i] - _bins[_i - 1], endpoint=False)\n    if _bins[_i + 1] > _bins[_i]:\n        _fb[_i - 1, _bins[_i]:_bins[_i + 1]] = np.linspace(1.0, 0.0, _bins[_i + 1] - _bins[_i], endpoint=False)\n{mel_spectrogram} = np.dot(_fb, {spectrogram})",
@@ -2508,7 +4326,9 @@
         "import numpy as np"
       ],
       "primary_in": "spectrogram",
-      "primary_out": "mel_spectrogram"
+      "primary_out": "mel_spectrogram",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "AUDIO_SPECTROGRAM_TO_DB",
@@ -2535,7 +4355,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.spectrogram_magnitude",
+          "typestate": "audio::spectrogram_magnitude",
+          "invariants": []
         },
         "ref_value": {
           "type_name": "float",
@@ -2548,7 +4382,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.energy_value",
+          "typestate": "audio::energy_value",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2561,7 +4409,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.spectrogram_db",
+          "typestate": "audio::spectrogram_db",
+          "invariants": []
         }
       },
       "code_template": "_clamped = np.maximum({spectrogram}, 1e-10)\n{spectrogram_db} = 10.0 * np.log10(_clamped / float({ref_value}))",
@@ -2569,7 +4431,9 @@
         "import numpy as np"
       ],
       "primary_in": "spectrogram",
-      "primary_out": "spectrogram_db"
+      "primary_out": "spectrogram_db",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_PREEMPHASIS",
@@ -2596,7 +4460,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "alpha": {
           "type_name": "float",
@@ -2609,7 +4487,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.coefficient",
+          "typestate": "audio::coefficient",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2622,7 +4514,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filtered",
+          "typestate": "audio::filtered",
+          "invariants": []
         }
       },
       "code_template": "{emphasized_waveform} = np.append({waveform}[0], {waveform}[1:] - {alpha} * {waveform}[:-1]) if {waveform}.ndim == 1 else np.vstack([{waveform}[:1], {waveform}[1:] - {alpha} * {waveform}[:-1]])",
@@ -2630,7 +4536,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "emphasized_waveform"
+      "primary_out": "emphasized_waveform",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "AUDIO_BUTTER_LOWPASS",
@@ -2657,7 +4565,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2670,7 +4592,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "cutoff_freq": {
           "type_name": "float",
@@ -2683,7 +4619,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "order": {
           "type_name": "int",
@@ -2696,7 +4646,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filter_order",
+          "typestate": "audio::filter_order",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2709,7 +4673,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filtered",
+          "typestate": "audio::filtered",
+          "invariants": []
         }
       },
       "code_template": "_sos = signal.butter({order}, {cutoff_freq}, btype='lowpass', fs={sample_rate}, output='sos')\n{filtered_waveform} = signal.sosfilt(_sos, {waveform}, axis=0)",
@@ -2717,7 +4695,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "filtered_waveform"
+      "primary_out": "filtered_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_BUTTER_HIGHPASS",
@@ -2733,6 +4720,13 @@
         "dsp_filter",
         "rumble_filter"
       ],
+      "keywords": [
+        "high",
+        "pass",
+        "highpass",
+        "butterworth",
+        "filter"
+      ],
       "inputs": {
         "waveform": {
           "type_name": "audio_waveform",
@@ -2744,7 +4738,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2757,7 +4765,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "cutoff_freq": {
           "type_name": "float",
@@ -2770,7 +4792,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "order": {
           "type_name": "int",
@@ -2783,7 +4819,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filter_order",
+          "typestate": "audio::filter_order",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2796,7 +4846,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filtered",
+          "typestate": "audio::filtered",
+          "invariants": []
         }
       },
       "code_template": "_sos = signal.butter({order}, {cutoff_freq}, btype='highpass', fs={sample_rate}, output='sos')\n{filtered_waveform} = signal.sosfilt(_sos, {waveform}, axis=0)",
@@ -2804,7 +4868,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "filtered_waveform"
+      "primary_out": "filtered_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_BUTTER_BANDPASS",
@@ -2831,7 +4904,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2844,7 +4931,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "lowcut": {
           "type_name": "float",
@@ -2857,7 +4958,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "highcut": {
           "type_name": "float",
@@ -2870,7 +4985,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "order": {
           "type_name": "int",
@@ -2883,7 +5012,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filter_order",
+          "typestate": "audio::filter_order",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2896,7 +5039,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filtered",
+          "typestate": "audio::filtered",
+          "invariants": []
         }
       },
       "code_template": "_sos = signal.butter({order}, [{lowcut}, {highcut}], btype='bandpass', fs={sample_rate}, output='sos')\n{filtered_waveform} = signal.sosfilt(_sos, {waveform}, axis=0)",
@@ -2904,7 +5061,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "filtered_waveform"
+      "primary_out": "filtered_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_NOTCH_FILTER",
@@ -2931,7 +5097,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -2944,7 +5124,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "notch_freq": {
           "type_name": "float",
@@ -2957,7 +5151,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         },
         "quality_factor": {
           "type_name": "float",
@@ -2970,7 +5178,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filter_q",
+          "typestate": "audio::filter_q",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2983,7 +5205,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.filtered",
+          "typestate": "audio::filtered",
+          "invariants": []
         }
       },
       "code_template": "_b, _a = signal.iirnotch({notch_freq}, {quality_factor}, fs={sample_rate})\n{filtered_waveform} = signal.lfilter(_b, _a, {waveform}, axis=0)",
@@ -2991,7 +5227,16 @@
         "from scipy import signal"
       ],
       "primary_in": "waveform",
-      "primary_out": "filtered_waveform"
+      "primary_out": "filtered_waveform",
+      "effects": [],
+      "mutation_type": "pure",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_WRITE_SOUNDFILE",
@@ -3007,6 +5252,13 @@
         "soundfile_write",
         "export_audio",
         "audio_sink"
+      ],
+      "keywords": [
+        "export",
+        "save",
+        "write",
+        "audio",
+        "wav"
       ],
       "inputs": {
         "filepath": {
@@ -3025,7 +5277,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.destination_path",
+          "typestate": "audio::destination_path",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -3037,7 +5303,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -3050,7 +5330,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3069,7 +5363,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.written",
+          "typestate": "audio::written",
+          "invariants": []
         }
       },
       "code_template": "sf.write({filepath}, {waveform}, {sample_rate})\n{out_path} = {filepath}",
@@ -3077,7 +5385,16 @@
         "import soundfile as sf"
       ],
       "primary_in": "waveform",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_WRITE_SCIPY_WAV",
@@ -3110,7 +5427,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.destination_path",
+          "typestate": "audio::destination_path",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -3122,7 +5453,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -3135,7 +5480,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100
+          "default_value": 44100,
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3154,7 +5513,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[audio_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.written",
+          "typestate": "audio::written",
+          "invariants": []
         }
       },
       "code_template": "_pcm = np.clip({waveform}, -1.0, 1.0)\n_pcm_16 = (_pcm * 32767).astype(np.int16) if np.issubdtype({waveform}.dtype, np.floating) else {waveform}\nwavfile.write({filepath}, {sample_rate}, _pcm_16)\n{out_path} = {filepath}",
@@ -3163,7 +5536,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_SAVE_SPECTROGRAM_IMAGE",
@@ -3196,7 +5578,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[image_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.destination_path",
+          "typestate": "audio::destination_path",
+          "invariants": []
         },
         "spectrogram": {
           "type_name": "spectrogram",
@@ -3208,7 +5604,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "spectrogram",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.spectrogram_magnitude",
+          "typestate": "audio::spectrogram_magnitude",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -3221,7 +5631,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3240,7 +5664,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[image_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.plot_saved",
+          "typestate": "audio::plot_saved",
+          "invariants": []
         }
       },
       "code_template": "_extent = [0, {spectrogram}.shape[1], 0, float({sample_rate}) / 2.0]\n_fig, _ax = plt.subplots(figsize=(10, 4))\n_im = _ax.imshow({spectrogram}, origin='lower', aspect='auto', cmap='magma', extent=_extent)\n_ax.set_title('Spectrogram')\n_ax.set_xlabel('Time Frame')\n_ax.set_ylabel('Frequency (Hz)')\n_fig.colorbar(_im, ax=_ax)\n_fig.tight_layout()\n_fig.savefig({image_path}, dpi=150)\nplt.close(_fig)\n{out_image_path} = {image_path}",
@@ -3248,7 +5686,9 @@
         "import matplotlib.pyplot as plt"
       ],
       "primary_in": "spectrogram",
-      "primary_out": "out_image_path"
+      "primary_out": "out_image_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "AUDIO_SAVE_WAVEFORM_PLOT",
@@ -3281,7 +5721,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[image_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.destination_path",
+          "typestate": "audio::destination_path",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -3293,7 +5747,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         },
         "sample_rate": {
           "type_name": "sample_rate",
@@ -3306,7 +5774,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "sample_rate",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.frequency_hz",
+          "typestate": "audio::frequency_hz",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3325,7 +5807,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[image_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.plot_saved",
+          "typestate": "audio::plot_saved",
+          "invariants": []
         }
       },
       "code_template": "_fig, _ax = plt.subplots(figsize=(10, 3))\n_time_axis = np.linspace(0.0, len({waveform}) / float({sample_rate}), len({waveform}), endpoint=False)\n_ax.plot(_time_axis, {waveform}, linewidth=0.5)\n_ax.set_title('Waveform Envelope')\n_ax.set_xlabel('Time (s)')\n_ax.set_ylabel('Amplitude')\n_fig.tight_layout()\n_fig.savefig({image_path}, dpi=150)\nplt.close(_fig)\n{out_image_path} = {image_path}",
@@ -3334,7 +5830,16 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "out_image_path"
+      "primary_out": "out_image_path",
+      "effects": [],
+      "mutation_type": "io",
+      "relations": [
+        {
+          "kind": "same_provenance",
+          "source_port": "waveform",
+          "target_port": "sample_rate"
+        }
+      ]
     },
     {
       "cell_id": "AUDIO_WRITE_NUMPY",
@@ -3367,7 +5872,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[binary_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.destination_path",
+          "typestate": "audio::destination_path",
+          "invariants": []
         },
         "waveform": {
           "type_name": "audio_waveform",
@@ -3379,7 +5898,21 @@
           "structure_kind": "tensor",
           "rank": 2,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "audio_waveform",
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.floating_waveform",
+          "typestate": "audio::floating_waveform",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3398,7 +5931,21 @@
             "flac",
             "ogg",
             "m4a"
-          ]
+          ],
+          "carrier": "File[binary_format]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "audio.written",
+          "typestate": "audio::written",
+          "invariants": []
         }
       },
       "code_template": "np.save({filepath}, {waveform})\n{out_path} = {filepath}",
@@ -3406,7 +5953,9 @@
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "out_path"
+      "primary_out": "out_path",
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "supported_formats": [

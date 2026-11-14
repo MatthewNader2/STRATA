@@ -669,29 +669,39 @@ class LocalRAG:
         if not candidates_set:
             return []
 
+        max_bm25 = max((float(sc) for sc in bm25_scores.values() if sc > 0.0), default=0.0)
         rrf_k = 60.0
-        fused: List[Tuple[float, int, float]] = []
+        bm25_rrf_weight = 0.45
+        max_rrf = (1.0 / (rrf_k + 1.0)) + (bm25_rrf_weight / (rrf_k + 1.0))
+        fused: List[Tuple[float, float, float, int, float]] = []
         for idx in candidates_set:
             if idx not in self.id_to_schema:
                 continue
             schema = self.id_to_schema[idx]
             cid = str(schema.get("cell_id", "") or "").lower()
+            boost = float(self.cell_boosts.get(cid, 1.0))
 
-            d_rank = dense_rank_map.get(idx, 100)
-            b_rank = bm25_rank_map.get(idx, 100)
+            d_term = (1.0 / (rrf_k + dense_rank_map[idx])) if idx in dense_rank_map else 0.0
+            bm25_val = float(bm25_scores.get(idx, 0.0) or 0.0)
+            if idx in bm25_rank_map and bm25_val > 0.0 and max_bm25 > 0.0:
+                bm25_strength = bm25_val / max_bm25
+                b_term = (bm25_rrf_weight * bm25_strength) / (rrf_k + bm25_rank_map[idx])
+            else:
+                b_term = 0.0
 
-            # Mathematical Reciprocal Rank Fusion without heuristic keyword boosts
-            rrf = (1.0 / (rrf_k + d_rank)) + (1.0 / (rrf_k + b_rank))
-
-            # Apply cell-level registration multiplier (e.g., provisional discount for unreviewed cells)
-            final_score = rrf * self.cell_boosts.get(cid, 1.0)
+            # Strength-weighted Reciprocal Rank Fusion scaled to [0, 1] without allowing
+            # a weak 1-token BM25 overlap to override high dense cosine similarity.
+            raw_rrf = d_term + b_term
+            norm_rrf = min(1.0, (raw_rrf / max_rrf) * boost)
             dense_score = next((d for d, i in dense_results if i == idx), 0.0)
-            fused.append((final_score, idx, dense_score))
+            dense_pos = max(0.0, min(1.0, float(dense_score))) * boost if (dense_score is not None and dense_score > 0.05) else 0.0
+            sort_key = (0.5 * norm_rrf + 0.5 * dense_pos) if dense_pos > 0.0 else (0.5 * norm_rrf)
+            fused.append((sort_key, norm_rrf, raw_rrf, idx, dense_score))
 
         fused.sort(key=lambda x: x[0], reverse=True)
 
         results: List[Dict[str, Any]] = []
-        for score, idx, dense_sc in fused[:top_k]:
+        for _sort_k, norm_rrf, raw_rrf, idx, dense_sc in fused[:top_k]:
             schema = self.id_to_schema[idx]
             cid = schema.get("cell_id", "")
             # Honest score reporting: `score` is the REAL dense cosine
@@ -706,7 +716,8 @@ class LocalRAG:
                 "cell_id": cid,
                 "score": float(norm_score),
                 "score_source": "dense_cosine" if has_dense_evidence else "rrf_rank",
-                "rrf_score": float(score),
+                "rrf_score": float(norm_rrf),
+                "raw_rrf_score": float(raw_rrf),
                 "schema": schema,
                 "domain": schema.get("domain", "generic"),
                 "primary_input": schema.get("primary_input", "any"),

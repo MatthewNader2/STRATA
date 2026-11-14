@@ -34,77 +34,6 @@
       "target_path"
     ]
   },
-  "verification_semantics": {
-    "path_consumer_roles": [
-      "source_data"
-    ],
-    "path_abstract_types": [
-      "path"
-    ],
-    "path_roles": [
-      "path",
-      "file",
-      "filepath",
-      "filename",
-      "pathlike",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier"
-    ],
-    "path_type_names": [
-      "path",
-      "filepath",
-      "uri",
-      "url",
-      "file",
-      "pathlike"
-    ],
-    "path_port_tokens": [
-      "path",
-      "filepath",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier",
-      "uri",
-      "url",
-      "file",
-      "pathlike"
-    ],
-    "source_roles": [
-      "source",
-      "ingress"
-    ],
-    "ingress_roles": [
-      "source",
-      "ingress"
-    ],
-    "sink_roles": [
-      "sink",
-      "terminal",
-      "egress"
-    ],
-    "terminal_roles": [
-      "sink",
-      "model_sink",
-      "evaluator",
-      "export",
-      "terminal",
-      "output"
-    ],
-    "bridge_roles": [
-      "bridge",
-      "tunnel",
-      "adapter",
-      "cast",
-      "coercion"
-    ],
-    "dataflow_roles": [
-      "carrier",
-      "data_input"
-    ]
-  },
   "types": [
     {
       "name": "object",
@@ -152,7 +81,7 @@
     },
     {
       "name": "file_content_bytes",
-      "parent": "object"
+      "parent": "bytes"
     },
     {
       "name": "stat_result",
@@ -167,12 +96,17 @@
     "domain": "pathlib",
     "states": [
       {
+        "name": "unbound",
+        "description": "Unbound control-flow or iterator body slot awaiting macro expansion."
+      },
+      {
         "name": "absolute_path",
         "description": "Path instance with fully resolved absolute filesystem coordinates.",
         "parent_state": "existing_path"
       },
       {
         "name": "binary_payload",
+        "parent_state": "raw_bytes",
         "description": "In-memory bytes content for read or write operations."
       },
       {
@@ -315,7 +249,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -330,7 +278,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{path_obj} = Path({raw_path})",
@@ -338,7 +300,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "raw_path",
-      "primary_out": "path_obj"
+      "primary_out": "path_obj",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_CWD",
@@ -368,7 +332,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "dir_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "code_template": "{cwd_path} = Path.cwd()",
@@ -376,7 +354,9 @@
         "from pathlib import Path"
       ],
       "primary_in": null,
-      "primary_out": "cwd_path"
+      "primary_out": "cwd_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_HOME",
@@ -406,7 +386,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "dir_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "code_template": "{home_path} = Path.home()",
@@ -414,7 +408,9 @@
         "from pathlib import Path"
       ],
       "primary_in": null,
-      "primary_out": "home_path"
+      "primary_out": "home_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_FROM_URI",
@@ -441,7 +437,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -456,7 +466,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{path_obj} = Path.from_uri({uri})",
@@ -464,7 +488,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "uri",
-      "primary_out": "path_obj"
+      "primary_out": "path_obj",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_JOIN",
@@ -493,7 +519,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "child_name": {
           "type_name": "str",
@@ -506,7 +546,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -521,7 +575,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{joined_path} = {parent_path} / {child_name}",
@@ -529,7 +597,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "parent_path",
-      "primary_out": "joined_path"
+      "primary_out": "joined_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_JOINPATH",
@@ -558,7 +628,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "sub_path": {
           "type_name": "str",
@@ -571,7 +655,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ""
+          "default_value": "",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -586,7 +684,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{joined_path} = {base_path}.joinpath({sub_path})",
@@ -594,7 +706,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "base_path",
-      "primary_out": "joined_path"
+      "primary_out": "joined_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_RESOLVE",
@@ -623,7 +737,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "strict": {
           "type_name": "bool",
@@ -636,7 +764,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -651,7 +793,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.absolute_path",
+          "typestate": "pathlib::absolute_path",
+          "invariants": []
         }
       },
       "code_template": "{resolved_path} = {path_obj}.resolve(strict={strict})",
@@ -659,7 +815,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "resolved_path"
+      "primary_out": "resolved_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_PARENT",
@@ -688,7 +846,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -703,7 +875,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "dir_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "code_template": "{parent_path} = {path_obj}.parent",
@@ -711,7 +897,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "parent_path"
+      "primary_out": "parent_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_PARENTS",
@@ -740,7 +928,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -765,7 +967,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{parents_list} = list({path_obj}.parents)",
@@ -773,7 +991,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "parents_list"
+      "primary_out": "parents_list",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_PARTS",
@@ -802,7 +1022,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -815,7 +1049,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "Tuple[str]",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_parts",
+          "typestate": "pathlib::string_parts",
+          "invariants": []
         }
       },
       "code_template": "{parts_tuple} = {path_obj}.parts",
@@ -823,7 +1071,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "parts_tuple"
+      "primary_out": "parts_tuple",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_WITH_NAME",
@@ -852,7 +1102,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "name": {
           "type_name": "str",
@@ -865,7 +1129,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "file.txt"
+          "default_value": "file.txt",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -880,7 +1158,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{new_path} = {path_obj}.with_name({name})",
@@ -888,7 +1180,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "new_path"
+      "primary_out": "new_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_WITH_SUFFIX",
@@ -917,7 +1211,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "suffix": {
           "type_name": "str",
@@ -930,7 +1238,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ".txt"
+          "default_value": ".txt",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_extension",
+          "typestate": "pathlib::string_extension",
+          "invariants": []
         }
       },
       "outputs": {
@@ -945,7 +1267,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{new_path} = {path_obj}.with_suffix({suffix})",
@@ -953,7 +1289,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "new_path"
+      "primary_out": "new_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_WITH_STEM",
@@ -982,7 +1320,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "stem": {
           "type_name": "str",
@@ -995,7 +1347,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "file"
+          "default_value": "file",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1010,7 +1376,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{new_path} = {path_obj}.with_stem({stem})",
@@ -1018,7 +1398,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "new_path"
+      "primary_out": "new_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_RELATIVE_TO",
@@ -1047,7 +1429,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "other_path": {
           "type_name": "path",
@@ -1061,7 +1457,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1076,7 +1486,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{relative_path} = {path_obj}.relative_to({other_path})",
@@ -1084,7 +1508,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "relative_path"
+      "primary_out": "relative_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_RELATIVE_TO",
@@ -1113,7 +1539,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "other_path": {
           "type_name": "path",
@@ -1127,7 +1567,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1140,7 +1594,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_relative} = {path_obj}.is_relative_to({other_path})",
@@ -1148,7 +1616,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_relative"
+      "primary_out": "is_relative",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_EXPANDUSER",
@@ -1177,7 +1647,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1192,7 +1676,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.absolute_path",
+          "typestate": "pathlib::absolute_path",
+          "invariants": []
         }
       },
       "code_template": "{expanded_path} = {path_obj}.expanduser()",
@@ -1200,7 +1698,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "expanded_path"
+      "primary_out": "expanded_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_AS_POSIX",
@@ -1229,7 +1729,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1242,7 +1756,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{posix_str} = {path_obj}.as_posix()",
@@ -1250,7 +1778,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "posix_str"
+      "primary_out": "posix_str",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_AS_URI",
@@ -1279,7 +1809,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.absolute_path",
+          "typestate": "pathlib::absolute_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1292,7 +1836,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{uri_str} = {path_obj}.as_uri()",
@@ -1300,7 +1858,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "uri_str"
+      "primary_out": "uri_str",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_TO_STR",
@@ -1329,7 +1889,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1342,7 +1916,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{str_path} = str({path_obj})",
@@ -1350,7 +1938,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "str_path"
+      "primary_out": "str_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_EXISTS",
@@ -1379,7 +1969,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1392,7 +1996,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{exists_flag} = {path_obj}.exists()",
@@ -1400,7 +2018,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "exists_flag"
+      "primary_out": "exists_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_FILE",
@@ -1429,7 +2049,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1442,7 +2076,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_file_flag} = {path_obj}.is_file()",
@@ -1450,7 +2098,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_file_flag"
+      "primary_out": "is_file_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_DIR",
@@ -1479,7 +2129,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1492,7 +2156,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_dir_flag} = {path_obj}.is_dir()",
@@ -1500,7 +2178,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_dir_flag"
+      "primary_out": "is_dir_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_SYMLINK",
@@ -1529,7 +2209,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1542,7 +2236,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_symlink_flag} = {path_obj}.is_symlink()",
@@ -1550,7 +2258,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_symlink_flag"
+      "primary_out": "is_symlink_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_ABSOLUTE",
@@ -1579,7 +2289,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1592,7 +2316,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_absolute_flag} = {path_obj}.is_absolute()",
@@ -1600,7 +2338,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_absolute_flag"
+      "primary_out": "is_absolute_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_MOUNT",
@@ -1629,7 +2369,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1642,7 +2396,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_mount_flag} = {path_obj}.is_mount()",
@@ -1650,7 +2418,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_mount_flag"
+      "primary_out": "is_mount_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_SOCKET",
@@ -1679,7 +2449,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1692,7 +2476,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_socket_flag} = {path_obj}.is_socket()",
@@ -1700,7 +2498,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_socket_flag"
+      "primary_out": "is_socket_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_FIFO",
@@ -1729,7 +2529,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1742,7 +2556,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_fifo_flag} = {path_obj}.is_fifo()",
@@ -1750,7 +2578,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_fifo_flag"
+      "primary_out": "is_fifo_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_IS_BLOCK_DEVICE",
@@ -1779,7 +2609,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1792,7 +2636,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_block_flag} = {path_obj}.is_block_device()",
@@ -1800,7 +2658,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_block_flag"
+      "primary_out": "is_block_flag",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_NAME",
@@ -1829,7 +2689,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1842,7 +2716,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "code_template": "{file_name} = {path_obj}.name",
@@ -1850,7 +2738,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "file_name"
+      "primary_out": "file_name",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_STEM",
@@ -1879,7 +2769,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1892,7 +2796,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         }
       },
       "code_template": "{stem} = {path_obj}.stem",
@@ -1900,7 +2818,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "stem"
+      "primary_out": "stem",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_SUFFIX",
@@ -1929,7 +2849,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -1942,7 +2876,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_extension",
+          "typestate": "pathlib::string_extension",
+          "invariants": []
         }
       },
       "code_template": "{suffix} = {path_obj}.suffix",
@@ -1950,7 +2898,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "suffix"
+      "primary_out": "suffix",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_SUFFIXES",
@@ -1979,7 +2929,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2002,7 +2966,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[str]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_parts",
+          "typestate": "pathlib::string_parts",
+          "invariants": []
         }
       },
       "code_template": "{suffixes} = {path_obj}.suffixes",
@@ -2010,7 +2990,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "suffixes"
+      "primary_out": "suffixes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_STAT",
@@ -2039,7 +3021,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2052,7 +3048,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "stat_result",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.stat_metadata",
+          "typestate": "pathlib::stat_metadata",
+          "invariants": []
         }
       },
       "code_template": "{stat_info} = {path_obj}.stat()",
@@ -2060,7 +3070,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "stat_info"
+      "primary_out": "stat_info",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_SIZE",
@@ -2089,7 +3101,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2102,7 +3128,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.byte_count",
+          "typestate": "pathlib::byte_count",
+          "invariants": []
         }
       },
       "code_template": "{size_bytes} = {path_obj}.stat().st_size",
@@ -2110,7 +3150,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "size_bytes"
+      "primary_out": "size_bytes",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_MTIME",
@@ -2139,7 +3181,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2152,7 +3208,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.stat_metadata",
+          "typestate": "pathlib::stat_metadata",
+          "invariants": []
         }
       },
       "code_template": "{mtime} = {path_obj}.stat().st_mtime",
@@ -2160,7 +3230,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "mtime"
+      "primary_out": "mtime",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GET_CTIME",
@@ -2189,7 +3261,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2202,7 +3288,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.stat_metadata",
+          "typestate": "pathlib::stat_metadata",
+          "invariants": []
         }
       },
       "code_template": "{ctime} = {path_obj}.stat().st_ctime",
@@ -2210,7 +3310,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "ctime"
+      "primary_out": "ctime",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_SAMEFILE",
@@ -2239,7 +3341,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         },
         "other_path": {
           "type_name": "path",
@@ -2253,7 +3369,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2266,7 +3396,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_same} = {path_obj}.samefile({other_path})",
@@ -2274,7 +3418,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_same"
+      "primary_out": "is_same",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_MATCH",
@@ -2303,7 +3449,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "pattern": {
           "type_name": "str",
@@ -2316,7 +3476,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "*"
+          "default_value": "*",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.glob_pattern",
+          "typestate": "pathlib::glob_pattern",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2329,7 +3503,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "code_template": "{is_match} = {path_obj}.match({pattern})",
@@ -2337,7 +3525,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "is_match"
+      "primary_out": "is_match",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_GLOB",
@@ -2367,7 +3557,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "pattern": {
           "type_name": "str",
@@ -2380,7 +3584,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.glob_pattern",
+          "typestate": "pathlib::glob_pattern",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2405,7 +3623,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{matched_paths} = list({dir_path}.glob({pattern}))",
@@ -2413,7 +3647,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "matched_paths"
+      "primary_out": "matched_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_RGLOB",
@@ -2443,7 +3679,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "pattern": {
           "type_name": "str",
@@ -2456,7 +3706,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.glob_pattern",
+          "typestate": "pathlib::glob_pattern",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2481,7 +3745,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{matched_paths} = list({dir_path}.rglob({pattern}))",
@@ -2489,7 +3769,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "matched_paths"
+      "primary_out": "matched_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_ITERDIR",
@@ -2518,7 +3800,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2543,7 +3839,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{child_paths} = list({dir_path}.iterdir())",
@@ -2551,7 +3863,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "child_paths"
+      "primary_out": "child_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_FILTER_BY_EXTENSION",
@@ -2589,7 +3903,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         },
         "suffix": {
           "type_name": "str",
@@ -2602,7 +3932,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ".txt"
+          "default_value": ".txt",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_extension",
+          "typestate": "pathlib::string_extension",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2627,7 +3971,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{filtered_paths} = [p for p in {paths} if p.suffix == {suffix}]",
@@ -2635,7 +3995,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "filtered_paths"
+      "primary_out": "filtered_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_FILTER_FILES",
@@ -2673,7 +4035,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2698,7 +4076,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_list",
+          "typestate": "pathlib::file_list",
+          "invariants": []
         }
       },
       "code_template": "{files_only} = [p for p in {paths} if p.is_file()]",
@@ -2706,7 +4100,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "files_only"
+      "primary_out": "files_only",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_FILTER_DIRS",
@@ -2744,7 +4140,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2769,7 +4181,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.dir_list",
+          "typestate": "pathlib::dir_list",
+          "invariants": []
         }
       },
       "code_template": "{dirs_only} = [p for p in {paths} if p.is_dir()]",
@@ -2777,7 +4205,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "dirs_only"
+      "primary_out": "dirs_only",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_SORT_BY_NAME",
@@ -2815,7 +4245,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2840,7 +4286,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{sorted_paths} = sorted({paths}, key=lambda p: p.name)",
@@ -2848,7 +4310,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "sorted_paths"
+      "primary_out": "sorted_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_SORT_BY_MTIME",
@@ -2886,7 +4350,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         },
         "reverse": {
           "type_name": "bool",
@@ -2899,7 +4379,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -2924,7 +4418,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{sorted_paths} = sorted({paths}, key=lambda p: p.stat().st_mtime, reverse={reverse})",
@@ -2932,7 +4442,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "sorted_paths"
+      "primary_out": "sorted_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_SORT_BY_SIZE",
@@ -2970,7 +4482,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         },
         "reverse": {
           "type_name": "bool",
@@ -2983,7 +4511,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3008,7 +4550,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.paths_list",
+          "typestate": "pathlib::paths_list",
+          "invariants": []
         }
       },
       "code_template": "{sorted_paths} = sorted({paths}, key=lambda p: p.stat().st_size, reverse={reverse})",
@@ -3016,7 +4574,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "sorted_paths"
+      "primary_out": "sorted_paths",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_FOR_EACH_FILE",
@@ -3061,7 +4621,50 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[path]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_list",
+          "typestate": "pathlib::file_list",
+          "invariants": []
+        },
+        "body": {
+          "type_name": "str",
+          "state": "unbound",
+          "abstract_type": "callable",
+          "required": false,
+          "default_value": "pass",
+          "port_role": "configuration",
+          "description": "Block body expression or statement.",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "string",
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "any",
+          "typestate": "any",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3074,7 +4677,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.byte_count",
+          "typestate": "pathlib::byte_count",
+          "invariants": []
         }
       },
       "code_template": "_count = 0\nfor _item_path in {paths}:\n    {body}\n    _count += 1\n{processed_count} = _count",
@@ -3082,7 +4699,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "paths",
-      "primary_out": "processed_count"
+      "primary_out": "processed_count",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_READLINK",
@@ -3110,7 +4729,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.symlink",
+          "typestate": "pathlib::symlink",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3125,7 +4758,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "code_template": "{target_path} = {symlink_path}.readlink()",
@@ -3133,7 +4780,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "symlink_path",
-      "primary_out": "target_path"
+      "primary_out": "target_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_READ_TEXT",
@@ -3163,7 +4812,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -3176,7 +4839,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3189,7 +4866,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "file_content_text",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "code_template": "{content} = {file_path}.read_text(encoding={encoding})",
@@ -3197,7 +4888,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "file_path",
-      "primary_out": "content"
+      "primary_out": "content",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_READ_BYTES",
@@ -3226,7 +4919,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3239,7 +4946,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "float64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "file_content_bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.binary_payload",
+          "typestate": "pathlib::binary_payload",
+          "invariants": []
         }
       },
       "code_template": "{content} = {file_path}.read_bytes()",
@@ -3247,7 +4968,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "file_path",
-      "primary_out": "content"
+      "primary_out": "content",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_READ_LINES",
@@ -3276,7 +4999,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -3289,7 +5026,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3312,7 +5063,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[str]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "code_template": "{lines} = {file_path}.read_text(encoding={encoding}).splitlines()",
@@ -3320,7 +5087,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "file_path",
-      "primary_out": "lines"
+      "primary_out": "lines",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SHUTIL_DISK_USAGE",
@@ -3349,7 +5118,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3362,7 +5145,21 @@
           "structure_kind": "composite",
           "rank": 0,
           "element_type": "composite_record",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "disk_usage",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.disk_usage_tuple",
+          "typestate": "pathlib::disk_usage_tuple",
+          "invariants": []
         }
       },
       "code_template": "{usage} = shutil.disk_usage({path_obj})",
@@ -3371,7 +5168,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "usage"
+      "primary_out": "usage",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "SHUTIL_WHICH",
@@ -3399,7 +5198,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.command_name",
+          "typestate": "pathlib::command_name",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3414,7 +5227,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "code_template": "_w = shutil.which({cmd})\n{executable_path} = Path(_w) if _w else None",
@@ -3423,7 +5250,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "cmd",
-      "primary_out": "executable_path"
+      "primary_out": "executable_path",
+      "effects": [],
+      "mutation_type": "pure"
     },
     {
       "cell_id": "PATH_MKDIR",
@@ -3452,7 +5281,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "parents": {
           "type_name": "bool",
@@ -3465,7 +5308,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         },
         "exist_ok": {
           "type_name": "bool",
@@ -3478,7 +5335,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3493,7 +5364,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "dir_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory_created",
+          "typestate": "pathlib::directory_created",
+          "invariants": []
         }
       },
       "code_template": "{dir_path}.mkdir(parents={parents}, exist_ok={exist_ok})\n{created_dir} = {dir_path}",
@@ -3501,7 +5386,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "created_dir"
+      "primary_out": "created_dir",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_RMDIR",
@@ -3530,7 +5417,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3545,7 +5446,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory_deleted",
+          "typestate": "pathlib::directory_deleted",
+          "invariants": []
         }
       },
       "code_template": "{dir_path}.rmdir()\n{removed_path} = {dir_path}",
@@ -3553,7 +5468,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "removed_path"
+      "primary_out": "removed_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_UNLINK",
@@ -3582,7 +5499,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "missing_ok": {
           "type_name": "bool",
@@ -3595,7 +5526,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3610,7 +5555,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_deleted",
+          "typestate": "pathlib::file_deleted",
+          "invariants": []
         }
       },
       "code_template": "{file_path}.unlink(missing_ok={missing_ok})\n{unlinked_path} = {file_path}",
@@ -3618,7 +5577,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "file_path",
-      "primary_out": "unlinked_path"
+      "primary_out": "unlinked_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_RENAME",
@@ -3647,7 +5608,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         },
         "target_path": {
           "type_name": "path",
@@ -3661,7 +5636,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3676,7 +5665,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_renamed",
+          "typestate": "pathlib::file_renamed",
+          "invariants": []
         }
       },
       "code_template": "{renamed_path} = {source_path}.rename({target_path})",
@@ -3684,7 +5687,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "source_path",
-      "primary_out": "renamed_path"
+      "primary_out": "renamed_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_REPLACE",
@@ -3713,7 +5718,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         },
         "target_path": {
           "type_name": "path",
@@ -3727,7 +5746,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3742,7 +5775,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_renamed",
+          "typestate": "pathlib::file_renamed",
+          "invariants": []
         }
       },
       "code_template": "{replaced_path} = {source_path}.replace({target_path})",
@@ -3750,7 +5797,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "source_path",
-      "primary_out": "replaced_path"
+      "primary_out": "replaced_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_TOUCH",
@@ -3779,7 +5828,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "exist_ok": {
           "type_name": "bool",
@@ -3792,7 +5855,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3807,7 +5884,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "file_path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_created",
+          "typestate": "pathlib::file_created",
+          "invariants": []
         }
       },
       "code_template": "{file_path}.touch(exist_ok={exist_ok})\n{touched_path} = {file_path}",
@@ -3815,7 +5906,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "file_path",
-      "primary_out": "touched_path"
+      "primary_out": "touched_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_CHMOD",
@@ -3844,7 +5937,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         },
         "mode": {
           "type_name": "int",
@@ -3857,7 +5964,21 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 420
+          "default_value": 420,
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.byte_count",
+          "typestate": "pathlib::byte_count",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3872,7 +5993,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "code_template": "{path_obj}.chmod({mode})\n{modified_path} = {path_obj}",
@@ -3880,7 +6015,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "path_obj",
-      "primary_out": "modified_path"
+      "primary_out": "modified_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_SYMLINK_TO",
@@ -3909,7 +6046,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "target_path": {
           "type_name": "path",
@@ -3923,7 +6074,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -3938,7 +6103,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.symlink",
+          "typestate": "pathlib::symlink",
+          "invariants": []
         }
       },
       "code_template": "{link_path}.symlink_to({target_path})\n{created_symlink} = {link_path}",
@@ -3946,7 +6125,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "link_path",
-      "primary_out": "created_symlink"
+      "primary_out": "created_symlink",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_HARDLINK_TO",
@@ -3975,7 +6156,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "target_path": {
           "type_name": "path",
@@ -3989,7 +6184,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4004,7 +6213,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.hardlink",
+          "typestate": "pathlib::hardlink",
+          "invariants": []
         }
       },
       "code_template": "{link_path}.hardlink_to({target_path})\n{created_hardlink} = {link_path}",
@@ -4012,7 +6235,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "link_path",
-      "primary_out": "created_hardlink"
+      "primary_out": "created_hardlink",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_WRITE_TEXT",
@@ -4042,7 +6267,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_created",
+          "typestate": "pathlib::file_created",
+          "invariants": []
         },
         "content": {
           "type_name": "str",
@@ -4055,7 +6294,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -4068,7 +6321,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4081,7 +6348,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.char_count",
+          "typestate": "pathlib::char_count",
+          "invariants": []
         }
       },
       "code_template": "{bytes_written} = {file_path}.write_text({content}, encoding={encoding})",
@@ -4089,7 +6370,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "content",
-      "primary_out": "bytes_written"
+      "primary_out": "bytes_written",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_WRITE_BYTES",
@@ -4118,7 +6401,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_created",
+          "typestate": "pathlib::file_created",
+          "invariants": []
         },
         "content": {
           "type_name": "file_content_bytes",
@@ -4131,7 +6428,21 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "file_content_bytes",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.binary_payload",
+          "typestate": "pathlib::binary_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4144,7 +6455,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.byte_count",
+          "typestate": "pathlib::byte_count",
+          "invariants": []
         }
       },
       "code_template": "{bytes_written} = {file_path}.write_bytes({content})",
@@ -4152,7 +6477,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "content",
-      "primary_out": "bytes_written"
+      "primary_out": "bytes_written",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_APPEND_TEXT",
@@ -4181,7 +6508,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "content": {
           "type_name": "str",
@@ -4194,7 +6535,21 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "role": "data_input"
+          "role": "data_input",
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -4207,7 +6562,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4220,7 +6589,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.char_count",
+          "typestate": "pathlib::char_count",
+          "invariants": []
         }
       },
       "code_template": "with open({file_path}, 'a', encoding={encoding}) as _f:\n    {chars_appended} = _f.write({content})",
@@ -4228,7 +6611,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "content",
-      "primary_out": "chars_appended"
+      "primary_out": "chars_appended",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "PATH_WRITE_LINES",
@@ -4257,7 +6642,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file_created",
+          "typestate": "pathlib::file_created",
+          "invariants": []
         },
         "lines": {
           "type_name": "List[str]",
@@ -4279,7 +6678,23 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
-          }
+          },
+          "carrier": "List[str]",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         },
         "encoding": {
           "type_name": "str",
@@ -4292,7 +6707,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.text_payload",
+          "typestate": "pathlib::text_payload",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4307,7 +6736,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "code_template": "with open({file_path}, 'w', encoding={encoding}) as _f:\n    _f.writelines({lines})\n{written_path} = {file_path}",
@@ -4315,7 +6758,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "lines",
-      "primary_out": "written_path"
+      "primary_out": "written_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_COPY",
@@ -4344,7 +6789,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "dst_path": {
           "type_name": "path",
@@ -4358,7 +6817,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4373,7 +6846,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "code_template": "{copied_path} = Path(shutil.copy({src_path}, {dst_path}))",
@@ -4382,7 +6869,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "src_path",
-      "primary_out": "copied_path"
+      "primary_out": "copied_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_COPY2",
@@ -4411,7 +6900,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "dst_path": {
           "type_name": "path",
@@ -4425,7 +6928,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4440,7 +6957,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "code_template": "{copied_path} = Path(shutil.copy2({src_path}, {dst_path}))",
@@ -4449,7 +6980,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "src_path",
-      "primary_out": "copied_path"
+      "primary_out": "copied_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_COPYTREE",
@@ -4478,7 +7011,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "dst_dir": {
           "type_name": "path",
@@ -4492,7 +7039,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "dirs_exist_ok": {
           "type_name": "bool",
@@ -4505,7 +7066,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4520,7 +7095,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "code_template": "{copied_dir} = Path(shutil.copytree({src_dir}, {dst_dir}, dirs_exist_ok={dirs_exist_ok}))",
@@ -4529,7 +7118,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "src_dir",
-      "primary_out": "copied_dir"
+      "primary_out": "copied_dir",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_MOVE",
@@ -4558,7 +7149,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         },
         "dst_path": {
           "type_name": "path",
@@ -4572,7 +7177,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4587,7 +7206,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.existing_path",
+          "typestate": "pathlib::existing_path",
+          "invariants": []
         }
       },
       "code_template": "{moved_path} = Path(shutil.move({src_path}, {dst_path}))",
@@ -4596,7 +7229,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "src_path",
-      "primary_out": "moved_path"
+      "primary_out": "moved_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_RMTREE",
@@ -4625,7 +7260,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         },
         "ignore_errors": {
           "type_name": "bool",
@@ -4638,7 +7287,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "bool",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.boolean_flag",
+          "typestate": "pathlib::boolean_flag",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4653,7 +7316,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory_deleted",
+          "typestate": "pathlib::directory_deleted",
+          "invariants": []
         }
       },
       "code_template": "shutil.rmtree({dir_path}, ignore_errors={ignore_errors})\n{removed_path} = {dir_path}",
@@ -4662,7 +7339,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "dir_path",
-      "primary_out": "removed_path"
+      "primary_out": "removed_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_MAKE_ARCHIVE",
@@ -4692,7 +7371,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.unresolved_path",
+          "typestate": "pathlib::unresolved_path",
+          "invariants": []
         },
         "format_type": {
           "type_name": "str",
@@ -4705,7 +7398,21 @@
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
-          "supported_formats": []
+          "supported_formats": [],
+          "carrier": "str",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.string_name",
+          "typestate": "pathlib::string_name",
+          "invariants": []
         },
         "root_dir": {
           "type_name": "path",
@@ -4719,7 +7426,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4734,7 +7455,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         }
       },
       "code_template": "{archive_path} = Path(shutil.make_archive(base_name=str({base_name}), format={format_type}, root_dir=str({root_dir})))",
@@ -4743,7 +7478,9 @@
         "from pathlib import Path"
       ],
       "primary_in": "root_dir",
-      "primary_out": "archive_path"
+      "primary_out": "archive_path",
+      "effects": [],
+      "mutation_type": "io"
     },
     {
       "cell_id": "SHUTIL_UNPACK_ARCHIVE",
@@ -4773,7 +7510,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.file",
+          "typestate": "pathlib::file",
+          "invariants": []
         },
         "extract_dir": {
           "type_name": "path",
@@ -4787,7 +7538,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "outputs": {
@@ -4802,7 +7567,21 @@
           "element_type": "string",
           "supported_formats": [
             "*"
-          ]
+          ],
+          "carrier": "path",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "pathlib.directory",
+          "typestate": "pathlib::directory",
+          "invariants": []
         }
       },
       "code_template": "shutil.unpack_archive(filename=str({archive_path}), extract_dir=str({extract_dir}))\n{extracted_dir} = {extract_dir}",
@@ -4811,10 +7590,76 @@
         "from pathlib import Path"
       ],
       "primary_in": "archive_path",
-      "primary_out": "extracted_dir"
+      "primary_out": "extracted_dir",
+      "effects": [],
+      "mutation_type": "io"
     }
   ],
   "supported_formats": [
     "*"
-  ]
+  ],
+  "role_semantics": {
+    "path_consumer_roles": [
+      "source_data"
+    ],
+    "path_abstract_types": [
+      "path"
+    ],
+    "path_roles": [
+      "path",
+      "file",
+      "filepath",
+      "filename",
+      "pathlike",
+      "dest_path",
+      "source_path",
+      "dest_identifier",
+      "source_identifier",
+      "dest",
+      "buf",
+      "fp",
+      "uri",
+      "url"
+    ],
+    "path_type_names": [
+      "path",
+      "filepath",
+      "uri",
+      "url",
+      "file",
+      "pathlike"
+    ],
+    "source_roles": [
+      "source",
+      "ingress"
+    ],
+    "ingress_roles": [
+      "source",
+      "ingress"
+    ],
+    "sink_roles": [
+      "sink",
+      "terminal",
+      "egress"
+    ],
+    "terminal_roles": [
+      "sink",
+      "model_sink",
+      "evaluator",
+      "export",
+      "terminal",
+      "output"
+    ],
+    "bridge_roles": [
+      "bridge",
+      "tunnel",
+      "adapter",
+      "cast",
+      "coercion"
+    ],
+    "dataflow_roles": [
+      "carrier",
+      "data_input"
+    ]
+  }
 }

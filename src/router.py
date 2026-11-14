@@ -15,6 +15,7 @@ runnable standalone; production profiles should override via settings.
 """
 
 from __future__ import annotations
+import ast
 import os
 import json
 import time
@@ -29,7 +30,7 @@ from log_config import get_logger
 try:
     from .lattice import LatticeOrchestrator, Cell, MacroCell, TypeRegistry
     from .internal_rag import LocalRAG
-    from .planner import LatticePlanner, STOPWORDS, _segment_prompt_clauses
+    from .planner import LatticePlanner, _segment_prompt_clauses
     from .tokenizer import CellTokenizer
     from .inference import ModelManager
     from .route_methods import get_route_method, RouteMethod
@@ -40,7 +41,7 @@ try:
 except (ImportError, ValueError):
     from lattice import LatticeOrchestrator, Cell, MacroCell, TypeRegistry
     from internal_rag import LocalRAG
-    from planner import LatticePlanner, STOPWORDS, _segment_prompt_clauses
+    from planner import LatticePlanner, _segment_prompt_clauses
     from tokenizer import CellTokenizer
     from inference import ModelManager
     from route_methods import get_route_method, RouteMethod
@@ -139,8 +140,8 @@ MACRO_CONCEPT_COVERAGE_GATE: float = float(_cfg("macro_concept_coverage_gate", 0
 # degraded Profile A/C/D benchmarks to Profile 0 behavior on prompts with
 # high lexical overlap.
 # Per-span top_k bounds for the dense blend.
-DENSE_RAG_MIN_PER_SPAN: int = int(_cfg("dense_rag_min_per_span", 4))
-DENSE_RAG_MAX_PER_SPAN: int = int(_cfg("dense_rag_max_per_span", 25))
+DENSE_RAG_MIN_PER_SPAN: int = int(_cfg("dense_rag_min_per_span", 15))
+DENSE_RAG_MAX_PER_SPAN: int = int(_cfg("dense_rag_max_per_span", 30))
 
 
 # --- Clause delimiter fallback -------------------------------------------
@@ -149,15 +150,15 @@ DENSE_RAG_MAX_PER_SPAN: int = int(_cfg("dense_rag_max_per_span", 25))
 # harvested from the loaded domain trees. The engine carries no language
 # literals of its own; with no trees loaded the delimiter set is empty and
 # only punctuation-based splitting remains.
-def _get_clause_delims() -> frozenset:
+def _get_clause_delims() -> Set[str]:
     delims = getattr(CellTokenizer, "CLAUSE_DELIMITERS", None)
     if delims:
-        return frozenset(delims)
+        return set(delims)
     try:
         reg = TypeRegistry.get_instance()
-        return frozenset(reg.get_sentence_connectives()) | frozenset(reg.get_preposition_triggers())
+        return set(reg.get_sentence_connectives()) | set(reg.get_preposition_triggers())
     except Exception:
-        return frozenset()
+        return set()
 
 
 def _extract_id(item):
@@ -250,7 +251,13 @@ class LatticeRouter:
             self.default_route_method = str(_explicit_method).strip().lower()
         else:
             try:
-                self.default_route_method = "m4" if ModelManager.get_instance().can_synthesize() else "m0"
+                _mm_rt = ModelManager.get_instance()
+                if getattr(_mm_rt, "has_coalgebraic_unfolder", lambda: False)():
+                    self.default_route_method = "omega"
+                elif _mm_rt.can_synthesize():
+                    self.default_route_method = "m4"
+                else:
+                    self.default_route_method = "m0"
             except Exception:
                 self.default_route_method = "m0"
         # Macro-goal routing (Section 3.5). Defaults to the global settings
@@ -271,25 +278,52 @@ class LatticeRouter:
             macros_enabled=self._macros_enabled,
             topology_mode=self._topology_mode
         )
-        # (apply_fixes_v7) IR compiler hook
-        self._use_ir_compiler = bool(_cfg("use_ir_compiler", False))
+        # (apply_fixes_v7) IR compiler hook — auto-enabled when active profile provides has_ir_compiler() (e.g. Profile S)
+        is_p0 = False
+        has_ir = False
+        try:
+            mm_ir = ModelManager.get_instance()
+            is_p0 = (getattr(mm_ir, "current_profile_name", None) == "0")
+            has_ir = bool(mm_ir.has_ir_compiler())
+        except Exception:
+            is_p0 = False
+            has_ir = False
+        self._use_ir_compiler = False if is_p0 else (bool(_cfg("use_ir_compiler", False)) or has_ir)
         self._ir_compiler = None
         if self._use_ir_compiler:
             try:
                 from ir_compiler import IRCompiler
                 self._ir_compiler = IRCompiler(self.orchestrator)
             except Exception as _e:
-                logger.warning("IR compiler unavailable: %s", _e)
+                try:
+                    from .ir_compiler import IRCompiler
+                    self._ir_compiler = IRCompiler(self.orchestrator)
+                except Exception as _e2:
+                    logger.warning("IR compiler unavailable: %s", _e2)
         self._last_ir_steps = 0
         self.priority_map: Dict[str, float] = {}
 
-        # Neural Reranker configuration (Optional / Experimental)
+        # Neural Reranker configuration:
+        # Profile A enables cross-encoder/listwise reranking by default (`uses_reranker() == True`).
+        # Profile 0 and Profile B never enable the reranker.
+        mm_inst = None
+        profile_name_now = None
+        profile_uses_reranker = False
+        try:
+            mm_inst = ModelManager.get_instance()
+            profile_name_now = getattr(mm_inst, "current_profile_name", None)
+            profile_uses_reranker = bool(mm_inst.uses_reranker()) if mm_inst else False
+        except Exception:
+            pass
         reranker_val = kwargs.get("use_reranker")
-        if reranker_val is None:
-            reranker_val = _cfg("use_reranker", False)
-        self.use_reranker = bool(reranker_val)
+        if is_p0 or profile_name_now == "B":
+            self.use_reranker = False
+        elif reranker_val is not None:
+            self.use_reranker = bool(reranker_val)
+        else:
+            self.use_reranker = bool(_cfg("use_reranker", False)) or profile_uses_reranker
         self.reranker_model = kwargs.get("reranker_model") or _cfg("reranker_model", None)
-        self.reranker = kwargs.get("reranker")
+        self.reranker = None if (is_p0 or profile_name_now == "B") else kwargs.get("reranker")
         if self.use_reranker and self.reranker is None and LocalReranker is not None:
             try:
                 self.reranker = LocalReranker(model_name_or_path=self.reranker_model)
@@ -299,8 +333,16 @@ class LatticeRouter:
         self.raw_rag_tunnel: List[Cell] = []
         self.raw_rag_relevance_map: Dict[str, float] = {}
         self.last_reranker_telemetry: List[Dict[str, Any]] = []
+        self.last_clause_semantic_scores: List[Dict[str, float]] = []
         self._route_cache: Dict[Any, Any] = {}
         self.enable_route_cache: bool = True
+
+    @staticmethod
+    def _is_profile_zero() -> bool:
+        try:
+            return getattr(ModelManager.get_instance(), "current_profile_name", None) == "0"
+        except Exception:
+            return False
 
     def clear_route_cache(self) -> None:
         """Clears memoized Layer 1 semantic routing results."""
@@ -340,6 +382,18 @@ class LatticeRouter:
         inv_q_len = 1.0 / q_len
         clause_scores: Dict[Cell, float] = {}
 
+        if self._is_profile_zero():
+            # Strict Profile 0: direct formal set membership against {cell_id} | canonical_op_names ONLY.
+            # Zero semantic tags, zero keywords, zero docstring matching, zero zero-IDF stripping.
+            raw_set = {w.strip().lower() for w in text.replace("(", " ").replace(")", " ").replace(",", " ").split() if w.strip()} | eval_tokens
+            denom = max(len(raw_set), q_len, 1)
+            for cell in self.orchestrator.loaded_cells.values():
+                f_ids = getattr(cell, "formal_identifiers", None) or {cell.cell_id.lower()}
+                hits = raw_set & f_ids
+                if hits:
+                    clause_scores[cell] = float(len(hits)) / float(denom)
+            return clause_scores
+
         if not token_index or N == 0:
             for cell in self.orchestrator.loaded_cells.values():
                 cell_tokens = cell.token_set
@@ -358,10 +412,12 @@ class LatticeRouter:
         cells_with_identity: Set[Cell] = set()
         idf_ratio = float(_cfg("lexical_idf_max_freq_ratio", 0.3))
         idf_body_w = float(_cfg("lexical_idf_body_weight", 0.3))
+        q_idf_mass = 0.0
         for tok in eval_tokens:
             cells = token_index.get(tok, [])
+            w = _idf(tok)
+            q_idf_mass += w
             if N < 20 or len(cells) < idf_ratio * N:
-                w = _idf(tok)
                 for cell in cells:
                     if tok in getattr(cell, "identity_tokens", ()):
                         cells_with_identity.add(cell)
@@ -369,12 +425,13 @@ class LatticeRouter:
                     else:
                         match_weights[cell] = match_weights.get(cell, 0.0) + idf_body_w * w
 
+        q_idf_denom = q_idf_mass if q_idf_mass > 0.0 else float(max(q_len, 1))
         for cell, weight_sum in match_weights.items():
             if cells_with_identity and cell not in cells_with_identity:
                 continue
             c_len = max(getattr(cell, "token_count", len(cell.token_set)), 1)
-            sc = (weight_sum * inv_q_len) * LEN_NORM_TABLE[min(c_len, 499)]
-            clause_scores[cell] = sc
+            sc = (weight_sum / q_idf_denom) * LEN_NORM_TABLE[min(c_len, 499)]
+            clause_scores[cell] = min(1.0, float(sc))
 
         return clause_scores
 
@@ -553,10 +610,10 @@ class LatticeRouter:
             from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
             ingress_stage = reg.get_ingress_stage()
-            ingress_roles = {str(r).lower() for r in (reg.get_verification_semantics("ingress_roles") or ("source", "ingress"))}
+            ingress_roles = reg.get_ingress_roles_set()
         except Exception:
             ingress_stage = 1
-            ingress_roles = {"source", "ingress"}
+            ingress_roles = set()
 
         for cell in idiom.cells:
             cid = cell.cell_id
@@ -596,14 +653,33 @@ class LatticeRouter:
           (tunnel_cells, cell_relevance_probabilities)
         """
         if not prompt or not prompt.strip() or len(self.orchestrator.loaded_cells) == 0:
+            self.last_clause_semantic_scores = []
+            if self.orchestrator is not None:
+                self.orchestrator._last_clause_semantic_scores = None
             return [], {}
+
+        self.last_clause_semantic_scores = []
+        if self.orchestrator is not None:
+            self.orchestrator._last_clause_semantic_scores = None
+        is_p0 = self._is_profile_zero()
+        if is_p0:
+            prog_cells, _ = self._resolve_program_0(prompt)
+            rel_p0 = {c.cell_id: 1.0 for c in prog_cells}
+            return prog_cells, rel_p0
+        cur_prof_name = ""
+        try:
+            cur_prof_name = str(getattr(ModelManager.get_instance(), "current_profile_name", "") or "")
+        except Exception:
+            pass
 
         cache_key = (
             prompt.strip(),
             int(top_k),
-            bool(getattr(self, "use_reranker", False)),
-            str(getattr(self, "reranker_model", "") or ""),
-            id(getattr(self, "internal_rag", None)),
+            bool(getattr(self, "use_reranker", False)) and not is_p0,
+            str(getattr(self, "reranker_model", "") or "") if not is_p0 else "",
+            id(getattr(self, "internal_rag", None)) if not is_p0 else 0,
+            cur_prof_name,
+            bool(getattr(self, "_use_ir_compiler", False)) and not is_p0,
         )
         if getattr(self, "enable_route_cache", True) and hasattr(self, "_route_cache") and cache_key in self._route_cache:
             entry = self._route_cache[cache_key]
@@ -613,6 +689,13 @@ class LatticeRouter:
             self.raw_rag_tunnel = list(entry.get("raw_rag_tunnel") or [])
             self.raw_rag_relevance_map = dict(entry.get("raw_rag_relevance_map") or {})
             self.last_reranker_telemetry = list(entry.get("last_reranker_telemetry") or [])
+            self.last_clause_semantic_scores = [dict(d) for d in (entry.get("last_clause_semantic_scores") or [])]
+            if self.orchestrator is not None:
+                self.orchestrator._last_clause_semantic_scores = (
+                    (prompt.strip(), [dict(d) for d in self.last_clause_semantic_scores])
+                    if self.last_clause_semantic_scores
+                    else None
+                )
             for _cid, _s in entry.get("priority_map", {}).items():
                 self.priority_map[_cid] = _s
             return list(entry["final_tunnel"]), dict(entry["relevance_map"])
@@ -639,7 +722,7 @@ class LatticeRouter:
         ir_clauses: List[str] = []
         self.last_compiled_ir = None
         self.last_ir_literals = {}
-        if getattr(self, "_use_ir_compiler", False) and self._ir_compiler is not None:
+        if not is_p0 and getattr(self, "_use_ir_compiler", False) and self._ir_compiler is not None:
             try:
                 _ir = self._ir_compiler.compile(prompt,)
                 if _ir is not None and _ir.steps:
@@ -672,13 +755,16 @@ class LatticeRouter:
         clauses = raw_clauses
         if not num_semantic_clauses:
             num_semantic_clauses = len(clauses)
-        search_texts = [prompt.strip()] + [c for c in clauses if c != prompt.strip()]
+        primary_texts = [prompt.strip()]
+        for c in clauses:
+            cs = c.strip()
+            if cs and cs not in primary_texts:
+                primary_texts.append(cs)
         for ic in ir_clauses:
-            if ic and ic not in search_texts:
-                search_texts.append(ic)
-        for q in self._generate_query_spans(prompt.strip()):
-            if q not in search_texts:
-                search_texts.append(q)
+            if ic and ic not in primary_texts:
+                primary_texts.append(ic)
+        window_texts = [q for q in self._generate_query_spans(prompt.strip()) if q not in primary_texts]
+        search_texts = primary_texts + window_texts
         first_clause = clauses[0] if clauses else prompt.strip()
 
         # Step 1: Stage 1 Idiom / Subgraph Discovery
@@ -691,28 +777,40 @@ class LatticeRouter:
 
         # Step 3: Candidate Group Assembly
         grouped_candidates: List[Dict[Cell, float]] = []
+        primary_text_set = set(primary_texts)
 
         for text in search_texts:
             clause_scores = self._score_clause_lexical_idf(text, token_index, N)
             if not clause_scores:
                 continue
 
+            lex_scale = 1.0 if text in primary_text_set else 0.65
             kept = sorted(clause_scores.items(), key=lambda x: x[1], reverse=True)[:100]
-            grouped_candidates.append(dict(kept))
+            grouped_candidates.append({c: float(sc) * lex_scale for c, sc in kept})
 
         # Step 3.1: Candidate Subgraph / Idiom Group Preservation
         # Discovered idioms represent coherent topological paths across clauses.
-        # Idiom cell weights are anchored to their empirical seed clause match score.
+        # Normalize summed clause lexical scores into [0, 1] and weight by
+        # topological edge coherence so disconnected cross-domain coincidences
+        # cannot clamp weak lexical hits to 1.0 over strong dense semantic matches.
+        n_cl_norm = float(max(len(clauses), 1))
         for idiom in candidate_idioms[:3]:
             if not idiom.cells:
                 continue
             idiom_group: Dict[Cell, float] = {}
-            base_score = float(getattr(idiom, "lexical_score", 0.0) or 0.0)
-            if base_score <= 0.0:
+            raw_lex = float(getattr(idiom, "lexical_score", 0.0) or 0.0)
+            if raw_lex <= 0.0:
                 continue
+            edge_ratio = (
+                min(1.0, float(len(getattr(idiom, "edges", []) or [])) / float(max(len(clauses) - 1, 1)))
+                if len(clauses) > 1
+                else 1.0
+            )
+            base_score = min(1.0, (raw_lex / n_cl_norm) * (0.5 + 0.5 * edge_ratio))
             entry_bonus = float(_cfg("idiom_entry_bonus", 0.2))
             for c in idiom.cells:
-                idiom_group[c] = base_score * (1.0 + (entry_bonus if c == idiom.entry_node else 0.0))
+                sc_i = base_score * (1.0 + (entry_bonus if c == idiom.entry_node else 0.0))
+                idiom_group[c] = min(1.0, sc_i)
             if idiom_group:
                 grouped_candidates.append(idiom_group)
 
@@ -724,19 +822,20 @@ class LatticeRouter:
         # synonyms are ever hardcoded: the association is measured from the
         # loaded cells' own declared identity vocabulary.
         prf_spans: List[str] = []
-        try:
-            prelim = self._tunnel_from_groups(grouped_candidates)
-            exp_tokens = self._harvest_expansion_tokens(prompt, prelim)
-            if exp_tokens:
-                span = " ".join(exp_tokens)
-                prf_spans.append(span)
-                exp_scores = self._score_clause_lexical_idf(span, token_index, N)
-                if exp_scores:
-                    kept_exp = sorted(exp_scores.items(), key=lambda x: x[1], reverse=True)[:100]
-                    grouped_candidates.append(dict(kept_exp))
-                logger.debug("[ROUTER] PRF expansion span: %r", span)
-        except Exception as _prf_err:
-            logger.debug("[ROUTER] PRF expansion skipped: %s", _prf_err)
+        if not is_p0:
+            try:
+                prelim = self._tunnel_from_groups(grouped_candidates)
+                exp_tokens = self._harvest_expansion_tokens(prompt, prelim)
+                if exp_tokens:
+                    span = " ".join(exp_tokens)
+                    prf_spans.append(span)
+                    exp_scores = self._score_clause_lexical_idf(span, token_index, N)
+                    if exp_scores:
+                        kept_exp = sorted(exp_scores.items(), key=lambda x: x[1], reverse=True)[:100]
+                        grouped_candidates.append(dict(kept_exp))
+                    logger.debug("[ROUTER] PRF expansion span: %r", span)
+            except Exception as _prf_err:
+                logger.debug("[ROUTER] PRF expansion skipped: %s", _prf_err)
 
         # Step 4: Dense vector blending from edge-context embeddings.
         # Architecture contract (Profile A/C/D/E): the dense pass ALWAYS runs
@@ -744,12 +843,14 @@ class LatticeRouter:
         # dense embedding evidence are complementary modalities; a lexical
         # heuristic must never short-circuit the embed + FAISS pass, so the
         # reported dense-retrieval behavior in every profile is genuine.
-        if self.internal_rag is not None and self.internal_rag.index is not None:
-            clause_spans = [c.strip() for c in search_texts if c and c.strip()]
+        clause_dense_scores: List[Dict[str, float]] = [{} for _ in clauses]
+        if not is_p0 and self.internal_rag is not None and self.internal_rag.index is not None:
+            clause_spans = [c.strip() for c in primary_texts if c and c.strip()]
             query_spans = clause_spans + [
-                q for q in (prf_spans + self._generate_query_spans(prompt.strip()))
+                q for q in (prf_spans + window_texts)
                 if q and q not in clause_spans
             ]
+            span_to_idx = {sp: idx for idx, sp in enumerate(query_spans)}
             # Divide the retrieval budget across spans instead of granting every
             # span the full top_k, so total dense work is bounded by top_k
             # regardless of span count.
@@ -758,31 +859,44 @@ class LatticeRouter:
                 DENSE_RAG_MIN_PER_SPAN,
                 min(DENSE_RAG_MAX_PER_SPAN, top_k // n_spans),
             )
-            dense_candidates: Dict[str, Tuple[Cell, float]] = {}
             rag_results = self.internal_rag.get_relevant_context_batch(query_spans, top_k=per_span_k)
+            for cl_idx, cl_text in enumerate(clauses):
+                sp_idx = span_to_idx.get(cl_text.strip())
+                if sp_idx is not None and sp_idx < len(rag_results):
+                    for item in rag_results[sp_idx]:
+                        cid = item.get("cell_id")
+                        dsc = float(item.get("score", 0.0) or 0.0)
+                        if cid and dsc > 0.0:
+                            clause_dense_scores[cl_idx][cid] = max(
+                                clause_dense_scores[cl_idx].get(cid, 0.0), dsc
+                            )
+            self.last_clause_semantic_scores = [dict(d) for d in clause_dense_scores]
             for span_results in rag_results:
+                span_group: Dict[Cell, float] = {}
                 for item in span_results:
                     cid = item.get("cell_id")
                     if not cid:
                         continue
-                    # Honest fusion weight: the RRF rank is the declared fusion
-                    # policy over dense + lexical modalities. No fabricated
-                    # cosine substitution is applied anywhere.
-                    weight = float(item.get("rrf_score", 0.0) or 0.0)
+                    dense_sc = float(item.get("score", 0.0) or 0.0)
+                    rrf_sc = float(item.get("rrf_score", 0.0) or 0.0)
+                    # Commensurate [0, 1] fusion weight per clause/span: preserve real
+                    # dense cosine similarity alongside normalized RRF fusion weight without
+                    # allowing weak lexical-only overlap to match strong dense cosine matches.
+                    if dense_sc > 0.05:
+                        weight = min(1.0, max(dense_sc, 0.75 * dense_sc + 0.25 * rrf_sc))
+                    else:
+                        weight = min(1.0, 0.6 * rrf_sc)
                     if weight <= 0.0:
                         continue
                     cell_obj = self.orchestrator.loaded_cells.get(cid)
                     if cell_obj is None:
                         continue
-                    prev = dense_candidates.get(cid)
-                    if prev is None or weight > prev[1]:
-                        dense_candidates[cid] = (cell_obj, weight)
-
-            if dense_candidates:
-                top_dense = sorted(dense_candidates.values(), key=lambda x: x[1], reverse=True)[:60]
-                dense_dict: Dict[Cell, float] = {c: w for c, w in top_dense}
-                if dense_dict:
-                    grouped_candidates.append(dense_dict)
+                    prev_w = span_group.get(cell_obj, 0.0)
+                    if weight > prev_w:
+                        span_group[cell_obj] = weight
+                if span_group:
+                    top_span = sorted(span_group.items(), key=lambda x: x[1], reverse=True)[:40]
+                    grouped_candidates.append(dict(top_span))
 
         candidates_with_scores = self._tunnel_from_groups(grouped_candidates)
 
@@ -823,18 +937,22 @@ class LatticeRouter:
         # Category-Theoretic Bridge Morphisms are discovered dynamically during Layer 2
         # topological routing (via find_shortest_bridge_path in the lattice graph), preserving
         # Layer 1 semantic query-grounding purity. Zero ungrounded bridge injection in Layer 1.
+        reg = TypeRegistry.get_instance()
         carriers_out = set()
         carriers_in = set()
         for c in final_tunnel:
             out_t = getattr(c.primary_output, "type_name", "")
             in_t = getattr(c.primary_input, "type_name", "")
-            if out_t and out_t.lower() not in ("any", "none", "*", "top", "void"):
-                carriers_out.add(out_t)
-            if in_t and in_t.lower() not in ("any", "none", "*", "top", "void"):
-                carriers_in.add(in_t)
+            if out_t:
+                ot_low = out_t.lower()
+                if not (reg.is_declared_top(ot_low) or reg.is_void_type(ot_low)):
+                    carriers_out.add(out_t)
+            if in_t:
+                it_low = in_t.lower()
+                if not (reg.is_declared_top(it_low) or reg.is_void_type(it_low)):
+                    carriers_in.add(in_t)
 
-        reg = TypeRegistry.get_instance()
-        if carriers_out and carriers_in:
+        if not is_p0 and carriers_out and carriers_in:
             # Property & Qualifier Categorical Boundary Closure:
             # If an active producer establishes a property/qualifier (e.g. is_complex=True)
             # that conflicts with an active consumer's precondition/rejected qualifier on a
@@ -922,7 +1040,7 @@ class LatticeRouter:
                             relevance_map[cand.cell_id] = max(relevance_map.get(cand.cell_id, 0.0), 0.15)
                             logger.info("[ROUTER] Injected resolving morphism %s for refinement conflict (%s, %s == %s)", cand.cell_id, carrier, prop, target_val)
 
-        if carriers_out or carriers_in:
+        if not is_p0 and (carriers_out or carriers_in):
             prompt_toks = CellTokenizer.tokenize_prompt(prompt) if prompt else set()
             active_domains = set(c.domain_name for c in final_tunnel if c.domain_name)
             # Carrier-completion augmentation is intentionally TIGHT: only cells in
@@ -949,7 +1067,8 @@ class LatticeRouter:
             augment.sort(key=lambda c: (
                 len(getattr(c, "identity_tokens", c.token_set) & prompt_toks),
                 relevance_map.get(c.cell_id, 0.0),
-                -getattr(c, "source_priority", 100)
+                1 if getattr(c, "is_public", True) else 0,
+                -str(getattr(c, "cell_id", "")).count("."),
             ), reverse=True)
             for cell in augment[:carrier_augment_max]:
                 final_tunnel.append(cell)
@@ -973,7 +1092,7 @@ class LatticeRouter:
         # enters the tunnel and scores ABOVE every one of its constituent
         # micro-cells, sharpening the routing distribution toward the
         # known-good path. Skipped entirely when macros are disabled.
-        if self.macros_enabled:
+        if self.macros_enabled and not is_p0:
             self._promote_macro_goals(prompt, final_tunnel, tunnel_ids, relevance_map)
         final_tunnel = self._prune_tunnel_stratified(
             final_tunnel, relevance_map,
@@ -988,17 +1107,104 @@ class LatticeRouter:
         self.raw_rag_tunnel = list(final_tunnel)
         self.raw_rag_relevance_map = dict(relevance_map)
         self.last_reranker_telemetry = []
+        if not is_p0 and clause_dense_scores:
+            self.last_clause_semantic_scores = [dict(d) for d in clause_dense_scores]
 
         # Neural Reranking Pass (Optional / Experimental)
-        if getattr(self, "use_reranker", False) and getattr(self, "reranker", None) is not None:
+        if not is_p0 and getattr(self, "use_reranker", False) and getattr(self, "reranker", None) is not None:
             final_tunnel, relevance_map, self.last_reranker_telemetry = self.reranker.rerank(
                 prompt,
                 final_tunnel,
                 relevance_map,
-                top_k=min(top_k, 50),
+                top_k=min(max(top_k, 50), 80),
             )
+            tunnel_by_id = {c.cell_id: c for c in final_tunnel}
+            clause_sem = [dict(d) for d in clause_dense_scores]
+            if len(clauses) <= 1 and clause_sem:
+                calib_map = {
+                    t["cell_id"]: float(t.get("calibrated_score", t.get("new_score", 0.0)) or 0.0)
+                    for t in (self.last_reranker_telemetry or [])
+                    if "cell_id" in t
+                }
+                for cid, calib_sc in calib_map.items():
+                    if cid in clause_sem[0]:
+                        clause_sem[0][cid] = 0.5 * float(clause_sem[0][cid]) + 0.5 * calib_sc
+                    else:
+                        clause_sem[0][cid] = calib_sc
+            elif len(clauses) > 1 and clause_sem:
+                for cl_idx, cl_text in enumerate(clauses):
+                    cl_clean = cl_text.strip()
+                    if not cl_clean:
+                        continue
+                    cl_pool: List[Cell] = []
+                    cl_pool_ids: Set[str] = set()
+                    for cid, _dsc in sorted(
+                        clause_dense_scores[cl_idx].items(), key=lambda kv: kv[1], reverse=True
+                    )[:15]:
+                        c_obj = tunnel_by_id.get(cid)
+                        if c_obj is not None and cid not in cl_pool_ids:
+                            cl_pool.append(c_obj)
+                            cl_pool_ids.add(cid)
+                    for c_obj in final_tunnel:
+                        if len(cl_pool) >= 25:
+                            break
+                        if c_obj.cell_id not in cl_pool_ids:
+                            cl_pool.append(c_obj)
+                            cl_pool_ids.add(c_obj.cell_id)
+                    if not cl_pool:
+                        continue
+                    _, cl_rel, cl_telem = self.reranker.rerank(
+                        cl_clean,
+                        cl_pool,
+                        {c.cell_id: relevance_map.get(c.cell_id, 0.0) for c in cl_pool},
+                        top_k=len(cl_pool),
+                    )
+                    calib_map = {
+                        t["cell_id"]: float(t.get("calibrated_score", t.get("new_score", 0.0)) or 0.0)
+                        for t in (cl_telem or [])
+                        if "cell_id" in t
+                    }
+                    for cid, calib_sc in calib_map.items():
+                        if cid in clause_dense_scores[cl_idx]:
+                            clause_sem[cl_idx][cid] = 0.5 * float(clause_dense_scores[cl_idx][cid]) + 0.5 * calib_sc
+                        else:
+                            clause_sem[cl_idx][cid] = calib_sc
+                    for cid, rel_sc in (cl_rel or {}).items():
+                        relevance_map[cid] = max(relevance_map.get(cid, 0.0), float(rel_sc or 0.0))
+                final_tunnel = sorted(
+                    final_tunnel,
+                    key=lambda c: relevance_map.get(c.cell_id, 0.0),
+                    reverse=True,
+                )
+            self.last_clause_semantic_scores = clause_sem
             for cid, s in relevance_map.items():
                 self.priority_map[cid] = s
+
+        # Profile Omega Stage 2: Calibrated Sigmoid Hybrid Retrieval + Backward Precondition Cone
+        try:
+            mm_st2 = ModelManager.get_instance()
+            is_omega_st2 = bool(not is_p0 and getattr(mm_st2, "has_coalgebraic_unfolder", lambda: False)())
+        except Exception:
+            is_omega_st2 = False
+        if not is_p0 and final_tunnel:
+            if is_omega_st2 and not self.last_reranker_telemetry:
+                self._calibrate_hybrid_sigmoid(relevance_map)
+            added_cone = self._expand_backward_precondition_cone(
+                prompt, final_tunnel, tunnel_ids, relevance_map
+            )
+            if added_cone:
+                final_tunnel = sorted(
+                    final_tunnel,
+                    key=lambda c: relevance_map.get(c.cell_id, 0.0),
+                    reverse=True,
+                )
+
+        if self.orchestrator is not None:
+            self.orchestrator._last_clause_semantic_scores = (
+                (prompt.strip(), [dict(d) for d in self.last_clause_semantic_scores])
+                if (not is_p0 and self.last_clause_semantic_scores)
+                else None
+            )
 
         if getattr(self, "enable_route_cache", True) and hasattr(self, "_route_cache"):
             self._route_cache[cache_key] = {
@@ -1010,10 +1216,120 @@ class LatticeRouter:
                 "raw_rag_tunnel": list(self.raw_rag_tunnel or []),
                 "raw_rag_relevance_map": dict(self.raw_rag_relevance_map or {}),
                 "last_reranker_telemetry": list(self.last_reranker_telemetry or []),
+                "last_clause_semantic_scores": [dict(d) for d in (self.last_clause_semantic_scores or [])],
                 "priority_map": dict(self.priority_map or {}),
             }
 
         return final_tunnel, relevance_map
+
+    @staticmethod
+    def _calibrate_hybrid_sigmoid(relevance_map: Dict[str, float]) -> None:
+        """Logistic sigmoid calibration sigma((s - mu) / tau) for hybrid scores when no reranker ran."""
+        if not relevance_map:
+            return
+        vals = [float(v) for v in relevance_map.values()]
+        mean_v = sum(vals) / max(len(vals), 1)
+        var_v = sum((v - mean_v) ** 2 for v in vals) / max(len(vals), 1)
+        tau = max(math.sqrt(var_v), 0.18)
+        for cid, raw in list(relevance_map.items()):
+            z = max(-8.0, min(8.0, (float(raw) - mean_v) / tau))
+            relevance_map[cid] = 1.0 / (1.0 + math.exp(-z))
+
+    def _expand_backward_precondition_cone(
+        self,
+        prompt: str,
+        final_tunnel: List[Cell],
+        tunnel_ids: Set[str],
+        relevance_map: Dict[str, float],
+        max_hops: int = 2,
+        max_added: int = 24,
+    ) -> int:
+        """
+        Profile Omega Stage 2 Backward Precondition Cone:
+        Ensures every high-relevance cell in `final_tunnel` has upstream producer
+        morphisms in `final_tunnel` capable of supplying its required carrier types
+        and preconditions (up to `max_hops` reverse unification hops).
+        """
+        try:
+            from unification import unify, _pointed_default
+            from lattice import is_path_port
+        except (ImportError, ValueError):
+            from .unification import unify, _pointed_default
+            from .lattice import is_path_port
+
+        prompt_toks = CellTokenizer.tokenize_prompt(prompt) if prompt else set()
+        loaded = list(getattr(self.orchestrator, "loaded_cells", {}).values())
+        if not loaded:
+            return 0
+        reg = TypeRegistry.get_instance()
+
+        # Collect currently producible output signatures in tunnel
+        frontier_goals: List[Tuple[Cell, float]] = [
+            (c, float(relevance_map.get(c.cell_id, 0.0)))
+            for c in final_tunnel[:12]
+        ]
+        added = 0
+
+        for _hop in range(max_hops):
+            if added >= max_added or not frontier_goals:
+                break
+            produced_sigs = []
+            for tc in final_tunnel:
+                for op in (getattr(tc, "outputs", {}) or {}).values():
+                    osig = getattr(op, "signature", op)
+                    if osig is not None:
+                        produced_sigs.append(osig)
+
+            next_frontier: List[Tuple[Cell, float]] = []
+            for target_c, target_sc in frontier_goals:
+                ins = getattr(target_c, "inputs", {}) or {}
+                if not isinstance(ins, dict):
+                    continue
+                for ip in ins.values():
+                    if not getattr(ip, "required", True) or getattr(ip, "default_value", None) is not None:
+                        continue
+                    role = str(getattr(ip, "port_role", "") or getattr(ip, "role", "") or "").lower()
+                    if reg.is_config_role(role) or reg.is_hof_role(role) or role in set(reg.get_verification_semantics("parameter_roles") or ()):
+                        continue
+                    if is_path_port(ip) or _pointed_default(ip, target_c) is not None:
+                        continue
+                    isig = getattr(ip, "signature", ip)
+                    if isig is None:
+                        continue
+                    # Already satisfied by an active output carrier in tunnel?
+                    if any(unify(psig, isig) is not None for psig in produced_sigs):
+                        continue
+
+                    # Find highest-affinity upstream producer outside tunnel unifying with `isig`
+                    best_prod = None
+                    best_sc = -1.0
+                    for cand in loaded:
+                        if cand.cell_id in tunnel_ids or getattr(cand, "node_type", "") == "constant":
+                            continue
+                        outs = (getattr(cand, "outputs", {}) or {}).values()
+                        if not any(unify(getattr(op, "signature", op), isig) is not None for op in outs):
+                            continue
+                        id_toks = set(getattr(cand, "identity_tokens", ())) | set(CellTokenizer.tokenize_identifier(cand.cell_id))
+                        ov = len(prompt_toks & id_toks)
+                        dom_match = 0.25 if getattr(cand, "domain_name", "") == getattr(target_c, "domain_name", "") else 0.0
+                        depth_pen = 0.001 * str(getattr(cand, "cell_id", "")).count(".") + (0.0 if getattr(cand, "is_public", True) else 0.05)
+                        sc = 0.20 * ov + dom_match - depth_pen
+                        if sc > best_sc:
+                            best_sc = sc
+                            best_prod = cand
+                    if best_prod is not None and best_prod.cell_id not in tunnel_ids:
+                        final_tunnel.append(best_prod)
+                        tunnel_ids.add(best_prod.cell_id)
+                        new_rel = max(float(relevance_map.get(best_prod.cell_id, 0.0)), max(0.08, 0.78 * target_sc))
+                        relevance_map[best_prod.cell_id] = new_rel
+                        next_frontier.append((best_prod, new_rel))
+                        added += 1
+                        if added >= max_added:
+                            break
+                if added >= max_added:
+                    break
+            frontier_goals = next_frontier
+        return added
 
 
     def _prune_tunnel_stratified(self, tunnel_cells, relevance_map,
@@ -1240,8 +1556,7 @@ class LatticeRouter:
             # Universal Clause-Relative Activation:
             # Prevents group-size dilution where large candidate pools are penalized by 1/N.
             # Relative decay from the group peak is governed by temperature gamma, anchored to peak score.
-            norm_scores = raw_scores / max_s
-            shifted = (norm_scores - 1.0) / max(self.gamma, 1e-5)
+            shifted = (raw_scores - max_s) / max(self.gamma, 1e-5)
             calibrated_probs = np.exp(shifted) * min(1.0, float(max_s))
             cutoff = tau * min(1.0, float(max_s))
             sorted_indices = np.argsort(raw_scores)[::-1]
@@ -1330,6 +1645,332 @@ class LatticeRouter:
         # Bounded retrieval fan-out; see MAX_QUERY_SPANS.
         return queries[:MAX_QUERY_SPANS]
 
+    @staticmethod
+    def _parse_program_0_steps(prompt: str) -> Tuple[Optional[List[Tuple[str, Dict[str, Any]]]], Optional[str]]:
+        """
+        Strict Profile 0 Formal Composition Grammar Parser:
+          Program_0 ::= Step ("->" Step)*
+          Step      ::= <cell_id | op_name> "(" (<port_name> "=" <literal> ("," ...)*)? ")"
+        Uses deterministic character scanning and Python AST literal verification (zero regex).
+        """
+        if not prompt or not prompt.strip():
+            return None, "Empty prompt under Profile 0"
+
+        text = prompt.strip()
+        segments: List[str] = []
+        start = 0
+        i = 0
+        n = len(text)
+        in_quote: Optional[str] = None
+        paren_depth = 0
+        brack_depth = 0
+        brace_depth = 0
+
+        while i < n:
+            ch = text[i]
+            if in_quote is not None:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == in_quote:
+                    in_quote = None
+                i += 1
+                continue
+            if ch in ("'", '"'):
+                in_quote = ch
+                i += 1
+                continue
+            if ch == "(":
+                paren_depth += 1
+            elif ch == ")":
+                paren_depth -= 1
+                if paren_depth < 0:
+                    return None, "Profile 0 syntax error: unbalanced ')'"
+            elif ch == "[":
+                brack_depth += 1
+            elif ch == "]":
+                brack_depth -= 1
+                if brack_depth < 0:
+                    return None, "Profile 0 syntax error: unbalanced ']'"
+            elif ch == "{":
+                brace_depth += 1
+            elif ch == "}":
+                brace_depth -= 1
+                if brace_depth < 0:
+                    return None, "Profile 0 syntax error: unbalanced '}'"
+            elif paren_depth == 0 and brack_depth == 0 and brace_depth == 0 and text[i : i + 2] == "->":
+                segments.append(text[start:i])
+                i += 2
+                start = i
+                continue
+            i += 1
+
+        if in_quote is not None or paren_depth != 0 or brack_depth != 0 or brace_depth != 0:
+            return None, "Profile 0 syntax error: unclosed quote or delimiter"
+        segments.append(text[start:])
+
+        parsed_steps: List[Tuple[str, Dict[str, Any]]] = []
+        for idx, raw_seg in enumerate(segments):
+            seg = raw_seg.strip()
+            if not seg:
+                return None, f"Profile 0 syntax error: empty step at position {idx}"
+            try:
+                node = ast.parse(seg, mode="eval").body
+            except SyntaxError:
+                return None, (
+                    "Profile 0 requires formal composition syntax: "
+                    "<cell_id|op_name>(port=literal, ...) [-> <cell_id|op_name>(...)]*"
+                )
+            if not isinstance(node, ast.Call):
+                return None, (
+                    "Profile 0 step must be <cell_id|op_name>(port=literal, ...)"
+                )
+            # Extract dotted or simple callable identifier (no arbitrary expressions)
+            fn_node = node.func
+            fn_parts: List[str] = []
+            while isinstance(fn_node, ast.Attribute):
+                fn_parts.append(fn_node.attr)
+                fn_node = fn_node.value
+            if not isinstance(fn_node, ast.Name):
+                return None, (
+                    "Profile 0 step must be <cell_id|op_name>(port=literal, ...)"
+                )
+            fn_parts.append(fn_node.id)
+            ident_str = ".".join(reversed(fn_parts))
+
+            if node.args:
+                return None, (
+                    "Profile 0 requires named port=literal arguments (no positional args)"
+                )
+            kwargs_dict: Dict[str, Any] = {}
+            for kw in node.keywords:
+                if kw.arg is None:
+                    return None, "Profile 0 forbids **kwargs unpacking"
+                if kw.arg in kwargs_dict:
+                    return None, f"Profile 0 duplicate port binding '{kw.arg}' in step '{ident_str}'"
+                try:
+                    lit_val = ast.literal_eval(kw.value)
+                except Exception:
+                    return None, (
+                        f"Profile 0 argument '{kw.arg}' in '{ident_str}' must be a literal constant"
+                    )
+                kwargs_dict[kw.arg] = lit_val
+            parsed_steps.append((ident_str, kwargs_dict))
+
+        return parsed_steps, None
+
+    def _resolve_program_0(
+        self,
+        prompt: str,
+        start_sig: Optional[Any] = None,
+        goal_sig: Optional[Any] = None,
+    ) -> Tuple[List[Cell], Optional[str]]:
+        """
+        Deterministically resolves a parsed Program_0 step sequence against
+        formal {cell_id} / canonical_op_names and declared port schemas.
+        """
+        steps, parse_err = self._parse_program_0_steps(prompt)
+        if steps is None:
+            return [], parse_err
+
+        loaded = getattr(self.orchestrator, "loaded_cells", {}) or {}
+        if not loaded:
+            return [], "No lattice cells loaded"
+
+        by_cid: Dict[str, Cell] = {}
+        by_op: Dict[str, List[Cell]] = defaultdict(list)
+        for cell in loaded.values():
+            by_cid[cell.cell_id.lower()] = cell
+            for op in getattr(cell, "canonical_op_names", ()):
+                by_op[op].append(cell)
+
+        reg = TypeRegistry.get_instance()
+        try:
+            from unification import UnificationGate, unify, _is_key_or_complement_port, _is_valid_slot_value
+            from preflight import PreflightLinter
+        except (ImportError, ValueError):
+            from .unification import UnificationGate, unify, _is_key_or_complement_port, _is_valid_slot_value
+            from .preflight import PreflightLinter
+
+        role_carriers = reg.get_declared_role_carriers()
+        step_candidates: List[List[Tuple[Tuple[int, int, int], Cell, Dict[str, Any]]]] = []
+
+        for step_idx, (ident, kwargs_dict) in enumerate(steps):
+            ident_l = ident.strip().lower()
+            exact_cell = by_cid.get(ident_l)
+            if exact_cell is not None:
+                pool = [(0, exact_cell)]
+            else:
+                op_cands = by_op.get(ident_l, [])
+                if not op_cands:
+                    return [], f"Profile 0 unknown formal cell_id or op_name: '{ident}'"
+                pool = [(1, c) for c in op_cands]
+
+            surviving: List[Tuple[Tuple[int, int, int], Cell, Dict[str, Any]]] = []
+            saw_port_match = False
+            for match_tier, cand in pool:
+                if not set(kwargs_dict.keys()).issubset(set(cand.inputs.keys())):
+                    continue
+                saw_port_match = True
+
+                # Literal schema / type / enum / format check on explicit kwargs
+                fmt_mismatch = False
+                for p_name, lit_val in kwargs_dict.items():
+                    p_sig = cand.inputs[p_name]
+                    tn_lit = str(getattr(getattr(p_sig, "signature", p_sig), "type_name", "") or "").strip().lower()
+                    enums_lit = {str(e).strip().strip("'\"").lower() for e in (getattr(p_sig, "enum_values", None) or [])}
+                    if lit_val is None:
+                        if getattr(p_sig, "required", True) and "none" not in enums_lit:
+                            fmt_mismatch = True
+                            break
+                        continue
+                    if isinstance(lit_val, bool):
+                        if tn_lit and tn_lit != "object" and not reg.is_declared_top(tn_lit) and not reg.is_subtype(tn_lit, "bool"):
+                            fmt_mismatch = True
+                            break
+                        continue
+                    if enums_lit:
+                        if str(lit_val).strip().strip("'\"").lower() not in enums_lit:
+                            fmt_mismatch = True
+                            break
+                    elif tn_lit and tn_lit != "object" and not reg.is_declared_top(tn_lit):
+                        if (reg.is_subtype(tn_lit, "str") or reg.is_subtype(tn_lit, "path")) and not (
+                            reg.is_subtype(tn_lit, "int") or reg.is_subtype(tn_lit, "numeric")
+                        ):
+                            if not isinstance(lit_val, str):
+                                fmt_mismatch = True
+                                break
+                        elif not _is_valid_slot_value(lit_val, p_sig):
+                            fmt_mismatch = True
+                            break
+                    sup_fmts = getattr(p_sig, "supported_formats", None) or []
+                    if sup_fmts and isinstance(lit_val, str) and "." in lit_val:
+                        ext = lit_val.rsplit(".", 1)[-1].strip().lower()
+                        norm_fmts = {str(s).strip().lstrip(".").lower() for s in sup_fmts if s}
+                        if ext and norm_fmts and ext not in norm_fmts:
+                            fmt_mismatch = True
+                            break
+                if fmt_mismatch:
+                    continue
+
+                # Require every non-carrier required port to have explicit binding or non-empty valid default
+                missing_non_carrier = 0
+                carrier_eligible_left = 1 if (step_idx > 0 or start_sig is not None) else 0
+                prim_in_name = getattr(cand.primary_input, "name", None) if getattr(cand, "primary_input", None) else None
+                for p_name, p_sig in cand.inputs.items():
+                    if not getattr(p_sig, "required", True):
+                        continue
+                    if p_name in kwargs_dict:
+                        continue
+                    tn_l = str(getattr(getattr(p_sig, "signature", p_sig), "type_name", "") or "").lower()
+                    p_role = str(getattr(p_sig, "port_role", "") or getattr(p_sig, "derived_role", "") or "").lower()
+                    is_carrier = (
+                        p_name == prim_in_name
+                        or p_role in role_carriers
+                        or reg.is_composite_carrier(tn_l)
+                        or reg.is_abstract_carrier(tn_l)
+                    ) and not reg.is_subtype(tn_l, "path") and not reg.is_subtype(tn_l, "str")
+                    if is_carrier and carrier_eligible_left > 0:
+                        carrier_eligible_left -= 1
+                        continue
+                    def_val = getattr(p_sig, "default_value", None)
+                    has_usable_default = def_val is not None
+                    if has_usable_default and _is_key_or_complement_port(cand, p_sig, reg):
+                        if str(def_val).strip("'\"") in ("", "[]", "()"):
+                            has_usable_default = False
+                    if not has_usable_default:
+                        missing_non_carrier += 1
+                if missing_non_carrier > 0:
+                    continue
+
+                req_unfilled = sum(
+                    1 for pn, ps in cand.inputs.items()
+                    if getattr(ps, "required", True) and pn not in kwargs_dict and getattr(ps, "default_value", None) is None
+                )
+                vis_rank = (0 if getattr(cand, "is_public", True) else 1, str(getattr(cand, "cell_id", "")).count("."))
+                surviving.append(((match_tier, req_unfilled, vis_rank), cand, kwargs_dict))
+
+            if not surviving:
+                if not saw_port_match:
+                    return [], f"Profile 0 invalid port name(s) {sorted(kwargs_dict.keys())} for '{ident}'"
+                return [], f"Profile 0 missing required argument(s) or incompatible format for '{ident}'"
+
+            surviving.sort(key=lambda x: x[0])
+            step_candidates.append(surviving[:8])
+
+        def _pair_compatible(prev_c: Cell, next_c: Cell, prefix: List[Cell]) -> bool:
+            if hasattr(self.orchestrator, "cells_directly_unify"):
+                try:
+                    if self.orchestrator.cells_directly_unify(prev_c, next_c):
+                        return True
+                except Exception:
+                    pass
+            # Also allow DAG ancestor output unification into next_c
+            req_ins = [p for p in next_c.inputs.values() if getattr(p, "required", True)]
+            in_ports = req_ins if req_ins else list(next_c.inputs.values())
+            for anc in reversed(prefix):
+                for out_p in anc.outputs.values():
+                    for in_p in in_ports:
+                        if unify(out_p.signature, in_p.signature) is not None:
+                            return True
+            return False
+
+        def _validate_sequence(seq_items: List[Tuple[Cell, Dict[str, Any]]]) -> Optional[List[Cell]]:
+            cloned_seq: List[Cell] = []
+            for s_idx, (c_obj, kw) in enumerate(seq_items):
+                c_clone = c_obj.clone() if hasattr(c_obj, "clone") else c_obj
+                c_clone.explicit_port_bindings = dict(kw)
+                c_clone.formal_program_step = True
+                c_clone.matched_clause_idx = s_idx
+                cloned_seq.append(c_clone)
+            try:
+                gate = UnificationGate(orchestrator=self.orchestrator)
+                code = gate.unify_and_emit(cloned_seq, prompt)
+                if gate.last_pipeline_bindings:
+                    lint_res = PreflightLinter.lint(
+                        gate.last_pipeline_bindings,
+                        prompt=prompt,
+                        code_str=code,
+                        orchestrator=self.orchestrator,
+                    )
+                    if not lint_res.is_valid:
+                        return None
+                return cloned_seq
+            except Exception:
+                return None
+
+        # Backtracking DFS over candidate combinations (small branching per formal op)
+        chosen: List[Tuple[Cell, Dict[str, Any]]] = []
+
+        def _dfs(pos: int) -> Optional[List[Cell]]:
+            if pos == len(step_candidates):
+                if goal_sig is not None and chosen:
+                    last_out = getattr(chosen[-1][0], "primary_output", None)
+                    if last_out is not None and unify(getattr(last_out, "signature", last_out), goal_sig) is None:
+                        return None
+                return _validate_sequence(chosen)
+
+            for _, cand, kw in step_candidates[pos]:
+                if pos == 0 and start_sig is not None:
+                    first_in = getattr(cand, "primary_input", None)
+                    if first_in is not None and unify(start_sig, getattr(first_in, "signature", first_in)) is None:
+                        continue
+                if pos > 0:
+                    prefix_cells = [x[0] for x in chosen]
+                    if not _pair_compatible(chosen[-1][0], cand, prefix_cells):
+                        continue
+                chosen.append((cand, kw))
+                res = _dfs(pos + 1)
+                if res is not None:
+                    return res
+                chosen.pop()
+            return None
+
+        resolved = _dfs(0)
+        if not resolved:
+            return [], "Profile 0 pipeline failed type unification or preflight validation"
+        return resolved, None
+
     def plan_path(
         self,
         prompt: str,
@@ -1346,6 +1987,34 @@ class LatticeRouter:
           1. Computes active semantic tunnel T for prompt.
           2. Uses selected RouteMethod (M0 - M6) to find valid monadic composition through T.
         """
+        if self._is_profile_zero():
+            self.last_clause_semantic_scores = []
+            if self.orchestrator is not None:
+                self.orchestrator._last_clause_semantic_scores = None
+            prog_cells, prog_err = self._resolve_program_0(prompt, start_sig=start_sig, goal_sig=goal_sig)
+            cand_ids = {c.cell_id for c in prog_cells}
+            rel_map = {c.cell_id: 1.0 for c in prog_cells}
+            self.raw_rag_tunnel = list(prog_cells)
+            self.raw_rag_relevance_map = dict(rel_map)
+            self.last_reranker_telemetry = []
+            plan_res = PlanResult(
+                cells=prog_cells,
+                candidate_ids=cand_ids,
+                requested_route="PROGRAM_0",
+                effective_route="PROGRAM_0",
+                fallback_reason=prog_err,
+                route_trace=tuple([{"event": "program_0_parse", "ok": bool(prog_cells), "error": prog_err}]),
+                ir_literals={},
+                tagging_decisions=(),
+            )
+            self.last_requested_route = "PROGRAM_0"
+            self.last_effective_route = "PROGRAM_0"
+            self.last_fallback_reason = prog_err
+            self.last_route_trace = list(plan_res.route_trace)
+            self.last_tagging_decisions = []
+            if not prog_cells and prog_err:
+                logger.warning(f"[ROUTER/P0] Strict formal Program_0 rejected prompt '{prompt}': {prog_err}")
+            return (plan_res, cand_ids) if return_tuple else plan_res
         tunnel_cells, relevance_map = self.route(prompt, top_k=top_k)
         # A caller-supplied relevance_map arrives inside **kwargs; if it were
         # re-expanded into method.plan(...) below it would collide with the
@@ -1385,14 +2054,22 @@ class LatticeRouter:
         route_trace: List[Dict[str, Any]] = []
         tagging_decisions: List[Dict[str, Any]] = []
 
+        clause_sem_scores = getattr(self, "last_clause_semantic_scores", None) or None
+
         # Registry-driven dispatch decision (no alias duplication here):
         # the M0 trellis planner is the in-router baseline; everything else
         # delegates to its registered RouteMethod class.
         from route_methods import ROUTE_METHOD_REGISTRY as _ROUTE_REGISTRY
         _method_cls = _ROUTE_REGISTRY.get(method_name)
-        if _method_cls is not None and _method_cls.__name__ != "M0TrellisRouteMethod":
+        if _method_cls is not None:
             try:
                 method = get_route_method(method_name, orchestrator=self.orchestrator)
+                _method_kwargs = dict(kwargs)
+                for _coalg_kw in ("max_depth", "recursion_depth", "epsilon", "theta_closed"):
+                    _method_kwargs.pop(_coalg_kw, None)
+                _rag_arg = _method_kwargs.pop("rag", self.internal_rag)
+                if "clause_semantic_scores" not in _method_kwargs and clause_sem_scores is not None:
+                    _method_kwargs["clause_semantic_scores"] = clause_sem_scores
                 path = method.plan(
                     prompt=prompt,
                     tunnel=tunnel_cells,
@@ -1401,8 +2078,8 @@ class LatticeRouter:
                     ctx=ctx,
                     start_sig=start_sig,
                     goal_sig=goal_sig,
-                    rag=kwargs.get("rag", self.internal_rag),
-                    **kwargs
+                    rag=_rag_arg,
+                    **_method_kwargs
                 )
                 effective_route = (getattr(method, "effective_method", None) or method_name).upper()
                 if getattr(method, "fallback_reason", None):
@@ -1414,51 +2091,27 @@ class LatticeRouter:
                     f"[ROUTER] RouteMethod '{method_name}' failed: {e}",
                     exc_info=True,
                 )
-                try:
-                    from config import settings
-                    allow_fb = settings.allow_fallback
-                except Exception:
-                    try:
-                        from .config import settings
-                        allow_fb = settings.allow_fallback
-                    except Exception:
-                        allow_fb = False
-
-                if allow_fb:
-                    effective_route = "M0"
-                    fallback_reason = f"{type(e).__name__}: {str(e)}"
-                    path = self.planner.plan(
-                        prompt=prompt,
-                        tunnel=tunnel_cells,
-                        relevance_map=relevance_map,
-                        start_sig=start_sig,
-                        goal_sig=goal_sig
-                    )
-                else:
-                    effective_route = method_name.upper()
-                    fallback_reason = f"{type(e).__name__}: {str(e)}"
-                    path = []
+                effective_route = method_name.upper()
+                fallback_reason = f"{type(e).__name__}: {str(e)}"
+                path = []
         else:
-            # Find verified composition path inside tunnel T using baseline Trellis
+            # Unknown route method name falls back to Trellis baseline
             effective_route = "M0"
-            path = self.planner.plan(
+            fallback_reason = f"Unknown route method '{method_name}'"
+            m0 = get_route_method("m0", orchestrator=self.orchestrator)
+            path = m0.plan(
                 prompt=prompt,
                 tunnel=tunnel_cells,
                 relevance_map=relevance_map,
+                orchestrator=self.orchestrator,
+                ctx=ctx,
                 start_sig=start_sig,
-                goal_sig=goal_sig
+                goal_sig=goal_sig,
+                clause_semantic_scores=clause_sem_scores,
             )
 
-        # Universal Precondition & Typestate Bridge Closure
-        if path:
-            try:
-                _base_rm = get_route_method("m0", orchestrator=self.orchestrator)
-                path = _base_rm.insert_property_bridges(path, prompt=prompt, ctx=ctx)
-            except Exception as _b_err:
-                logger.debug(f"[ROUTER] Initial precondition bridge closure failed: {_b_err}")
-
         # ------------------------------------------------------------------ #
-        # Recursive Coalgebraic Goal Unfolding (Unified Fixpoint Rule)
+        # Recursive Coalgebraic Goal Unfolding (Epistemic Grounding + Fixpoint)
         # ------------------------------------------------------------------ #
         residual = 1.0
         if path:
@@ -1467,7 +2120,7 @@ class LatticeRouter:
                     from token_evidence import audit as _audit
                 except (ImportError, ValueError):
                     from .token_evidence import audit as _audit
-                audit_res = _audit(path, prompt, self.orchestrator)
+                audit_res = _audit(path, prompt, self.orchestrator, clause_semantic_scores=clause_sem_scores)
                 if audit_res.get("available"):
                     clauses_info = audit_res.get("clauses", [])
                     if clauses_info:
@@ -1484,13 +2137,44 @@ class LatticeRouter:
             residual = 1.0
 
         recursion_depth = kwargs.get("recursion_depth", 0)
-        max_depth = kwargs.get("max_depth", _cfg("macro_router_max_depth", 1))
+        max_depth = kwargs.get("max_depth", _cfg("macro_router_max_depth", 3))
         epsilon = kwargs.get("epsilon", 0.25)
+        theta_closed = kwargs.get("theta_closed", 0.55)
+
+        kappa = 1.0
+        if recursion_depth < max_depth:
+            try:
+                try:
+                    from coalgebraic_unfolder import EpistemicGroundingScorer, CoalgebraicUnfolder
+                except (ImportError, ValueError):
+                    from .coalgebraic_unfolder import EpistemicGroundingScorer, CoalgebraicUnfolder
+                kappa = EpistemicGroundingScorer(theta_closed=theta_closed).score(
+                    prompt, self.orchestrator, tunnel=tunnel_cells, relevance_map=relevance_map
+                )
+            except Exception as _ku_err:
+                logger.debug(f"[ROUTER] Epistemic grounding scorer skipped: {_ku_err}")
+                kappa = 1.0 if path else 0.0
+
+        has_unexpanded_macros = False
+        try:
+            try:
+                from coalgebraic_unfolder import is_macro_combinator_cell
+            except (ImportError, ValueError):
+                from .coalgebraic_unfolder import is_macro_combinator_cell
+            has_unexpanded_macros = bool(
+                path and any(
+                    is_macro_combinator_cell(c) and not getattr(c, "bound_slots", None)
+                    for c in path
+                )
+            )
+        except Exception:
+            has_unexpanded_macros = False
 
         # Unified Fixpoint Rule:
-        # If R(g, pi) <= epsilon: accept atomic path pi
-        # If R(g, pi) > epsilon and recursion_depth < max_depth: unfold via psi(g)
-        if residual > epsilon and recursion_depth < max_depth:
+        # Unfold via recursive coalgebraic anamorphism psi_C(g) whenever epistemic grounding
+        # kappa(g, C) < theta_closed, residual R(g, pi) > epsilon, or the path contains
+        # unexpanded macro combinators needing subgoal slot decomposition (bounded by max_depth).
+        if (residual > epsilon or kappa < theta_closed or has_unexpanded_macros) and recursion_depth < max_depth:
             try:
                 try:
                     from inference import ModelManager
@@ -1512,42 +2196,78 @@ class LatticeRouter:
                 route_trace.append({
                     "event": "coalgebraic_unfolding_null",
                     "residual": residual,
+                    "kappa": round(float(kappa), 4),
                     "reason": "Generative synthesis disabled (null decomposition operator)",
                 })
             else:
-                subgoals = self._decompose_goal_coalgebraic(
-                    prompt, self.orchestrator, mm, tunnel=tunnel_cells, relevance_map=relevance_map
-                )
-                if subgoals and len(subgoals) > 1:
-                    logger.info(f"[ROUTER] Coalgebraic goal unfolding: {len(subgoals)} subgoals at depth {recursion_depth + 1}")
-                    composed_path: List[Cell] = []
-                    sub_kwargs = dict(kwargs)
-                    sub_kwargs["recursion_depth"] = recursion_depth + 1
-                    for sub_g in subgoals:
-                        sub_res = self.plan_path(
-                            sub_g,
-                            return_tuple=False,
-                            top_k=top_k,
-                            route_method=route_method,
-                            ctx=ctx,
-                            **sub_kwargs
+                try:
+                    try:
+                        from coalgebraic_unfolder import CoalgebraicUnfolder
+                    except (ImportError, ValueError):
+                        from .coalgebraic_unfolder import CoalgebraicUnfolder
+                    unfolder = CoalgebraicUnfolder(
+                        theta_closed=theta_closed,
+                        max_depth=max(1, int(max_depth) - int(recursion_depth)),
+                    )
+                    unfold_res = unfolder.unfold(
+                        prompt,
+                        orchestrator=self.orchestrator,
+                        model_mgr=mm,
+                        tunnel=tunnel_cells,
+                        relevance_map=relevance_map,
+                        force_root_unfold=has_unexpanded_macros,
+                    )
+                    if (
+                        unfold_res.root.kind != "atomic"
+                        or len(unfold_res.flat_leaf_goals) > 1
+                        or bool(unfold_res.used_combinators)
+                    ):
+                        logger.info(
+                            f"[ROUTER] Coalgebraic unfolding: leaves={len(unfold_res.flat_leaf_goals)}, "
+                            f"combinators={unfold_res.used_combinators}, max_depth={unfold_res.max_depth_reached}"
                         )
-                        sub_cells = sub_res.cells if hasattr(sub_res, "cells") else sub_res
-                        if sub_cells:
-                            if composed_path:
-                                bridge_hops = _cfg("bridge_chain_max_hops", 2)
-                                bridges = self.orchestrator.find_shortest_bridge_path(composed_path[-1], sub_cells[0], max_hops=bridge_hops)
-                                composed_path.extend(bridges)
-                            composed_path.extend(sub_cells)
-                    if composed_path:
-                        path = composed_path
-                        effective_route = f"{effective_route}+COALG"
-                        route_trace.append({
-                            "event": "coalgebraic_unfolding_success",
-                            "residual_before": residual,
-                            "subgoals": subgoals,
-                            "composed_len": len(composed_path),
-                        })
+                        sub_kwargs = dict(kwargs)
+                        sub_kwargs["recursion_depth"] = max_depth
+                        sub_kwargs["max_depth"] = max_depth
+
+                        def _route_unfolded_leaf(sub_g: str, cur_sig: Optional[Any], initial_gamma: Optional[Tuple[Any, ...]] = None) -> List[Cell]:
+                            call_kwargs = dict(sub_kwargs)
+                            if initial_gamma is not None:
+                                call_kwargs["initial_gamma"] = initial_gamma
+                            sub_res = self.plan_path(
+                                sub_g,
+                                start_sig=cur_sig,
+                                return_tuple=False,
+                                top_k=top_k,
+                                route_method=route_method,
+                                ctx=ctx,
+                                **call_kwargs,
+                            )
+                            return list(sub_res.cells if hasattr(sub_res, "cells") else sub_res)
+
+                        bridge_hops = _cfg("bridge_chain_max_hops", 2)
+                        composed_path = unfolder.ground_tree(
+                            unfold_res.root,
+                            orchestrator=self.orchestrator,
+                            route_fn=_route_unfolded_leaf,
+                            start_sig=start_sig,
+                            bridge_max_hops=bridge_hops,
+                        )
+                        if composed_path:
+                            path = composed_path
+                            effective_route = f"{effective_route}+COALG"
+                            route_trace.append({
+                                "event": "coalgebraic_unfolding_success",
+                                "kappa": round(float(kappa), 4),
+                                "residual_before": residual,
+                                "subgoals": unfold_res.flat_leaf_goals,
+                                "used_combinators": unfold_res.used_combinators,
+                                "max_depth_reached": unfold_res.max_depth_reached,
+                                "composed_len": len(composed_path),
+                                "unfold_tree": unfold_res.root.to_dict(),
+                            })
+                except Exception as _cu_err:
+                    logger.debug(f"[ROUTER] Coalgebraic unfolding skipped: {_cu_err}")
 
         if path:
             # 1. Multiplicity expansion: distribute morphisms over declared prompt identifier groups
@@ -1556,31 +2276,17 @@ class LatticeRouter:
             except Exception as _em_err:
                 logger.debug(f"[ROUTER] Multiplicity expansion skipped: {_em_err}")
 
-            # 2. Universal clause tagging: tag each cell with its prompt sub-goal
-            # for clause-scoped literal binding and dead-code protection in Layer 4
-            try:
-                from route_methods.m1_clause_anchor import M1ClauseAnchorRouteMethod as _Util
-                _util = _Util(orchestrator=self.orchestrator)
-                _before = [c.cell_id for c in path]
-                path = _util.prune_unrequested(path, prompt)
-                route_trace = list(route_trace) + list(_util.trace_events)
-                if [c.cell_id for c in path] != _before:
-                    logger.info(f"[ROUTER] Pruned unrequested cells: {sorted(set(_before) - {c.cell_id for c in path})}")
-            except Exception as _pr_err:
-                logger.warning(f"[ROUTER] Unrequested-cell pruning FAILED ({type(_pr_err).__name__}): {_pr_err}")
-            try:
-                from route_methods.base import RouteMethod as _RM
-                tagging_decisions = _RM.tag_cells_with_clause_indices(
-                    path, prompt, orchestrator=self.orchestrator)
-                from route_methods.m1_clause_anchor import M1ClauseAnchorRouteMethod as _Util2
-                _util2 = _Util2(orchestrator=self.orchestrator)
-                _util2.prompt = prompt
-                path = _util2.insert_property_bridges(path, prompt=prompt, ctx=ctx)
-                route_trace = list(route_trace) + list(_util2.trace_events)
-            except Exception as _tc_err:
-                # Was logger.debug + wrong class name: tagging silently never ran.
-                logger.warning(f"[ROUTER] Clause tagging FAILED ({type(_tc_err).__name__}): {_tc_err}")
-                tagging_decisions = []
+            # 2. Universal clause tagging (metadata-only for clause-scoped literal binding;
+            # never overrides or mutates the route method's chosen cells or bridges).
+            if effective_route != "M0":
+                try:
+                    from route_methods.base import RouteMethod as _RM
+                    tagging_decisions = _RM.tag_cells_with_clause_indices(
+                        path, prompt, orchestrator=self.orchestrator,
+                        clause_semantic_scores=clause_sem_scores)
+                except Exception as _tc_err:
+                    logger.warning(f"[ROUTER] Clause tagging FAILED ({type(_tc_err).__name__}): {_tc_err}")
+                    tagging_decisions = []
 
             # 2b. Autonomous Semantic Adapter Injection under --llm-feedback
             if os.environ.get("NSTL_LLM_FEEDBACK") == "1" or getattr(ctx, "llm_feedback", False):
@@ -1678,6 +2384,7 @@ class LatticeRouter:
                 pass
             return False
 
+        reg = TypeRegistry.get_instance()
         new_path: List[Cell] = []
         for i in range(len(path)):
             new_path.append(path[i])
@@ -1697,7 +2404,15 @@ class LatticeRouter:
                             for in_p in next_cell.inputs.values():
                                 o_st = str(getattr(out_p, "state", "") or "").lower()
                                 i_st = str(getattr(in_p, "state", "") or "").lower()
-                                if o_st and i_st and o_st != i_st and o_st not in ("any", "generic") and i_st not in ("any", "generic"):
+                                if (
+                                    o_st
+                                    and i_st
+                                    and o_st != i_st
+                                    and o_st != "generic"
+                                    and i_st != "generic"
+                                    and not reg.is_declared_top(o_st)
+                                    and not reg.is_declared_top(i_st)
+                                ):
                                     acc = [str(s).lower() for s in getattr(in_p, "accepted_states", []) or []]
                                     if acc and o_st not in acc:
                                         has_state_mismatch = True
@@ -1753,60 +2468,31 @@ class LatticeRouter:
         model_mgr: Any,
         tunnel: Optional[List[Any]] = None,
         relevance_map: Optional[Dict[str, float]] = None,
+        max_depth: Optional[int] = None,
     ) -> List[str]:
         """
-        Subgoal Decomposition Operator psi(g, LatticeSchemaSummary) -> [g_1, ..., g_m]:
-        Decomposes an abstract or high-residual goal g into fine-grained subgoals
-        grounded in the available carrier types and operations of the active tunnel T.
+        Subgoal Decomposition Operator psi_C(g) -> [g_1, ..., g_m]:
+        Delegates to CoalgebraicUnfolder with dynamic domain-agnostic lattice
+        schema extraction and bounded recursive unfolding.
         """
         if not model_mgr or not orchestrator:
             return []
         try:
-            scope_cells = tunnel if tunnel else (list(orchestrator.loaded_cells.values()) if hasattr(orchestrator, "loaded_cells") else [])
-            rel_map = relevance_map or {}
-            scored_cells = [(c, rel_map.get(getattr(c, "cell_id", ""), 1.0)) for c in scope_cells]
-            scored_cells.sort(key=lambda x: x[1], reverse=True)
-            top_cells = [c for c, _ in scored_cells[:30]]
-
-            domains = {getattr(c, "domain_name", "") for c in top_cells if getattr(c, "domain_name", "")}
-            sample_ops = [getattr(c, "cell_id", "") for c in top_cells if getattr(c, "cell_id", "")]
-
-            carriers = set()
-            for c in top_cells:
-                for p in getattr(c, "inputs", []) or []:
-                    t = getattr(p, "carrier_type", "") or getattr(p, "type", "")
-                    if t:
-                        carriers.add(str(t))
-                for p in getattr(c, "outputs", []) or []:
-                    t = getattr(p, "carrier_type", "") or getattr(p, "type", "")
-                    if t:
-                        carriers.add(str(t))
-
-            carrier_str = f"\nActive data carriers in scope: {', '.join(sorted(list(carriers))[:15])}" if carriers else ""
-            system_prompt = (
-                "You are the Neuro-Symbolic Topological Lattice Subgoal Decomposer. "
-                "Given a high-level computational goal, decompose it into 2 to 4 sequential, "
-                "fine-grained sub-goals that can be executed step-by-step. "
-                "Ground your sub-goals strictly in the active domains and operations available in scope.\n"
-                f"Active domains in scope: {', '.join(sorted(domains))}\n"
-                f"Relevant operations in scope: {', '.join(sample_ops[:20])}"
-                f"{carrier_str}\n"
-                "Do NOT introduce unrelated domains (e.g. do not suggest computer vision, audio, or cryptography unless they are explicitly in scope).\n"
-                "Respond ONLY with a JSON array of string sub-goals, e.g.: [\"subgoal 1\", \"subgoal 2\", \"subgoal 3\"]"
+            try:
+                from coalgebraic_unfolder import CoalgebraicUnfolder
+            except (ImportError, ValueError):
+                from .coalgebraic_unfolder import CoalgebraicUnfolder
+            depth = _cfg("macro_router_max_depth", 3) if max_depth is None else max_depth
+            unfolder = CoalgebraicUnfolder(max_depth=depth)
+            res = unfolder.unfold(
+                prompt,
+                orchestrator=orchestrator,
+                model_mgr=model_mgr,
+                tunnel=tunnel,
+                relevance_map=relevance_map,
+                force_root_unfold=True,
             )
-            raw_resp = model_mgr.generate_text(
-                prompt=f"Decompose this goal into executable sub-steps: '{prompt}'",
-                system_prompt=system_prompt,
-                max_tokens=256
-            )
-            if not raw_resp:
-                return []
-            import json, re
-            m = re.search(r'\[.*\]', raw_resp, re.DOTALL)
-            if m:
-                parsed = json.loads(m.group(0))
-                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
-                    return [s.strip() for s in parsed if s.strip()]
+            return list(res.flat_leaf_goals)
         except Exception as e:
             logger.debug(f"[ROUTER] Coalgebraic decomposition error: {e}")
         return []

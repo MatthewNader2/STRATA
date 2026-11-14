@@ -421,7 +421,7 @@ class LibraryAdapter(abc.ABC):
             from lattice import TypeRegistry
             dest_tokens = TypeRegistry.get_instance().get_dest_port_tokens()
         except Exception:
-            dest_tokens = frozenset()
+            dest_tokens = set()
 
         for p in input_names:
             components = {c for c in tokenize_alphanumeric(str(p).lower()) if c}

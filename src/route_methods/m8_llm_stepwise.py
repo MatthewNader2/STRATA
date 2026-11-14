@@ -27,8 +27,7 @@ from log_config import get_logger
 
 logger = get_logger("route_methods.m8")
 
-from .base import RouteMethod, is_terminal_sink
-from .m1_clause_anchor import M1ClauseAnchorRouteMethod, _clause_has_egress_intent
+from .base import RouteMethod, is_terminal_sink, _clause_has_egress_intent, is_macro_cell, _fmt_port_sig
 from lattice import Cell, LatticeOrchestrator, TypeRegistry
 from unification import ExecutionContext
 from inference import ModelManager
@@ -76,13 +75,6 @@ SYSTEM_PROMPT_STEP = (
     "Respond with ONLY a JSON object of the form: {\"next_node\": \"CELL_ID\"} or "
     "{\"next_node\": \"FINISH\"}. No prose, no markdown."
 )
-
-
-def _fmt_port_sig(p: Any) -> str:
-    sig = getattr(p, "signature", None)
-    tn = str(getattr(sig, "type_name", "") or getattr(p, "abstract_type", "") or "any")
-    st = str(getattr(sig, "state", "") or "")
-    return f"{tn}[{st}]" if st and st not in ("any", "none") else tn
 
 
 def _format_cell_signature(cell: Cell) -> str:
@@ -146,8 +138,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             and (
                 bool(getattr(c, "slots", None))
                 or (
-                    getattr(c, "node_type", "") != "macro"
-                    and not c.cell_id.startswith("MACRO_")
+                    not is_macro_cell(c)
                     and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
                 )
             )
@@ -156,10 +147,9 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
         has_llm = mm.can_synthesize()
 
         def _fallback(reason):
-            return self._delegate_to_m1(
-                reason, prompt, tunnel, relevance_map, orch, ctx=ctx,
-                start_sig=start_sig, goal_sig=goal_sig, max_transforms=max_transforms,
-            )
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         if not has_llm:
             return _fallback("no LLM loaded in this profile")
@@ -270,7 +260,11 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             target_cl_idx = min(uncovered_indices) if uncovered_indices else (num_clauses - 1)
 
             target_cl = clauses[target_cl_idx] if target_cl_idx < num_clauses else ""
-            target_is_egress = _clause_has_egress_intent(target_cl)
+            target_is_egress = (
+                _clause_has_egress_intent(target_cl)
+                or (self.requested_sink(target_cl, shown) is not None)
+                or (len(uncovered_indices) <= 1 and target_cl_idx >= num_clauses - 1)
+            )
 
             # Identify valid next transitions from curr
             # Tuple: (target_cell, bridge_cell_or_None, transition_type_str)
@@ -295,60 +289,20 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                     if bridge and bridge.cell_id not in visited_ids:
                         transitions.append((c, bridge, f"BRIDGED via {bridge.cell_id}"))
 
-            if not any(_cand_clause(t[0]) == target_cl_idx for t in transitions):
-                for cand in shown:
-                    if cand.cell_id in visited_ids:
-                        continue
-                    if is_terminal_sink(cand, orch) and not target_is_egress and uncovered_indices:
-                        continue
-                    if _cand_clause(cand) == target_cl_idx:
-                        prod = self._find_type_producer(cand, path, candidates, clauses, orch)
-                        if prod is not None and prod.cell_id not in visited_ids:
-                            if self.step_unifies(curr, prod, prev_path=path):
-                                transitions.append((prod, None, "PRODUCER_DIRECT"))
-                            elif self.step_unifies_dag(prod, path, ctx=ctx):
-                                transitions.append((prod, None, "PRODUCER_DAG"))
-                        bridge = self.find_bridge(curr, cand, candidates, orch, prev_path=path)
-                        if not bridge and orch and hasattr(orch, "loaded_cells"):
-                            bridge = self.find_bridge(curr, cand, list(orch.loaded_cells.values()), orch, prev_path=path)
-                        if bridge is not None and bridge.cell_id not in visited_ids:
-                            transitions.append((cand, bridge, f"BRIDGED via {bridge.cell_id}"))
-
             if not transitions:
                 break
 
-            # Sort transitions by clause alignment, anti-inversion, candidate relevance and edge affinity
-            def _trans_score(t: Tuple[Cell, Optional[Cell], str]) -> Tuple[int, int, float, float, float]:
+            # Pure Markovian type-mask ranking over E_valid(Gamma_t): no M1 exact_target override
+            def _trans_score(t: Tuple[Cell, Optional[Cell], str]) -> Tuple[float, float]:
                 tgt, brg, _ = t
-                cand_cl = _cand_clause(tgt)
-                is_target_cl = bool(cand_cl is not None and cand_cl == target_cl_idx)
-                is_inversion = bool(cand_cl is not None and uncovered_indices and cand_cl < min(uncovered_indices))
-
-                cl_text = clauses[target_cl_idx] if target_cl_idx < len(clauses) else ""
-                fit_rec, fit_name_prec, fit_f = self.clause_fit(cl_text, tgt) if cl_text else (0.0, 0.0, 0.0)
-
+                fit_rec, _, _ = self.clause_fit(prompt, tgt) if prompt else (0.0, 0.0, 0.0)
                 score = relevance_map.get(tgt.cell_id, 0.0) * 2.0
                 score += self.calculate_edge_affinity(curr, brg if brg else tgt, orch, relevance_map=relevance_map)
                 if brg:
                     score += self.calculate_edge_affinity(brg, tgt, orch, relevance_map=relevance_map) * 0.8
-                return (0 if is_inversion else 1, 1 if is_target_cl else 0, fit_rec, fit_name_prec, score)
+                return (fit_rec, score)
 
-            valid_forward = [
-                t for t in transitions
-                if not (_cand_clause(t[0]) is not None and uncovered_indices and _cand_clause(t[0]) < min(uncovered_indices))
-            ]
-            # Prioritize target clause transitions over unaligned or future clause transitions
-            exact_target = [t for t in valid_forward if _cand_clause(t[0]) == target_cl_idx]
-            if exact_target:
-                cand_transitions = exact_target
-            else:
-                target_forward = [
-                    t for t in valid_forward
-                    if _cand_clause(t[0]) in (None, target_cl_idx)
-                ]
-                cand_transitions = target_forward if target_forward else valid_forward
-            if not cand_transitions:
-                cand_transitions = transitions
+            cand_transitions = list(transitions)
             cand_transitions.sort(key=_trans_score, reverse=True)
             active_transitions = cand_transitions[:MAX_TRANSITIONS_SHOWN]
             trans_by_id = {t[0].cell_id.lower(): t for t in active_transitions}
@@ -405,12 +359,6 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                 if cand_cell:
                     if is_terminal_sink(cand_cell, orch) and uncovered_indices:
                         chosen_id = None
-                    elif (
-                        uncovered_indices
-                        and _cand_clause(cand_cell) != target_cl_idx
-                        and any(_cand_clause(t[0]) == target_cl_idx for t in active_transitions)
-                    ):
-                        chosen_id = None
                     elif cand_cell.cell_id not in visited_ids:
                         if self.step_unifies(curr, cand_cell, prev_path=path):
                             matched_trans = (cand_cell, None, "DIRECT")
@@ -431,14 +379,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                             rag=kwargs.get("rag"),
                         )
                         if res_cell is not None and res_cell.cell_id not in visited_ids and getattr(res_cell, "verified", True):
-                            if (
-                                _cand_clause(res_cell) is not None
-                                and uncovered_indices
-                                and _cand_clause(res_cell) > target_cl_idx
-                                and any(_cand_clause(t[0]) == target_cl_idx for t in active_transitions)
-                            ):
-                                pass
-                            elif self.step_unifies(curr, res_cell, prev_path=path):
+                            if self.step_unifies(curr, res_cell, prev_path=path):
                                 matched_trans = (res_cell, None, "DYNAMIC_DIRECT")
                             elif self.step_unifies_dag(res_cell, path, ctx=ctx):
                                 matched_trans = (res_cell, None, "DYNAMIC_DAG_FRONTIER")

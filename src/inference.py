@@ -6,7 +6,7 @@ Agnostic Semantic Compilation, and Thread-Safe Generation.
 
 from __future__ import annotations
 import gc
-import hashlib
+import inspect
 import json
 import os
 import threading
@@ -142,6 +142,32 @@ class InferenceProfile(ABC):
 
     def has_translator_pass(self) -> bool:
         return False
+
+    def has_semantic_compiler(self) -> bool:
+        return False
+
+    def uses_reranker(self) -> bool:
+        return False
+
+    def can_extract_slots(self) -> bool:
+        return self.can_synthesize()
+
+    def has_ir_compiler(self) -> bool:
+        return False
+
+    def has_coalgebraic_unfolder(self) -> bool:
+        return False
+
+    def has_constrained_choice_scorer(self) -> bool:
+        return False
+
+    def score_choices(
+        self,
+        prompt: str,
+        candidates: List[str],
+        context_desc: str = "",
+    ) -> Dict[str, float]:
+        return {}
 
     def has_embedder(self) -> bool:
         return self.embedding_dimension > 0
@@ -466,10 +492,25 @@ class BenchmarkProfile_0(InferenceProfile):
     def can_synthesize(self) -> bool:
         return False
 
+    def can_extract_slots(self) -> bool:
+        return False
+
     def can_feedback_check(self) -> bool:
         return False
 
     def has_embedder(self) -> bool:
+        return False
+
+    def has_semantic_compiler(self) -> bool:
+        return False
+
+    def has_translator_pass(self) -> bool:
+        return False
+
+    def uses_reranker(self) -> bool:
+        return False
+
+    def has_ir_compiler(self) -> bool:
         return False
 
     def feedback_check(self, failing_code: str, traceback_error: str) -> str:
@@ -480,15 +521,18 @@ class BenchmarkProfile_0(InferenceProfile):
         return 0
 
 
-class BenchmarkProfile_A(InferenceProfile):
-    """Profile A: Embedding Only."""
+class BenchmarkProfile_B(InferenceProfile):
+    """Profile B: Bi-Encoder Dense Embeddings Only (no reranker, no LLM)."""
     def __init__(self):
         self.model = None
+        self.embedder = None
+        self.llm = None
         self._dim = 384
         self.embedder_name = "default"
+        self.llm_name = "none"
         self._lock = threading.Lock()
 
-    def load_models(self, embedder_name: str, llm_name: str):
+    def load_models(self, embedder_name: str, llm_name: str = ""):
         from sentence_transformers import SentenceTransformer
         try:
             from .router import HardwareProfiler
@@ -496,6 +540,8 @@ class BenchmarkProfile_A(InferenceProfile):
             from router import HardwareProfiler
 
         self.embedder_name = select_optimal_embedder(embedder_name)
+        self.llm_name = "none"
+        self.llm = None
         emb_path = os.path.join(MODELS_DIR, "embeddings", self.embedder_name)
         device = HardwareProfiler.get_optimal_device()
         is_jina = "jina" in self.embedder_name.lower()
@@ -504,9 +550,10 @@ class BenchmarkProfile_A(InferenceProfile):
             self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs)
         except Exception:
             self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+        self.embedder = self.model
 
         self._dim = resolve_embedding_dimension(self.model)
-        logger.info(f"[PROFILE A] Loaded embedder '{self.embedder_name}' (dim={self._dim}) on {device.upper()}")
+        logger.info(f"[PROFILE B] Loaded embedder '{self.embedder_name}' (dim={self._dim}, no LLM, no reranker) on {device.upper()}")
 
     def get_embedding(self, text: str, mode: str = "query") -> List[float]:
         res = self.get_embeddings([text], mode=mode)
@@ -521,12 +568,27 @@ class BenchmarkProfile_A(InferenceProfile):
         return _encode_with_modes(self.model, texts, mode=mode, batch_size=batch_size, lock=self._lock)
 
     def generate_text(self, prompt: str, max_tokens: int = 1024, schema: Optional[dict] = None, system_prompt: Optional[str] = None) -> str:
-        raise RuntimeError("Profile A does not support text generation.")
+        raise RuntimeError("Profile B (Dense Embeddings Only) does not support text generation.")
 
     def can_synthesize(self) -> bool:
         return False
 
+    def can_extract_slots(self) -> bool:
+        return False
+
     def can_feedback_check(self) -> bool:
+        return False
+
+    def has_semantic_compiler(self) -> bool:
+        return False
+
+    def has_translator_pass(self) -> bool:
+        return False
+
+    def has_ir_compiler(self) -> bool:
+        return False
+
+    def uses_reranker(self) -> bool:
         return False
 
     def has_embedder(self) -> bool:
@@ -538,6 +600,16 @@ class BenchmarkProfile_A(InferenceProfile):
     @property
     def embedding_dimension(self) -> int:
         return self._dim
+
+
+class BenchmarkProfile_A(BenchmarkProfile_B):
+    """Profile A: Bi-Encoder Dense Embeddings + Cross-Encoder / Listwise Reranker (no LLM)."""
+
+    def uses_reranker(self) -> bool:
+        return True
+
+    def generate_text(self, prompt: str, max_tokens: int = 1024, schema: Optional[dict] = None, system_prompt: Optional[str] = None) -> str:
+        raise RuntimeError("Profile A (Dense Embeddings + Reranker) does not support text generation.")
 
 
 class BenchmarkProfile_C(InferenceProfile):
@@ -640,6 +712,9 @@ class BenchmarkProfile_C(InferenceProfile):
     def can_synthesize(self) -> bool:
         return True
 
+    def can_extract_slots(self) -> bool:
+        return True
+
     def can_feedback_check(self) -> bool:
         return True
 
@@ -653,7 +728,13 @@ class BenchmarkProfile_C(InferenceProfile):
             return failing_code
 
     def has_semantic_compiler(self) -> bool:
-        return self.llm is not None
+        return False
+
+    def has_translator_pass(self) -> bool:
+        return False
+
+    def has_ir_compiler(self) -> bool:
+        return False
 
     def compile_semantic_intent(
         self,
@@ -715,13 +796,13 @@ class BenchmarkProfile_C(InferenceProfile):
             "- deliverable: the primary terminal entity, variable, model, or metric requested.\n"
             "- operations: strictly ordered sequence of atomic, single-step computational morphisms representing each sequential transformation. "
             "You MUST exhaustively include every operation from the prompt up to and including the terminal deliverable (e.g. data loading, transformations, aggregations, feature extraction, model training, evaluation, predictions, or persistence).\n"
-            "- variables: exhaustively list all distinct column names, variable names, target variables, features, and symbols explicitly mentioned in the user specification (both feature columns and target/predicted columns, e.g. for 'X column', 'Y column', 'column called Z', and 'predict Z', extract ['X', 'Y', 'Z']). Never omit the target or predicted variable. Never append artificial suffixes like '_col' or '_column' unless written verbatim in the text.\n"
+            "- variables: exhaustively list all distinct field names, variable names, target variables, parameters, and symbols explicitly mentioned in the user specification (never omit target or output identifiers, and never append synthetic suffixes unless written verbatim in the text).\n"
             "- inputs: explicit input file names, asset paths, or data sources mentioned in the text (empty list if none).\n"
             "- outputs: explicit destination file paths mentioned in the text (empty list if deliverable is in-memory).\n\n"
             "Guidelines:\n"
             "1. Exhaustive Coverage: operations must NEVER be truncated or omitted; every sequential clause in the prompt must have its corresponding atomic step in operations.\n"
-            "2. Extract ALL variables, identifiers, and files that are explicitly mentioned in the user specification without omitting any column or target variable.\n"
-            "3. Do not invent or hallucinate placeholder names or suffixes (e.g. use 'X', not 'X_col').\n"
+            "2. Extract ALL variables, identifiers, and files that are explicitly mentioned in the user specification without omitting any identifier or target entity.\n"
+            "3. Do not invent or hallucinate placeholder names or synthetic suffixes; preserve identifier strings verbatim.\n"
             "4. Output valid JSON only."
         )
 
@@ -756,8 +837,29 @@ class BenchmarkProfile_C(InferenceProfile):
                 data["outputs"] = valid_outs
                 data["dest_files"] = list(valid_outs)
 
-                if "inputs" in data and "source_files" not in data:
-                    data["source_files"] = data["inputs"]
+                # Ground input source_files against prompt text/literals symmetrically
+                # so speculative filenames from the small compiler never poison Layer 2 Step 0.
+                raw_ins = data.get("source_files") if "source_files" in data else (data.get("inputs") or [])
+                if not isinstance(raw_ins, list):
+                    raw_ins = [raw_ins] if raw_ins else []
+                valid_ins = []
+                extracted_lits = None
+                for in_f in raw_ins:
+                    if isinstance(in_f, str) and in_f.strip():
+                        clean_in = in_f.strip()
+                        if clean_in.lower() in prompt_lower:
+                            valid_ins.append(clean_in)
+                        else:
+                            try:
+                                if extracted_lits is None:
+                                    from unification import ExecutionContext
+                                    extracted_lits = ExecutionContext._extract_universal_literals(prompt)
+                                if any(clean_in.lower() in str(lit_val).lower() for _, _, lit_val in (extracted_lits or ())):
+                                    valid_ins.append(clean_in)
+                            except Exception:
+                                pass
+                data["inputs"] = list(valid_ins)
+                data["source_files"] = list(valid_ins)
                 if "parameters" in data and "hyperparameters" not in data:
                     data["hyperparameters"] = data["parameters"]
                 if "variables" in data and isinstance(data["variables"], list):
@@ -796,24 +898,50 @@ class BenchmarkProfile_C(InferenceProfile):
 
 
 class BenchmarkProfile_D(BenchmarkProfile_C):
+    """Profile D: Embeddings + Schema-Constrained SLM Slot Extraction Only."""
+
+    def can_extract_slots(self) -> bool:
+        return True
+
     def can_synthesize(self) -> bool:
         return False
 
+    def can_feedback_check(self) -> bool:
+        return False
 
-class BenchmarkProfile_B(BenchmarkProfile_C):
-    """Profile B: Dual Model (Dedicated Embedding Model + Generative LLM). Alias of Profile C."""
-    pass
+    def has_semantic_compiler(self) -> bool:
+        return False
+
+    def has_translator_pass(self) -> bool:
+        return False
+
+    def has_ir_compiler(self) -> bool:
+        return False
 
 
 class BenchmarkProfile_E(BenchmarkProfile_C):
+    """Profile E: Translator Pass + Semantic Intent Compiler + Neuro-Symbolic Synthesis."""
+
+    def has_semantic_compiler(self) -> bool:
+        return True
+
     def has_translator_pass(self) -> bool:
         return True
 
+    def has_ir_compiler(self) -> bool:
+        return False
 
-class BenchmarkProfile_S(BenchmarkProfile_C):
-    """Profile S: Structured Semantic Compiler Profile."""
+
+class BenchmarkProfile_S(BenchmarkProfile_E):
+    """Profile S: Typed IR Compiler + Semantic Compiler + Translator + Neuro-Symbolic Synthesis."""
 
     def has_semantic_compiler(self) -> bool:
+        return True
+
+    def has_translator_pass(self) -> bool:
+        return True
+
+    def has_ir_compiler(self) -> bool:
         return True
 
     def compile_semantic_intent(
@@ -822,72 +950,7 @@ class BenchmarkProfile_S(BenchmarkProfile_C):
         schema: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
-        if self.llm is not None:
-            res = super().compile_semantic_intent(prompt, schema, system_prompt)
-            if res and res.get("task") not in ("generic", ""):
-                return res
-
-        # Semantic heuristic extraction when LLM is unavailable or returns generic
-        try:
-            from planner import _segment_prompt_clauses
-            clauses = _segment_prompt_clauses(prompt)
-        except Exception:
-            clauses = [prompt]
-
-        inputs = []
-        outputs = []
-        for word in prompt.split():
-            clean_w = word.strip("'\":,;.()[]{}")
-            if "." in clean_w:
-                ext = clean_w.rpartition(".")[2].lower()
-                is_file = False
-                try:
-                    from .lattice import TypeRegistry
-                    reg = TypeRegistry.get_instance()
-                    is_file = reg.is_subtype(ext, "format") or reg.is_subtype(ext, "file")
-                except Exception:
-                    try:
-                        from lattice import TypeRegistry
-                        reg = TypeRegistry.get_instance()
-                        is_file = reg.is_subtype(ext, "format") or reg.is_subtype(ext, "file")
-                    except Exception:
-                        pass
-                if not is_file:
-                    try:
-                        from .unification import ExecutionContext
-                        is_file = ExecutionContext._is_path_string(clean_w)
-                    except Exception:
-                        try:
-                            from unification import ExecutionContext
-                            is_file = ExecutionContext._is_path_string(clean_w)
-                        except Exception:
-                            pass
-                if is_file:
-                    if not inputs:
-                        inputs.append(clean_w)
-                    else:
-                        outputs.append(clean_w)
-
-        active_domain = "generic"
-        try:
-            from lattice import TypeRegistry
-            active_domain = getattr(TypeRegistry.get_instance(), "active_domain", "generic") or "generic"
-        except Exception:
-            pass
-
-        return {
-            "task": "pipeline",
-            "domain": active_domain,
-            "inputs": inputs,
-            "outputs": outputs,
-            "source_files": inputs,
-            "dest_files": outputs,
-            "operations": clauses,
-            "parameters": {},
-            "hyperparameters": {},
-            "slots": {},
-            "effective_prompt": prompt,
-        }
+        return super().compile_semantic_intent(prompt, schema=schema, system_prompt=system_prompt)
 
 
 class BenchmarkProfile_U(InferenceProfile):
@@ -932,19 +995,27 @@ class BenchmarkProfile_U(InferenceProfile):
             ggufs = [f for f in os.listdir(llm_dir) if f.endswith(".gguf")]
             if ggufs:
                 try:
+                    import llama_cpp
                     from llama_cpp import Llama
-                    gguf_path = os.path.join(llm_dir, ggufs[0])
-                    n_gpu = 99 if device == "cuda" else 0
+                    unified_ggufs = [f for f in ggufs if not is_split_gguf_shard(f)]
+                    chosen_gguf = unified_ggufs[0] if unified_ggufs else ggufs[0]
+                    gguf_path = os.path.join(llm_dir, chosen_gguf)
+                    n_gpu = -1 if device in ("cuda", "mps", "metal", "rocm") else 0
+                    n_threads = max(1, (os.cpu_count() or 4) - 1)
+                    mean_pooling = getattr(llama_cpp, "LLAMA_POOLING_TYPE_MEAN", 1)
                     self.llm = Llama(
                         model_path=gguf_path,
                         n_ctx=settings.llm_context_length,
                         n_gpu_layers=n_gpu,
+                        n_threads=n_threads,
                         embedding=True,  # Enable dual embedding + completion from single instance
+                        pooling_type=mean_pooling,
                         verbose=False,
                     )
                     try:
                         test_emb = self.llm.create_embedding("probe")
-                        self._dim = len(test_emb["data"][0]["embedding"])
+                        probe_arr = np.asarray(test_emb["data"][0]["embedding"], dtype=np.float32)
+                        self._dim = int(probe_arr.shape[-1]) if probe_arr.ndim >= 1 and probe_arr.size > 0 else 896
                     except Exception:
                         self._dim = getattr(self.llm, "n_embd", lambda: 896)() or 896
                     self.is_torch = False
@@ -991,10 +1062,43 @@ class BenchmarkProfile_U(InferenceProfile):
                 with torch.no_grad():
                     core_model = getattr(self.model, "model", self.model)
                     hidden = core_model.embed_tokens(inputs.input_ids)
+                    seq_len = inputs.input_ids.shape[1]
+                    batch_size = inputs.input_ids.shape[0]
+                    position_ids = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0).expand(batch_size, seq_len)
+                    rotary_pos_emb = None
+                    if hasattr(core_model, "rotary_emb"):
+                        try:
+                            rotary_pos_emb = core_model.rotary_emb(hidden, position_ids)
+                        except Exception:
+                            rotary_pos_emb = None
+                    causal_mask = None
+                    attn_2d = getattr(inputs, "attention_mask", None)
+                    if attn_2d is not None:
+                        min_val = torch.finfo(hidden.dtype).min if hidden.dtype.is_floating_point else -1e9
+                        causal_base = torch.triu(
+                            torch.full((seq_len, seq_len), min_val, dtype=hidden.dtype, device=device),
+                            diagonal=1,
+                        ).unsqueeze(0).unsqueeze(0)
+                        pad_mask = (1.0 - attn_2d.to(dtype=hidden.dtype)).unsqueeze(1).unsqueeze(2) * min_val
+                        causal_mask = causal_base + pad_mask
+
                     k = self.k_layer
                     layers = getattr(core_model, "layers", [])
                     for layer in layers[:k]:
-                        hidden = layer(hidden)[0] if isinstance(layer(hidden), tuple) else layer(hidden)
+                        layer_kwargs: Dict[str, Any] = {}
+                        try:
+                            sig = inspect.signature(layer.forward)
+                            params = sig.parameters
+                            if "position_ids" in params:
+                                layer_kwargs["position_ids"] = position_ids
+                            if "position_embeddings" in params and rotary_pos_emb is not None:
+                                layer_kwargs["position_embeddings"] = rotary_pos_emb
+                            if "attention_mask" in params and causal_mask is not None:
+                                layer_kwargs["attention_mask"] = causal_mask
+                        except (TypeError, ValueError):
+                            layer_kwargs = {"position_ids": position_ids}
+                        layer_out = layer(hidden, **layer_kwargs)
+                        hidden = layer_out[0] if isinstance(layer_out, tuple) else layer_out
                     if hasattr(core_model, "norm"):
                         hidden = core_model.norm(hidden)
                     mask = inputs.attention_mask.unsqueeze(-1).expand(hidden.size()).float()
@@ -1010,22 +1114,27 @@ class BenchmarkProfile_U(InferenceProfile):
                 for t in texts:
                     res = self.llm.create_embedding(t)
                     emb = res["data"][0]["embedding"]
-                    arr = np.array(emb, dtype=np.float32)
-                    norm = np.linalg.norm(arr)
+                    arr = np.asarray(emb, dtype=np.float32)
+                    if arr.ndim > 1:
+                        arr = arr.reshape(-1, arr.shape[-1]).mean(axis=0)
+                    norm = float(np.linalg.norm(arr))
                     if norm > 1e-9:
-                        arr /= norm
+                        arr = arr / norm
                     embeddings.append(arr.tolist())
                 return embeddings
 
-            # 3. Deterministic semantic projection fallback for offline/test mode
-            embeddings = []
-            for t in texts:
-                h = int(hashlib.md5(t.encode("utf-8")).hexdigest()[:8], 16)
-                rng = np.random.RandomState(h % (2**31 - 1))
-                vec = rng.normal(0, 1.0, self._dim).astype(np.float32)
-                vec /= (np.linalg.norm(vec) + 1e-9)
-                embeddings.append(vec.tolist())
-            return embeddings
+            # 3. Deterministic compositional projection fallback for offline/test mode (zero MD5 RNG)
+            try:
+                from .latent_autoencoder import _extract_structural_features, _project_compositional_features
+            except (ImportError, ValueError):
+                from latent_autoencoder import _extract_structural_features, _project_compositional_features
+            return [
+                _project_compositional_features(
+                    _extract_structural_features(t, is_typestate=True),
+                    self._dim,
+                ).tolist()
+                for t in texts
+            ]
 
     def generate_text(self, prompt: str, max_tokens: int = 1024, schema: Optional[dict] = None, system_prompt: Optional[str] = None) -> str:
         with self._lock:
@@ -1042,23 +1151,41 @@ class BenchmarkProfile_U(InferenceProfile):
                 if system_prompt:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.append({"role": "user", "content": prompt})
-                res = self.llm.create_chat_completion(
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=settings.llm_temperature,
-                    top_p=settings.llm_top_p,
-                )
-                return res["choices"][0]["message"]["content"]
+                kwargs: Dict[str, Any] = {
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": settings.llm_temperature,
+                    "top_p": settings.llm_top_p,
+                    "repeat_penalty": 1.15,
+                    "stop": ["<|im_end|>", "<|endoftext|>"],
+                }
+                if schema:
+                    kwargs["response_format"] = {"type": "json_object", "schema": schema}
+                res = self.llm.create_chat_completion(**kwargs)
+                return res["choices"][0]["message"]["content"].strip()
             return ""
 
     def can_synthesize(self) -> bool:
+        return True
+
+    def can_extract_slots(self) -> bool:
         return True
 
     def can_feedback_check(self) -> bool:
         return True
 
     def feedback_check(self, failing_code: str, traceback_error: str) -> str:
-        return failing_code
+        prompt = (
+            "Fix the runtime error in this code and return ONLY the corrected code "
+            f"inside ```python ```:\n\nERROR:\n{traceback_error}\n\nCODE:\n```python\n{failing_code}\n```"
+        )
+        try:
+            raw = self.generate_text(prompt, max_tokens=1024)
+            repaired = extract_code_from_llm_response(raw)
+            return repaired if repaired else failing_code
+        except Exception as e:
+            logger.error(f"[PROFILE U FEEDBACK CHECK ERROR] {e}")
+            return failing_code
 
     @property
     def embedding_dimension(self) -> int:
@@ -1140,6 +1267,99 @@ class BenchmarkProfile_AE(InferenceProfile):
         return self._dim
 
 
+class BenchmarkProfile_Omega(BenchmarkProfile_S):
+    """
+    Profile Omega (O / Ω): Full STRATA 4-Stage Formal Neuro-Symbolic Pipeline.
+      - Stage 1: Recursive Coalgebraic Subgoal Unfolding (open -> semi-closed -> closed)
+      - Stage 2: Calibrated Sigmoid Hybrid Retrieval + Backward Precondition Cone
+      - Stage 3: Type-Directed Bidirectional A* Search over Symmetric Monoidal Category
+                 with schema-constrained SLM ranking over E_valid(Gamma_t)
+      - Stage 4: Exact Robinson Unification + Profunctor Lens Lifting + GBNF Slot Extraction
+                 + Pointed Monoidal Defaults eta_tau : 1 -> tau
+    """
+
+    def uses_reranker(self) -> bool:
+        return True
+
+    def has_coalgebraic_unfolder(self) -> bool:
+        return True
+
+    def has_constrained_choice_scorer(self) -> bool:
+        return True
+
+    def score_choices(
+        self,
+        prompt: str,
+        candidates: List[str],
+        context_desc: str = "",
+    ) -> Dict[str, float]:
+        """
+        Schema-constrained SLM choice scorer restricted strictly to E_valid(Gamma_t).
+        Returns {cell_id: score in [0, 1]} only for candidate IDs in `candidates`.
+        """
+        clean_cands = [str(c).strip() for c in (candidates or []) if c]
+        has_custom_gen = type(self).generate_text is not BenchmarkProfile_C.generate_text
+        if not clean_cands or (self.llm is None and not has_custom_gen):
+            return {}
+        capped = clean_cands[:12]
+        choice_schema = {
+            "type": "object",
+            "properties": {
+                "rankings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "cell_id": {"type": "string", "enum": capped},
+                            "score": {"type": "number"},
+                        },
+                        "required": ["cell_id", "score"],
+                    },
+                }
+            },
+            "required": ["rankings"],
+        }
+        ctx_line = f"\nCurrent typed context Gamma_t:\n{context_desc}\n" if context_desc else "\n"
+        sys_p = (
+            "You rank ONLY type-valid outgoing morphisms from the provided candidate list.\n"
+            "Do not invent new cell IDs. Assign scores in [0.0, 1.0] reflecting how well each "
+            "candidate advances the goal."
+        )
+        usr_p = (
+            f"Goal: {prompt}{ctx_line}"
+            f"Type-valid candidate morphisms E_valid: {', '.join(capped)}\n"
+            'Return JSON: {"rankings": [{"cell_id": "<id>", "score": <0..1>}, ...]}'
+        )
+        try:
+            raw = self.generate_text(usr_p, max_tokens=256, schema=choice_schema, system_prompt=sys_p)
+            data = None
+            try:
+                data = json.loads(raw)
+            except Exception:
+                start = raw.find("{")
+                end = raw.rfind("}")
+                if start != -1 and end > start:
+                    data = json.loads(raw[start : end + 1])
+            if not isinstance(data, dict):
+                return {}
+            valid_set = set(capped)
+            out: Dict[str, float] = {}
+            for item in data.get("rankings", []) or []:
+                if not isinstance(item, dict):
+                    continue
+                cid = str(item.get("cell_id", "")).strip()
+                if cid in valid_set:
+                    try:
+                        sc = max(0.0, min(1.0, float(item.get("score", 0.0))))
+                        out[cid] = max(out.get(cid, 0.0), sc)
+                    except Exception:
+                        pass
+            return out
+        except Exception as err:
+            logger.debug(f"[OMEGA] Constrained choice scoring skipped: {err}")
+            return {}
+
+
 class ModelManager:
     _instance = None
     _lock = threading.RLock()
@@ -1176,6 +1396,11 @@ class ModelManager:
                     self.active_profile.model = None
                 self.active_profile = None
             self.current_profile_name = None
+            try:
+                from cognitive_pathfinder import LatentVectorExtractor
+                LatentVectorExtractor.reset_instance()
+            except Exception:
+                pass
 
             gc.collect()
             if TORCH_AVAILABLE and torch.cuda.is_available():
@@ -1207,6 +1432,9 @@ class ModelManager:
                 prof = BenchmarkProfile_U()
             elif p_type == "AE":
                 prof = BenchmarkProfile_AE()
+            elif p_type in ("O", "OMEGA", "Ω"):
+                prof = BenchmarkProfile_Omega()
+                p_type = "O"
             else:
                 raise ValueError(f"Unknown profile type: {profile_type}")
 
@@ -1243,6 +1471,45 @@ class ModelManager:
     def can_synthesize(self) -> bool:
         with self._lock:
             return self.active_profile.can_synthesize() if self.active_profile else False
+
+    def can_extract_slots(self) -> bool:
+        with self._lock:
+            if not self.active_profile:
+                return False
+            if hasattr(self.active_profile, "can_extract_slots"):
+                return self.active_profile.can_extract_slots()
+            return self.active_profile.can_synthesize()
+
+    def is_pure_symbolic(self) -> bool:
+        with self._lock:
+            return self.current_profile_name == "0"
+
+    def uses_reranker(self) -> bool:
+        with self._lock:
+            return getattr(self.active_profile, "uses_reranker", lambda: False)() if self.active_profile else False
+
+    def has_ir_compiler(self) -> bool:
+        with self._lock:
+            return getattr(self.active_profile, "has_ir_compiler", lambda: False)() if self.active_profile else False
+
+    def has_coalgebraic_unfolder(self) -> bool:
+        with self._lock:
+            return getattr(self.active_profile, "has_coalgebraic_unfolder", lambda: False)() if self.active_profile else False
+
+    def has_constrained_choice_scorer(self) -> bool:
+        with self._lock:
+            return getattr(self.active_profile, "has_constrained_choice_scorer", lambda: False)() if self.active_profile else False
+
+    def score_choices(
+        self,
+        prompt: str,
+        candidates: List[str],
+        context_desc: str = "",
+    ) -> Dict[str, float]:
+        with self._lock:
+            if self.active_profile and hasattr(self.active_profile, "score_choices"):
+                return self.active_profile.score_choices(prompt, candidates, context_desc=context_desc)
+            return {}
 
     def has_embedder(self) -> bool:
         with self._lock:
