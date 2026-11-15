@@ -9,6 +9,7 @@ import gc
 import inspect
 import json
 import os
+import sys
 import threading
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any, Tuple, Union
@@ -20,14 +21,50 @@ except ImportError:
 
 import numpy as np
 
-# Torch is required only by neural inference profiles; the symbolic toolchain
-# (CLI compile/validate/harvest) runs without it.
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    torch = None  # type: ignore[assignment]
-    TORCH_AVAILABLE = False
+# Configure PyTorch CUDA memory allocator before any lazy torch import
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+# Torch is imported lazily on first neural use so symbolic commands (Profile 0, compile, harvest)
+# avoid ~200 MB of startup RAM and cold torch import latency.
+torch = None  # type: ignore[assignment]
+TORCH_AVAILABLE: Optional[bool] = None
+
+
+def _ensure_torch() -> bool:
+    """Lazily imports PyTorch once on first neural inference use."""
+    global torch, TORCH_AVAILABLE
+    if TORCH_AVAILABLE is not None:
+        return TORCH_AVAILABLE
+    try:
+        import torch as _torch
+        torch = _torch
+        TORCH_AVAILABLE = True
+    except ImportError:  # pragma: no cover
+        torch = None  # type: ignore[assignment]
+        TORCH_AVAILABLE = False
+    return TORCH_AVAILABLE
+
+
+def _trim_host_memory() -> None:
+    """Returns freed glibc heap arenas (e.g. safetensors/torch load staging buffers) back to the OS."""
+    if sys.platform.startswith("linux"):
+        try:
+            import ctypes
+            libc = ctypes.CDLL("libc.so.6")
+            libc.malloc_trim(0)
+        except Exception:
+            pass
+
+
+def _instantiate_llama(llama_cls: Any, **kwargs: Any) -> Any:
+    """Instantiates Llama with flash_attn=True when supported, falling back cleanly."""
+    if "flash_attn" not in kwargs:
+        try:
+            return llama_cls(**kwargs, flash_attn=True)
+        except TypeError:
+            pass
+    return llama_cls(**kwargs)
 
 try:
     from log_config import get_logger
@@ -45,17 +82,193 @@ except (ImportError, ValueError):
     from config import MODELS_DIR, settings
     from utils import extract_code_from_llm_response
 
-# Configure PyTorch CUDA memory allocator to prevent memory fragmentation
-if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
 logger = get_logger("inference")
 
 
-def resolve_embedding_dimension(model: Any, fallback: int = 384) -> int:
+def _validate_json_schema(val: Any, schema: Optional[Dict[str, Any]], _depth: int = 0) -> bool:
+    """Lightweight recursive JSON Schema validator for fast unconstrained JSON verification."""
+    if not isinstance(schema, dict) or _depth > 8:
+        return True
+    if "enum" in schema:
+        if val not in (schema.get("enum") or ()):
+            return False
+    expected_t = schema.get("type")
+    if expected_t is not None:
+        t_list = [expected_t] if isinstance(expected_t, str) else list(expected_t)
+        ok_t = False
+        for t_s in t_list:
+            if t_s == "object" and isinstance(val, dict):
+                ok_t = True
+            elif t_s == "array" and isinstance(val, list):
+                ok_t = True
+            elif t_s == "string" and isinstance(val, str):
+                ok_t = True
+            elif t_s == "integer" and isinstance(val, int) and not isinstance(val, bool):
+                ok_t = True
+            elif t_s == "number" and isinstance(val, (int, float)) and not isinstance(val, bool):
+                ok_t = True
+            elif t_s == "boolean" and isinstance(val, bool):
+                ok_t = True
+            elif t_s == "null" and val is None:
+                ok_t = True
+        if not ok_t:
+            return False
+    if isinstance(val, dict):
+        for req_k in schema.get("required") or ():
+            if req_k not in val:
+                return False
+        props = schema.get("properties")
+        if isinstance(props, dict):
+            for pk, p_sch in props.items():
+                if pk in val and not _validate_json_schema(val[pk], p_sch, _depth + 1):
+                    return False
+        add_p = schema.get("additionalProperties")
+        if isinstance(add_p, dict):
+            declared = set(props.keys()) if isinstance(props, dict) else set()
+            for vk, vv in val.items():
+                if vk not in declared and not _validate_json_schema(vv, add_p, _depth + 1):
+                    return False
+    elif isinstance(val, list):
+        item_sch = schema.get("items")
+        if isinstance(item_sch, dict):
+            for elem in val:
+                if not _validate_json_schema(elem, item_sch, _depth + 1):
+                    return False
+    return True
+
+
+def _render_schema_skeleton(schema: Any, depth: int = 0) -> str:
+    """Renders a JSON Schema into a concise structural type-spec without literal '<string>' tokens."""
+    if not isinstance(schema, dict) or depth > 5:
+        return "any"
+    enums = schema.get("enum")
+    if isinstance(enums, list) and enums:
+        shown = [json.dumps(x) for x in enums[:12]]
+        suffix = ", ..." if len(enums) > 12 else ""
+        return "one of (" + "|".join(shown) + suffix + ")"
+    t = schema.get("type")
+    if isinstance(t, list):
+        t = next((x for x in t if x != "null"), t[0] if t else None)
+    if t == "object" or ("properties" in schema and t is None):
+        props = schema.get("properties")
+        if isinstance(props, dict) and props:
+            req = set(schema.get("required") or ())
+            parts = []
+            for k, v in list(props.items())[:24]:
+                mark = "*" if k in req else ""
+                parts.append(f"{json.dumps(k)}{mark}: {_render_schema_skeleton(v, depth + 1)}")
+            return "{" + ", ".join(parts) + "}"
+        return "object"
+    if t == "array" or ("items" in schema and t is None):
+        items = schema.get("items")
+        if isinstance(items, dict):
+            return "list<" + _render_schema_skeleton(items, depth + 1) + ">"
+        return "list<any>"
+    if t in ("string", "number", "integer", "boolean"):
+        return t
+    return "any"
+
+
+def _normalize_json_to_schema(val: Any, schema: Optional[Dict[str, Any]], _depth: int = 0) -> Any:
+    """Losslessly coerces minor wrapper shape mismatches (e.g. [['op']] -> ['op']) to satisfy JSON schema."""
+    if not isinstance(schema, dict) or _depth > 8:
+        return val
+    expected_t = schema.get("type")
+    t_list = [expected_t] if isinstance(expected_t, str) else (list(expected_t) if isinstance(expected_t, list) else [])
+    allows_null = "null" in t_list
+    primary_t = next((x for x in t_list if x != "null"), None)
+    if primary_t == "string":
+        if val is None and not allows_null:
+            return ""
+        if isinstance(val, (list, tuple)) and val and all(isinstance(x, (str, int, float, bool)) for x in val):
+            return str(val[0]) if len(val) == 1 else ", ".join(str(x) for x in val)
+        return val
+    if primary_t == "array" or ("items" in schema and primary_t is None):
+        if val is None and not allows_null:
+            val = []
+        if isinstance(val, list):
+            item_sch = schema.get("items")
+            if isinstance(item_sch, dict):
+                return [_normalize_json_to_schema(elem, item_sch, _depth + 1) for elem in val]
+        return val
+    if primary_t == "object" or ("properties" in schema and primary_t is None):
+        if val is None and not allows_null:
+            val = {}
+        if isinstance(val, dict):
+            props = schema.get("properties")
+            add_p = schema.get("additionalProperties")
+            out = dict(val)
+            if isinstance(props, dict):
+                for pk, p_sch in props.items():
+                    if pk in out:
+                        out[pk] = _normalize_json_to_schema(out[pk], p_sch, _depth + 1)
+            if isinstance(add_p, dict):
+                declared = set(props.keys()) if isinstance(props, dict) else set()
+                for vk in list(out.keys()):
+                    if vk not in declared:
+                        out[vk] = _normalize_json_to_schema(out[vk], add_p, _depth + 1)
+            return out
+    return val
+
+
+def _generate_llama_with_optional_schema(
+    llm: Any,
+    lock: threading.Lock,
+    messages: List[Dict[str, str]],
+    kwargs: Dict[str, Any],
+    schema: Optional[dict],
+) -> str:
+    """
+    Runs llama_cpp chat completion with a fast unconstrained JSON first-pass when a
+    JSON schema is supplied (~10-15x faster than per-token CPU GBNF masking), validating
+    the output strictly against the schema and falling back to GBNF only if validation fails.
+    """
+    if schema:
+        try:
+            try:
+                from .utils import extract_json_object
+            except (ImportError, ValueError):
+                from utils import extract_json_object
+            spec_str = _render_schema_skeleton(schema)
+            if len(spec_str) > 2000:
+                spec_str = spec_str[:2000] + "...}"
+            req_keys = list(schema.get("required") or ()) if isinstance(schema, dict) else []
+            req_note = f" MUST include all required keys ({', '.join(req_keys)}, marked * — use [] or \"\" if none)." if req_keys else ""
+            schema_hint = (
+                "\nOutput ONLY ONE valid minified single-line JSON object (no newlines, no indentation) adhering to this type specification "
+                "(fill required fields with actual values derived from the user request; omit optional empty fields; match array vs object "
+                f"types and enum strings verbatim; no markdown fences, no commentary):{req_note}\nTypeSpec: {spec_str}"
+            )
+            fast_msgs = [dict(m) for m in messages]
+            if fast_msgs and fast_msgs[0].get("role") == "system":
+                fast_msgs[0]["content"] = fast_msgs[0]["content"] + schema_hint
+            else:
+                fast_msgs.insert(0, {"role": "system", "content": schema_hint.strip()})
+            fast_kwargs = dict(kwargs)
+            fast_kwargs["messages"] = fast_msgs
+            fast_kwargs["temperature"] = 0.0
+            with lock:
+                fast_resp = llm.create_chat_completion(**fast_kwargs)
+            fast_raw = (fast_resp["choices"][0]["message"]["content"] or "").strip()
+            parsed_fast = extract_json_object(fast_raw)
+            if isinstance(parsed_fast, dict):
+                parsed_fast = _normalize_json_to_schema(parsed_fast, schema)
+                if _validate_json_schema(parsed_fast, schema):
+                    return json.dumps(parsed_fast)
+        except Exception as _fast_err:
+            logger.debug(f"[INFERENCE] Fast JSON path fell back to GBNF schema: {_fast_err}")
+        kwargs["response_format"] = {"type": "json_object", "schema": schema}
+
+    kwargs["messages"] = messages
+    with lock:
+        response = llm.create_chat_completion(**kwargs)
+    return (response["choices"][0]["message"]["content"] or "").strip()
+
+
+def resolve_embedding_dimension(model: Any) -> int:
     """
     Resolves the embedding dimension of a loaded SentenceTransformer model
-    across library versions.
+    across library versions. Fails loudly if the dimension cannot be inspected.
     """
     modern = getattr(model, "get_embedding_dimension", None)
     if callable(modern):
@@ -84,16 +297,11 @@ def resolve_embedding_dimension(model: Any, fallback: int = 384) -> int:
         except Exception:
             pass
 
-    try:
-        probe = model.encode(["nstl dimension probe"], convert_to_numpy=True)
-        dim = int(probe.shape[-1])
-        if dim > 0:
-            return dim
-    except Exception:
-        pass
-
-    logger.warning(f"[INFERENCE] Could not resolve embedding dimension; using fallback {fallback}.")
-    return fallback
+    probe = model.encode(["nstl dimension probe"], convert_to_numpy=True)
+    dim = int(probe.shape[-1])
+    if dim > 0:
+        return dim
+    raise RuntimeError("Could not resolve embedding dimension from loaded model.")
 
 
 def get_adaptive_batch_size(device: str = "cuda", min_batch: int = 8, max_batch: int = 128) -> int:
@@ -101,7 +309,7 @@ def get_adaptive_batch_size(device: str = "cuda", min_batch: int = 8, max_batch:
     Computes an optimal batch size dynamically based on available device memory headroom.
     Fully hardware-agnostic: tracks continuous free VRAM headroom without hardcoded card thresholds.
     """
-    if not TORCH_AVAILABLE or "cuda" not in str(device).lower() or not torch.cuda.is_available():
+    if "cuda" not in str(device).lower() or not _ensure_torch() or not torch.cuda.is_available():
         return 32
 
     try:
@@ -269,39 +477,34 @@ def select_optimal_embedder(requested_name: str = "") -> str:
 
 def select_optimal_llm(requested_name: str = "") -> str:
     """
-    Selects the optimal local GGUF LLM model.
-    Defaults to the 0.5b model when available, or matches the requested name.
+    Selects a local GGUF LLM model from MODELS_DIR/llms (respecting explicit request,
+    configured `settings.llm_model` / `settings.preferred_llms`, or deterministic sorted discovery).
+    Fails loudly if no local GGUF models exist.
     """
     llm_base_dir = os.path.join(MODELS_DIR, "llms")
     if not os.path.exists(llm_base_dir):
-        return requested_name or "qwen2.5-coder-0.5b-instruct"
+        raise FileNotFoundError(f"LLM directory does not exist: {llm_base_dir}")
 
     available = sorted([
         d for d in os.listdir(llm_base_dir)
         if os.path.isdir(os.path.join(llm_base_dir, d)) and any(f.endswith(".gguf") for f in os.listdir(os.path.join(llm_base_dir, d)))
     ])
     if not available:
-        return requested_name or "qwen2.5-coder-0.5b-instruct"
+        raise FileNotFoundError(f"No GGUF LLM models found under {llm_base_dir}")
 
-    req = (requested_name or "").strip()
-    if req and req not in ("auto", "default"):
+    req = (requested_name or settings.llm_model or "").strip()
+    if req and req.lower() not in ("auto", "default"):
         if req in available:
             return req
         for cand in available:
             if req.lower() in cand.lower():
                 return cand
+        raise FileNotFoundError(f"Requested LLM '{req}' not found among local models: {available}")
 
-    # Prioritize 0.8B (Qwen3.5-0.8B), then 0.6B (Qwen3-0.6B), then 0.5B (Qwen2.5-0.5B)
-    m_08b = next((m for m in available if "0.8b" in m.lower()), None)
-    if m_08b is not None:
-        return m_08b
-    m_06b = next((m for m in available if "0.6b" in m.lower()), None)
-    if m_06b is not None:
-        return m_06b
-    m_05b = next((m for m in available if "0.5b" in m.lower()), None)
-    if m_05b is not None:
-        return m_05b
-
+    prefs = [str(p).strip() for p in (getattr(settings, "preferred_llms", None) or ()) if str(p).strip()]
+    for pref in prefs:
+        if pref in available:
+            return pref
     return available[0]
 
 
@@ -355,9 +558,10 @@ def _encode_with_modes(
         return [cached_map[i] for i in range(len(texts))]
 
     prompt_name = "query" if mode == "query" else "document"
+    has_torch = _ensure_torch()
 
     def _invoke(p_name: Optional[str], t_name: Optional[str], b_size: int, input_texts: List[str]):
-        kwargs: Dict[str, Any] = {"convert_to_numpy": True, "batch_size": b_size}
+        kwargs: Dict[str, Any] = {"convert_to_numpy": True, "batch_size": b_size, "show_progress_bar": False}
         if p_name:
             kwargs["prompt_name"] = p_name
         if t_name:
@@ -365,12 +569,12 @@ def _encode_with_modes(
 
         if lock is not None:
             with lock:
-                if TORCH_AVAILABLE:
+                if has_torch:
                     with torch.inference_mode():
                         return model.encode(input_texts, **kwargs)
                 return model.encode(input_texts, **kwargs)
         else:
-            if TORCH_AVAILABLE:
+            if has_torch:
                 with torch.inference_mode():
                     return model.encode(input_texts, **kwargs)
             return model.encode(input_texts, **kwargs)
@@ -381,26 +585,42 @@ def _encode_with_modes(
         (None, "retrieval"),
         (None, None),
     ]
+    sig_cache = getattr(model, "_working_encode_sig", None)
+    if isinstance(sig_cache, dict) and prompt_name in sig_cache:
+        pref = sig_cache[prompt_name]
+        if pref in attempts:
+            attempts = [pref] + [a for a in attempts if a != pref]
 
     last_sig_error = None
     computed: Optional[List[List[float]]] = None
+
+    def _remember_sig(p_name: Optional[str], t_name: Optional[str]) -> None:
+        try:
+            sc = getattr(model, "_working_encode_sig", None)
+            if not isinstance(sc, dict):
+                sc = {}
+                setattr(model, "_working_encode_sig", sc)
+            sc[prompt_name] = (p_name, t_name)
+        except Exception:
+            pass
 
     for p_name, t_name in attempts:
         try:
             res = _invoke(p_name, t_name, batch_size, missing_texts)
             computed = res.tolist() if hasattr(res, "tolist") else [list(r) for r in res]
+            _remember_sig(p_name, t_name)
             break
         except (TypeError, ValueError) as arg_err:
             last_sig_error = arg_err
             continue
         except Exception as err:
-            is_oom = TORCH_AVAILABLE and isinstance(err, torch.cuda.OutOfMemoryError)
+            is_oom = has_torch and isinstance(err, torch.cuda.OutOfMemoryError)
             if not is_oom and "out of memory" not in str(err).lower():
                 logger.error(f"[ENCODER] Fatal encoding error: {err}")
                 raise err
 
             logger.warning(f"[ENCODER] CUDA OOM encountered at batch_size={batch_size}. Retrying with micro-batches.")
-            if TORCH_AVAILABLE and torch.cuda.is_available():
+            if has_torch and torch.cuda.is_available():
                 gc.collect()
                 torch.cuda.empty_cache()
 
@@ -415,15 +635,16 @@ def _encode_with_modes(
                     else:
                         micro_results.extend([list(r) for r in sub_res])
                 computed = micro_results
+                _remember_sig(p_name, t_name)
                 break
             except (TypeError, ValueError) as arg_err:
                 last_sig_error = arg_err
                 continue
             except Exception as sub_err:
-                is_sub_oom = TORCH_AVAILABLE and isinstance(sub_err, torch.cuda.OutOfMemoryError)
+                is_sub_oom = has_torch and isinstance(sub_err, torch.cuda.OutOfMemoryError)
                 if is_sub_oom or "out of memory" in str(sub_err).lower():
                     logger.warning(f"[ENCODER] Micro-batch size {micro_bs} triggered OOM. Attempting next signature candidate.")
-                    if TORCH_AVAILABLE and torch.cuda.is_available():
+                    if has_torch and torch.cuda.is_available():
                         gc.collect()
                         torch.cuda.empty_cache()
                     continue
@@ -435,13 +656,13 @@ def _encode_with_modes(
         try:
             if lock is not None:
                 with lock:
-                    if TORCH_AVAILABLE:
+                    if has_torch:
                         with torch.inference_mode():
                             res = model.encode(missing_texts, convert_to_numpy=True)
                     else:
                         res = model.encode(missing_texts, convert_to_numpy=True)
             else:
-                if TORCH_AVAILABLE:
+                if has_torch:
                     with torch.inference_mode():
                         res = model.encode(missing_texts, convert_to_numpy=True)
                 else:
@@ -465,6 +686,47 @@ def _encode_with_modes(
                 break
 
     return [cached_map[i] for i in range(len(texts))]
+
+
+def _resolve_embedder_task(emb_path: str) -> Optional[str]:
+    """Reads configured or model-declared default task prompt without name heuristics."""
+    if getattr(settings, "embedder_task", None):
+        return str(settings.embedder_task)
+    cfg_st = os.path.join(emb_path, "config_sentence_transformers.json")
+    if os.path.isfile(cfg_st):
+        try:
+            with open(cfg_st, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            prompts = data.get("prompts") or {}
+            if isinstance(prompts, dict) and "retrieval" in prompts:
+                return "retrieval"
+        except Exception:
+            pass
+    return None
+
+
+def _build_embedder_model_kwargs(task_name: Optional[str], device: str) -> Dict[str, Any]:
+    """Builds SentenceTransformer model_kwargs from model/settings capabilities and CUDA precision."""
+    mk: Dict[str, Any] = {}
+    if task_name:
+        mk["default_task"] = task_name
+    if "cuda" in str(device).lower() and _ensure_torch() and torch.cuda.is_available():
+        mk["torch_dtype"] = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        mk["low_cpu_mem_usage"] = True
+    return mk
+
+
+def _cast_embedder_half_precision(model: Any, device: str) -> Any:
+    """Casts SentenceTransformer embedders on CUDA to BF16/FP16 to halve VRAM while keeping float fallback."""
+    if model is None or "cuda" not in str(device).lower() or not _ensure_torch():
+        return model
+    try:
+        target_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        model = model.to(target_dtype)
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
+    return model
 
 
 class BenchmarkProfile_0(InferenceProfile):
@@ -542,18 +804,27 @@ class BenchmarkProfile_B(InferenceProfile):
         self.embedder_name = select_optimal_embedder(embedder_name)
         self.llm_name = "none"
         self.llm = None
-        emb_path = os.path.join(MODELS_DIR, "embeddings", self.embedder_name)
-        device = HardwareProfiler.get_optimal_device()
-        is_jina = "jina" in self.embedder_name.lower()
-        model_kwargs = {"default_task": "retrieval"} if is_jina else {}
-        try:
-            self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs)
-        except Exception:
-            self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
-        self.embedder = self.model
-
-        self._dim = resolve_embedding_dimension(self.model)
-        logger.info(f"[PROFILE B] Loaded embedder '{self.embedder_name}' (dim={self._dim}, no LLM, no reranker) on {device.upper()}")
+        if self.model is None:
+            emb_path = os.path.join(MODELS_DIR, "embeddings", self.embedder_name)
+            device = HardwareProfiler.get_optimal_device()
+            task_name = _resolve_embedder_task(emb_path)
+            model_kwargs = _build_embedder_model_kwargs(task_name, device)
+            try:
+                self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs)
+            except Exception:
+                fallback_mk = {"default_task": task_name} if task_name else {}
+                try:
+                    self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=fallback_mk)
+                except Exception:
+                    self.model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+            self.model = _cast_embedder_half_precision(self.model, device)
+            self.embedder = self.model
+            self._dim = resolve_embedding_dimension(self.model)
+            logger.info(f"[PROFILE B] Loaded embedder '{self.embedder_name}' (dim={self._dim}, no LLM, no reranker) on {device.upper()}")
+        else:
+            self.embedder = self.model
+            if not self._dim:
+                self._dim = resolve_embedding_dimension(self.model)
 
     def get_embedding(self, text: str, mode: str = "query") -> List[float]:
         res = self.get_embeddings([text], mode=mode)
@@ -634,43 +905,51 @@ class BenchmarkProfile_C(InferenceProfile):
 
         device = HardwareProfiler.get_optimal_device()
 
-        # 1. Load Embedder
+        # 1. Load Embedder (skip if pre-attached via ModelManager weight reuse)
         self.embedder_name = select_optimal_embedder(embedder_name)
-        emb_path = os.path.join(MODELS_DIR, "embeddings", self.embedder_name)
-        is_jina = "jina" in self.embedder_name.lower()
-        model_kwargs = {"default_task": "retrieval"} if is_jina else {}
+        if self.embedder is None:
+            emb_path = os.path.join(MODELS_DIR, "embeddings", self.embedder_name)
+            task_name = _resolve_embedder_task(emb_path)
+            model_kwargs = _build_embedder_model_kwargs(task_name, device)
 
-        try:
-            self.embedder = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs)
-        except Exception:
-            self.embedder = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+            try:
+                self.embedder = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs)
+            except Exception:
+                fallback_mk = {"default_task": task_name} if task_name else {}
+                try:
+                    self.embedder = SentenceTransformer(emb_path, device=device, trust_remote_code=True, model_kwargs=fallback_mk)
+                except Exception:
+                    self.embedder = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+            self.embedder = _cast_embedder_half_precision(self.embedder, device)
 
-        self._dim = resolve_embedding_dimension(self.embedder)
+            self._dim = resolve_embedding_dimension(self.embedder)
 
-        # 2. Load LLM
+        # 2. Load LLM (skip if pre-attached via ModelManager weight reuse)
         self.llm_name = select_optimal_llm(llm_name)
-        llm_base_dir = os.path.join(MODELS_DIR, "llms")
-        llm_dir = os.path.join(llm_base_dir, self.llm_name)
-        if not os.path.isdir(llm_dir):
-            raise FileNotFoundError(f"LLM directory not found: {llm_dir}")
+        if self.llm is None:
+            llm_base_dir = os.path.join(MODELS_DIR, "llms")
+            llm_dir = os.path.join(llm_base_dir, self.llm_name)
+            if not os.path.isdir(llm_dir):
+                raise FileNotFoundError(f"LLM directory not found: {llm_dir}")
 
-        ggufs = [f for f in os.listdir(llm_dir) if f.endswith(".gguf")]
-        if not ggufs:
-            raise FileNotFoundError(f"No GGUF model file found in {llm_dir}")
-        unified_ggufs = [f for f in ggufs if not is_split_gguf_shard(f)]
-        chosen_gguf = unified_ggufs[0] if unified_ggufs else ggufs[0]
-        model_file = os.path.join(llm_dir, chosen_gguf)
+            ggufs = [f for f in os.listdir(llm_dir) if f.endswith(".gguf")]
+            if not ggufs:
+                raise FileNotFoundError(f"No GGUF model file found in {llm_dir}")
+            unified_ggufs = [f for f in ggufs if not is_split_gguf_shard(f)]
+            chosen_gguf = unified_ggufs[0] if unified_ggufs else ggufs[0]
+            model_file = os.path.join(llm_dir, chosen_gguf)
 
-        gpu_layers = -1 if device in ("cuda", "mps", "metal", "rocm") else 0
-        n_threads = max(1, (os.cpu_count() or 4) - 1)
-        self.llm = Llama(
-            model_path=model_file,
-            n_ctx=settings.llm_context_length,
-            n_gpu_layers=gpu_layers,
-            n_threads=n_threads,
-            verbose=False
-        )
-        logger.info(f"[PROFILE C] Loaded Embedder '{self.embedder_name}' + LLM '{self.llm_name}' on {device.upper()} (gpu_layers={gpu_layers}, n_threads={n_threads})")
+            gpu_layers = -1 if device in ("cuda", "mps", "metal", "rocm") else 0
+            n_threads = max(1, (os.cpu_count() or 4) - 1)
+            self.llm = _instantiate_llama(
+                Llama,
+                model_path=model_file,
+                n_ctx=settings.llm_context_length,
+                n_gpu_layers=gpu_layers,
+                n_threads=n_threads,
+                verbose=False,
+            )
+            logger.info(f"[PROFILE C] Loaded Embedder '{self.embedder_name}' + LLM '{self.llm_name}' on {device.upper()} (gpu_layers={gpu_layers}, n_threads={n_threads})")
 
     def get_embedding(self, text: str, mode: str = "query") -> List[float]:
         res = self.get_embeddings([text], mode=mode)
@@ -694,20 +973,16 @@ class BenchmarkProfile_C(InferenceProfile):
         messages.append({"role": "user", "content": prompt})
 
         kwargs: Dict[str, Any] = {
-            "messages": messages,
             "max_tokens": max_tokens,
             "temperature": settings.llm_temperature,
             "top_p": settings.llm_top_p,
             "repeat_penalty": 1.15,
-            "stop": ["<|im_end|>", "<|endoftext|>"],
         }
-        if schema:
-            kwargs["response_format"] = {"type": "json_object", "schema": schema}
-
-        # Concurrency safety: synchronize queries to llama_cpp instance
-        with self._llm_lock:
-            response = self.llm.create_chat_completion(**kwargs)
-        return response['choices'][0]['message']['content'].strip()
+        if settings.llm_stop_tokens:
+            kwargs["stop"] = list(settings.llm_stop_tokens)
+        return _generate_llama_with_optional_schema(
+            self.llm, self._llm_lock, messages, kwargs, schema
+        )
 
     def can_synthesize(self) -> bool:
         return True
@@ -719,7 +994,12 @@ class BenchmarkProfile_C(InferenceProfile):
         return True
 
     def feedback_check(self, failing_code: str, traceback_error: str) -> str:
-        prompt = f"Fix the runtime error in this code and return ONLY the corrected code inside ```python ```:\n\nERROR:\n{traceback_error}\n\nCODE:\n```python\n{failing_code}\n```"
+        from language_backend import get_active_language_backend
+        lang_name = get_active_language_backend().name or "target"
+        prompt = (
+            f"Fix the runtime error in this code and return ONLY the corrected code inside ```{lang_name} ```:\n\n"
+            f"ERROR:\n{traceback_error}\n\nCODE:\n```{lang_name}\n{failing_code}\n```"
+        )
         try:
             raw = self.generate_text(prompt, max_tokens=1024)
             return extract_code_from_llm_response(raw)
@@ -794,16 +1074,15 @@ class BenchmarkProfile_C(InferenceProfile):
             "- task: high-level intent.\n"
             "- domain: problem domain.\n"
             "- deliverable: the primary terminal entity, variable, model, or metric requested.\n"
-            "- operations: strictly ordered sequence of atomic, single-step computational morphisms representing each sequential transformation. "
-            "You MUST exhaustively include every operation from the prompt up to and including the terminal deliverable (e.g. data loading, transformations, aggregations, feature extraction, model training, evaluation, predictions, or persistence).\n"
-            "- variables: exhaustively list all distinct field names, variable names, target variables, parameters, and symbols explicitly mentioned in the user specification (never omit target or output identifiers, and never append synthetic suffixes unless written verbatim in the text).\n"
-            "- inputs: explicit input file names, asset paths, or data sources mentioned in the text (empty list if none).\n"
-            "- outputs: explicit destination file paths mentioned in the text (empty list if deliverable is in-memory).\n\n"
+            "- operations: ordered JSON array of SHORT strings (each a 2-5 word atomic step phrase, e.g. [\"load input.csv\", ...]; NOT objects).\n"
+            "- variables: JSON array of distinct column, feature, variable, and parameter strings mentioned verbatim in the prompt.\n"
+            "- inputs: JSON array of explicit input file path strings mentioned in the prompt (empty list [] if none).\n"
+            "- outputs: JSON array of explicit output destination file path strings mentioned in the prompt (empty list [] if deliverable is in-memory).\n\n"
             "Guidelines:\n"
-            "1. Exhaustive Coverage: operations must NEVER be truncated or omitted; every sequential clause in the prompt must have its corresponding atomic step in operations.\n"
+            "1. Exhaustive Coverage: operations must NEVER be truncated or omitted; every sequential clause in the prompt must have its corresponding concise string in operations.\n"
             "2. Extract ALL variables, identifiers, and files that are explicitly mentioned in the user specification without omitting any identifier or target entity.\n"
             "3. Do not invent or hallucinate placeholder names or synthetic suffixes; preserve identifier strings verbatim.\n"
-            "4. Output valid JSON only."
+            "4. Output compact single-line valid JSON only."
         )
 
         try:
@@ -878,19 +1157,7 @@ class BenchmarkProfile_C(InferenceProfile):
         except Exception as e:
             logger.debug(f"[LLM] Semantic intent compilation fallback: {e}")
 
-        return {
-            "task": "generic",
-            "domain": "generic",
-            "inputs": [],
-            "outputs": [],
-            "source_files": [],
-            "dest_files": [],
-            "operations": [],
-            "parameters": {},
-            "hyperparameters": {},
-            "slots": {},
-            "effective_prompt": prompt,
-        }
+        raise RuntimeError(f"Semantic intent compilation failed for profile {getattr(self, 'llm_name', 'unknown')}.")
 
     @property
     def embedding_dimension(self) -> int:
@@ -1003,7 +1270,8 @@ class BenchmarkProfile_U(InferenceProfile):
                     n_gpu = -1 if device in ("cuda", "mps", "metal", "rocm") else 0
                     n_threads = max(1, (os.cpu_count() or 4) - 1)
                     mean_pooling = getattr(llama_cpp, "LLAMA_POOLING_TYPE_MEAN", 1)
-                    self.llm = Llama(
+                    self.llm = _instantiate_llama(
+                        Llama,
                         model_path=gguf_path,
                         n_ctx=settings.llm_context_length,
                         n_gpu_layers=n_gpu,
@@ -1025,7 +1293,7 @@ class BenchmarkProfile_U(InferenceProfile):
                     logger.debug(f"[PROFILE U] GGUF loading skipped: {e}")
 
         # 2. Attempt PyTorch / HuggingFace model loading
-        if not loaded and TORCH_AVAILABLE:
+        if not loaded and _ensure_torch():
             try:
                 if os.path.isdir(llm_dir) and any(os.path.exists(os.path.join(llm_dir, f)) for f in ("config.json", "model.safetensors")):
                     from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -1042,10 +1310,9 @@ class BenchmarkProfile_U(InferenceProfile):
                 logger.debug(f"[PROFILE U] PyTorch model loading skipped: {e}")
 
         if not loaded:
-            # Standalone test/simulation mode: maintain lightweight layer-slicing simulator
-            self._dim = 896
-            self.k_layer = self.early_exit_layer or 12
-            logger.info(f"[PROFILE U] Initialized layer-tapping manifold (k={self.k_layer}, dim={self._dim})")
+            raise FileNotFoundError(
+                f"Profile U failed to load local GGUF or PyTorch LLM '{self.llm_name}' from '{llm_dir}'."
+            )
 
     def get_embedding(self, text: str, mode: str = "query") -> List[float]:
         res = self.get_embeddings([text], mode=mode)
@@ -1123,22 +1390,11 @@ class BenchmarkProfile_U(InferenceProfile):
                     embeddings.append(arr.tolist())
                 return embeddings
 
-            # 3. Deterministic compositional projection fallback for offline/test mode (zero MD5 RNG)
-            try:
-                from .latent_autoencoder import _extract_structural_features, _project_compositional_features
-            except (ImportError, ValueError):
-                from latent_autoencoder import _extract_structural_features, _project_compositional_features
-            return [
-                _project_compositional_features(
-                    _extract_structural_features(t, is_typestate=True),
-                    self._dim,
-                ).tolist()
-                for t in texts
-            ]
+            raise RuntimeError("Profile U embeddings require a loaded PyTorch or GGUF LLM.")
 
     def generate_text(self, prompt: str, max_tokens: int = 1024, schema: Optional[dict] = None, system_prompt: Optional[str] = None) -> str:
-        with self._lock:
-            if self.is_torch and self.model is not None and self.tokenizer is not None:
+        if self.is_torch and self.model is not None and self.tokenizer is not None:
+            with self._lock:
                 device = getattr(self.model, "device", "cpu")
                 full_p = f"{system_prompt}\n{prompt}" if system_prompt else prompt
                 inputs = self.tokenizer(full_p, return_tensors="pt").to(device)
@@ -1146,24 +1402,23 @@ class BenchmarkProfile_U(InferenceProfile):
                     out = self.model.generate(**inputs, max_new_tokens=max_tokens)
                 return self.tokenizer.decode(out[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
 
-            if self.llm is not None:
-                messages = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
-                messages.append({"role": "user", "content": prompt})
-                kwargs: Dict[str, Any] = {
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": settings.llm_temperature,
-                    "top_p": settings.llm_top_p,
-                    "repeat_penalty": 1.15,
-                    "stop": ["<|im_end|>", "<|endoftext|>"],
-                }
-                if schema:
-                    kwargs["response_format"] = {"type": "json_object", "schema": schema}
-                res = self.llm.create_chat_completion(**kwargs)
-                return res["choices"][0]["message"]["content"].strip()
-            return ""
+        if self.llm is not None:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            kwargs: Dict[str, Any] = {
+                "max_tokens": max_tokens,
+                "temperature": settings.llm_temperature,
+                "top_p": settings.llm_top_p,
+                "repeat_penalty": 1.15,
+            }
+            if settings.llm_stop_tokens:
+                kwargs["stop"] = list(settings.llm_stop_tokens)
+            return _generate_llama_with_optional_schema(
+                self.llm, self._lock, messages, kwargs, schema
+            )
+        raise RuntimeError("Profile U LLM is not loaded.")
 
     def can_synthesize(self) -> bool:
         return True
@@ -1175,9 +1430,11 @@ class BenchmarkProfile_U(InferenceProfile):
         return True
 
     def feedback_check(self, failing_code: str, traceback_error: str) -> str:
+        from language_backend import get_active_language_backend
+        lang_name = get_active_language_backend().name or "target"
         prompt = (
             "Fix the runtime error in this code and return ONLY the corrected code "
-            f"inside ```python ```:\n\nERROR:\n{traceback_error}\n\nCODE:\n```python\n{failing_code}\n```"
+            f"inside ```{lang_name} ```:\n\nERROR:\n{traceback_error}\n\nCODE:\n```{lang_name}\n{failing_code}\n```"
         )
         try:
             raw = self.generate_text(prompt, max_tokens=1024)
@@ -1221,8 +1478,7 @@ class BenchmarkProfile_AE(InferenceProfile):
         if orch is not None and getattr(orch, "loaded_cells", None):
             self.autoencoder = train_autoencoder_from_orchestrator(orch, dimension=self._dim)
         else:
-            self.autoencoder = TransitionAutoencoder(dimension=self._dim)
-            self.autoencoder.train([], epochs=30)
+            raise RuntimeError("Profile AE requires loaded orchestrator cells to train the transition autoencoder.")
 
         logger.info(f"[PROFILE AE] Initialized Structural Transition Autoencoder (dim={self._dim})")
 
@@ -1321,14 +1577,16 @@ class BenchmarkProfile_Omega(BenchmarkProfile_S):
         }
         ctx_line = f"\nCurrent typed context Gamma_t:\n{context_desc}\n" if context_desc else "\n"
         sys_p = (
-            "You rank ONLY type-valid outgoing morphisms from the provided candidate list.\n"
-            "Do not invent new cell IDs. Assign scores in [0.0, 1.0] reflecting how well each "
-            "candidate advances the goal."
+            "You rank ONLY candidates from E_valid.\n"
+            "STRICT RULE: Every cell_id in rankings MUST be copied character-for-character from E_valid. "
+            "Do NOT output any cell_id that is not verbatim in E_valid. Assign float scores in [0.0, 1.0]."
         )
+        cands_numbered = "\n".join(f"- {cid}" for cid in capped)
+        ex_cid = capped[0]
         usr_p = (
             f"Goal: {prompt}{ctx_line}"
-            f"Type-valid candidate morphisms E_valid: {', '.join(capped)}\n"
-            'Return JSON: {"rankings": [{"cell_id": "<id>", "score": <0..1>}, ...]}'
+            f"Allowed E_valid IDs (choose ONLY from these exact strings):\n{cands_numbered}\n"
+            f'Return compact single-line JSON: {{"rankings":[{{"cell_id":"{ex_cid}","score":0.95}}]}}'
         )
         try:
             raw = self.generate_text(usr_p, max_tokens=256, schema=choice_schema, system_prompt=sys_p)
@@ -1380,7 +1638,7 @@ class ModelManager:
         with self._lock:
             return self.active_profile
 
-    def cleanup(self):
+    def cleanup(self, release_reranker: bool = True):
         """Forces complete teardown of active models, releasing all GPU VRAM and CPU RAM."""
         with self._lock:
             if self.active_profile is not None:
@@ -1401,47 +1659,94 @@ class ModelManager:
                 LatentVectorExtractor.reset_instance()
             except Exception:
                 pass
+            if release_reranker:
+                try:
+                    try:
+                        from .reranker import LocalReranker
+                    except (ImportError, ValueError):
+                        from reranker import LocalReranker
+                    LocalReranker.release_shared()
+                except Exception:
+                    pass
 
             gc.collect()
-            if TORCH_AVAILABLE and torch.cuda.is_available():
+            if TORCH_AVAILABLE and torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
+            _trim_host_memory()
             logger.info("[MODEL MANAGER] Completed VRAM cleanup and memory reclamation.")
 
     def initialize_profile(self, profile_type: str, embedder_name: str = "", llm_name: str = ""):
         with self._lock:
-            self.cleanup()
+            from config import resolve_profile_spec
+            p_type = resolve_profile_spec(profile_type).code
+            profile_classes = {
+                "0": BenchmarkProfile_0,
+                "A": BenchmarkProfile_A,
+                "B": BenchmarkProfile_B,
+                "C": BenchmarkProfile_C,
+                "D": BenchmarkProfile_D,
+                "E": BenchmarkProfile_E,
+                "S": BenchmarkProfile_S,
+                "U": BenchmarkProfile_U,
+                "AE": BenchmarkProfile_AE,
+                "O": BenchmarkProfile_Omega,
+            }
+            prof = profile_classes[p_type]()
 
-            p_type = profile_type.upper()
-            if p_type in ("0", "SYMBOLIC", "ZERO", "PURE"):
-                prof = BenchmarkProfile_0()
-                p_type = "0"
-            elif p_type == "A":
-                prof = BenchmarkProfile_A()
-            elif p_type == "B":
-                prof = BenchmarkProfile_B()
-            elif p_type == "C":
-                prof = BenchmarkProfile_C()
-            elif p_type == "D":
-                prof = BenchmarkProfile_D()
-            elif p_type == "E":
-                prof = BenchmarkProfile_E()
-            elif p_type == "S":
-                prof = BenchmarkProfile_S()
-            elif p_type == "U":
-                prof = BenchmarkProfile_U()
-            elif p_type == "AE":
-                prof = BenchmarkProfile_AE()
-            elif p_type in ("O", "OMEGA", "Ω"):
-                prof = BenchmarkProfile_Omega()
-                p_type = "O"
+            # Transfer matching resident weights across compatible profile switches to avoid reload/VRAM churn
+            prev = self.active_profile
+            if prev is not None and isinstance(prof, (BenchmarkProfile_B, BenchmarkProfile_C)):
+                if isinstance(prev, (BenchmarkProfile_B, BenchmarkProfile_C)) and getattr(prev, "embedder", None) is not None:
+                    target_emb = select_optimal_embedder(embedder_name)
+                    if getattr(prev, "embedder_name", None) == target_emb:
+                        reused_emb = prev.embedder
+                        reused_dim = getattr(prev, "_dim", 384)
+                        prev.embedder = None
+                        if hasattr(prev, "model"):
+                            prev.model = None
+                        prof.embedder = reused_emb
+                        prof.embedder_name = target_emb
+                        prof._dim = reused_dim
+                        if isinstance(prof, BenchmarkProfile_B):
+                            prof.model = reused_emb
+                if isinstance(prof, BenchmarkProfile_C) and isinstance(prev, BenchmarkProfile_C) and getattr(prev, "llm", None) is not None:
+                    target_llm = select_optimal_llm(llm_name)
+                    if getattr(prev, "llm_name", None) == target_llm:
+                        prof.llm = prev.llm
+                        prof.llm_name = target_llm
+                        prev.llm = None
+
+            # Clean up only remaining non-reused weights on previous profile
+            needs_cleanup = prev is not None and (
+                getattr(prev, "llm", None) is not None
+                or getattr(prev, "embedder", None) is not None
+                or getattr(prev, "model", None) is not None
+                or getattr(prev, "autoencoder", None) is not None
+            )
+            low_vram = os.environ.get("NSTL_LOW_VRAM") == "1"
+            release_rr = low_vram and not prof.uses_reranker()
+            if needs_cleanup:
+                self.cleanup(release_reranker=release_rr)
             else:
-                raise ValueError(f"Unknown profile type: {profile_type}")
+                self.active_profile = None
+                self.current_profile_name = None
+                if release_rr:
+                    try:
+                        try:
+                            from .reranker import LocalReranker
+                        except (ImportError, ValueError):
+                            from reranker import LocalReranker
+                        LocalReranker.release_shared()
+                    except Exception:
+                        pass
 
             try:
                 prof.load_models(embedder_name, llm_name)
                 self.active_profile = prof
                 self.current_profile_name = p_type
+                gc.collect()
+                _trim_host_memory()
             except Exception as e:
                 self.cleanup()
                 raise e

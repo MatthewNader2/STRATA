@@ -67,9 +67,22 @@ def merge_domain_tree(
     else:
         merged_cells = new_cells
 
+    existing_meta: Dict[str, object] = {}
+    if existing_paths:
+        try:
+            raw_existing = json.loads(existing_paths[0].read_text(encoding="utf-8"))
+            if isinstance(raw_existing, dict):
+                existing_meta = {
+                    k: v for k, v in raw_existing.items()
+                    if k not in ("domain", "cells")
+                }
+        except Exception as meta_err:
+            logger.warning(f"[{domain_name}] Could not read existing tree metadata from {existing_paths[0]}: {meta_err}")
+
     tree = TreeSchema(
         domain=domain_name,
-        cells=merged_cells
+        cells=merged_cells,
+        **existing_meta
     )
 
     t_path.parent.mkdir(parents=True, exist_ok=True)

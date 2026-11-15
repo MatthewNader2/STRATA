@@ -81,8 +81,9 @@ class M10MonteCarloRouteMethod(RouteMethod):
             primary = [c for c, _ in anchors_for_clause(ev, cl, pool, relevance_map, on_event=None, clause_idx=j)]
             gl: List[Tuple[List[str], float]] = []
             if primary:
+                primary = self.order_clause_cells(primary)
                 _po = ev.identity_overlap(toks, primary[0])
-                gl.append(([c.cell_id for c in primary], _po["recall"] * _po["name_precision"]))
+                gl.append(([c.cell_id for c in primary], float(_po["f"])))
                 prim_ids = {p.cell_id for p in primary}
                 alt_scored = [
                     (o, c)
@@ -91,7 +92,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
                 ]
                 alt_scored.sort(key=lambda t: (t[0]["rank"], relevance_map.get(t[1].cell_id, 0.0)), reverse=True)
                 for o, c in alt_scored[:max_alts]:
-                    score_val = max(o["recall"] * o["name_precision"], 0.1 * relevance_map.get(c.cell_id, 0.0))
+                    score_val = max(float(o["f"]), 0.1 * relevance_map.get(c.cell_id, 0.0))
                     gl.append(([c.cell_id], score_val))
             else:
                 fallback_cands = sorted(
@@ -142,8 +143,13 @@ class M10MonteCarloRouteMethod(RouteMethod):
                 out.append(c)
             return out
 
+        connect_cache: Dict[Tuple[Tuple[str, ...], Tuple[str, ...], int], Optional[List[Tuple[str, int]]]] = {}
+
         def connect(path_cells: List[Cell], cell_ids: List[str], idx: int) -> Optional[List[Tuple[str, int]]]:
             """Cells (and any bridge/producer) needed to append `cell_ids` after `path_cells`, or None."""
+            ckey = (tuple(c.cell_id for c in path_cells), tuple(cell_ids), idx)
+            if ckey in connect_cache:
+                return connect_cache[ckey]
             appended: List[Tuple[str, int]] = []
             cur = list(path_cells)
             for cid in cell_ids:
@@ -153,21 +159,32 @@ class M10MonteCarloRouteMethod(RouteMethod):
                         br = self.find_bridge(cur[-1], nxt, pool, orch, prev_path=cur)
                         if br is not None:
                             cur.append(br)
-                            appended.append((br.cell_id, -1))
+                            appended.append((br.cell_id, idx))
                             proto.setdefault(br.cell_id, br)
                             if not (self.step_unifies(br, nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur)):
+                                connect_cache[ckey] = None
                                 return None
                         else:
                             tagged = nxt.clone() if hasattr(nxt, "clone") else nxt
                             tagged.matched_clause_idx = idx
+                            tagged.clause_literals = list(literals[idx])
                             prod = self._find_type_producer(tagged, cur, pool, clauses, orch)
                             if prod is None:
+                                connect_cache[ckey] = None
                                 return None
+                            if not (self.step_unifies(cur[-1], prod, prev_path=cur) or self.step_unifies_dag(prod, cur)):
+                                pbr = self.find_bridge_chain(cur[-1], prod, pool, prev_path=cur)
+                                if pbr:
+                                    for b in pbr:
+                                        cur.append(b)
+                                        appended.append((b.cell_id, idx))
+                                        proto.setdefault(b.cell_id, b)
                             cur.append(prod)
                             appended.append((prod.cell_id, idx))
                             proto.setdefault(prod.cell_id, prod)
                 cur.append(nxt)
                 appended.append((cid, idx))
+            connect_cache[ckey] = appended
             return appended
 
         def actions(state):
@@ -217,7 +234,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
             j = state[0]
             kind, arg = action
             if kind == "group":
-                return 0.05 + groups[j][arg][1]
+                return (0.25 if arg == 0 else 0.0) + groups[j][arg][1]
             if kind == "bridge":
                 # A bridge is promising right after a cell whose tree-declared postcondition asserts the very
                 # property the bridge flips (e.g. FFT declares is_complex == True, the bridge establishes False).
@@ -246,13 +263,18 @@ class M10MonteCarloRouteMethod(RouteMethod):
         reg = TypeRegistry.get_instance()
 
         unif_reward_cache: Dict[tuple, float] = {}
+        gate_r = UnificationGate(orchestrator=orch)
+
+        def _finalize_cells(cells_list: List[Cell]) -> List[Cell]:
+            committed = self.insert_optic_commits(list(cells_list), trace=False)
+            return self.insert_property_bridges(committed, prompt=prompt, ctx=ctx)
 
         def _fast_reward(path_t: tuple) -> float:
             if not path_t:
                 return 0.0
             if path_t in unif_reward_cache:
                 return unif_reward_cache[path_t]
-            mat_cells = materialize(path_t)
+            mat_cells = _finalize_cells(materialize(path_t))
             # Fast structural port-compatibility check between adjacent steps
             compat_factor = 1.0
             for i in range(len(mat_cells) - 1):
@@ -266,14 +288,19 @@ class M10MonteCarloRouteMethod(RouteMethod):
                         if not (reg.is_subtype(t_out, t_in) or reg.is_subtype(t_in, t_out)):
                             compat_factor *= 0.5
 
-            # Stage 3 UnificationGate validity check inside rollout reward
+            # Stage 3 UnificationGate + PreflightLinter validity check inside rollout reward
             unif_factor = 1.0
+            lint_penalty = 1.0
             try:
-                gate_r = UnificationGate(orchestrator=orch)
                 ctx_r = ExecutionContext(prompt=prompt)
                 ur_r = gate_r.unify_pipeline(mat_cells, ctx_r, extract_llm_slots=False)
                 if ur_r.is_bottom() or not getattr(ur_r, "value", None):
                     unif_factor = 0.05
+                else:
+                    code_r = gate_r.emit_code(ur_r.value, ctx_r)
+                    lint_r = PreflightLinter.lint(ur_r.value, prompt=prompt, code_str=code_r)
+                    if not lint_r.is_valid:
+                        lint_penalty = 1.0 + float(len(lint_r.violations))
             except Exception:
                 unif_factor = 0.05
 
@@ -282,7 +309,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
             served = (sum(1 for c in infos if c["status"] == "served") / len(infos)) if infos else 0.0
             quality = (sum(c["quality"] for c in infos) / len(infos)) if infos else 0.0
             n_issues = len(res.get("issues", []))
-            val = (served * quality * compat_factor * unif_factor) / (1.0 + n_issues)
+            val = (served * quality * compat_factor * unif_factor) / ((1.0 + n_issues) * lint_penalty)
             unif_reward_cache[path_t] = val
             return val
 
@@ -305,22 +332,12 @@ class M10MonteCarloRouteMethod(RouteMethod):
         nviol, note = 0, None
         final_cells: List[Cell] = []
         if best_path and cur_reward > 0.0:
-            final_cells = materialize(best_path)
-            try:
-                gate = UnificationGate(orchestrator=orch)
-                run_ctx = ExecutionContext(prompt=prompt)
-                ur = gate.unify_pipeline(final_cells, run_ctx, extract_llm_slots=False)
-                if ur.is_bottom():
-                    nviol, note = 10, "unification produced bottom"
-                else:
-                    code = gate.emit_code(ur.value, run_ctx, extract_llm_slots=False)
-                    lint = PreflightLinter.lint(ur.value, prompt=prompt, code_str=code, orchestrator=orch)
-                    nviol = len(lint.violations)
-                    note = lint.violations[0][:140] if lint.violations else None
-            except UnificationFailure as exc:
-                nviol, note = 10, f"refused: {str(exc)[:120]}"
-            except Exception as exc:
-                nviol, note = 10, f"verifier error {type(exc).__name__}: {str(exc)[:100]}"
+            final_cells = _finalize_cells(materialize(best_path))
+            verr = self.verify_planned_path(final_cells, prompt, orch, ctx=ctx)
+            if verr:
+                nviol, note = 10, verr[:140]
+            else:
+                nviol, note = 0, None
             verdicts[best_path] = {"served": round(cur_reward, 3), "quality": round(cur_reward, 3), "violations": nviol, "first": note}
             if nviol > 0:
                 result.best_reward = cur_reward / (1.0 + nviol)
@@ -331,7 +348,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
                     best_reward=round(result.best_reward, 4), best_plan=[c for c, _ in best_path], verdict=v,
                     root=result.root_stats[:8], best_line=result.best_path_stats)
         if not best_path or result.best_reward <= 0.0 or nviol >= 10:
-            reason = "Monte Carlo search found no plan with positive reward"
+            reason = f"Monte Carlo search found no valid plan ({note})" if note else "Monte Carlo search found no plan with positive reward"
             self.fallback_reason = reason
             self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []

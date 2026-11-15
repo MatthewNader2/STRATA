@@ -39,6 +39,10 @@ class SemanticBlackboard:
     cell_slot_locks: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     @property
+    def feature_columns(self) -> List[str]:
+        return self.projected_keys
+
+    @property
     def hyperparameters(self) -> Dict[str, Any]:
         return self.parameters
 
@@ -52,12 +56,15 @@ class SemanticBlackboard:
         self.locked_by_neural = True
         tgt = (
             intent_data.get("target_sink")
+            or intent_data.get("target_col")
             or intent_data.get("sink")
         )
         if tgt:
             self.target_sink = str(tgt).strip()
         keys = (
             intent_data.get("projected_keys")
+            or intent_data.get("columns")
+            or intent_data.get("feature_columns")
             or intent_data.get("keys")
         )
         if isinstance(keys, list) and keys:
@@ -468,7 +475,8 @@ class OpenPortFrontier:
                 detailed_edges.extend(edges)
                 frontier.apply_morphism(cell, edges, step_idx=step_idx)
             else:
-                frontier.add_ingress_node(cell, step_idx=step_idx)
+                if is_ing or not getattr(cell, "inputs", None):
+                    frontier.add_ingress_node(cell, step_idx=step_idx)
 
         tuple_edges = [e.as_tuple() for e in detailed_edges]
         return DAGPlan(nodes=nodes, edges=tuple_edges, detailed_edges=detailed_edges)

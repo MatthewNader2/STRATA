@@ -125,7 +125,7 @@
         "graph",
         "network"
       ],
-      "template": "try:\n    import networkx as nx\n    {var_name} = nx.path_graph(5)\nexcept ImportError:\n    {var_name} = {'nodes': [0, 1, 2], 'edges': [(0, 1), (1, 2)]}"
+      "template": "{var_name} = {0: [1], 1: [2], 2: []}"
     }
   ],
   "supported_formats": [],

@@ -23,9 +23,17 @@ NON_OVERRIDABLE_BLOCKED_MODULES: Tuple[str, ...] = (
     "_ctypes",
     "pty",
     "subprocess",
+    "_posixsubprocess",
     "posix",
     "code",
     "codeop",
+    "shutil",
+    "importlib",
+    "pickle",
+    "_pickle",
+    "marshal",
+    "shelve",
+    "multiprocessing",
 )
 
 NON_OVERRIDABLE_BLOCKED_ATTRS: Tuple[str, ...] = (
@@ -51,19 +59,28 @@ NON_OVERRIDABLE_BLOCKED_CALLS: Tuple[str, ...] = (
     "compile",
     "breakpoint",
     "input",
+    "__import__",
+)
+
+NON_OVERRIDABLE_BLOCKED_OS_OPS: Tuple[str, ...] = (
+    "system", "popen", "spawn", "spawnl", "spawnle", "spawnlp", "spawnlpe",
+    "spawnv", "spawnve", "spawnvp", "spawnvpe", "execv", "execve", "execvp",
+    "execvpe", "execl", "execle", "execlp", "execlpe", "remove", "unlink",
+    "rmdir", "removedirs", "chmod", "chown", "kill", "killpg", "fork", "forkpty",
 )
 
 # 2. Standard Default Capability Gating
 # Mapping of standard modules to their capability categories.
 DEFAULT_CAPABILITY_MODULES: Dict[str, str] = {
     "socket": "net",
-    "requests": "net.http",
+    "ssl": "net",
     "urllib": "net.http",
     "urllib3": "net.http",
     "http": "net.http",
     "ftplib": "net.ftp",
     "smtplib": "net.smtp",
     "telnetlib": "net.telnet",
+    "xmlrpc": "net.http",
     "asyncio": "async",
 }
 

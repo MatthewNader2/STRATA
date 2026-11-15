@@ -226,12 +226,24 @@ def _validate_template(
     node_role: str = "function",
     declared_aliases: Optional[Set[str]] = None,
     supported_formats: Optional[Iterable[str]] = None,
+    language_spec: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, Optional[str]]:
     if not code or not code.strip():
         return False, "Empty code template"
 
     for m in _QUOTED_PATH_RE.finditer(code):
         return False, f"Hardcoded path literal '{m.group(2)}'"
+
+    if language_spec is not None and str(language_spec.get("ast_backend", "python")).lower() not in ("python", "python_ast"):
+        try:
+            import sys as _sys
+            _src_dir = str(Path(__file__).resolve().parents[1] / "src")
+            if _src_dir not in _sys.path:
+                _sys.path.insert(0, _src_dir)
+            from language_backend import get_language_backend
+            return get_language_backend(language_spec).validate_syntax(code, allow_placeholders=True)
+        except Exception as exc:
+            return False, f"Backend validation error: {exc}"
 
     dummy_code = _PLACEHOLDER_SUBST_RE.sub("dummy_var", code)
     try:
@@ -623,10 +635,12 @@ CREATE TABLE IF NOT EXISTS types (
 
 _CREATE_TYPESTATES_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS typestates (
-    state_name   TEXT PRIMARY KEY,
+    state_name   TEXT NOT NULL,
     parent_state TEXT,
     carrier_type TEXT,
-    properties   TEXT
+    properties   TEXT,
+    domain       TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (state_name, domain)
 );
 """
 
@@ -744,10 +758,25 @@ def _merge_list_mapping(acc: dict, incoming: dict, lower_keys: bool = True) -> N
             acc[k] = raw_v
 
 
+def _collect_core_domains(tree_files: List[Path]) -> Set[str]:
+    core: Set[str] = {"", "core"}
+    for path in tree_files:
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict) and data.get("is_core"):
+            dom = str(data.get("domain") or path.stem).strip().lower()
+            if dom:
+                core.add(dom)
+    return core
+
+
 def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path]) -> int:
     cur = conn.cursor()
     written = 0
-    core_domains = {"", "python_core", "core", "base", "builtin", "builtins"}
+    core_domains = _collect_core_domains(tree_files)
 
     def _insert(cat: str, it: str, ex: Optional[str] = None):
         nonlocal written
@@ -757,11 +786,11 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
         )
         written += 1
 
-    merged_role_semantics: dict = {}
     merged_capabilities: dict = {}
     merged_carrier_roles: dict = {}
     merged_state_role_ancestors: dict = {}
     merged_state_role_markers: dict = {}
+    merged_dependent_ports: dict = {}
 
     for path in tree_files:
         try:
@@ -773,6 +802,26 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
             continue
 
         dom = str(data.get("domain") or path.stem).strip().lower()
+        if data.get("is_core") and dom:
+            _insert("core_domain", dom)
+
+        if isinstance(data.get("language_spec"), dict):
+            spec_name = str(data["language_spec"].get("name") or dom or "default").strip().lower()
+            _insert("language_spec", spec_name, json.dumps(data["language_spec"], ensure_ascii=False))
+
+        for qg in (data.get("exclusive_qualifiers") or ()):
+            qg_json = json.dumps(qg, sort_keys=True)
+            _insert("exclusive_qualifier", qg_json, qg_json)
+
+        for rg in (data.get("exclusive_roles") or ()):
+            rg_json = json.dumps(rg, sort_keys=True)
+            _insert("exclusive_role", rg_json, rg_json)
+
+        for fse in (data.get("forbidden_side_effects") or ()):
+            if str(fse).strip():
+                _insert("forbidden_side_effect", str(fse).strip())
+
+        _merge_list_mapping(merged_dependent_ports, data.get("dependent_ports"), lower_keys=True)
 
         mappings = [
             ("dest_port_tokens", "dest_port_token"),
@@ -788,6 +837,10 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
             ("path_port_tokens", "path_port_token"),
             ("identifier_root_states", "identifier_root_state"),
             ("supported_formats", "supported_format"),
+            ("excluded_module_tokens", "excluded_module_token"),
+            ("enum_citation_triggers", "enum_citation_trigger"),
+            ("enum_suffixes", "enum_suffix"),
+            ("symbol_stopwords", "symbol_stopword"),
         ]
         for key, cat in mappings:
             items = data.get(key)
@@ -840,7 +893,6 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
                     probe_json = json.dumps(probe, sort_keys=True)
                     _insert("mock_probe", probe_json, probe_json)
 
-        _merge_list_mapping(merged_role_semantics, data.get("role_semantics"), lower_keys=True)
         _merge_list_mapping(merged_capabilities, data.get("capabilities"), lower_keys=False)
         _merge_list_mapping(merged_carrier_roles, data.get("carrier_roles"), lower_keys=True)
         _merge_list_mapping(merged_state_role_ancestors, data.get("state_role_ancestors"), lower_keys=True)
@@ -861,8 +913,6 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
                             if role:
                                 _insert("role_carrier", str(role).strip().lower())
 
-    for k, val in merged_role_semantics.items():
-        _insert("role_semantics", k, json.dumps(val))
     for k, val in merged_capabilities.items():
         _insert("capability", k, json.dumps(val))
     for k, val in merged_carrier_roles.items():
@@ -871,6 +921,8 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
         _insert("state_role_ancestor", k, json.dumps(val))
     for k, val in merged_state_role_markers.items():
         _insert("state_role_marker", k, json.dumps(val))
+    for k, val in merged_dependent_ports.items():
+        _insert("dependent_port", k, json.dumps(val))
 
     conn.commit()
     return written
@@ -884,7 +936,7 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
     """
     cur = conn.cursor()
     written = 0
-    core_domains = {"", "python_core", "core", "base", "builtin", "builtins"}
+    core_domains = _collect_core_domains(tree_files)
     for path in tree_files:
         try:
             with path.open("r", encoding="utf-8") as fh:
@@ -897,6 +949,33 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
         dom = str(data.get("domain") or path.stem).strip().lower()
         entries: List[Tuple[str, str]] = []
         raw_types = data.get("types")
+
+        def _persist_type_meta(t_name: str, t_meta: dict) -> None:
+            k_low = str(t_name).strip().lower()
+            if not k_low:
+                return
+            if t_meta.get("kind"):
+                cur.execute(
+                    "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                    ("type_kind", k_low, str(t_meta["kind"]).strip().lower()),
+                )
+            if isinstance(t_meta.get("properties"), dict) and t_meta["properties"]:
+                cur.execute(
+                    "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                    ("type_property", k_low, json.dumps(t_meta["properties"], ensure_ascii=False)),
+                )
+            if "empty_expr" in t_meta:
+                if dom:
+                    cur.execute(
+                        "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                        ("type_empty_expr", f"{dom}:{k_low}", json.dumps(t_meta["empty_expr"])),
+                    )
+                if dom in core_domains:
+                    cur.execute(
+                        "INSERT OR REPLACE INTO structural_metadata (category, item, extra) VALUES (?, ?, ?)",
+                        ("type_empty_expr", k_low, json.dumps(t_meta["empty_expr"])),
+                    )
+
         if isinstance(raw_types, list):
             for item in raw_types:
                 if isinstance(item, str):
@@ -906,6 +985,7 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
                     if not name:
                         continue
                     k_low = str(name).strip().lower()
+                    _persist_type_meta(name, item)
                     if "default_value" in item:
                         if dom:
                             cur.execute(
@@ -940,6 +1020,7 @@ def _persist_type_hierarchies(conn: sqlite3.Connection, tree_files: List[Path]) 
             for name, meta in raw_types.items():
                 if isinstance(meta, dict):
                     k_low = str(name).strip().lower()
+                    _persist_type_meta(name, meta)
                     if "default_value" in meta:
                         if dom:
                             cur.execute(
@@ -1004,6 +1085,7 @@ def _persist_typestates(conn: sqlite3.Connection, tree_files: List[Path]) -> int
             continue
         if not isinstance(data, dict):
             continue
+        dom_name = str(data.get("domain") or path.stem).strip()
         ts_info = data.get("typestates")
         states: List[Any] = []
         if isinstance(ts_info, dict):
@@ -1012,7 +1094,7 @@ def _persist_typestates(conn: sqlite3.Connection, tree_files: List[Path]) -> int
             states = ts_info
         for s in states:
             if isinstance(s, str):
-                row = (s, None, None, None)
+                row = (s, None, None, None, dom_name)
             elif isinstance(s, dict) and s.get("name"):
                 props = s.get("properties")
                 row = (
@@ -1020,13 +1102,14 @@ def _persist_typestates(conn: sqlite3.Connection, tree_files: List[Path]) -> int
                     s.get("parent_state"),
                     s.get("carrier_type"),
                     json.dumps(props, ensure_ascii=False) if props else None,
+                    dom_name,
                 )
             else:
                 continue
             cur.execute(
-                "INSERT INTO typestates (state_name, parent_state, carrier_type, properties) "
-                "VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(state_name) DO UPDATE SET "
+                "INSERT INTO typestates (state_name, parent_state, carrier_type, properties, domain) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(state_name, domain) DO UPDATE SET "
                 "parent_state=excluded.parent_state, carrier_type=excluded.carrier_type, "
                 "properties=excluded.properties",
                 row,
@@ -1101,8 +1184,20 @@ def compile_database(
         total_synthesized_edges = sum(len(e) for e in dynamic_edges_map.values())
         print(f"[compile_trees] Synthesized {total_synthesized_edges} dynamic structural edges across {len(all_cells)} cells.")
 
+        core_lang_spec: Optional[dict] = None
+        fallback_lang_spec: Optional[dict] = None
+        for _, tree_data, _ in raw_trees:
+            if isinstance(tree_data, dict) and isinstance(tree_data.get("language_spec"), dict):
+                if tree_data.get("is_core"):
+                    core_lang_spec = tree_data["language_spec"]
+                    break
+                if fallback_lang_spec is None:
+                    fallback_lang_spec = tree_data["language_spec"]
+        default_lang_spec = core_lang_spec or fallback_lang_spec
+
         for path, tree_data, nodes in raw_trees:
             supported_formats = tree_data.get("supported_formats", [])
+            tree_lang_spec = (tree_data.get("language_spec") if isinstance(tree_data, dict) else None) or default_lang_spec
             for domain, node in nodes:
                 if "cell_id" not in node or "stage" not in node:
                     print(f"[compile_trees] SKIP node in {path.name}: missing cell_id/stage",
@@ -1127,7 +1222,12 @@ def compile_database(
                 else:
                     aliases = _module_aliases(node.get("dependencies", []) or [])
                     ok, err = _validate_template(
-                        template, row[0], node.get("node_role", ""), aliases, supported_formats=supported_formats,
+                        template,
+                        row[0],
+                        node.get("node_role", ""),
+                        aliases,
+                        supported_formats=supported_formats,
+                        language_spec=tree_lang_spec,
                     )
                     if not ok:
                         warnings.append(f"{path.name}::{row[0]}: {err}")

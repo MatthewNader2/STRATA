@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from collections import deque
 import copy
+import time
 import heapq
-import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
@@ -46,21 +46,6 @@ except (ImportError, ValueError):
     from tokenizer import CellTokenizer
 
 
-def _get_sk_sets(reg: Optional[Any] = None) -> Tuple[Set[str], Set[str], Set[str]]:
-    if reg is None:
-        try:
-            reg = TypeRegistry.get_instance()
-        except Exception:
-            reg = None
-    if reg is None:
-        return set(), set(), set()
-    return (
-        set(reg.get_verification_semantics("path_compat_structure_kinds") or ()),
-        set(reg.get_verification_semantics("scalar_abstract_types") or ()),
-        set(reg.get_verification_semantics("compound_structure_kinds") or ()),
-    )
-
-
 def _port_requires_carrier(cell: Any, port: Any, reg: Optional[Any] = None) -> bool:
     """True iff `port` is a required dataflow carrier input (cannot rely solely on eta_tau)."""
     if not getattr(port, "required", True):
@@ -72,7 +57,7 @@ def _port_requires_carrier(cell: Any, port: Any, reg: Optional[Any] = None) -> b
             reg = None
     role = str(getattr(port, "port_role", "") or getattr(port, "role", "") or "").strip().lower()
     if reg is not None:
-        if reg.is_config_role(role) or reg.is_hof_role(role) or role in set(reg.get_verification_semantics("parameter_roles") or ()):
+        if reg.is_config_role(role) or reg.is_hof_role(role) or role in reg.get_roles_for_category("parameter"):
             return False
     sk = str(getattr(port, "structure_kind", "") or "").strip().lower()
     t_name = str(getattr(getattr(port, "signature", port), "type_name", "") or "").strip().lower()
@@ -207,28 +192,14 @@ def _structural_kind_compatible(out_port: Any, in_port: Any) -> bool:
         return True
     out_sk = str(getattr(out_port, "structure_kind", "") or "").strip().lower()
     in_sk = str(getattr(in_port, "structure_kind", "") or "").strip().lower()
-    if out_sk == "handle" and in_sk and in_sk != "handle":
-        return False
-    if in_sk == "handle" and out_sk and out_sk != "handle":
-        return False
-    path_compat_sk, scalar_abs, compound_sk = _get_sk_sets()
-    if out_sk == "path_spec" and in_sk and in_sk not in path_compat_sk:
-        return False
-    if in_sk == "path_spec" and out_sk and out_sk not in path_compat_sk:
-        return False
     out_sig = getattr(out_port, "signature", out_port)
     in_sig = getattr(in_port, "signature", in_port)
     out_abs = str(getattr(out_port, "abstract_type", "") or getattr(out_sig, "abstract_type", "") or "").strip().lower()
     in_abs = str(getattr(in_port, "abstract_type", "") or getattr(in_sig, "abstract_type", "") or "").strip().lower()
-    is_out_scalar = (out_sk == "scalar") or (out_abs in scalar_abs)
-    is_in_scalar = (in_sk == "scalar") or (in_abs in scalar_abs)
-    is_out_compound = out_sk in compound_sk
-    is_in_compound = in_sk in compound_sk
-    if is_out_scalar and is_in_compound:
-        return False
-    if is_in_scalar and is_out_compound:
-        return False
-    return True
+    return TypeRegistry.get_instance().are_structure_kinds_compatible(out_sk, in_sk, out_abs, in_abs)
+
+
+_MISSING_SENTINEL = object()
 
 
 def _can_fire_under_gamma(
@@ -242,84 +213,169 @@ def _can_fire_under_gamma(
     sig_key_cache: Optional[Dict[int, Tuple[Any, ...]]] = None,
     tv_cache: Optional[Dict[Tuple[str, str], bool]] = None,
     unify_empty_sub_cache: Optional[Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], Optional[Tuple[Tuple[str, Any], ...]]]] = None,
+    empty_pair_cache: Optional[Dict[Tuple[int, int, int, int], Any]] = None,
+    tv_id_cache: Optional[Dict[Tuple[int, int], bool]] = None,
+    kept_sigs: Optional[Dict[int, Any]] = None,
 ) -> Optional[Any]:
     """
     Returns updated Substitution iff ALL required dataflow inputs of `cell`
     satisfy carrier structure_kind compatibility and unify with carriers in `gamma`, else None.
     """
+    if req_ins is None:
+        req_ins = _cell_required_data_inputs(cell)
+    if not req_ins:
+        return sigma.copy() if hasattr(sigma, "copy") else Substitution()
+    if not gamma:
+        return None
     if reg is None:
         try:
             reg = TypeRegistry.get_instance()
         except Exception:
             reg = None
-    if req_ins is None:
-        req_ins = _cell_required_data_inputs(cell)
-    cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
-    if not req_ins:
-        return cur_sigma
-    if not gamma:
-        return None
+    cur_sigma = sigma
+    copied = False
     empty_sub = not getattr(cur_sigma, "mappings", None)
-    cons_id = str(getattr(cell, "cell_id", "") or "")
     for _, in_port in req_ins:
         in_sig = getattr(in_port, "signature", in_port)
-        in_key = _sig_dedup_key(in_sig, sig_key_cache) if (unify_cache is not None and empty_sub) else None
+        id_in_port = id(in_port)
+        id_in_sig = id(in_sig)
+        in_key = None
         matched = False
         for g_item in gamma:
-            if isinstance(g_item, tuple) and len(g_item) == 3:
-                out_sig, out_port, prod_cell = g_item
+            if type(g_item) is tuple and len(g_item) == 3:
+                out_sig, out_port, _prod_cell = g_item
             else:
-                out_sig, out_port, prod_cell = g_item, None, None
+                out_sig, out_port = g_item, None
+            id_out_port = id(out_port) if out_port is not None else 0
+            id_out_sig = id(out_sig)
+
+            if empty_sub and empty_pair_cache is not None:
+                ep_k = (id_out_port, id_out_sig, id_in_port, id_in_sig)
+                ep_hit = empty_pair_cache.get(ep_k, _MISSING_SENTINEL)
+                if ep_hit is not _MISSING_SENTINEL:
+                    if ep_hit is None:
+                        continue
+                    if not ep_hit:
+                        matched = True
+                        break
+                    if not copied:
+                        cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+                        copied = True
+                    cur_sigma.mappings.update(ep_hit)
+                    empty_sub = not cur_sigma.mappings
+                    matched = True
+                    break
+
             if out_port is not None:
-                prod_id = str(getattr(prod_cell, "cell_id", "") or "")
-                ek = (id(out_port), id(in_port), prod_id, cons_id)
+                ek = (id_out_port, id_in_port)
                 ev_ok = edge_cache.get(ek) if edge_cache is not None else None
                 if ev_ok is None:
                     ev_ok = _structural_kind_compatible(out_port, in_port)
                     if edge_cache is not None:
                         edge_cache[ek] = ev_ok
                 if not ev_ok:
+                    if empty_sub and empty_pair_cache is not None:
+                        if kept_sigs is not None:
+                            kept_sigs[id_out_sig] = out_sig
+                            kept_sigs[id_in_sig] = in_sig
+                            kept_sigs[id_out_port] = out_port
+                            kept_sigs[id_in_port] = in_port
+                        empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
                     continue
-            if _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache):
+
+            tv_k = (id_out_sig, id_in_sig)
+            tv_blocked = tv_id_cache.get(tv_k) if tv_id_cache is not None else None
+            if tv_blocked is None:
+                tv_blocked = _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache)
+                if tv_id_cache is not None:
+                    if kept_sigs is not None:
+                        kept_sigs[id_out_sig] = out_sig
+                        kept_sigs[id_in_sig] = in_sig
+                    tv_id_cache[tv_k] = tv_blocked
+            if tv_blocked:
+                if empty_sub and empty_pair_cache is not None:
+                    if kept_sigs is not None:
+                        kept_sigs[id_out_sig] = out_sig
+                        kept_sigs[id_in_sig] = in_sig
+                        if out_port is not None:
+                            kept_sigs[id_out_port] = out_port
+                        kept_sigs[id_in_port] = in_port
+                    empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
                 continue
-            if empty_sub and in_key is not None:
+
+            if empty_sub and (unify_cache is not None or unify_empty_sub_cache is not None):
+                if in_key is None:
+                    in_key = _sig_dedup_key(in_sig, sig_key_cache)
                 out_key = _sig_dedup_key(out_sig, sig_key_cache)
                 pair_k = (out_key, in_key)
-                if unify_cache is not None:
-                    cached = unify_cache.get(pair_k)
-                    if cached is False:
-                        continue
+                if unify_cache is not None and unify_cache.get(pair_k) is False:
+                    if empty_pair_cache is not None:
+                        if kept_sigs is not None:
+                            kept_sigs[id_out_sig] = out_sig
+                            kept_sigs[id_in_sig] = in_sig
+                            if out_port is not None:
+                                kept_sigs[id_out_port] = out_port
+                            kept_sigs[id_in_port] = in_port
+                        empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
+                    continue
                 if unify_empty_sub_cache is not None and pair_k in unify_empty_sub_cache:
                     m_tup = unify_empty_sub_cache[pair_k]
+                    if empty_pair_cache is not None:
+                        if kept_sigs is not None:
+                            kept_sigs[id_out_sig] = out_sig
+                            kept_sigs[id_in_sig] = in_sig
+                            if out_port is not None:
+                                kept_sigs[id_out_port] = out_port
+                            kept_sigs[id_in_port] = in_port
+                        empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_tup
                     if m_tup is None:
                         continue
                     if not m_tup:
                         matched = True
                         break
-                    sub = cur_sigma.copy() if hasattr(cur_sigma, "copy") else Substitution()
-                    sub.mappings.update(m_tup)
-                    cur_sigma = sub
-                    empty_sub = not getattr(cur_sigma, "mappings", None)
+                    if not copied:
+                        cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+                        copied = True
+                    cur_sigma.mappings.update(m_tup)
+                    empty_sub = not cur_sigma.mappings
                     matched = True
                     break
+                if not copied:
+                    cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+                    copied = True
                 sub = unify(out_sig, in_sig, cur_sigma)
                 if unify_cache is not None:
                     unify_cache[pair_k] = (sub is not None)
-                if unify_empty_sub_cache is not None:
-                    unify_empty_sub_cache[pair_k] = (
-                        tuple(sub.mappings.items()) if (sub is not None and hasattr(sub, "mappings")) else (
-                            () if sub is not None else None
-                        )
+                m_store = (
+                    tuple(sub.mappings.items()) if (sub is not None and hasattr(sub, "mappings")) else (
+                        () if sub is not None else None
                     )
+                )
+                if unify_empty_sub_cache is not None:
+                    unify_empty_sub_cache[pair_k] = m_store
+                if empty_pair_cache is not None:
+                    if kept_sigs is not None:
+                        kept_sigs[id_out_sig] = out_sig
+                        kept_sigs[id_in_sig] = in_sig
+                        if out_port is not None:
+                            kept_sigs[id_out_port] = out_port
+                        kept_sigs[id_in_port] = in_port
+                    empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_store
             else:
+                if not copied:
+                    cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+                    copied = True
                 sub = unify(out_sig, in_sig, cur_sigma)
             if sub is not None:
                 cur_sigma = sub
+                copied = True
                 empty_sub = not getattr(cur_sigma, "mappings", None)
                 matched = True
                 break
         if not matched:
             return None
+    if not copied:
+        return sigma.copy() if hasattr(sigma, "copy") else Substitution()
     return cur_sigma
 
 
@@ -368,11 +424,45 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         except Exception:
             reg = None
 
-        unify_cache: Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], bool] = {}
-        unify_empty_sub_cache: Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], Optional[Tuple[Tuple[str, Any], ...]]] = {}
-        edge_cache: Dict[Tuple[int, int, str, str], bool] = {}
+        orch_ref = orchestrator or getattr(self, "orchestrator", None)
+        cur_reg_gen = int(getattr(reg, "_generation", 0)) if reg is not None else 0
+        persistent_bag = None
+        if orch_ref is not None:
+            persistent_bag = getattr(orch_ref, "_omega_persistent_caches", None)
+            if (
+                not isinstance(persistent_bag, dict)
+                or persistent_bag.get("gen") != cur_reg_gen
+                or len(persistent_bag.get("unify", ())) > 50000
+                or len(persistent_bag.get("cls_unify", ())) > 50000
+            ):
+                persistent_bag = {
+                    "gen": cur_reg_gen,
+                    "unify": {},
+                    "unify_empty": {},
+                    "tv": {},
+                    "cls_unify": {},
+                    "props": {},
+                    "preconds": {},
+                }
+                orch_ref._omega_persistent_caches = persistent_bag
+
+        unify_cache: Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], bool] = (
+            persistent_bag["unify"] if persistent_bag is not None else {}
+        )
+        if persistent_bag is not None and "unify_empty" not in persistent_bag:
+            persistent_bag["unify_empty"] = {}
+        unify_empty_sub_cache: Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], Optional[Tuple[Tuple[str, Any], ...]]] = (
+            persistent_bag["unify_empty"] if persistent_bag is not None else {}
+        )
+        edge_cache: Dict[Tuple[int, int], bool] = {}
         sig_key_cache: Dict[int, Tuple[Any, ...]] = {}
-        tv_cache: Dict[Tuple[str, str], bool] = {}
+        tv_cache: Dict[Tuple[str, str], bool] = (
+            persistent_bag["tv"] if persistent_bag is not None else {}
+        )
+        port_unify_cache: Dict[Tuple[int, int], bool] = {}
+        empty_pair_cache: Dict[Tuple[int, int, int, int], Any] = {}
+        tv_id_cache: Dict[Tuple[int, int], bool] = {}
+        kept_sigs: Dict[int, Any] = {}
 
         def _unify_cached(
             out_sig: Any,
@@ -382,18 +472,43 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             prod_cell: Any = None,
             cons_cell: Any = None,
         ) -> bool:
-            if _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache):
-                return False
             if out_port is not None and in_port is not None:
-                prod_id = str(getattr(prod_cell, "cell_id", "") or "")
-                cons_id = str(getattr(cons_cell, "cell_id", "") or "")
-                ek = (id(out_port), id(in_port), prod_id, cons_id)
+                is_raw_port_sigs = (
+                    out_sig is getattr(out_port, "signature", out_port)
+                    and in_sig is getattr(in_port, "signature", in_port)
+                )
+                if is_raw_port_sigs:
+                    puk = (id(out_port), id(in_port))
+                    pu_hit = port_unify_cache.get(puk)
+                    if pu_hit is not None:
+                        return pu_hit
+                    if _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache):
+                        port_unify_cache[puk] = False
+                        return False
+                    ek = puk
+                    ev_ok = edge_cache.get(ek)
+                    if ev_ok is None:
+                        ev_ok = _structural_kind_compatible(out_port, in_port)
+                        edge_cache[ek] = ev_ok
+                    if not ev_ok:
+                        port_unify_cache[puk] = False
+                        return False
+                    pk = (_sig_dedup_key(out_sig, sig_key_cache), _sig_dedup_key(in_sig, sig_key_cache))
+                    res = unify_cache.get(pk)
+                    if res is None:
+                        res = unify(out_sig, in_sig) is not None
+                        unify_cache[pk] = res
+                    port_unify_cache[puk] = res
+                    return res
+                ek = (id(out_port), id(in_port))
                 ev_ok = edge_cache.get(ek)
                 if ev_ok is None:
                     ev_ok = _structural_kind_compatible(out_port, in_port)
                     edge_cache[ek] = ev_ok
                 if not ev_ok:
                     return False
+            if _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache):
+                return False
             pk = (_sig_dedup_key(out_sig, sig_key_cache), _sig_dedup_key(in_sig, sig_key_cache))
             res = unify_cache.get(pk)
             if res is None:
@@ -644,7 +759,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             top_cids.add(cid)
                 if top_cids:
                     clause_top_cells[t_id] = top_cids
-                    self._trace("anchor_candidate", target=t_id, candidates=sorted(top_cids))
+                    self._trace("omega_target_candidates", target=t_id, candidates=sorted(top_cids))
 
         coverable_clauses: Set[TargetId] = set()
         for _cl_hits in cell_clause_hits.values():
@@ -658,14 +773,14 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             for it in (getattr(c, "identity_tokens", None) or ()):
                 known_op_toks.add(str(it).lower())
         for fl in (src_file_literals + dest_file_literals):
-            for ft in re.findall(r"[A-Za-z0-9_]+", str(fl)):
+            for ft in CellTokenizer.tokenize_identifier(str(fl)):
                 known_op_toks.add(ft.lower())
 
         clause_focus_toks: Dict[int, Tuple[str, ...]] = {}
         clause_has_setter: Dict[int, bool] = {}
         for cl_i in range(n_clauses):
             cl_txt = clauses[cl_i] if cl_i < len(clauses) else ""
-            raw_w = re.findall(r"[A-Za-z0-9_]+", cl_txt)
+            raw_w = CellTokenizer.tokenize_prompt(cl_txt)
             clause_focus_toks[cl_i] = tuple(sorted({
                 w.lower() for w in raw_w if w.lower() not in known_op_toks
             }))
@@ -717,16 +832,26 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
 
         # Build backward adjacency inside tunnel via cached unification for h_bwd heuristic
         pool_by_id = {c.cell_id: c for c in pool}
-        cell_props_map: Dict[str, Dict[str, Any]] = {
-            c.cell_id: _cell_declared_props(c, reg) for c in pool
-        }
-        cell_preconds_map: Dict[str, Dict[str, List[Tuple[str, str, Any]]]] = {
-            c.cell_id: _cell_required_preconds(c) for c in pool
-        }
+        props_store = persistent_bag["props"] if persistent_bag is not None else {}
+        preconds_store = persistent_bag["preconds"] if persistent_bag is not None else {}
+        cell_props_map: Dict[str, Dict[str, Any]] = {}
+        cell_preconds_map: Dict[str, Dict[str, List[Tuple[str, str, Any]]]] = {}
+        for c in pool:
+            cid_c = c.cell_id
+            p_hit = props_store.get(cid_c)
+            if p_hit is None:
+                p_hit = _cell_declared_props(c, reg)
+                props_store[cid_c] = p_hit
+            cell_props_map[cid_c] = p_hit
+            pc_hit = preconds_store.get(cid_c)
+            if pc_hit is None:
+                pc_hit = _cell_required_preconds(c)
+                preconds_store[cid_c] = pc_hit
+            cell_preconds_map[cid_c] = pc_hit
         rev_edges: Dict[str, List[str]] = {c.cell_id: [] for c in pool}
-        orch_ref = orchestrator or getattr(self, "orchestrator", None)
         eff_edge_mode = str(getattr(orch_ref, "edge_mode", "") or "").strip().lower()
         static_rev_adj = getattr(orch_ref, "_reverse_adjacency", None) if orch_ref is not None else None
+        port_can_receive_from: Dict[int, Set[str]] = {}
         if eff_edge_mode == "static" and isinstance(static_rev_adj, dict):
             for cons in pool:
                 if not cell_req_ins_map[cons.cell_id]:
@@ -735,29 +860,74 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if prod_id != cons.cell_id and prod_id in pool_by_id:
                         rev_edges[cons.cell_id].append(prod_id)
         else:
+            # Group unique (signature_key, structure_kind, abstract_type) classes so we check ~50x50
+            # equivalence classes instead of N x N (~215k) cell port pairs directly.
+            def _port_abs_sk(p_obj: Any, sig_obj: Any) -> Tuple[str, str]:
+                p_sk = str(getattr(p_obj, "structure_kind", "") or "").strip().lower()
+                p_abs = str(getattr(p_obj, "abstract_type", "") or getattr(sig_obj, "abstract_type", "") or "").strip().lower()
+                return p_sk, p_abs
+
+            out_cls_prods: Dict[Tuple[Any, str, str], List[str]] = {}
+            out_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
             for prod in pool:
                 p_outs = cell_out_ports_map[prod.cell_id]
                 if not p_outs:
                     continue
-                for cons in pool:
-                    if cons.cell_id == prod.cell_id:
+                for oport, osig in p_outs:
+                    ok = (_sig_dedup_key(osig, sig_key_cache), *_port_abs_sk(oport, osig))
+                    if ok not in out_cls_rep:
+                        out_cls_rep[ok] = (oport, osig)
+                        out_cls_prods[ok] = []
+                    if not out_cls_prods[ok] or out_cls_prods[ok][-1] != prod.cell_id:
+                        out_cls_prods[ok].append(prod.cell_id)
+
+            in_cls_cons: Dict[Tuple[Any, str, str], List[Tuple[str, int]]] = {}
+            in_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
+            for cons in pool:
+                req_ins = cell_req_ins_map[cons.cell_id]
+                if not req_ins:
+                    continue
+                for _, ip in req_ins:
+                    isig = getattr(ip, "signature", ip)
+                    ik = (_sig_dedup_key(isig, sig_key_cache), *_port_abs_sk(ip, isig))
+                    if ik not in in_cls_rep:
+                        in_cls_rep[ik] = (ip, isig)
+                        in_cls_cons[ik] = []
+                    in_cls_cons[ik].append((cons.cell_id, id(ip)))
+
+            cls_unify_store = persistent_bag["cls_unify"] if persistent_bag is not None else {}
+            sk_pair_cache: Dict[Tuple[str, str, str, str], bool] = {}
+            rev_edge_sets: Dict[str, Set[str]] = {c.cell_id: set() for c in pool}
+            for ok, (oport, osig) in out_cls_rep.items():
+                prods_for_ok = out_cls_prods[ok]
+                o_sk, o_abs = ok[1], ok[2]
+                for ik, (ip, isig) in in_cls_rep.items():
+                    sk_k = (o_sk, o_abs, ik[1], ik[2])
+                    sk_ok = sk_pair_cache.get(sk_k)
+                    if sk_ok is None:
+                        sk_ok = _structural_kind_compatible(oport, ip)
+                        sk_pair_cache[sk_k] = sk_ok
+                    if not sk_ok:
                         continue
-                    req_ins = cell_req_ins_map[cons.cell_id]
-                    if not req_ins:
-                        continue
-                    if any(
-                        _unify_cached(
-                            osig,
-                            getattr(ip, "signature", ip),
-                            out_port=oport,
-                            in_port=ip,
-                            prod_cell=prod,
-                            cons_cell=cons,
-                        )
-                        for oport, osig in p_outs
-                        for _, ip in req_ins
-                    ):
-                        rev_edges[cons.cell_id].append(prod.cell_id)
+                    cls_pair = (ok, ik)
+                    compat = cls_unify_store.get(cls_pair)
+                    if compat is None:
+                        compat = bool(_unify_cached(osig, isig, out_port=oport, in_port=ip))
+                        cls_unify_store[cls_pair] = compat
+                    if compat:
+                        for cons_cid, ip_id in in_cls_cons[ik]:
+                            recv_set = port_can_receive_from.get(ip_id)
+                            if recv_set is None:
+                                recv_set = set()
+                                port_can_receive_from[ip_id] = recv_set
+                            cons_rev_set = rev_edge_sets[cons_cid]
+                            cons_rev_list = rev_edges[cons_cid]
+                            for prod_cid in prods_for_ok:
+                                if prod_cid != cons_cid:
+                                    recv_set.add(prod_cid)
+                                    if prod_cid not in cons_rev_set:
+                                        cons_rev_set.add(prod_cid)
+                                        cons_rev_list.append(prod_cid)
 
         bwd_dist: Dict[str, int] = {}
         dq = deque()
@@ -787,6 +957,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         )
         scorer_calls = 0
         max_scorer_calls = 4
+        _choice_score_cache: Dict[Tuple[Tuple[str, ...], str], Dict[str, float]] = {}
 
         def _heuristic(
             last_cid: Optional[str],
@@ -842,29 +1013,65 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         if psig is not None:
                             setter_val_sigs.append(psig)
 
-        # Precompute pool-local required-input producer adjacency for k-hop backward precondition cone
-        pool_producers_for: Dict[str, List[Cell]] = {c.cell_id: [] for c in pool}
-        for tc in pool:
-            tc_req = cell_req_ins_map[tc.cell_id]
-            if not tc_req:
-                continue
-            for pc in pool:
-                if pc.cell_id == tc.cell_id or is_sink_map[pc.cell_id]:
+        cell_has_handle_out_map: Dict[str, bool] = {
+            c.cell_id: any(self.is_handle_port(osig) for _, osig in cell_out_ports_map[c.cell_id])
+            for c in pool
+        }
+        cell_optic_role_map: Dict[str, str] = {
+            c.cell_id: str(getattr(c, "optic_role", "") or "").strip().lower()
+            for c in pool
+        }
+        rep_optics = reg.get_roles_for_category("optic") if reg is not None else ()
+        cid_bit: Dict[str, int] = {c.cell_id: (1 << i) for i, c in enumerate(pool)}
+        cell_req_prod_masks: Dict[str, Tuple[int, ...]] = {}
+        if port_can_receive_from:
+            for c in pool:
+                r_ins = cell_req_ins_map[c.cell_id]
+                if not r_ins:
                     continue
-                pc_outs = cell_out_ports_map[pc.cell_id]
-                if pc_outs and any(
-                    _unify_cached(
-                        osig,
-                        getattr(ip, "signature", ip),
-                        out_port=oport,
-                        in_port=ip,
-                        prod_cell=pc,
-                        cons_cell=tc,
-                    )
-                    for oport, osig in pc_outs
-                    for _, ip in tc_req
-                ):
-                    pool_producers_for[tc.cell_id].append(pc)
+                masks: List[int] = []
+                for _, ip in r_ins:
+                    m_ip = 0
+                    for prod_cid in port_can_receive_from.get(id(ip), ()):
+                        pb = cid_bit.get(prod_cid)
+                        if pb is not None:
+                            m_ip |= pb
+                    masks.append(m_ip)
+                cell_req_prod_masks[c.cell_id] = tuple(masks)
+
+        # Precompute pool-local required-input producer adjacency for k-hop backward precondition cone
+        if port_can_receive_from:
+            pool_producers_for: Dict[str, List[Cell]] = {
+                c.cell_id: [
+                    pool_by_id[pid]
+                    for pid in rev_edges.get(c.cell_id, ())
+                    if pid in pool_by_id and not is_sink_map[pid]
+                ]
+                for c in pool
+            }
+        else:
+            pool_producers_for = {c.cell_id: [] for c in pool}
+            for tc in pool:
+                tc_req = cell_req_ins_map[tc.cell_id]
+                if not tc_req:
+                    continue
+                for pc in pool:
+                    if pc.cell_id == tc.cell_id or is_sink_map[pc.cell_id]:
+                        continue
+                    pc_outs = cell_out_ports_map[pc.cell_id]
+                    if pc_outs and any(
+                        _unify_cached(
+                            osig,
+                            getattr(ip, "signature", ip),
+                            out_port=oport,
+                            in_port=ip,
+                            prod_cell=pc,
+                            cons_cell=tc,
+                        )
+                        for oport, osig in pc_outs
+                        for _, ip in tc_req
+                    ):
+                        pool_producers_for[tc.cell_id].append(pc)
 
         # Priority queue items:
         # (f_score, neg_evidence, counter, g_cost, chain_ids, gamma, sigma,
@@ -905,10 +1112,17 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         max_expansions = int(kwargs.get("max_expansions", max(900, n_clauses * 240)))
         max_chain_len = int(kwargs.get("max_chain_len", 18))
         branch_factor = int(kwargs.get("branch_factor", 8))
+        _budget_ms = float(kwargs.get("planner_time_budget_ms", 18000.0))
+        _search_deadline = time.perf_counter() + max(_budget_ms, 500.0) / 1000.0
+        first_full_exp: Optional[int] = None
         expansions = 0
         valid_frontier_sizes: List[int] = []
 
         while pq and expansions < max_expansions:
+            if time.perf_counter() >= _search_deadline:
+                break
+            if first_full_exp is not None and (expansions - first_full_exp) >= 80:
+                break
             (
                 f_sc, neg_ev, _, g_cost, chain_ids, gamma, sigma,
                 cov_cl, active_props, open_lens, active_focus, focus_modified,
@@ -936,7 +1150,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 non_optic_steps = 0
                 domain_switches = 0
                 prev_dom = ""
-                acc_optics = set(TypeRegistry.get_instance().get_verification_semantics("accessor_optic_roles") or ())
+                acc_optics = {"getter"}
                 for c_item in chain_cells:
                     c_or = str(getattr(c_item, "optic_role", "") or "").strip().lower()
                     if c_or not in acc_optics:
@@ -989,7 +1203,10 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     best_partial = (quality, chain_ids, step_clauses)
                 if n_cov_target <= 1 or len(cov_cl) >= n_cov_target:
                     full_score = quality + (0.6 if reaches_goal else 0.0)
-                    if best_full_complete is None or full_score > best_full_complete[0]:
+                    if best_full_complete is None:
+                        first_full_exp = expansions
+                        best_full_complete = (full_score, chain_ids, step_clauses)
+                    elif full_score > best_full_complete[0]:
                         best_full_complete = (full_score, chain_ids, step_clauses)
                 if reaches_goal and (n_clauses <= 1 or len(cov_cl) >= max(1, n_clauses // 2)):
                     if best_complete is None or quality > best_complete[0]:
@@ -1011,22 +1228,55 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if is_ingress_map[cid] or (not cell_req_ins_map[cid] and cand_needs_path_map[cid])
             )
 
+            # Precompute O(1) integer bitmask of current pool producers in gamma when empty_sub & raw sigs
+            use_gamma_mask = False
+            gamma_mask = 0
+            if cell_req_prod_masks and not getattr(sigma, "mappings", None):
+                use_gamma_mask = True
+                for g_item in gamma:
+                    if not (type(g_item) is tuple and len(g_item) == 3):
+                        use_gamma_mask = False
+                        break
+                    g_osig, g_oport, g_pc = g_item
+                    if g_pc is None or g_oport is None or g_osig is not getattr(g_oport, "signature", g_oport):
+                        use_gamma_mask = False
+                        break
+                    gb = cid_bit.get(g_pc.cell_id)
+                    if gb is None:
+                        use_gamma_mask = False
+                        break
+                    gamma_mask |= gb
+
             # Evaluate firing feasibility once per pool cell for this state
-            can_fire_map: Dict[str, Optional[Any]] = {
-                c.cell_id: _can_fire_under_gamma(
+            can_fire_map: Dict[str, Optional[Any]] = {}
+            for c in pool:
+                cid_c = c.cell_id
+                if use_gamma_mask:
+                    rmasks = cell_req_prod_masks.get(cid_c)
+                    if rmasks is not None:
+                        blocked_by_mask = False
+                        for rm in rmasks:
+                            if (gamma_mask & rm) == 0:
+                                blocked_by_mask = True
+                                break
+                        if blocked_by_mask:
+                            can_fire_map[cid_c] = None
+                            continue
+                can_fire_map[cid_c] = _can_fire_under_gamma(
                     c,
                     gamma,
                     sigma,
                     unify_cache=unify_cache,
                     edge_cache=edge_cache,
                     reg=reg,
-                    req_ins=cell_req_ins_map[c.cell_id],
+                    req_ins=cell_req_ins_map[cid_c],
                     sig_key_cache=sig_key_cache,
                     tv_cache=tv_cache,
                     unify_empty_sub_cache=unify_empty_sub_cache,
+                    empty_pair_cache=empty_pair_cache,
+                    tv_id_cache=tv_id_cache,
+                    kept_sigs=kept_sigs,
                 )
-                for c in pool
-            }
 
             # Precompute unused high-value cells currently blocked, and expand up to 2 hops backward
             # along missing required inputs so multi-step initializers (KEY_GEN -> INIT -> ENCRYPT) unlock.
@@ -1049,20 +1299,39 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cached_m = blocked_missing_ins.get(cid_t)
                 if cached_m is not None:
                     return cached_m
-                miss = [
-                    ip for _, ip in cell_req_ins_map[cid_t]
-                    if not any(
-                        _unify_cached(
-                            gs[0] if isinstance(gs, tuple) else gs,
-                            getattr(ip, "signature", ip),
-                            out_port=gs[1] if isinstance(gs, tuple) else None,
-                            in_port=ip,
-                            prod_cell=gs[2] if isinstance(gs, tuple) else None,
-                            cons_cell=t_cell,
+                req_list = cell_req_ins_map[cid_t]
+                rmasks = cell_req_prod_masks.get(cid_t) if use_gamma_mask else None
+                if rmasks is not None:
+                    miss = [
+                        ip for idx_ip, (_, ip) in enumerate(req_list)
+                        if (gamma_mask & rmasks[idx_ip]) == 0
+                        or not any(
+                            _unify_cached(
+                                gs[0] if isinstance(gs, tuple) else gs,
+                                getattr(ip, "signature", ip),
+                                out_port=gs[1] if isinstance(gs, tuple) else None,
+                                in_port=ip,
+                                prod_cell=gs[2] if isinstance(gs, tuple) else None,
+                                cons_cell=t_cell,
+                            )
+                            for gs in gamma
                         )
-                        for gs in gamma
-                    )
-                ]
+                    ]
+                else:
+                    miss = [
+                        ip for _, ip in req_list
+                        if not any(
+                            _unify_cached(
+                                gs[0] if isinstance(gs, tuple) else gs,
+                                getattr(ip, "signature", ip),
+                                out_port=gs[1] if isinstance(gs, tuple) else None,
+                                in_port=ip,
+                                prod_cell=gs[2] if isinstance(gs, tuple) else None,
+                                cons_cell=t_cell,
+                            )
+                            for gs in gamma
+                        )
+                    ]
                 blocked_missing_ins[cid_t] = miss
                 return miss
 
@@ -1077,17 +1346,21 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     for pc in pool_producers_for.get(tc.cell_id, ()):
                         if pc.cell_id in used_set or can_fire_map.get(pc.cell_id) is not None:
                             continue
-                        if any(
-                            _unify_cached(
-                                osig,
-                                getattr(ip, "signature", ip),
-                                out_port=oport,
-                                in_port=ip,
-                                prod_cell=pc,
-                                cons_cell=tc,
+                        if (
+                            any(pc.cell_id in port_can_receive_from.get(id(ip), ()) for ip in missing_ins)
+                            if port_can_receive_from
+                            else any(
+                                _unify_cached(
+                                    osig,
+                                    getattr(ip, "signature", ip),
+                                    out_port=oport,
+                                    in_port=ip,
+                                    prod_cell=pc,
+                                    cons_cell=tc,
+                                )
+                                for oport, osig in cell_out_ports_map[pc.cell_id]
+                                for ip in missing_ins
                             )
-                            for oport, osig in cell_out_ports_map[pc.cell_id]
-                            for ip in missing_ins
                         ):
                             unlock_clause_hits[pc.cell_id] = (
                                 unlock_clause_hits.get(pc.cell_id, set())
@@ -1162,26 +1435,175 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if can_fire_map.get(gc.cell_id) is None or gc.cell_id == last_cid:
                         continue
                     g_outs = cell_out_ports_map[gc.cell_id]
-                    if any(
-                        _unify_cached(
-                            osig,
-                            getattr(ip, "signature", ip),
-                            out_port=oport,
-                            in_port=ip,
-                            prod_cell=gc,
-                            cons_cell=tc,
+                    if (
+                        any(
+                            gc.cell_id in port_can_receive_from.get(id(ip), ())
+                            for tc in next_target_anchors
+                            for _, ip in cell_req_ins_map[tc.cell_id]
                         )
-                        for oport, osig in g_outs
-                        for tc in next_target_anchors
-                        for _, ip in cell_req_ins_map[tc.cell_id]
+                        if port_can_receive_from
+                        else any(
+                            _unify_cached(
+                                osig,
+                                getattr(ip, "signature", ip),
+                                out_port=oport,
+                                in_port=ip,
+                                prod_cell=gc,
+                                cons_cell=tc,
+                            )
+                            for oport, osig in g_outs
+                            for tc in next_target_anchors
+                            for _, ip in cell_req_ins_map[tc.cell_id]
+                        )
                     ):
                         getter_unlocks_next_focus = True
                         break
 
+            # Precompute per-popped-state inverted producer lookup tables (replaces inner loops over blocked_chain_targets)
+            state_downstream_unblock_cids: Optional[Set[str]] = None
+            state_connects_gamma_cids: Optional[Set[str]] = None
+            state_unlock_ng: Optional[Dict[str, Tuple[float, float]]] = None
+            state_unlock_g: Optional[Dict[str, Tuple[float, float]]] = None
+            if port_can_receive_from:
+                state_downstream_unblock_cids = set()
+                state_connects_gamma_cids = set()
+                gamma_cids = {
+                    gs[2].cell_id
+                    for gs in gamma
+                    if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None
+                } if gamma else set()
+                for tc in blocked_chain_targets:
+                    tc_cid = tc.cell_id
+                    tc_req = cell_req_ins_map.get(tc_cid, ())
+                    if not tc_req:
+                        continue
+                    if unlock_depth.get(tc_cid, 0) > 0:
+                        for _, ip in tc_req:
+                            state_downstream_unblock_cids.update(port_can_receive_from.get(id(ip), ()))
+                    elif len(tc_req) >= 2 and gamma:
+                        # Which required ports of tc are fed by current gamma?
+                        port_gamma_hit = [
+                            any(
+                                (
+                                    not (isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None and gs[2].cell_id in pool_by_id)
+                                    or gs[2].cell_id in port_can_receive_from.get(id(ip_j), ())
+                                )
+                                and _unify_cached(
+                                    gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs,
+                                    getattr(ip_j, "signature", ip_j),
+                                    out_port=(gs[1] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                    in_port=ip_j,
+                                    prod_cell=(gs[2] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                    cons_cell=tc,
+                                )
+                                for gs in gamma
+                            )
+                            for _, ip_j in tc_req
+                        ]
+                        total_hits = sum(1 for h in port_gamma_hit if h)
+                        if total_hits >= 1:
+                            for idx_i, (tk_name, ip_i) in enumerate(tc_req):
+                                if total_hits > (1 if port_gamma_hit[idx_i] else 0) or any(
+                                    port_gamma_hit[idx_j] and tc_req[idx_j][0] != tk_name
+                                    for idx_j in range(len(tc_req))
+                                ):
+                                    state_downstream_unblock_cids.update(port_can_receive_from.get(id(ip_i), ()))
+                    if gamma_cids:
+                        for _, ip in tc_req:
+                            recv_ip = port_can_receive_from.get(id(ip))
+                            if not recv_ip or not (gamma_cids & recv_ip):
+                                continue
+                            if any(
+                                isinstance(gs, tuple) and len(gs) == 3
+                                and gs[2] is not None and gs[2].cell_id in recv_ip
+                                and _unify_cached(
+                                    gs[0],
+                                    getattr(ip, "signature", ip),
+                                    out_port=gs[1],
+                                    in_port=ip,
+                                    prod_cell=gs[2],
+                                    cons_cell=tc,
+                                )
+                                for gs in gamma
+                            ):
+                                for _, ip_u in tc_req:
+                                    state_connects_gamma_cids.update(port_can_receive_from.get(id(ip_u), ()))
+                                break
+
+                state_unlock_ng = {}
+                state_unlock_g = {}
+
+                def _record_unlock_target(tc_obj: Any, getter_only: bool) -> None:
+                    tc_cid = tc_obj.cell_id
+                    tc_ins = blocked_missing_ins.get(tc_cid)
+                    if tc_ins is None:
+                        tc_ins = [ip for _, ip in cell_req_ins_map[tc_cid]]
+                    if not tc_ins:
+                        return
+                    prod_cids: Set[str] = set()
+                    for ip in tc_ins:
+                        prod_cids.update(port_can_receive_from.get(id(ip), ()))
+                    if not prod_cids:
+                        return
+                    depth_decay = 0.78 ** unlock_depth.get(tc_cid, 0)
+                    tc_new = unlock_clause_hits.get(
+                        tc_cid,
+                        cell_clause_hits.get(tc_cid, set()) - cov_cl_set,
+                    )
+                    tc_next_hits = [t for t in tc_new if next_target is not None and t == next_target]
+                    tc_lex_val = cell_lex_score.get(tc_cid, 0.0)
+                    if tc_next_hits:
+                        tc_str = max(clause_cell_strength.get((tc_cid, t), 0.5) for t in tc_next_hits)
+                    else:
+                        tc_str = 0.0
+                    # Non-getter branch
+                    if not getter_only:
+                        if tc_next_hits and not next_uncl_fireable:
+                            uv_ng = depth_decay * (0.70 + 0.90 * tc_str + 0.25 * tc_lex_val)
+                            cr_ng = 0.65
+                        elif tc_next_hits:
+                            uv_ng = depth_decay * (0.20 * tc_str + 0.15 * tc_lex_val)
+                            cr_ng = 0.0
+                        else:
+                            uv_ng = depth_decay * (0.35 * tc_lex_val + 0.20 * len(tc_new))
+                            cr_ng = 0.0
+                        for pid in prod_cids:
+                            prev = state_unlock_ng.get(pid)
+                            if prev is None:
+                                state_unlock_ng[pid] = (uv_ng, cr_ng)
+                            else:
+                                state_unlock_ng[pid] = (uv_ng if uv_ng > prev[0] else prev[0], cr_ng if cr_ng > prev[1] else prev[1])
+                    # Getter branch
+                    if tc_next_hits and (not next_uncl_fireable or getter_unlocks_next_focus):
+                        uv_g = depth_decay * (0.70 + 0.90 * tc_str + 0.25 * tc_lex_val) + 0.45
+                        cr_g = 0.65
+                    elif tc_next_hits:
+                        uv_g = depth_decay * (0.20 * tc_str + 0.15 * tc_lex_val)
+                        cr_g = 0.0
+                    else:
+                        uv_g = depth_decay * (0.35 * tc_lex_val + 0.20 * len(tc_new)) + 0.20
+                        cr_g = 0.0
+                    for pid in prod_cids:
+                        prev = state_unlock_g.get(pid)
+                        if prev is None:
+                            state_unlock_g[pid] = (uv_g, cr_g)
+                        else:
+                            state_unlock_g[pid] = (uv_g if uv_g > prev[0] else prev[0], cr_g if cr_g > prev[1] else prev[1])
+
+                seen_unlock_cids: Set[str] = set()
+                for tc in blocked_chain_targets:
+                    if tc.cell_id not in seen_unlock_cids:
+                        seen_unlock_cids.add(tc.cell_id)
+                        _record_unlock_target(tc, getter_only=False)
+                if getter_unlocks_next_focus:
+                    for tc in next_target_anchors:
+                        if tc.cell_id not in seen_unlock_cids:
+                            seen_unlock_cids.add(tc.cell_id)
+                            _record_unlock_target(tc, getter_only=True)
+
             e_valid: List[Tuple[Cell, Any, float, float, float, Optional[int]]] = []
-            rep_optics = set(TypeRegistry.get_instance().get_verification_semantics("repeatable_optic_roles") or ())
             for cand in pool:
-                optic_r = str(getattr(cand, "optic_role", "") or "").strip().lower()
+                optic_r = cell_optic_role_map.get(cand.cell_id, "")
                 is_repeatable_optic = optic_r in rep_optics
                 cand_new_cl_reuse = cell_clause_hits.get(cand.cell_id, set()) - cov_cl_set
                 if cand.cell_id in used_set:
@@ -1220,8 +1642,10 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     prior_sc += 0.25
                 unlock_credit = 0.0
                 order_cost_penalty = 0.0
-                step_cl_idx: Optional[int] = min(t[0] for t in eff_new_hits) if eff_new_hits else (
-                    max(0, max_cl_seen) if is_closing_open_setter else (next_target[0] if next_target is not None else None)
+                step_cl_idx: Optional[int] = (
+                    min(t[0] for t in eff_new_hits)
+                    if eff_new_hits
+                    else (max(0, max_cl_seen) if is_closing_open_setter else None)
                 )
 
                 next_uncl_hits = [t for t in eff_new_hits if next_target is not None and t == next_target]
@@ -1245,6 +1669,27 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if cand.cell_id in bwd_dist:
                     prior_sc += 0.20 / (1.0 + bwd_dist[cand.cell_id])
                 cand_needs_path = cand_needs_path_map[cand.cell_id]
+                cand_has_handle_out = cell_has_handle_out_map[cand.cell_id]
+                if (
+                    chain_ids
+                    and is_ingress_map[cand.cell_id]
+                    and not cand_needs_path
+                    and not cell_req_ins_map[cand.cell_id]
+                    and not cand_has_handle_out
+                    and src_file_literals
+                    and num_sources_used >= len(src_file_literals)
+                    and not (
+                        eff_new_hits
+                        and any(
+                            not any(
+                                not is_ingress_map.get(tcid, False)
+                                for tcid in clause_top_cells.get(cl_t, ())
+                            )
+                            for cl_t in eff_new_hits
+                        )
+                    )
+                ):
+                    continue
                 is_zero_in_reader = is_ingress_map[cand.cell_id] or (
                     not cell_req_ins_map[cand.cell_id] and cand_needs_path
                 )
@@ -1252,8 +1697,17 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if has_compat_src_in_pool:
                         if cand_needs_path and self.file_compat(cand, src_file_literals[0]) < 0:
                             continue
-                    prior_sc += 0.45
+                        if cand_needs_path:
+                            prior_sc += 0.90
+                        else:
+                            prior_sc -= 0.75
+                    else:
+                        prior_sc += 0.45
                 elif chain_ids and not cell_req_ins_map[cand.cell_id]:
+                    # Zero-input non-path dataset generators (e.g. make_blobs, load_*) must not hijack
+                    # an already-started pipeline mid-chain unless directly requested by an uncovered clause.
+                    if is_ingress_map[cand.cell_id] and not cand_needs_path and not new_hits:
+                        continue
                     # Zero-input sources/generators mid-chain are valid when either:
                     # (a) an unmatched external source file remains in the prompt, OR
                     # (b) the non-path constructor/generator produces a carrier needed by a blocked/uncovered downstream cell.
@@ -1269,74 +1723,81 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             unblocks_downstream = bool(eff_new_hits)
                         else:
                             cand_outs = cell_out_ports_map.get(cand.cell_id, ())
-                            unblocks_downstream = (bool(eff_new_hits) and not is_ingress_map[cand.cell_id]) or any(
-                                (
-                                    unlock_depth.get(tc.cell_id, 0) > 0
-                                    or (
-                                        len(cell_req_ins_map.get(tc.cell_id, ())) >= 2
-                                        and any(
-                                            _unify_cached(
-                                                gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs,
-                                                getattr(other_ip, "signature", other_ip),
-                                                out_port=(gs[1] if (isinstance(gs, tuple) and len(gs) == 3) else None),
-                                                in_port=other_ip,
-                                                prod_cell=(gs[2] if (isinstance(gs, tuple) and len(gs) == 3) else None),
-                                                cons_cell=tc,
+                            unblocks_downstream = (bool(eff_new_hits) and not is_ingress_map[cand.cell_id]) or (
+                                (bool(cand_outs and cand.cell_id in state_downstream_unblock_cids))
+                                if state_downstream_unblock_cids is not None
+                                else any(
+                                    (
+                                        unlock_depth.get(tc.cell_id, 0) > 0
+                                        or (
+                                            len(cell_req_ins_map.get(tc.cell_id, ())) >= 2
+                                            and any(
+                                                _unify_cached(
+                                                    gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs,
+                                                    getattr(other_ip, "signature", other_ip),
+                                                    out_port=(gs[1] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                                    in_port=other_ip,
+                                                    prod_cell=(gs[2] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                                    cons_cell=tc,
+                                                )
+                                                for gs in gamma
+                                                for ok_name, other_ip in cell_req_ins_map.get(tc.cell_id, ())
+                                                if ok_name != tk_name
                                             )
-                                            for gs in gamma
-                                            for ok_name, other_ip in cell_req_ins_map.get(tc.cell_id, ())
-                                            if ok_name != tk_name
                                         )
                                     )
+                                    and _unify_cached(
+                                        osig,
+                                        getattr(ip, "signature", ip),
+                                        out_port=oport,
+                                        in_port=ip,
+                                        prod_cell=cand,
+                                        cons_cell=tc,
+                                    )
+                                    for tc in blocked_chain_targets
+                                    for oport, osig in cand_outs
+                                    for tk_name, ip in cell_req_ins_map.get(tc.cell_id, ())
                                 )
-                                and _unify_cached(
-                                    osig,
-                                    getattr(ip, "signature", ip),
-                                    out_port=oport,
-                                    in_port=ip,
-                                    prod_cell=cand,
-                                    cons_cell=tc,
-                                )
-                                for tc in blocked_chain_targets
-                                for oport, osig in cand_outs
-                                for tk_name, ip in cell_req_ins_map.get(tc.cell_id, ())
                             )
                     if not has_more_files and not unblocks_downstream:
                         continue
                     if is_ingress_map[cand.cell_id] and not cand_needs_path and not eff_new_hits:
                         # Disallow zero-hit synthetic generators mid-chain when disconnected from active gamma
                         cand_outs_chk = cell_out_ports_map.get(cand.cell_id, ())
-                        connects_gamma = False
-                        for tc in blocked_chain_targets:
-                            tc_req = cell_req_ins_map[tc.cell_id]
-                            if not any(
-                                _unify_cached(
-                                    osig,
-                                    getattr(ip, "signature", ip),
-                                    out_port=oport,
-                                    in_port=ip,
-                                    prod_cell=cand,
-                                    cons_cell=tc,
-                                )
-                                for oport, osig in cand_outs_chk
-                                for _, ip in tc_req
-                            ):
-                                continue
-                            if any(
-                                isinstance(gs, tuple) and len(gs) == 3
-                                and _unify_cached(
-                                    gs[0],
-                                    getattr(ip, "signature", ip),
-                                    out_port=gs[1],
-                                    in_port=ip,
-                                    prod_cell=gs[2],
-                                    cons_cell=tc,
-                                )
-                                for gs in gamma
-                                for _, ip in tc_req
-                            ):
-                                connects_gamma = True
-                                break
+                        if state_connects_gamma_cids is not None:
+                            connects_gamma = bool(cand_outs_chk and cand.cell_id in state_connects_gamma_cids)
+                        else:
+                            connects_gamma = False
+                            for tc in blocked_chain_targets:
+                                tc_req = cell_req_ins_map[tc.cell_id]
+                                if not any(
+                                    _unify_cached(
+                                        osig,
+                                        getattr(ip, "signature", ip),
+                                        out_port=oport,
+                                        in_port=ip,
+                                        prod_cell=cand,
+                                        cons_cell=tc,
+                                    )
+                                    for oport, osig in cand_outs_chk
+                                    for _, ip in tc_req
+                                ):
+                                    continue
+                                if any(
+                                    isinstance(gs, tuple) and len(gs) == 3
+                                    and _unify_cached(
+                                        gs[0],
+                                        getattr(ip, "signature", ip),
+                                        out_port=gs[1],
+                                        in_port=ip,
+                                        prod_cell=gs[2],
+                                        cons_cell=tc,
+                                    )
+                                    for gs in gamma
+                                    for _, ip in tc_req
+                                ):
+                                    connects_gamma = True
+                                    break
                         if not connects_gamma:
                             continue
 
@@ -1388,53 +1849,66 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 # Bridge/optic & multi-hop precondition unlock bonus: reward carriers satisfying
                 # missing inputs of blocked targets (or blocked prerequisite initializers).
                 best_unlock = 0.0
-                unlock_targets = list(blocked_chain_targets)
-                if getter_unlocks_next_focus and optic_r == "getter":
-                    for tc in next_target_anchors:
-                        if tc not in unlock_targets:
-                            unlock_targets.append(tc)
-                if cand_out_pairs and unlock_targets:
-                    for tc in unlock_targets:
-                        tc_ins = blocked_missing_ins.get(tc.cell_id)
-                        if tc_ins is None:
-                            tc_ins = [ip for _, ip in cell_req_ins_map[tc.cell_id]]
-                        if tc_ins and any(
-                            _unify_cached(
-                                osig,
-                                getattr(ip, "signature", ip),
-                                out_port=oport,
-                                in_port=ip,
-                                prod_cell=cand,
-                                cons_cell=tc,
-                            )
-                            for oport, osig in cand_out_pairs
-                            for ip in tc_ins
-                        ):
-                            depth_decay = 0.78 ** unlock_depth.get(tc.cell_id, 0)
-                            tc_new = unlock_clause_hits.get(
-                                tc.cell_id,
-                                cell_clause_hits.get(tc.cell_id, set()) - cov_cl_set,
-                            )
-                            tc_next_hits = [t for t in tc_new if next_target is not None and t == next_target]
-                            if tc_next_hits and (not next_uncl_fireable or (getter_unlocks_next_focus and optic_r == "getter")):
-                                tc_str = max(clause_cell_strength.get((tc.cell_id, t), 0.5) for t in tc_next_hits)
-                                uv = depth_decay * (0.70 + 0.90 * tc_str + 0.25 * cell_lex_score.get(tc.cell_id, 0.0))
-                                if optic_r == "getter":
-                                    uv += 0.45
-                                unlock_credit = max(unlock_credit, 0.65)
-                            elif tc_next_hits:
-                                tc_str = max(clause_cell_strength.get((tc.cell_id, t), 0.5) for t in tc_next_hits)
-                                uv = depth_decay * (0.20 * tc_str + 0.15 * cell_lex_score.get(tc.cell_id, 0.0))
-                            else:
-                                uv = depth_decay * (0.35 * cell_lex_score.get(tc.cell_id, 0.0) + 0.20 * len(tc_new))
-                                if optic_r == "getter":
-                                    uv += 0.20
-                            if uv > best_unlock:
-                                best_unlock = uv
-                    prior_sc += min(1.85 if optic_r == "getter" else 1.45, best_unlock)
-                    # Only clear order penalty for pure bridge/optic carriers (not future-clause operators)
-                    if unlock_credit > 0.0 and order_cost_penalty > 0.0 and not new_hits:
-                        order_cost_penalty = 0.0
+                if cand_out_pairs:
+                    if state_unlock_ng is not None and state_unlock_g is not None:
+                        unlock_entry = (state_unlock_g if optic_r == "getter" else state_unlock_ng).get(cand.cell_id)
+                        if unlock_entry is not None:
+                            best_unlock, unlock_credit = unlock_entry
+                            prior_sc += min(1.85 if optic_r == "getter" else 1.45, best_unlock)
+                            if unlock_credit > 0.0 and order_cost_penalty > 0.0 and not new_hits:
+                                order_cost_penalty = 0.0
+                    else:
+                        unlock_targets = list(blocked_chain_targets)
+                        if getter_unlocks_next_focus and optic_r == "getter":
+                            for tc in next_target_anchors:
+                                if tc not in unlock_targets:
+                                    unlock_targets.append(tc)
+                        if unlock_targets:
+                            for tc in unlock_targets:
+                                tc_ins = blocked_missing_ins.get(tc.cell_id)
+                                if tc_ins is None:
+                                    tc_ins = [ip for _, ip in cell_req_ins_map[tc.cell_id]]
+                                if tc_ins and (
+                                    any(cand.cell_id in port_can_receive_from.get(id(ip), ()) for ip in tc_ins)
+                                    if port_can_receive_from
+                                    else any(
+                                        _unify_cached(
+                                            osig,
+                                            getattr(ip, "signature", ip),
+                                            out_port=oport,
+                                            in_port=ip,
+                                            prod_cell=cand,
+                                            cons_cell=tc,
+                                        )
+                                        for oport, osig in cand_out_pairs
+                                        for ip in tc_ins
+                                    )
+                                ):
+                                    depth_decay = 0.78 ** unlock_depth.get(tc.cell_id, 0)
+                                    tc_new = unlock_clause_hits.get(
+                                        tc.cell_id,
+                                        cell_clause_hits.get(tc.cell_id, set()) - cov_cl_set,
+                                    )
+                                    tc_next_hits = [t for t in tc_new if next_target is not None and t == next_target]
+                                    if tc_next_hits and (not next_uncl_fireable or (getter_unlocks_next_focus and optic_r == "getter")):
+                                        tc_str = max(clause_cell_strength.get((tc.cell_id, t), 0.5) for t in tc_next_hits)
+                                        uv = depth_decay * (0.70 + 0.90 * tc_str + 0.25 * cell_lex_score.get(tc.cell_id, 0.0))
+                                        if optic_r == "getter":
+                                            uv += 0.45
+                                        unlock_credit = max(unlock_credit, 0.65)
+                                    elif tc_next_hits:
+                                        tc_str = max(clause_cell_strength.get((tc.cell_id, t), 0.5) for t in tc_next_hits)
+                                        uv = depth_decay * (0.20 * tc_str + 0.15 * cell_lex_score.get(tc.cell_id, 0.0))
+                                    else:
+                                        uv = depth_decay * (0.35 * cell_lex_score.get(tc.cell_id, 0.0) + 0.20 * len(tc_new))
+                                        if optic_r == "getter":
+                                            uv += 0.20
+                                    if uv > best_unlock:
+                                        best_unlock = uv
+                            prior_sc += min(1.85 if optic_r == "getter" else 1.45, best_unlock)
+                            # Only clear order penalty for pure bridge/optic carriers (not future-clause operators)
+                            if unlock_credit > 0.0 and order_cost_penalty > 0.0 and not new_hits:
+                                order_cost_penalty = 0.0
 
                 # 5-Axis Bridge Profile cost-tiering & lossy guard
                 bp = getattr(cand, "bridge_profile", None)
@@ -1445,6 +1919,10 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if not eff_new_hits:
                         prior_sc -= min(1.5, 0.12 * tier)
                         order_cost_penalty += min(2.0, 0.08 * tier)
+                elif not eff_new_hits and best_unlock > 0.0 and not optic_r and not is_sink_map[cand.cell_id]:
+                    # Non-bridge transforms acting purely as structural unlockers pay more than declared bridges
+                    prior_sc -= 0.40
+                    order_cost_penalty += 0.25
 
                 # Property precondition / postcondition repair awareness (e.g. is_complex == False)
                 cand_pre = cell_preconds_map[cand.cell_id]
@@ -1480,8 +1958,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 elif open_lens and focus_modified and not prop_repair_bonus and next_target is not None and (
                     not new_hits or min(t[0] for t in new_hits) > max(0, max_cl_seen)
                 ):
-                    prior_sc -= 1.15
-                    order_cost_penalty += 0.85
+                    continue
 
                 # Do not materialize file-path sinks when the prompt declares neither a destination file nor explicit egress hits
                 if is_sink_map[cand.cell_id] and cand_needs_path and not dest_file_literals and not (has_egress and eff_new_hits):
@@ -1509,10 +1986,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             if (
                 use_choice_scorer
                 and len(shortlist) > 1
-                and scorer_calls < max_scorer_calls
                 and (shortlist[0][2] - shortlist[1][2]) < 0.45
             ):
-                scorer_calls += 1
                 gamma_desc = ", ".join(
                     sorted({
                         str(getattr(s[0] if isinstance(s, tuple) else s, "type_name", s))
@@ -1520,11 +1995,18 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         if s is not None
                     })
                 ) or "empty (start)"
-                choice_scores = mm.score_choices(
-                    prompt,
-                    [c.cell_id for c, _, _, _, _, _ in shortlist],
-                    context_desc=f"chain={[x for x in chain_ids]}, available_carriers=[{gamma_desc}]",
-                ) or {}
+                cand_ids_tuple = tuple(c.cell_id for c, _, _, _, _, _ in shortlist)
+                cache_key = (cand_ids_tuple, gamma_desc)
+                if cache_key in _choice_score_cache:
+                    choice_scores = _choice_score_cache[cache_key]
+                elif scorer_calls < max_scorer_calls:
+                    scorer_calls += 1
+                    choice_scores = mm.score_choices(
+                        prompt,
+                        list(cand_ids_tuple),
+                        context_desc=f"chain={[x for x in chain_ids]}, available_carriers=[{gamma_desc}]",
+                    ) or {}
+                    _choice_score_cache[cache_key] = choice_scores
 
             scored_children: List[Tuple[float, float, Cell, Any, float, Optional[int]]] = []
             for cand, next_sigma, base_prior, unlock_cr, ord_pen, st_cl in shortlist:
@@ -1689,8 +2171,6 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             chosen_entry = best_complete if best_complete[0] >= best_partial[0] else best_partial
         elif best_complete is not None:
             chosen_entry = best_complete
-        elif best_partial is not None:
-            chosen_entry = best_partial
 
         chosen_ids = chosen_entry[1] if chosen_entry is not None else None
         chosen_clauses = chosen_entry[2] if chosen_entry is not None else ()
@@ -1715,6 +2195,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             cl_idx_r = chosen_clauses[idx_r] if idx_r < len(chosen_clauses) else None
             if cl_idx_r is not None:
                 c_cl.matched_clause_idx = cl_idx_r
+            else:
+                setattr(c_cl, "_auto_inserted_bridge", True)
             result.append(c_cl)
         for i_r, c_cl in enumerate(result):
             if getattr(c_cl, "matched_clause_idx", None) is None:

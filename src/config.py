@@ -3,11 +3,159 @@ src/config.py - Centralized Configuration for STRATA (Symbolic Topological Routi
 Uses Pydantic BaseSettings for validated, type-safe configuration with .env file support.
 """
 import json
+import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@dataclass(frozen=True)
+class ProfileSpec:
+    """Single source of truth for STRATA inference profile capabilities & display metadata."""
+    code: str
+    aliases: Tuple[str, ...]
+    display_name: str
+    short_label: str
+    description: str
+    pure_symbolic: bool = False
+    uses_embedder: bool = False
+    uses_llm: bool = False
+    uses_reranker: bool = False
+    uses_translator: bool = False
+    uses_ir_compiler: bool = False
+    uses_coalgebraic_unfolder: bool = False
+    uses_constrained_choice_scorer: bool = False
+    uses_autoencoder: bool = False
+    quick_shortcut: Optional[str] = None
+
+
+PROFILE_SPECS: Dict[str, ProfileSpec] = {
+    "0": ProfileSpec(
+        code="0",
+        aliases=("0", "SYMBOLIC", "ZERO", "PURE"),
+        display_name="Profile 0 (Pure Symbolic Layer)",
+        short_label="Symbolic",
+        description="Deterministic formal-syntax lattice composition. Baseline layer (zero neural models).",
+        pure_symbolic=True,
+        quick_shortcut="1",
+    ),
+    "A": ProfileSpec(
+        code="A",
+        aliases=("A",),
+        display_name="Profile A (Dense Embeddings + Neural Reranker)",
+        short_label="Embedder",
+        description="FAISS dense vector retrieval + cross-encoder/listwise neural reranking (no LLM).",
+        uses_embedder=True,
+        uses_reranker=True,
+        quick_shortcut="2",
+    ),
+    "B": ProfileSpec(
+        code="B",
+        aliases=("B",),
+        display_name="Profile B (Bi-Encoder Dense Embeddings Only)",
+        short_label="Bi-Encoder",
+        description="FAISS vector retrieval with bi-encoder dense embeddings only (no reranker, no LLM).",
+        uses_embedder=True,
+    ),
+    "C": ProfileSpec(
+        code="C",
+        aliases=("C",),
+        display_name="Profile C (Hybrid Neuro-Symbolic + GGUF LLM)",
+        short_label="Neuro-Symbolic",
+        description="Embedder RAG + GGUF local LLM slot-filling & self-repair.",
+        uses_embedder=True,
+        uses_llm=True,
+        quick_shortcut="3",
+    ),
+    "D": ProfileSpec(
+        code="D",
+        aliases=("D",),
+        display_name="Profile D (Embeddings + SLM Slot Extraction Only)",
+        short_label="Routing",
+        description="Embeddings + SLM schema-constrained slot extraction only (no feedback repair/translator).",
+        uses_embedder=True,
+        uses_llm=True,
+        quick_shortcut="4",
+    ),
+    "E": ProfileSpec(
+        code="E",
+        aliases=("E",),
+        display_name="Profile E (Translator Pass + Neuro-Symbolic)",
+        short_label="Translator",
+        description="2-stage pipeline: conversational prompt -> canonical translator + semantic compiler.",
+        uses_embedder=True,
+        uses_llm=True,
+        uses_translator=True,
+        quick_shortcut="5",
+    ),
+    "S": ProfileSpec(
+        code="S",
+        aliases=("S",),
+        display_name="Profile S (Structured Semantic Compiler)",
+        short_label="Semantic-Compiler",
+        description="Typed Intent & Schema Compiler (IRCompiler) + Neuro-Symbolic synthesis.",
+        uses_embedder=True,
+        uses_llm=True,
+        uses_translator=True,
+        uses_ir_compiler=True,
+        quick_shortcut="6",
+    ),
+    "U": ProfileSpec(
+        code="U",
+        aliases=("U",),
+        display_name="Profile U (Early-Exit Single LLM Layer-Tapping)",
+        short_label="Layer-Tap",
+        description="Single unified LLM: intermediate layer k tapped for dense RAG, full depth for generation.",
+        uses_embedder=True,
+        uses_llm=True,
+    ),
+    "AE": ProfileSpec(
+        code="AE",
+        aliases=("AE",),
+        display_name="Profile AE (Structural Transition Autoencoder Manifold)",
+        short_label="Autoencoder",
+        description="Continuous transition manifold embedding type signatures and cell morphisms.",
+        uses_embedder=True,
+        uses_autoencoder=True,
+    ),
+    "O": ProfileSpec(
+        code="O",
+        aliases=("O", "OMEGA", "Ω"),
+        display_name="Profile Omega (4-Stage Coalgebraic + Bidirectional A* Pipeline)",
+        short_label="Omega",
+        description="Coalgebraic unfolding + calibrated hybrid cone + type-directed A* + exact unification & pointed defaults.",
+        uses_embedder=True,
+        uses_llm=True,
+        uses_reranker=True,
+        uses_translator=True,
+        uses_ir_compiler=True,
+        uses_coalgebraic_unfolder=True,
+        uses_constrained_choice_scorer=True,
+    ),
+}
+
+PROFILE_ALIAS_MAP: Dict[str, str] = {
+    alias: spec.code for spec in PROFILE_SPECS.values() for alias in spec.aliases
+}
+
+
+def resolve_profile_spec(profile: Optional[str]) -> ProfileSpec:
+    """Resolves a profile identifier or alias to its authoritative ProfileSpec."""
+    key = str(profile or "0").strip().upper()
+    canonical = PROFILE_ALIAS_MAP.get(key)
+    if canonical is None:
+        raise ValueError(f"Unknown profile type: {profile}")
+    return PROFILE_SPECS[canonical]
+
+
+def active_profile_spec() -> ProfileSpec:
+    """Returns the currently active ProfileSpec from env or settings."""
+    env_p = os.environ.get("NSTL_PROFILE")
+    raw = env_p if env_p is not None and env_p.strip() else settings.profile
+    return resolve_profile_spec(raw or "0")
 
 
 class NSTLSettings(BaseSettings):
@@ -29,7 +177,10 @@ class NSTLSettings(BaseSettings):
     rerankers_dir: Optional[Path] = None
     reranker_model: Optional[str] = Field(default=None, description="Optional reranker model identifier.")
     use_reranker: bool = Field(default=False, description="Whether neural reranking is enabled in Layer 1.")
-    allow_fallback: bool = Field(default=False, description="Whether route methods may fall back to M1 on failure.")
+    allow_advisory_qualifier_waiver: bool = Field(
+        default=False,
+        description="When True, auto-waive input qualifiers not in rejected_qualifiers as advisory (legacy compatibility).",
+    )
 
     # Server & Networking
     api_host: str = Field(default="127.0.0.1", description="Host interface to bind the API server.")
@@ -56,9 +207,21 @@ class NSTLSettings(BaseSettings):
     mcts_max_bridges: int = Field(default=2, ge=0, description="Maximum property/type bridge cells M10 may insert.")
     mcts_rollout_temperature: float = Field(default=0.1, gt=0, description="Softmax temperature of the rollout policy (lower = rollouts follow the heuristic prior more closely).")
 
-    # Inference & Similarity
-    embedder_model: str = Field(default="jina-embeddings-v5-text-nano", description="Default text embedding model identifier.")
-    llm_model: str = Field(default="qwen2.5-coder-0.5b-instruct", description="Default GGUF LLM model identifier.")
+    # Inference & Similarity (models discovered dynamically from MODELS_DIR unless configured via NSTL_*)
+    embedder_model: Optional[str] = Field(default=None, description="Configured text embedding model identifier.")
+    embedder_task: Optional[str] = Field(default=None, description="Optional SentenceTransformer default task prompt name.")
+    llm_model: Optional[str] = Field(default=None, description="Configured GGUF LLM model identifier.")
+    preferred_embedders: List[str] = Field(default_factory=list, description="Optional preference order for embedder discovery.")
+    preferred_llms: List[str] = Field(default_factory=list, description="Optional preference order for LLM discovery.")
+    preferred_rerankers: List[str] = Field(default_factory=list, description="Optional preference order for reranker discovery.")
+    llm_stop_tokens: List[str] = Field(default_factory=list, description="Optional extra stop sequences for LLM generation.")
+    agent_stopping_tokens: List[str] = Field(
+        default_factory=lambda: ["FINISH", "DONE", "STOP", "COMPLETE", "END"],
+        description="FSM loop termination tokens expected from stepwise synthesis prompts.",
+    )
+    smoke_test_loop_bound: int = Field(default=2, ge=1, description="Loop unroll bound used by static sandbox smoke tests.")
+    eval_embeddings: List[str] = Field(default_factory=list, description="Optional embedder matrix override for eval_runner.")
+    eval_llms: List[str] = Field(default_factory=list, description="Optional LLM matrix override for eval_runner.")
     llm_context_length: int = Field(default=4096, ge=512)
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     llm_top_p: float = Field(default=0.95, ge=0.0, le=1.0)
@@ -267,4 +430,3 @@ API_HOST = settings.api_host
 API_PORT = settings.api_port
 CORS_ORIGINS = settings.cors_origins
 SIMILARITY_THRESHOLD = settings.similarity_threshold
-ALLOW_FALLBACK = settings.allow_fallback

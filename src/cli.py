@@ -71,7 +71,7 @@ try:
     from gevr_sandbox import GEVRSandbox
     from inference import ModelManager, select_optimal_embedder, select_optimal_llm
     from internal_rag import LocalRAG
-    from config import MODELS_DIR, settings
+    from config import MODELS_DIR, PROFILE_SPECS, resolve_profile_spec, settings
     from utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
     from errors import SynthesisError
     from tokenizer import CellTokenizer
@@ -93,7 +93,7 @@ except ImportError as _err:
         from .gevr_sandbox import GEVRSandbox
         from .inference import ModelManager, select_optimal_embedder, select_optimal_llm
         from .internal_rag import LocalRAG
-        from .config import MODELS_DIR, settings
+        from .config import MODELS_DIR, PROFILE_SPECS, resolve_profile_spec, settings
         from .utils import extract_code_from_llm_response, ensure_comprehensive_prompt, extract_template_placeholders, safe_substitute_template
         from .errors import SynthesisError
         from .tokenizer import CellTokenizer
@@ -111,8 +111,11 @@ console = Console()
 # Single source of truth for the numeric quick-shortcuts to profile letters. The dashboard
 # banner and the `default()` dispatcher both derive from this instead of keeping two
 # separately-maintained switch statements in sync by hand.
-QUICK_PROFILE_SHORTCUTS: Tuple[Tuple[str, str], ...] = (
-    ("1", "0"), ("2", "A"), ("3", "C"), ("4", "D"), ("5", "E"), ("6", "S"),
+QUICK_PROFILE_SHORTCUTS: Tuple[Tuple[str, str], ...] = tuple(
+    sorted(
+        ((spec.quick_shortcut, spec.code) for spec in PROFILE_SPECS.values() if spec.quick_shortcut),
+        key=lambda kv: kv[0],
+    )
 )
 
 # =====================================================================
@@ -400,13 +403,14 @@ def cmd_validate(args):
                 errors.append(f"{cell.cell_id}: Empty code template")
                 continue
 
-            dummy_code = sanitize_placeholders_for_ast(code)
-            try:
-                ast.parse(dummy_code)
+            from language_backend import get_language_backend, get_active_language_backend
+            _b = get_language_backend(getattr(tree, "language_spec", None)) if getattr(tree, "language_spec", None) else get_active_language_backend()
+            ok, err = _b.validate_syntax(code, allow_placeholders=True)
+            if ok:
                 valid_count += 1
-            except SyntaxError as e:
+            else:
                 failed_count += 1
-                errors.append(f"{cell.cell_id}: AST Syntax Error: {e}")
+                errors.append(f"{cell.cell_id}: Syntax Error: {err}")
 
         total = len(tree.cells)
         print(f"\n==================================================")
@@ -460,13 +464,13 @@ def cmd_validate(args):
                 errors.append(f"{cell_id}: Empty code template")
                 continue
 
-            dummy_code = sanitize_placeholders_for_ast(code)
-            try:
-                ast.parse(dummy_code)
+            from language_backend import get_active_language_backend
+            ok, err = get_active_language_backend().validate_syntax(code, allow_placeholders=True)
+            if ok:
                 valid_count += 1
-            except SyntaxError as e:
+            else:
                 failed_count += 1
-                errors.append(f"{cell_id}: AST Syntax Error: {e}")
+                errors.append(f"{cell_id}: Syntax Error: {err}")
 
     print(f"\n==================================================")
     print(f" VALIDATION RESULTS FOR: {target_path.name}")
@@ -511,63 +515,89 @@ def _is_environmental_error(error_msg: str, sandbox_res: Optional[Dict[str, Any]
     return False
 
 
+def _scan_attr_tokens(code: str) -> Set[str]:
+    """Collects member access identifier names (`obj.attr` / `path::member`) without language-specific AST."""
+    names: Set[str] = set()
+    n = len(code or "")
+    i = 0
+    in_q = None
+    while i < n:
+        ch = code[i]
+        if in_q is not None:
+            if ch == in_q and (i == 0 or code[i - 1] != "\\"):
+                in_q = None
+            i += 1
+            continue
+        if ch in ('"', "'"):
+            in_q = ch
+            i += 1
+            continue
+        sep_len = 0
+        if ch == ".":
+            sep_len = 1
+        elif code.startswith("::", i):
+            sep_len = 2
+        if sep_len:
+            j = i + sep_len
+            while j < n and (code[j].isalnum() or code[j] == "_"):
+                j += 1
+            ident = code[i + sep_len : j]
+            if ident and ident.isidentifier():
+                names.add(ident)
+            i = j
+            continue
+        i += 1
+    return names
+
+
 def _collect_template_api_names(templates) -> Set[str]:
-    """Collects attribute/method names referenced by verified cell templates via AST."""
+    """Collects attribute/method names referenced by verified cell templates."""
     names: Set[str] = set()
     for tmpl in templates:
-        if not tmpl:
-            continue
-        code = sanitize_placeholders_for_ast(tmpl)
-        try:
-            tree = ast.parse(code)
-        except SyntaxError:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute):
-                names.add(node.attr)
+        if tmpl:
+            names.update(_scan_attr_tokens(sanitize_placeholders_for_ast(tmpl)))
     return names
 
 
 def _unknown_api_references(repaired_code: str, original_code: str, cells) -> Set[str]:
-    """Returns attribute names referenced by repaired code absent from original code and lattice."""
-    def _attrs(code: str) -> Set[str]:
-        try:
-            tree = ast.parse(code)
-        except SyntaxError:
-            return set()
-        return {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-
-    repaired_attrs = _attrs(repaired_code)
-    original_attrs = _attrs(original_code)
+    """Returns member names referenced by repaired code absent from original code and lattice."""
+    repaired_attrs = _scan_attr_tokens(repaired_code)
+    original_attrs = _scan_attr_tokens(original_code)
     known = _collect_template_api_names(getattr(c, "code_template", "") for c in cells)
     return repaired_attrs - original_attrs - known
 
 
 def _get_available_embedders() -> List[str]:
-    """Scans MODELS_DIR/embeddings for available embedding models, prioritizing nano."""
+    """Scans MODELS_DIR/embeddings for available SentenceTransformer embedding models."""
     emb_dir = os.path.join(MODELS_DIR, "embeddings")
     if os.path.exists(emb_dir):
         raw = sorted([
             d for d in os.listdir(emb_dir)
             if os.path.isdir(os.path.join(emb_dir, d)) and not d.endswith("-GGUF")
         ])
-        m_nano = [d for d in raw if "nano" in d.lower()]
-        rest = [d for d in raw if "nano" not in d.lower()]
-        return m_nano + rest
+        prefs = [str(p).strip() for p in (getattr(settings, "preferred_embedders", None) or ()) if str(p).strip()]
+        if prefs:
+            pref_list = [d for p in prefs for d in raw if d == p]
+            rest = [d for d in raw if d not in pref_list]
+            return pref_list + rest
+        return raw
     return []
 
 
 def _get_available_llms() -> List[str]:
-    """Scans MODELS_DIR/llms for available GGUF LLMs, prioritizing the default 0.5b model."""
+    """Scans MODELS_DIR/llms for available GGUF LLMs."""
     llm_dir = os.path.join(MODELS_DIR, "llms")
     if os.path.exists(llm_dir):
         raw = sorted([
             d for d in os.listdir(llm_dir)
             if os.path.isdir(os.path.join(llm_dir, d))
         ])
-        m_05b = [d for d in raw if "0.5b" in d.lower()]
-        rest = [d for d in raw if "0.5b" not in d.lower()]
-        return m_05b + rest
+        prefs = [str(p).strip() for p in (getattr(settings, "preferred_llms", None) or ()) if str(p).strip()]
+        if prefs:
+            pref_list = [d for p in prefs for d in raw if d == p]
+            rest = [d for d in raw if d not in pref_list]
+            return pref_list + rest
+        return raw
     return []
 
 
@@ -599,7 +629,8 @@ class PipelineDebugger:
         embedder_name: str = "",
         llm_name: str = "",
         console: Optional[Console] = None,
-        route_method: Optional[str] = None
+        route_method: Optional[str] = None,
+        llm_feedback: bool = False
     ):
         self.orchestrator = orchestrator
         self.router = router
@@ -611,6 +642,7 @@ class PipelineDebugger:
         self.llm_name = select_optimal_llm(llm_name) if llm_name else select_optimal_llm()
         self.console = console or Console()
         self.route_method = route_method.upper() if route_method else None
+        self.llm_feedback = llm_feedback
 
     def run(
         self,
@@ -630,8 +662,17 @@ class PipelineDebugger:
         header_table.add_column("Device", style="green")
         header_table.add_column("Total Nodes", style="white")
 
-        emb_disp = self.embedder_name or "None (Bypassed)"
-        llm_disp = self.llm_name or "None (Bypassed)"
+        ap = ModelManager.get_instance().active_profile
+        ap_emb = getattr(ap, "embedder_name", None) if ap is not None else None
+        ap_llm = getattr(ap, "llm_name", None) if ap is not None else None
+        if ap_emb is not None:
+            emb_disp = "None (Bypassed)" if str(ap_emb).lower() == "none" else str(ap_emb)
+        else:
+            emb_disp = self.embedder_name or "None (Bypassed)"
+        if ap_llm is not None:
+            llm_disp = "None (Bypassed)" if str(ap_llm).lower() == "none" else str(ap_llm)
+        else:
+            llm_disp = self.llm_name or "None (Bypassed)"
         domains = set(cl.domain_name for cl in self.orchestrator.loaded_cells.values() if cl.domain_name)
         header_table.add_row(
             f"Profile {prof}",
@@ -706,7 +747,7 @@ class PipelineDebugger:
         route_dt = (time.perf_counter() - t_route_0) * 1000.0
 
         reranker_active = bool(getattr(self.router, "use_reranker", False) and getattr(self.router, "last_reranker_telemetry", None))
-        r_model_name = getattr(self.router, "reranker_model", None) or "jina-reranker-v3.5"
+        r_model_name = getattr(self.router, "reranker_model", None) or "configured"
         if reranker_active:
             engine_desc += f" ➔ Neural Reranker ({r_model_name})"
 
@@ -956,6 +997,7 @@ class PipelineDebugger:
         except Exception as _dp_err:
             logger.warning(f"[DEBUG] planning diagnostics unavailable: {type(_dp_err).__name__}: {_dp_err}")
 
+        final_code = ""
         if cells:
             path_table = Table(title=f"🛣️ Planned Monadic Pipeline Composition ({len(cells)} Steps)", box=box.ROUNDED, expand=True, border_style="green")
             path_table.add_column("Step", style="bold yellow", width=6)
@@ -1129,7 +1171,6 @@ class PipelineDebugger:
                         final_code = extracted
 
         # LAYER 3: Type-Monadic Unification & AST Synthesis
-        final_code = ""
         dest_paths = None
         pipeline_bindings = None
         accum_sigma = None
@@ -1213,6 +1254,17 @@ class PipelineDebugger:
                 bind_table.add_column("Provenance / Source", style="dim", ratio=2)
 
                 prompt_lits = {v for _, _, v in literals}
+                produced_vars: Set[str] = set()
+                for _cl, _b in pipeline_bindings:
+                    if isinstance(_b, dict):
+                        _ov = _b.get("output_var")
+                        if isinstance(_ov, str) and _ov:
+                            produced_vars.add(_ov)
+                        for _on in (getattr(_cl, "outputs", {}) or {}):
+                            _oval = _b.get(_on)
+                            if isinstance(_oval, str) and _oval:
+                                produced_vars.add(_oval)
+                reg_cli = getattr(self.orchestrator, "lattice", None) or TypeRegistry.get_instance()
                 unresolved_ports_set = set(getattr(ctx, "unresolved_ports", []))
                 for step_idx, (cl, bindings) in enumerate(pipeline_bindings, 1):
                     for p_name, p_sig in cl.inputs.items():
@@ -1227,7 +1279,7 @@ class PipelineDebugger:
                                 source_desc = "Prompt Literal"
                             elif any(f"'{lit}'" in b_val or f'"{lit}"' in b_val for lit in prompt_lits) or (b_val.startswith("[") and b_val.endswith("]")):
                                 source_desc = "Literal Projection"
-                            elif b_val.startswith("var_") or b_val.startswith("v"):
+                            elif b_val.split("[", 1)[0].strip() in produced_vars:
                                 source_desc = "Wired Variable"
                             elif p_sig.default_value is not None and str(p_sig.default_value) == b_val:
                                 source_desc = "Declared Default"
@@ -1255,7 +1307,7 @@ class PipelineDebugger:
                     for p_name, p_sig in cl.outputs.items():
                         b_val = bindings.get(p_name)
                         if b_val is None:
-                            is_sink = str(getattr(cl, "node_role", "") or "").lower() in ("sink", "terminal") or getattr(cl, "stage", None) == 3
+                            is_sink = reg_cli.is_terminal_role(getattr(cl, "node_role", "")) or getattr(cl, "stage", None) == 3
                             b_val = "None (sink/terminal)" if is_sink else str(UNRESOLVED_PORT)
                         else:
                             b_val = str(b_val)
@@ -1356,8 +1408,15 @@ class PipelineDebugger:
 
                             bridge_cand = None
                             if conflict:
+                                try:
+                                    from schema import is_bridge_cell as _cli_is_bridge_cell
+                                except ImportError:
+                                    from .schema import is_bridge_cell as _cli_is_bridge_cell
+                                reg_b = getattr(self.orchestrator, "lattice", None) or TypeRegistry.get_instance()
+                                transform_roles = reg_b.get_roles_for_category("transform")
                                 for c_cell in self.orchestrator.loaded_cells.values():
-                                    if getattr(c_cell, "node_role", "") not in ("bridge", "transformer"):
+                                    c_nr = str(getattr(c_cell, "node_role", "") or "").lower()
+                                    if not (_cli_is_bridge_cell(c_cell, reg_b) or c_nr in transform_roles):
                                         continue
                                     c_out = getattr(c_cell, "primary_output", None)
                                     if c_out is None:
@@ -1508,7 +1567,9 @@ class PipelineDebugger:
                     c.print("")
 
                 if final_code:
-                    syntax_code = Syntax(final_code, "python", theme="monokai", line_numbers=True)
+                    from language_backend import get_active_language_backend
+                    _syn_lang = get_active_language_backend().name or "text"
+                    syntax_code = Syntax(final_code, _syn_lang, theme="monokai", line_numbers=True)
                     c.print(Panel(syntax_code, title="[bold green]✨ Synthesized Python Code[/bold green]", border_style="green", padding=(0, 1)))
                     c.print("")
 
@@ -1861,7 +1922,7 @@ class NSTLInteractiveShell(cmd.Cmd):
         prof_text = f"[bold white]{prof_name}[/bold white]\n[dim]{prof_desc}[/dim]"
         emb_text = f"[cyan]Embedder:[/cyan] {self.embedder_name or '[dim]None (Bypassed)[/dim]'}"
         llm_text = f"[cyan]LLM (GGUF):[/cyan] {self.llm_name or '[dim]None (Bypassed)[/dim]'}"
-        r_model = self.reranker_model or "jina-reranker-v3.5"
+        r_model = self.reranker_model or "auto"
         rerank_status = f"[bold green]ON ({r_model})[/bold green]" if getattr(self, "use_reranker", False) else "[dim]OFF[/dim]"
         rerank_text = f"[cyan]Reranker:[/cyan] {rerank_status}"
         models_text = f"{emb_text}\n{llm_text}\n{rerank_text}"
@@ -1878,11 +1939,13 @@ class NSTLInteractiveShell(cmd.Cmd):
         header_table.add_row(prof_text, models_text, hardware_text)
 
         title_text = Text("🧬 STRATA: SYMBOLIC TOPOLOGICAL ROUTING ARCHITECTURE FOR TYPED AUTOMATA", justify="center", style="bold white on blue")
-        _short_label = {"0": "Symbolic", "A": "Embedder", "C": "Neuro-Symbolic", "D": "Routing", "E": "Translator", "S": "Semantic-Compiler"}
-        _quick_line = "  ".join(f"[{k}] {v}:{_short_label.get(v, v)}" for k, v in QUICK_PROFILE_SHORTCUTS)
+        _quick_line = "  ".join(
+            f"[{k}] {v}:{PROFILE_SPECS[v].short_label if v in PROFILE_SPECS else v}"
+            for k, v in QUICK_PROFILE_SHORTCUTS
+        )
         quick_shortcuts = Text(
             f"Quick Layers: {_quick_line}\n"
-            "Commands: /profile <0|A|B|C|D|E|S|U|AE|O> | /method <M<n>> | /reranker [on|off|<model>] | /topology <frontier|linear> | /audit | /macro | /debug [on|off] | /sandbox [on|off] | /status | /new | /clear | /exit",
+            f"Commands: /profile <{'|'.join(PROFILE_SPECS.keys())}> | /method <M<n>> | /reranker [on|off|<model>] | /topology <frontier|linear> | /audit | /macro | /debug [on|off] | /sandbox [on|off] | /status | /new | /clear | /exit",
             justify="center",
             style="dim cyan"
         )
@@ -1898,52 +1961,16 @@ class NSTLInteractiveShell(cmd.Cmd):
         console.print("[dim]Type any natural language pipeline specification to synthesize code in real-time:[/dim]\n")
 
     def _format_profile_name(self, prof: str) -> str:
-        prof_u = prof.upper()
-        if prof_u in ("0", "SYMBOLIC", "ZERO", "PURE"):
-            return "Profile 0 (Pure Symbolic Layer)"
-        elif prof_u == "B":
-            return "Profile B (Bi-Encoder Dense Embeddings Only)"
-        elif prof_u == "A":
-            return "Profile A (Dense Embeddings + Neural Reranker)"
-        elif prof_u == "C":
-            return "Profile C (Hybrid Neuro-Symbolic + GGUF LLM)"
-        elif prof_u == "D":
-            return "Profile D (Embeddings + SLM Slot Extraction Only)"
-        elif prof_u == "E":
-            return "Profile E (Translator Pass + Neuro-Symbolic)"
-        elif prof_u == "S":
-            return "Profile S (Structured Semantic Compiler)"
-        elif prof_u == "U":
-            return "Profile U (Early-Exit Single LLM Layer-Tapping)"
-        elif prof_u == "AE":
-            return "Profile AE (Structural Transition Autoencoder Manifold)"
-        elif prof_u in ("O", "OMEGA", "Ω"):
-            return "Profile Omega (4-Stage Coalgebraic + Bidirectional A* Pipeline)"
-        return f"Profile {prof_u}"
+        try:
+            return resolve_profile_spec(prof).display_name
+        except ValueError:
+            return f"Profile {str(prof).upper()}"
 
     def _get_profile_description(self, prof: str) -> str:
-        prof_u = prof.upper()
-        if prof_u in ("0", "SYMBOLIC", "ZERO", "PURE"):
-            return "Deterministic formal-syntax lattice composition. Baseline layer (zero neural models)."
-        elif prof_u == "B":
-            return "FAISS vector retrieval with bi-encoder dense embeddings only (no reranker, no LLM)."
-        elif prof_u == "A":
-            return "FAISS dense vector retrieval + cross-encoder/listwise neural reranking (no LLM)."
-        elif prof_u == "C":
-            return "Embedder RAG + GGUF local LLM slot-filling & self-repair."
-        elif prof_u == "D":
-            return "Embeddings + SLM schema-constrained slot extraction only (no feedback repair/translator)."
-        elif prof_u == "E":
-            return "2-stage pipeline: conversational prompt -> canonical translator + semantic compiler."
-        elif prof_u == "S":
-            return "Typed Intent & Schema Compiler (IRCompiler) + Neuro-Symbolic synthesis."
-        elif prof_u == "U":
-            return "Single unified LLM: intermediate layer k tapped for dense RAG, full depth for generation."
-        elif prof_u == "AE":
-            return "Continuous transition manifold embedding type signatures and cell morphisms."
-        elif prof_u in ("O", "OMEGA", "Ω"):
-            return "Coalgebraic unfolding + calibrated hybrid cone + type-directed A* + exact unification & pointed defaults."
-        return ""
+        try:
+            return resolve_profile_spec(prof).description
+        except ValueError:
+            return ""
 
     def _update_prompt(self):
         prof_label = self.active_profile.upper()
@@ -2055,16 +2082,19 @@ class NSTLInteractiveShell(cmd.Cmd):
                 console.print(f"[bold green][✓] Switched to {self._format_profile_name(self.active_profile)}[/bold green]\n")
             return True
 
-        if p not in ("A", "B", "C", "D", "E", "S", "U", "AE", "O"):
-            console.print(f"[bold red][!] Unknown profile '{profile}'. Valid options: 0 (Symbolic), A, B, C, D, E, S, U, AE, O.[/bold red]")
+        try:
+            spec = resolve_profile_spec(p)
+            p = spec.code
+        except ValueError:
+            console.print(f"[bold red][!] Unknown profile '{profile}'. Valid options: {', '.join(PROFILE_SPECS.keys())}.[/bold red]")
             return False
 
-        has_llm_profile = p in ("C", "D", "E", "S", "U", "O")
+        has_llm_profile = spec.uses_llm
         if p == "U":
             emb_choice = "llm_early_exit"
             llm_choice = select_optimal_llm(llm or self.llm_name)
-        elif p == "AE":
-            emb_choice = "transition_autoencoder"
+        elif spec.uses_autoencoder:
+            emb_choice = spec.code
             llm_choice = ""
         else:
             emb_choice = select_optimal_embedder(embedder or self.embedder_name or "auto")
@@ -2081,7 +2111,8 @@ class NSTLInteractiveShell(cmd.Cmd):
                 embedder_name=emb_choice,
                 llm_name=llm_choice
             )
-            self.embedder_name = emb_choice
+            actual_emb = getattr(mm.active_profile, "embedder_name", "none") or "none"
+            self.embedder_name = "" if actual_emb in ("none", "None", "") else actual_emb
             actual_llm = getattr(mm.active_profile, "llm_name", "none") or "none"
             self.llm_name = "" if actual_llm in ("none", "None", "") else actual_llm
 
@@ -2217,11 +2248,11 @@ class NSTLInteractiveShell(cmd.Cmd):
                 self.router.reranker_model = self.reranker_model
             if self.use_reranker and getattr(self.router, "reranker", None) is None:
                 try:
-                    self.router.reranker = LocalReranker(model_name_or_path=self.reranker_model)
+                    self.router.reranker = LocalReranker.get_shared(model_name_or_path=self.reranker_model)
                 except Exception as _e:
                     console.print(f"[bold red][!] Could not load reranker model: {_e}[/bold red]")
 
-        status_str = f"[bold green]ENABLED ({self.reranker_model or 'jina-reranker-v3.5'})[/bold green]" if self.use_reranker else "[yellow]DISABLED[/yellow]"
+        status_str = f"[bold green]ENABLED ({self.reranker_model or 'auto'})[/bold green]" if self.use_reranker else "[yellow]DISABLED[/yellow]"
         console.print(f"\n[*] Neural Reranker: {status_str}\n")
 
     def do_set(self, arg: str):
@@ -2255,7 +2286,7 @@ class NSTLInteractiveShell(cmd.Cmd):
                 self.router.use_reranker = enabled
                 if enabled and getattr(self.router, "reranker", None) is None:
                     try:
-                        self.router.reranker = LocalReranker(model_name_or_path=self.reranker_model)
+                        self.router.reranker = LocalReranker.get_shared(model_name_or_path=self.reranker_model)
                     except Exception as _e:
                         console.print(f"[bold red][!] Failed to load reranker: {_e}[/bold red]")
             console.print(f"[green][*] Neural reranker set to {'ON' if enabled else 'OFF'}.[/green]")
@@ -2267,7 +2298,7 @@ class NSTLInteractiveShell(cmd.Cmd):
                 self.router.reranker_model = val
                 if getattr(self, "use_reranker", False):
                     try:
-                        self.router.reranker = LocalReranker(model_name_or_path=val)
+                        self.router.reranker = LocalReranker.get_shared(model_name_or_path=val)
                     except Exception as _e:
                         console.print(f"[bold red][!] Failed to switch reranker model: {_e}[/bold red]")
             console.print(f"[green][*] Reranker model set to '{val}'.[/green]")
@@ -2749,8 +2780,8 @@ class NSTLInteractiveShell(cmd.Cmd):
                 for w in lint_res.warnings:
                     console.print(f"  [yellow]• {w}[/yellow]")
 
-            # Layer 5 Self-Repair for Pre-Flight Lint Violations (Disabled in symbolic profiles 0/A/D)
-            if not lint_valid and prof not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check() and final_code:
+            # Layer 5 Self-Repair for Pre-Flight Lint Violations (Controlled by active profile capabilities)
+            if not lint_valid and ModelManager.get_instance().can_feedback_check() and final_code:
                 mm = ModelManager.get_instance()
                 if mm.profile and mm.can_feedback_check():
                     err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_res.violations)
@@ -2793,7 +2824,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             sandbox_dt = (time.perf_counter() - t_exec_start) * 1000.0
 
         repaired = False
-        if not sandbox_res.get("success", False) and prof not in ("0", "A", "D") and ModelManager.get_instance().can_feedback_check():
+        if not sandbox_res.get("success", False) and ModelManager.get_instance().can_feedback_check():
             mm = ModelManager.get_instance()
             if mm.profile and mm.can_feedback_check():
                 error_msg = sandbox_res.get("error", "")
@@ -2840,7 +2871,9 @@ class NSTLInteractiveShell(cmd.Cmd):
 
         total_dt = (time.perf_counter() - t_total_start) * 1000.0
 
-        syntax_code = Syntax(final_code, "python", theme="monokai", line_numbers=True)
+        from language_backend import get_active_language_backend
+        _syn_lang = get_active_language_backend().name or "text"
+        syntax_code = Syntax(final_code, _syn_lang, theme="monokai", line_numbers=True)
         code_panel = Panel(
             syntax_code,
             title=f"[bold green]✨ Synthesized Python Code ({self._format_profile_name(self.active_profile)})[/bold green]",
@@ -2946,13 +2979,6 @@ def cmd_shell(args):
 
 def cmd_run(args):
     """Executes a single prompt synthesis directly from CLI."""
-    if getattr(args, "allow_fallback", None) is not None:
-        try:
-            from config import settings
-            settings.allow_fallback = bool(args.allow_fallback)
-        except Exception:
-            pass
-        os.environ["NSTL_ALLOW_FALLBACK"] = "1" if args.allow_fallback else "0"
     db_path = getattr(args, "db", "trees/lattice.db")
     profile = getattr(args, "profile", "0")
     os.environ["NSTL_PROFILE"] = str(profile).strip().upper()
@@ -3150,13 +3176,6 @@ def cmd_benchmark(args):
         except Exception:
             pass
         os.environ["NSTL_RERANKER_MODEL"] = str(args.reranker_model)
-    if getattr(args, "allow_fallback", None) is not None:
-        try:
-            from config import settings
-            settings.allow_fallback = bool(args.allow_fallback)
-        except Exception:
-            pass
-        os.environ["NSTL_ALLOW_FALLBACK"] = "1" if args.allow_fallback else "0"
     db_path = getattr(args, "db", "trees/lattice.db")
     ensure_lattice_compiled(trees_dir="trees", db_path=db_path)
     bench_type = getattr(args, "type", "matrix")
@@ -3257,11 +3276,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument("--no-macros", dest="macros", action="store_false", help="Disable macro-goal routing")
     p_bench.add_argument("--reranker", dest="reranker", action="store_true", default=None, help="Enable neural reranker for Layer 1 RAG routing")
     p_bench.add_argument("--no-reranker", dest="reranker", action="store_false", help="Disable neural reranker for Layer 1 RAG routing")
-    p_bench.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name (e.g. jina-reranker-v3.5)")
+    p_bench.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name")
     p_bench.add_argument("--dev", action="store_true", default=False, help="Enable Dev Mode")
     p_bench.add_argument("--topology", choices=["frontier", "linear"], default=None, help="Topological planning approach")
     p_bench.add_argument("--allow-capabilities", type=str, default="", help="Comma-separated list of capabilities to allow in sandbox (e.g. net.http,fs.read)")
-    p_bench.add_argument("--allow-fallback", action="store_true", default=False, help="Allow route methods to fall back to M1 on failure (default: False)")
     p_bench.add_argument("--llm-feedback", dest="llm_feedback", action="store_true", default=False, help="Enable LLM feedback / self-repair cycle")
     p_bench.add_argument(
         "--early-exit-layer",
@@ -3295,28 +3313,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_precompute = subparsers.add_parser("precompute-rag", help="Precompute FAISS dense embeddings into .rag_cache/")
     p_precompute.add_argument("--db", type=str, default="trees/lattice.db", help="Path to SQLite database")
     p_precompute.add_argument("--trees-dir", type=str, default="trees", help="Directory for domain tree JSON files")
-    p_precompute.add_argument("--embedder", type=str, default="jina-embeddings-v5-text-nano", help="Embedding model name")
+    p_precompute.add_argument("--embedder", type=str, default="", help="Embedding model name (empty = auto-discover)")
     p_precompute.set_defaults(func=cmd_precompute_rag)
 
     p_run = subparsers.add_parser("run", help="Synthesize code for a natural language prompt directly from CLI")
     p_run.add_argument("prompt", type=str, help="Natural language pipeline specification")
     p_run.add_argument("--debug", "-d", action="store_true", help="Enable verbose debug output across all pipeline layers")
     p_run.add_argument("--db", type=str, default="trees/lattice.db", help="Path to SQLite database")
-    p_run.add_argument("--profile", type=str, default="0", help="Inference profile (0=Symbolic, A=Embedder, B/C=Neuro-Symbolic, D, E, S, U=Early-Exit Layer, AE=Transition Autoencoder)")
+    p_run.add_argument("--profile", type=str, default="0", help="Inference profile (0=Symbolic, A=Embedder, B/C=Neuro-Symbolic, D, E, S, U=Early-Exit Layer, AE=Transition Autoencoder, O=Omega)")
     p_run.add_argument("--route-method", "-m", type=str, default=None, choices=route_method_ids(), help="Routing method algorithm")
     p_run.add_argument("--dev", action="store_true", default=False, help="Enable Dev Mode")
     p_run.add_argument("--no-lint", action="store_true", help="Skip static pre-flight linter")
-    p_run.add_argument("--embedder", type=str, default="jina-embeddings-v5-text-nano", help="Embedding model name")
-    p_run.add_argument("--llm", type=str, default="qwen2.5-coder-0.5b-instruct", help="LLM model name")
+    p_run.add_argument("--embedder", type=str, default="", help="Embedding model name (empty = auto-discover)")
+    p_run.add_argument("--llm", type=str, default="", help="LLM model name (empty = auto-discover)")
     p_run.add_argument("--reranker", dest="reranker", action="store_true", default=None, help="Enable neural reranker for Layer 1 RAG routing")
     p_run.add_argument("--no-reranker", dest="reranker", action="store_false", help="Disable neural reranker for Layer 1 RAG routing")
-    p_run.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name (e.g. jina-reranker-v3.5)")
+    p_run.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name")
     p_run.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"], help="Compute device")
     p_run.add_argument("--no-exec", action="store_true", help="Skip GEVR sandbox execution")
     p_run.add_argument("--exec", dest="exec_sandbox", action="store_true", default=False, help="Enable GEVR sandbox execution")
     p_run.add_argument("--llm-feedback", dest="llm_feedback", action="store_true", default=False, help="Enable LLM feedback / self-repair cycle when pre-flight lint fails")
     p_run.add_argument("--allow-capabilities", type=str, default="", help="Comma-separated list of capabilities to allow in sandbox (e.g. net.http,fs.read)")
-    p_run.add_argument("--allow-fallback", action="store_true", default=False, help="Allow route methods to fall back to M1 on failure (default: False)")
     p_run.add_argument("--timeout", type=float, default=DEFAULT_SANDBOX_TIMEOUT, help="Sandbox execution timeout in seconds")
     p_run.add_argument("--macros", dest="macros", action="store_true", default=None, help="Enable macro-goal routing")
     p_run.add_argument("--no-macros", dest="macros", action="store_false", help="Disable macro-goal routing")
@@ -3352,18 +3369,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_shell.add_argument("--route-method", "-m", type=str, default=None, choices=route_method_ids(), help="Initial routing method")
     p_shell.add_argument("--dev", action="store_true", default=False, help="Launch studio with Dev Mode enabled")
     p_shell.add_argument("--no-lint", action="store_true", help="Skip static pre-flight linter")
-    p_shell.add_argument("--embedder", type=str, default="jina-embeddings-v5-text-nano", help="Embedding model name")
-    p_shell.add_argument("--llm", type=str, default="qwen2.5-coder-0.5b-instruct", help="LLM model name")
+    p_shell.add_argument("--embedder", type=str, default="", help="Embedding model name (empty = auto-discover)")
+    p_shell.add_argument("--llm", type=str, default="", help="LLM model name (empty = auto-discover)")
     p_shell.add_argument("--reranker", dest="reranker", action="store_true", default=None, help="Enable neural reranker for Layer 1 RAG routing")
     p_shell.add_argument("--no-reranker", dest="reranker", action="store_false", help="Disable neural reranker for Layer 1 RAG routing")
-    p_shell.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name (e.g. jina-reranker-v3.5)")
+    p_shell.add_argument("--reranker-model", type=str, default=None, help="Neural reranker model name")
     p_shell.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"], help="Compute device")
     p_shell.add_argument("--debug", "-d", action="store_true", help="Launch studio with debug mode enabled")
     p_shell.add_argument("--no-exec", action="store_true", help="Skip GEVR sandbox execution")
     p_shell.add_argument("--exec", dest="exec_sandbox", action="store_true", default=False, help="Enable GEVR sandbox execution")
     p_shell.add_argument("--llm-feedback", dest="llm_feedback", action="store_true", default=False, help="Enable LLM feedback / self-repair cycle when pre-flight lint fails")
     p_shell.add_argument("--allow-capabilities", type=str, default="", help="Comma-separated list of capabilities to allow in sandbox (e.g. net.http,fs.read)")
-    p_shell.add_argument("--allow-fallback", action="store_true", default=False, help="Allow route methods to fall back to M1 on failure (default: False)")
     p_shell.add_argument("--timeout", type=float, default=DEFAULT_SANDBOX_TIMEOUT, help="Sandbox execution timeout in seconds")
     p_shell.add_argument("--macros", dest="macros", action="store_true", default=None, help="Enable macro-goal routing")
     p_shell.add_argument("--no-macros", dest="macros", action="store_false", help="Disable macro-goal routing")

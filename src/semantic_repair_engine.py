@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import keyword
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -170,7 +171,7 @@ def parse_call_expression(
             positional.append(name)
         else:
             try:
-                positional.append(ast.unparse(arg))
+                positional.append(_restore_placeholders(ast.unparse(arg)))
             except Exception:
                 positional.append("")
 
@@ -183,7 +184,7 @@ def parse_call_expression(
             keywords[kw.arg] = name
         else:
             try:
-                keywords[kw.arg] = ast.unparse(kw.value) if kw.value is not None else ""
+                keywords[kw.arg] = _restore_placeholders(ast.unparse(kw.value)) if kw.value is not None else ""
             except Exception:
                 keywords[kw.arg] = ""
 
@@ -212,38 +213,14 @@ def resolve_callable_from_expr(func_expr: str, dependencies: Optional[List[str]]
     root, _, rest = func_expr.partition(".")
     candidate_modules: List[str] = []
 
+    try:
+        from .language_backend import get_active_language_backend
+    except (ImportError, ValueError):
+        from language_backend import get_active_language_backend
+    be_sr = get_active_language_backend()
     for dep in dependencies or []:
         dep_str = str(dep).strip()
-
-        if dep_str.startswith("import "):
-            rest_dep = dep_str[len("import ") :].strip()
-            for part in rest_dep.split(","):
-                part = part.strip()
-                if not part:
-                    continue
-                if " as " in part:
-                    mod_name, alias = [x.strip() for x in part.split(" as ", 1)]
-                else:
-                    mod_name = part
-                    alias = part.split(".")[0]
-                if alias == root:
-                    candidate_modules.append(mod_name)
-
-        elif dep_str.startswith("from "):
-            rest_dep = dep_str[len("from ") :].strip()
-            if " import " in rest_dep:
-                mod_name, imports = rest_dep.split(" import ", 1)
-                for part in imports.split(","):
-                    part = part.strip()
-                    if not part:
-                        continue
-                    if " as " in part:
-                        name, alias = [x.strip() for x in part.split(" as ", 1)]
-                    else:
-                        name = part
-                        alias = part
-                    if alias == root:
-                        candidate_modules.append(f"{mod_name.strip()}.{name}")
+        candidate_modules.extend(be_sr.extract_dependency_target_modules(dep_str, root))
 
     candidate_modules.append(root)
 
@@ -293,7 +270,7 @@ def _format_token(tok: str) -> str:
         return ""
     if tok.startswith("{") and tok.endswith("}"):
         return tok
-    if tok.isidentifier():
+    if tok.isidentifier() and not keyword.iskeyword(tok):
         return f"{{{tok}}}"
     return tok
 
@@ -392,7 +369,17 @@ def repair_cell_semantics(cell: Dict[str, Any], domain: str = "generic") -> bool
         cell["code_template"] = tmpl
         modified = True
 
-    call_info = parse_call_expression(tmpl)
+    is_python_ast = True
+    try:
+        try:
+            from .language_backend import get_active_language_backend
+        except (ImportError, ValueError):
+            from language_backend import get_active_language_backend
+        is_python_ast = get_active_language_backend().is_python_ast
+    except Exception:
+        pass
+
+    call_info = parse_call_expression(tmpl) if is_python_ast else None
     if call_info:
         func_expr, raw_args, raw_kwargs, lhs = call_info
         func_obj = resolve_callable_from_expr(func_expr, cell.get("dependencies"))

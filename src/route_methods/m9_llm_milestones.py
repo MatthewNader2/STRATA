@@ -29,7 +29,10 @@ import json
 from collections import deque
 from typing import Dict, List, Optional, Any, Set
 
-from .base import RouteMethod, _bridge_roles, tokenize_alphanumeric, is_macro_cell, _fmt_port_sig
+from .base import (
+    RouteMethod, _bridge_roles, tokenize_alphanumeric, is_macro_cell, _fmt_port_sig,
+    is_combinator_cell, EXTENT_EFFECT_KINDS, get_effect_kind,
+)
 from lattice import Cell, LatticeOrchestrator, TypeRegistry
 from unification import ExecutionContext
 from inference import ModelManager
@@ -129,9 +132,7 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 pool_by_id.setdefault(cid, c)
         adj = getattr(orch, "_adjacency", None) or {}
         reg = TypeRegistry.get_instance()
-        comb_roles = set(reg.get_verification_semantics("combinator_roles") or ())
-        comb_topologies = set(reg.get_verification_semantics("combinator_topologies") or ())
-        destructive_names = set(reg.get_verification_semantics("destructive_effects") or ())
+        destructive_names = reg.get_forbidden_side_effects()
 
         while queue:
             curr, intermediates = queue.popleft()
@@ -159,18 +160,13 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 if cand.cell_id in visited or self.is_ingress_node(cand, orch):
                     continue
 
-                cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
-                cand_topology = str(getattr(cand, "topology_type", "") or getattr(cand, "node_type", "") or "").lower()
-                if (
-                    getattr(cand, "is_combinator", False)
-                    or cand_role in comb_roles
-                    or cand_topology in comb_topologies
-                ):
+                if getattr(cand, "is_combinator", False) or is_combinator_cell(cand, reg):
                     continue
 
                 effects = getattr(cand, "effects", []) or []
                 has_destructive_effect = any(
-                    (isinstance(e, dict) and e.get("name") in destructive_names)
+                    (get_effect_kind(e) in EXTENT_EFFECT_KINDS)
+                    or (isinstance(e, dict) and e.get("name") in destructive_names)
                     or (isinstance(e, str) and e in destructive_names)
                     for e in effects
                 )
@@ -198,12 +194,6 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
         **kwargs
     ) -> List[Cell]:
         self._current_prompt = prompt
-        try:
-            from inference import ModelManager
-        except (ImportError, ValueError):
-            from ..inference import ModelManager
-        if not ModelManager.get_instance().can_synthesize():
-            return []
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
@@ -217,10 +207,14 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ] or [tunnel[0]]
+        try:
+            from inference import ModelManager
+        except (ImportError, ValueError):
+            from ..inference import ModelManager
         mm = ModelManager.get_instance()
         has_llm = mm.can_synthesize()
 
@@ -229,7 +223,7 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
             self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []
 
-        if not has_llm:
+        if not has_llm or not ModelManager.get_instance().can_synthesize():
             return _fallback("no LLM loaded in this profile")
 
         shown = self.select_stratified_candidates(prompt, candidates, relevance_map, orchestrator=orch, max_shown=MAX_SHOWN_CANDIDATES)
@@ -467,25 +461,15 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
                                         continue
                                 except Exception:
                                     pass
-                                continue
+                                return _fallback(f"M9 milestone '{nxt.cell_id}' could not be bridged from '{c_prev.cell_id}'")
             chain = verified
 
         if len(chain) < 2:
             return _fallback("verified chain shorter than 2 cells")
 
-        try:
-            from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
-            _gate = UnificationGate(orchestrator=orch)
-            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
-            _ur = _gate.unify_pipeline(chain, _tctx, extract_llm_slots=False)
-            has_unresolved = bool(
-                getattr(_ur, "value", None)
-                and any(v is UNRESOLVED_PORT for _, b in _ur.value for v in b.values())
-            )
-            if _ur.is_bottom() or not getattr(_ur, "value", None) or has_unresolved:
-                return _fallback("M9 milestone path failed UnificationGate or left unresolved ports")
-        except Exception:
-            pass
+        _verr = self.verify_planned_path(chain, prompt, orch, ctx=ctx)
+        if _verr:
+            return _fallback(f"M9 {_verr}")
 
         self.tag_cells_with_clause_indices(chain, prompt)
         clauses = self.segment_prompt_clauses(prompt)

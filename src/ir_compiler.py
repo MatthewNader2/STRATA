@@ -148,7 +148,9 @@ class IR:
         def _check_step(s: Dict[str, Any], path: str):
             op = str(s.get("op", "")).strip().lower().replace("-", "_").replace(" ", "_")
             if op:
-                if op not in vocab and not (len(op) >= 3 and any((op in v) or (v in op) for v in vocab if len(v) >= 3)):
+                op_tokens = {t for t in op.split("_") if len(t) >= 3}
+                exact_or_token_match = (op in vocab) or bool(op_tokens and any(t in vocab for t in op_tokens))
+                if not exact_or_token_match:
                     errs.append(f"{path}: unknown op {s.get('op')!r}")
             for sub_name in ("body", "then_branch", "else_branch"):
                 sub_list = s.get(sub_name)
@@ -167,6 +169,14 @@ class IRCompiler:
     def __init__(self, orchestrator):
         self.orchestrator = orchestrator
         self.vocab: Set[str] = self._derive_vocab()
+        self._sorted_vocab: List[str] = sorted(self.vocab)
+        self._vocab_tokens: Dict[str, Tuple[bool, Set[str]]] = {
+            e: (
+                len(e) >= 3,
+                {p.lower() for p in e.replace("-", "_").split("_") if len(p) >= 3},
+            )
+            for e in self._sorted_vocab
+        }
         self.libs: List[str] = self._derive_libs()
 
     def _derive_vocab(self) -> Set[str]:
@@ -270,24 +280,35 @@ class IRCompiler:
                 if len(w) >= 3
             }
 
-        def _split_entry(entry: str) -> Set[str]:
-            parts = entry.replace("-", "_").split("_")
-            return {p.lower() for p in parts if len(p) >= 3}
+        vocab_tokens = getattr(self, "_vocab_tokens", {})
 
         def _relevance(entry: str) -> Tuple[int, int, str]:
             if not prompt_toks:
                 return (0, 0, entry)
-            entry_toks = _split_entry(entry)
+            cached = vocab_tokens.get(entry)
+            if cached is not None:
+                ge3, entry_toks = cached
+            else:
+                ge3 = len(entry) >= 3
+                entry_toks = {p.lower() for p in entry.replace("-", "_").split("_") if len(p) >= 3}
             overlap = len(entry_toks & prompt_toks)
-            prefix_hit = any(pt.startswith(entry) or entry.startswith(pt) for pt in prompt_toks if len(entry) >= 3)
+            prefix_hit = False
+            if ge3:
+                for pt in prompt_toks:
+                    if pt.startswith(entry) or entry.startswith(pt):
+                        prefix_hit = True
+                        break
             return (overlap, 1 if prefix_hit else 0, entry)
 
-        scored = sorted(entries, key=_relevance, reverse=True)
-        relevant = [e for e in scored if _relevance(e)[:2] != (0, 0)]
-        filler = [e for e in scored if _relevance(e)[:2] == (0, 0)]
+        scored_items = sorted(((_relevance(e), e) for e in entries), key=lambda x: x[0], reverse=True)
+        relevant = [e for sc, e in scored_items if sc[:2] != (0, 0)]
+        filler = [e for sc, e in scored_items if sc[:2] == (0, 0)]
         selected = relevant[:max_entries]
-        if len(selected) < max_entries:
-            needed = max_entries - len(selected)
+        # Only pad with stratified background vocabulary when relevant hits are sparse,
+        # avoiding hundreds of unrelated distractor op names in the LLM prompt.
+        filler_target = max_entries if len(relevant) < 40 else min(max_entries, len(selected) + 40)
+        if len(selected) < filler_target and filler:
+            needed = filler_target - len(selected)
             if len(filler) <= needed:
                 selected.extend(filler)
             else:
@@ -314,7 +335,8 @@ class IRCompiler:
             ir = IR.parse(raw)
             errs = ir.validate(self.vocab)
             if errs:
-                logger.debug("[IR] vocab strict-miss: %s", errs)
+                logger.warning("[IR] vocab validation errors: %s", errs)
+                raise ValueError(f"IR validation failed: {errs}")
 
             _ops = [s.get('op', '?') + '/' + str(s.get('library', '?')) for s in ir.steps]
             logger.info("[IR] compiled %d steps: %s", len(ir.steps), _ops)
@@ -331,6 +353,10 @@ class IRCompiler:
                     schema=IR_SCHEMA,
                 )
                 ir = IR.parse(raw2)
+                errs2 = ir.validate(self.vocab)
+                if errs2:
+                    logger.warning("[IR] corrective retry validation errors: %s", errs2)
+                    raise ValueError(f"IR validation failed after retry: {errs2}")
                 logger.info("[IR] corrective retry succeeded")
                 return ir
             except Exception as e2:

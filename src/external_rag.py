@@ -10,13 +10,12 @@ import abc
 import asyncio
 import json
 import logging
-import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Pattern
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +151,9 @@ class WebSearchFetcher(BaseFetcher):
     Avoids hardcoding specific ecosystems, allowing query construction via context templates.
     """
 
-    HTML_TAG_CLEANER: Pattern = re.compile(r"<[^>]+>")
-
     def __init__(
         self,
-        endpoint_url: str = "https://html.duckduckgo.com/html/",
+        endpoint_url: str = "",
         default_query_template: str = "{query}",
         timeout: float = 6.0,
     ):
@@ -164,7 +161,28 @@ class WebSearchFetcher(BaseFetcher):
         self.endpoint_url = endpoint_url
         self.default_query_template = default_query_template
 
+    @staticmethod
+    def _strip_tags(raw: str) -> str:
+        out: List[str] = []
+        in_tag = False
+        for ch in raw:
+            if ch == "<":
+                in_tag = True
+            elif ch == ">":
+                in_tag = False
+            elif not in_tag:
+                out.append(ch)
+        return "".join(out).strip()
+
     async def fetch(self, query: str, context: Optional[Dict[str, Any]] = None) -> RAGResponse:
+        if not self.endpoint_url:
+            return RAGResponse(
+                source="WebSearchFetcher",
+                identifier=query,
+                content="",
+                success=False,
+                error_message="No web search endpoint configured.",
+            )
         context = context or {}
         template = context.get("query_template", self.default_query_template)
         qualifier = context.get("qualifier", "")
@@ -195,14 +213,26 @@ class WebSearchFetcher(BaseFetcher):
 
     @classmethod
     def _extract_snippets(cls, html: str, max_snippets: int = 5) -> List[str]:
-        """Extract plain-text result snippets from search HTML without external dependencies."""
+        """Extract plain-text result snippets from search HTML without regex."""
         snippets: List[str] = []
-        pattern = re.compile(r'class="result__snippet[^"]*">(.*?)</a>', re.DOTALL | re.IGNORECASE)
-        matches = pattern.findall(html)
-        for match in matches[:max_snippets]:
-            clean_text = cls.HTML_TAG_CLEANER.sub("", match).strip()
+        marker = 'result__snippet'
+        pos = 0
+        lower_html = html.lower()
+        while len(snippets) < max_snippets:
+            idx = lower_html.find(marker, pos)
+            if idx == -1:
+                break
+            gt = html.find(">", idx)
+            if gt == -1:
+                break
+            end = lower_html.find("</a>", gt + 1)
+            if end == -1:
+                pos = gt + 1
+                continue
+            clean_text = cls._strip_tags(html[gt + 1 : end])
             if clean_text:
                 snippets.append(clean_text)
+            pos = end + 4
         return snippets
 
 
@@ -337,48 +367,9 @@ class FetcherRegistry:
 # ============================================================================
 
 def create_default_registry() -> FetcherRegistry:
-    """Instantiate a registry populated with agnostic ecosystem parsers."""
+    """Instantiate an agnostic fetcher registry without hardcoded ecosystem providers."""
     registry = FetcherRegistry()
-
-    # PyPI / Python Provider
-    def _pypi_extractor(raw_json: str) -> str:
-        data = json.loads(raw_json)
-        info = data.get("info", {})
-        summary = info.get("summary", "")
-        description = info.get("description", "")
-        return f"{summary}\n\n{description[:2000]}"
-
-    registry.register(
-        "python",
-        PackageRegistryFetcher(
-            name="PyPI",
-            url_template="https://pypi.org/pypi/{name}/json",
-            extractor=_pypi_extractor,
-        ),
-    )
-
-    # Crates.io / Rust Provider
-    def _crates_extractor(raw_json: str) -> str:
-        data = json.loads(raw_json)
-        crate = data.get("crate", {})
-        return crate.get("description", "")
-
-    registry.register(
-        "rust",
-        PackageRegistryFetcher(
-            name="CratesIo",
-            url_template="https://crates.io/api/v1/crates/{name}",
-            extractor=_crates_extractor,
-            headers={"User-Agent": "GEVR-Synthesis-RAG/2.0 (crates-io-fetcher)"},
-        ),
-    )
-
-    # Generic Web Search Provider
-    registry.register("web", WebSearchFetcher())
-
-    # Fallback Local Introspector
     registry.set_default(IntrospectionFetcher())
-
     return registry
 
 

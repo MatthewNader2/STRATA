@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
 from log_config import get_logger
-from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell
+from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell, is_combinator_cell
 
 logger = get_logger("m1_clause_anchor")
 
@@ -85,7 +85,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
             pool = [
                 c for c in pool
                 if bool(getattr(c, "slots", None))
-                or not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                or not is_combinator_cell(c)
             ]
 
             if idx == 0 and len(clauses) > 1:
@@ -172,18 +172,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                     clause_cells.append(c_inst)
 
                 if len(clause_cells) > 1:
-                    from unification import is_edge_valid
-                    ordered_clause_cells: List[Cell] = []
-                    for c in clause_cells:
-                        inserted = False
-                        for i, other in enumerate(ordered_clause_cells):
-                            if any(is_edge_valid(out, inp, c, other) for out in c.outputs.values() for inp in other.inputs.values()):
-                                ordered_clause_cells.insert(i, c)
-                                inserted = True
-                                break
-                        if not inserted:
-                            ordered_clause_cells.append(c)
-                    clause_cells = ordered_clause_cells
+                    clause_cells = self.order_clause_cells(clause_cells)
                 if not clause_cells and pool:
                     # No lattice cell carries identity evidence for this clause:
                     # fall back to the retrieval score (maximizing reachable downstream anchors for ingress) and SAY so.
@@ -271,17 +260,27 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
         routed_path: List[Cell] = [anchors[0]]
 
         for next_anchor in anchors[1:]:
+            # If a prior step (e.g. _find_type_producer) already inserted this exact cell on the same clause,
+            # do not duplicate it when its turn arrives later in the same-clause anchor list.
+            next_cl_idx = getattr(next_anchor, "matched_clause_idx", None)
+            if any(
+                c.cell_id == next_anchor.cell_id
+                and getattr(c, "matched_clause_idx", None) == next_cl_idx
+                for c in routed_path
+            ):
+                continue
             curr_cell = routed_path[-1]
             connected = False
             if self.step_unifies(curr_cell, next_anchor, prev_path=routed_path):
                 self._trace("anchor_connected", cell=next_anchor.cell_id, via="direct", after=curr_cell.cell_id)
                 routed_path.append(next_anchor)
                 connected = True
+            elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
+                self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
+                routed_path.append(next_anchor)
+                connected = True
             else:
-                producer = None
-                if not self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                    # Type-directed repair: check if a candidate producer on the current clause bridges to next_anchor
-                    producer = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
+                producer = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
                 if producer is not None:
                     self._trace("producer_inserted", cell=producer.cell_id, for_anchor=next_anchor.cell_id,
                                 clause_idx=getattr(next_anchor, "matched_clause_idx", None),
@@ -291,7 +290,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                         if p_bridges:
                             for pb in p_bridges:
                                 pb.matched_clause_idx = getattr(producer, "matched_clause_idx", None)
-                                pb.clause_literals = getattr(producer, "clause_literals", {})
+                                pb.clause_literals = getattr(producer, "clause_literals", [])
                             routed_path.extend(p_bridges)
                     routed_path.extend([producer, next_anchor])
                     connected = True
@@ -304,12 +303,8 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                     ):
                         for b in bridges:
                             b.matched_clause_idx = getattr(next_anchor, "matched_clause_idx", None)
-                            b.clause_literals = getattr(next_anchor, "clause_literals", {})
+                            b.clause_literals = getattr(next_anchor, "clause_literals", [])
                         routed_path.extend(bridges)
-                        routed_path.append(next_anchor)
-                        connected = True
-                    elif self.step_unifies_dag(next_anchor, routed_path, ctx=ctx):
-                        self._trace("anchor_connected", cell=next_anchor.cell_id, via="dag_scope", after=curr_cell.cell_id)
                         routed_path.append(next_anchor)
                         connected = True
                     else:
@@ -407,37 +402,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                 if best_sink:
                     routed_path.append(best_sink)
 
-        # 4. Fallback to LatticePlanner if empty and allow_fallback is enabled
-        try:
-            from config import settings
-            allow_fb = settings.allow_fallback
-        except Exception:
-            try:
-                from ..config import settings
-                allow_fb = settings.allow_fallback
-            except Exception:
-                allow_fb = False
-
-        if orch and not routed_path:
-            if allow_fb:
-                try:
-                    try:
-                        from ..planner import LatticePlanner
-                    except (ImportError, ValueError):
-                        from planner import LatticePlanner
-                    planner = LatticePlanner(orchestrator=orch)
-                    fb_path = planner.plan(
-                        prompt=prompt,
-                        tunnel=tunnel,
-                        relevance_map=relevance_map,
-                        start_sig=start_sig,
-                        goal_sig=goal_sig,
-                        max_transforms=max_transforms
-                    )
-                    if fb_path:
-                        return fb_path
-                except Exception as fb_err:
-                    logger.debug(f"[M1] Fallback to LatticePlanner failed: {fb_err}")
+        if not routed_path:
             return []
 
         # Propagate matched_clause_idx forward to any unindexed bridge cells
@@ -450,5 +415,7 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                         c.clause_literals = getattr(nxt, "clause_literals", {})
                         break
 
+        routed_path = self.insert_optic_commits(routed_path, trace=True)
+        routed_path = self.insert_property_bridges(routed_path, prompt=prompt, ctx=ctx)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
         return routed_path[:max_allowed]

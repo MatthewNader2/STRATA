@@ -19,6 +19,59 @@
     "data_input": [
       "table",
       "DataFrame"
+    ],
+    "data": [
+      "data_input",
+      "table",
+      "dataframe",
+      "series"
+    ],
+    "key": [
+      "column_key",
+      "column_projection",
+      "groupby_key",
+      "index_key"
+    ],
+    "projection": [
+      "column_projection",
+      "columns",
+      "column",
+      "subset",
+      "on",
+      "by",
+      "left_on",
+      "right_on",
+      "index",
+      "values",
+      "feature_projection",
+      "target_projection"
+    ],
+    "assigned_value": [
+      "assigned_value",
+      "column_value",
+      "field_value",
+      "value"
+    ],
+    "single_projection": [
+      "column",
+      "single",
+      "subscript"
+    ],
+    "multi_projection": [
+      "columns",
+      "multi"
+    ],
+    "clean": [
+      "cleaner",
+      "cleaning",
+      "imputer",
+      "deduplicator",
+      "transformer",
+      "filter"
+    ],
+    "terminal_output": [
+      "exported",
+      "saved"
     ]
   },
   "artifact_readers": {
@@ -78,7 +131,9 @@
         "parent_state": null,
         "carrier_type": "Series",
         "description": "Boolean Series of matching length.",
-        "properties": {}
+        "properties": {
+          "is_condition": true
+        }
       },
       {
         "name": "cleaned",
@@ -132,41 +187,54 @@
         "parent_state": null,
         "carrier_type": "str",
         "description": "Declared column identifier.",
-        "properties": {}
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "column_labels",
         "parent_state": null,
         "carrier_type": "List[str]",
         "description": "Single label or list of labels to drop.",
-        "properties": {}
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "column_list",
         "parent_state": null,
         "carrier_type": "List[str]",
         "description": "Column labels to consider for NA filtering.",
-        "properties": {}
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "column_name",
         "parent_state": null,
         "carrier_type": "str",
         "description": "Column name string to select.",
-        "properties": {}
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "column_projection",
         "parent_state": null,
         "carrier_type": "List[str]",
-        "description": "Declared by data migration (formerly engine bootstrap state 'column_projection')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'column_projection').",
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "column_subset",
         "parent_state": null,
         "carrier_type": "List[str]",
         "description": "Column labels to consider for identifying duplicates.",
-        "properties": {}
+        "properties": {
+          "is_projection": true
+        }
       },
       {
         "name": "columns_to_encode",
@@ -242,7 +310,10 @@
         "name": "destination_path",
         "parent_state": "source_identifier",
         "carrier_type": "str",
-        "description": "Declared by data migration (formerly engine bootstrap state 'destination_path')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'destination_path').",
+        "properties": {
+          "is_destination_identifier": true
+        }
       },
       {
         "name": "dict_orient",
@@ -299,7 +370,9 @@
         "carrier_type": "DataFrame",
         "description": "Sink state indicating extraction to native python data structure.",
         "properties": {
-          "in_memory_python": true
+          "in_memory_python": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -619,7 +692,10 @@
         "name": "order_flag",
         "parent_state": null,
         "carrier_type": "bool",
-        "description": "Declared by data migration (formerly engine bootstrap state 'order_flag')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'order_flag').",
+        "properties": {
+          "is_order_flag": true
+        }
       },
       {
         "name": "period_step",
@@ -767,7 +843,9 @@
         "carrier_type": "DataFrame",
         "description": "Sink state indicating byte stream or buffer serialization.",
         "properties": {
-          "is_serialized": true
+          "is_serialized": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -940,7 +1018,10 @@
         "name": "valid_path",
         "parent_state": "source_identifier",
         "carrier_type": "str",
-        "description": "Declared by data migration (formerly engine bootstrap state 'valid_path')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'valid_path').",
+        "properties": {
+          "is_source_identifier": true
+        }
       },
       {
         "name": "value_columns",
@@ -985,7 +1066,9 @@
         "carrier_type": "DataFrame",
         "description": "Sink state indicating serialized persistence to physical or networked storage.",
         "properties": {
-          "persisted": true
+          "persisted": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       }
     ],
@@ -3260,7 +3343,14 @@
         }
       ],
       "effects": [
-        "cleans_missing"
+        {
+          "name": "cleans_missing",
+          "effect_kind": "clean"
+        },
+        {
+          "name": "extent_mutating",
+          "effect_kind": "extent_mutation"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -3586,7 +3676,10 @@
         }
       ],
       "effects": [
-        "cleans_missing"
+        {
+          "name": "cleans_missing",
+          "effect_kind": "clean"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -4184,7 +4277,14 @@
         }
       ],
       "effects": [
-        "deduplicates"
+        {
+          "name": "deduplicates",
+          "effect_kind": "dedup"
+        },
+        {
+          "name": "extent_mutating",
+          "effect_kind": "extent_mutation"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -4671,7 +4771,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -4820,7 +4923,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -5052,7 +5158,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -5271,7 +5380,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -10491,7 +10603,8 @@
       "effects": [
         {
           "name": "removes_columns",
-          "from_port": "port_1"
+          "from_port": "port_1",
+          "effect_kind": "schema_removal"
         }
       ],
       "edges": [],
@@ -14829,7 +14942,10 @@
         }
       ],
       "effects": [
-        "cleans_missing"
+        {
+          "name": "cleans_missing",
+          "effect_kind": "clean"
+        }
       ],
       "edges": [],
       "primary_in": "port_0",
@@ -18020,7 +18136,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "series_1",
@@ -18148,7 +18267,10 @@
       "preconditions": [],
       "postconditions": [],
       "effects": [
-        "transforms_column"
+        {
+          "name": "transforms_column",
+          "effect_kind": "component_transform"
+        }
       ],
       "edges": [],
       "primary_in": "series",
@@ -18288,19 +18410,63 @@
     "DataFrame": {
       "parents": [
         "table"
-      ]
+      ],
+      "kind": "composite",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isna",
+          "isnull"
+        ],
+        "duplicate_check_methods": [
+          "duplicated"
+        ]
+      }
     },
     "Series": {
       "parents": [
         "sequence",
         "array-like"
-      ]
+      ],
+      "kind": "composite",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isna",
+          "isnull"
+        ],
+        "duplicate_check_methods": [
+          "duplicated"
+        ]
+      }
     },
     "tabularformat": {
       "parent": "format"
     },
     "table": {
-      "parent": "object"
+      "parent": "object",
+      "kind": "composite",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isna",
+          "isnull"
+        ],
+        "duplicate_check_methods": [
+          "duplicated"
+        ]
+      }
+    },
+    "column_identifier": {
+      "parent": "str",
+      "kind": "string",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     }
   },
   "mock_fixtures": [
@@ -18346,157 +18512,8 @@
     "list": "[]",
     "dict": "{}"
   },
-  "role_semantics": {
-    "forbidden_side_effect_methods": [
-      "to_pickle",
-      "read_pickle"
-    ],
-    "row_set_effects": [
-      "cleans_missing",
-      "drops_rows",
-      "filters_rows",
-      "row_filter",
-      "extent_mutating"
-    ],
-    "extent_mutating_effects": [
-      "cleans_missing",
-      "drops_rows",
-      "filters_rows",
-      "row_filter",
-      "extent_mutating"
-    ],
-    "component_transform_effects": [
-      "normalizes_column",
-      "transforms_column",
-      "encodes_column",
-      "scales_column",
-      "component_transform"
-    ],
-    "column_transform_effects": [
-      "normalizes_column",
-      "transforms_column",
-      "encodes_column",
-      "scales_column",
-      "component_transform"
-    ],
-    "projection_port_roles": [
-      "column_projection",
-      "columns"
-    ],
-    "projective_roles": [
-      "column_projection",
-      "columns",
-      "projection",
-      "feature_projection",
-      "target_projection"
-    ],
-    "projection_port_states": [
-      "column_projection",
-      "columns",
-      "columns_list",
-      "feature_names",
-      "column_name",
-      "target_name",
-      "subset"
-    ],
-    "destructive_effects": [
-      "removes_columns",
-      "drops_columns"
-    ],
-    "assigned_value_roles": [
-      "assigned_value",
-      "column_value",
-      "field_value",
-      "value"
-    ],
-    "projection_roles": [
-      "column_projection"
-    ],
-    "string_like_types": [
-      "column_identifier"
-    ],
-    "composite_carrier_roots": [
-      "dataframe",
-      "series",
-      "table",
-      "frame",
-      "panel",
-      "index",
-      "groupby"
-    ],
-    "key_roles": [
-      "column_key",
-      "column_projection",
-      "groupby_key",
-      "index_key"
-    ],
-    "key_binds": [
-      "column_key",
-      "index_key"
-    ],
-    "assigned_value_binds": [
-      "assigned_value",
-      "column_value"
-    ],
-    "projective_binds": [
-      "column_key",
-      "assigned_value"
-    ],
-    "projection_port_names": [
-      "column",
-      "columns",
-      "subset",
-      "on",
-      "by",
-      "left_on",
-      "right_on",
-      "index",
-      "values"
-    ],
-    "single_projection_kinds": [
-      "column",
-      "single",
-      "subscript"
-    ],
-    "multi_projection_kinds": [
-      "columns",
-      "multi"
-    ],
-    "terminal_output_roles": [
-      "exported",
-      "saved"
-    ],
-    "clean_effects": [
-      "cleans_missing",
-      "imputes_missing",
-      "fills_missing"
-    ],
-    "dedup_effects": [
-      "deduplicates",
-      "drops_duplicates"
-    ],
-    "clean_roles": [
-      "cleaner",
-      "cleaning",
-      "imputer",
-      "deduplicator",
-      "transformer",
-      "filter"
-    ],
-    "missing_value_methods": [
-      "isna",
-      "isnull"
-    ],
-    "duplicate_check_methods": [
-      "duplicated"
-    ],
-    "structured_carrier_intent_keys": [
-      "structured_carrier_egress",
-      "tabular_egress"
-    ],
-    "top_states": [
-      "dataframe_2d_generic",
-      "ndarray_generic"
-    ]
-  }
+  "forbidden_side_effects": [
+    "to_pickle",
+    "read_pickle"
+  ]
 }

@@ -27,17 +27,19 @@ def render_planning_diagnostics(console: Any, router: Any, cells: List[Any], pro
             cand.add_column(col, overflow="fold")
         shown: Dict[int, int] = {}
         for e in trace:
-            if e["event"] != "anchor_candidate":
+            if e.get("event") != "anchor_candidate" or "accepted" not in e or "clause_idx" not in e:
                 continue
             # accepted rows always; rejected rows capped to the 3 strongest per clause
             # (candidates are already emitted best-rank first)
-            if not e["accepted"]:
-                shown[e["clause_idx"]] = shown.get(e["clause_idx"], 0) + 1
-                if shown[e["clause_idx"]] > 3:
+            accepted = bool(e.get("accepted"))
+            cl_idx = int(e.get("clause_idx", 0))
+            if not accepted:
+                shown[cl_idx] = shown.get(cl_idx, 0) + 1
+                if shown[cl_idx] > 3:
                     continue
-            cand.add_row(str(e["clause_idx"] + 1), e["cell"], f'{e["recall"]:.3f}', f'{e["name_precision"]:.3f}',
-                         f'{e["precision"]:.3f}', f'{e["f"]:.3f}', ",".join(e["tokens"]),
-                         ("[green]ACCEPT[/green] " if e["accepted"] else "[dim]rejected[/dim] ") + e["reason"][:48])
+            cand.add_row(str(cl_idx + 1), str(e.get("cell", "")), f'{float(e.get("recall", 0.0)):.3f}', f'{float(e.get("name_precision", 0.0)):.3f}',
+                         f'{float(e.get("precision", 0.0)):.3f}', f'{float(e.get("f", 0.0)):.3f}', ",".join(e.get("tokens") or ()),
+                         ("[green]ACCEPT[/green] " if accepted else "[dim]rejected[/dim] ") + str(e.get("reason", ""))[:48])
         console.print(cand)
         for e in trace:
             if e["event"] == "anchor_dropped":

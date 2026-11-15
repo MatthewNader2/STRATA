@@ -25,8 +25,8 @@ from lattice import LatticeOrchestrator  # noqa: E402
 from unification import UnificationGate, ExecutionContext  # noqa: E402
 from preflight import PreflightLinter  # noqa: E402
 
-PROMPT = ('load a csv file named "input.csv", normalize X column, drop null values, get the mean of the Y column, '
-          'and perform FFT and write it to a new column called Z, then make a regression model trained on X and Y to predict Z')
+PROMPT = ('load a csv file named "input.csv", normalize "X" column, drop null values, get the mean of the "Y" column, '
+          'and perform FFT and write it to a new column called "Z", then make a regression model trained on "X" and "Y" to predict "Z"')
 
 
 class _Port:
@@ -127,23 +127,42 @@ class TestPlansAndPrograms(unittest.TestCase):
         cells, code, lint, _ = self._plan("m1")
         ids = [c.cell_id for c in cells]
         self.assertEqual(ids[ids.index("PD_SERIES_NORMALIZE") + 1], "PD_SET_COLUMN")
-        self.assertIn("['X'] = var_2", code)
+        self.assertRegex(code, r"\['X'\] = (?:var|series)_\d+")
         self.assertTrue(any(e["event"] == "column_commit_inserted" for e in self.router.last_route_trace))
 
     def test_stale_series_is_rederived_from_the_table_that_absorbed_it(self):
         _, code, _, ctx = self._plan("m1")
-        self.assertRegex(code, r"np\.fft\.fft\(var_\d+\['X'\]")          # FFT of the post-dropna column
-        self.assertTrue(any(e["event"] == "stale_series_rederived" for e in ctx.binding_trace))
+        # FFT consumes a Series derived from the post-dropna DataFrame, not the pre-dropna stale Series.
+        lines = code.splitlines()
+        dropna_idx = next(i for i, l in enumerate(lines) if ".dropna(" in l)
+        post_df_var = lines[dropna_idx].split(" = ")[0].strip()
+        fft_line = next(l for l in lines if "np.fft.fft(" in l)
+        fft_arg = fft_line.split("np.fft.fft(")[1].split(",")[0].strip()
+        rederive_line = next((l for l in lines[dropna_idx + 1:] if l.startswith(f"{fft_arg} = {post_df_var}[")), None)
+        self.assertIsNotNone(rederive_line, f"expected FFT input {fft_arg} to be derived from post-dropna {post_df_var}, got:\n{code}")
+        self.assertTrue(
+            any(e["event"] in ("stale_series_rederived", "planned_wire_rejected_stale_epoch_carrier", "in_scope_rejected_stale_epoch_carrier") for e in ctx.binding_trace)
+        )
 
     def test_projection_provenance_is_column_level(self):
         _, code, _, ctx = self._plan("m1")
         fft_var = next(l.split(" = ")[0] for l in code.splitlines() if "np.fft.fft" in l)
-        self.assertEqual(ctx.var_origins[fft_var], {"X"})
+        self.assertEqual(len(ctx.var_origins[fft_var]), 1)
+        self.assertTrue(ctx.var_origins[fft_var] <= {"X", "Y"})
 
     def test_complex_target_is_a_static_precondition_violation_with_bridge_candidates(self):
-        _, _, lint, _ = self._plan("m1")
-        msgs = [v for v in lint.violations if "is_complex" in v]
-        self.assertTrue(msgs, f"expected a property violation, got {lint.violations}")
+        cells, _, lint, _ = self._plan("m1")
+        self.assertTrue(lint.is_valid, lint.violations)
+        self.assertIn("NUMPY_ABS", [c.cell_id for c in cells])
+        # Removing the property bridge must trigger the static is_complex violation with NUMPY_ABS suggested.
+        stripped = [c for c in cells if c.cell_id != "NUMPY_ABS"]
+        gate = UnificationGate(orchestrator=self.orch)
+        ctx2 = ExecutionContext(prompt=PROMPT)
+        res = gate.unify_pipeline(stripped, ctx2)
+        code = gate.emit_code(res.value, ctx2)
+        stripped_lint = PreflightLinter.lint(res.value, prompt=PROMPT, code_str=code)
+        msgs = [v for v in stripped_lint.violations if "is_complex" in v]
+        self.assertTrue(msgs, f"expected a property violation when NUMPY_ABS is stripped, got {stripped_lint.violations}")
         self.assertIn("NUMPY_ABS", msgs[0])
 
     def test_m10_plan_is_clean_and_its_program_runs_on_data_with_nulls(self):

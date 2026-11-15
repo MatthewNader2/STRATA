@@ -32,6 +32,57 @@
       "savepath",
       "output_path",
       "target_path"
+    ],
+    "path": [
+      "path",
+      "file",
+      "filepath",
+      "filename",
+      "pathlike",
+      "dest_path",
+      "source_path",
+      "dest_identifier",
+      "source_identifier",
+      "dest",
+      "buf",
+      "fp",
+      "uri",
+      "url"
+    ],
+    "path_consumer": [
+      "source_data"
+    ],
+    "source": [
+      "source",
+      "ingress"
+    ],
+    "ingress": [
+      "source",
+      "ingress"
+    ],
+    "sink": [
+      "sink",
+      "terminal",
+      "egress"
+    ],
+    "terminal": [
+      "sink",
+      "model_sink",
+      "evaluator",
+      "export",
+      "terminal",
+      "output"
+    ],
+    "bridge": [
+      "bridge",
+      "tunnel",
+      "adapter",
+      "cast",
+      "coercion"
+    ],
+    "data": [
+      "carrier",
+      "data_input"
     ]
   },
   "types": [
@@ -41,35 +92,55 @@
     },
     {
       "name": "scalar",
-      "parent": "object"
+      "parent": "object",
+      "kind": "scalar"
     },
     {
       "name": "str",
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "string"
     },
     {
       "name": "int",
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "numeric"
     },
     {
       "name": "float",
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "numeric"
     },
     {
       "name": "bool",
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "boolean"
     },
     {
       "name": "path",
-      "parent": "object"
+      "parent": "object",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     {
       "name": "file_path",
-      "parent": "path"
+      "parent": "path",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     {
       "name": "dir_path",
-      "parent": "path"
+      "parent": "path",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     {
       "name": "path_list",
@@ -77,7 +148,8 @@
     },
     {
       "name": "file_content_text",
-      "parent": "str"
+      "parent": "str",
+      "kind": "string"
     },
     {
       "name": "file_content_bytes",
@@ -137,11 +209,18 @@
       {
         "name": "directory_created",
         "description": "Directory newly created or verified present on filesystem.",
-        "parent_state": "existing_path"
+        "parent_state": "existing_path",
+        "properties": {
+          "is_materialized": true
+        }
       },
       {
         "name": "directory_deleted",
-        "description": "Directory node removed from filesystem."
+        "description": "Directory node removed from filesystem.",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
       },
       {
         "name": "disk_usage_tuple",
@@ -159,11 +238,18 @@
       {
         "name": "file_created",
         "description": "File newly created or touched on filesystem.",
-        "parent_state": "existing_path"
+        "parent_state": "existing_path",
+        "properties": {
+          "is_materialized": true
+        }
       },
       {
         "name": "file_deleted",
-        "description": "File node deleted from filesystem."
+        "description": "File node deleted from filesystem.",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
       },
       {
         "name": "file_list",
@@ -7598,68 +7684,20 @@
   "supported_formats": [
     "*"
   ],
-  "role_semantics": {
-    "path_consumer_roles": [
-      "source_data"
-    ],
-    "path_abstract_types": [
-      "path"
-    ],
-    "path_roles": [
-      "path",
-      "file",
-      "filepath",
-      "filename",
-      "pathlike",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier",
-      "dest",
-      "buf",
-      "fp",
-      "uri",
-      "url"
-    ],
-    "path_type_names": [
-      "path",
-      "filepath",
-      "uri",
-      "url",
-      "file",
-      "pathlike"
-    ],
-    "source_roles": [
-      "source",
-      "ingress"
-    ],
-    "ingress_roles": [
-      "source",
-      "ingress"
-    ],
-    "sink_roles": [
-      "sink",
-      "terminal",
-      "egress"
-    ],
-    "terminal_roles": [
-      "sink",
-      "model_sink",
-      "evaluator",
-      "export",
-      "terminal",
-      "output"
-    ],
-    "bridge_roles": [
-      "bridge",
-      "tunnel",
-      "adapter",
-      "cast",
-      "coercion"
-    ],
-    "dataflow_roles": [
-      "carrier",
-      "data_input"
-    ]
-  }
+  "path_port_tokens": [
+    "path",
+    "file",
+    "filepath",
+    "filename",
+    "pathlike",
+    "dest_path",
+    "source_path",
+    "dest_identifier",
+    "source_identifier",
+    "dest",
+    "buf",
+    "fp",
+    "uri",
+    "url"
+  ]
 }

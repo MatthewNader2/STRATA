@@ -43,11 +43,8 @@ class ModelUnavailableError(RuntimeError):
 
 
 def get_latent_scoring_weights() -> Dict[str, float]:
-    """
-    Resolves geodesic scoring and state-update weights from TypeRegistry
-    or settings without hardcoded magic numbers in the scoring loop.
-    """
-    defaults = {
+    """Resolves geodesic scoring and state-update weights directly from centralized NSTLSettings."""
+    return {
         "sim_weight": float(settings.latent_sim_weight),
         "progress_weight": float(settings.latent_progress_weight),
         "clause_weight": float(settings.latent_clause_weight),
@@ -55,19 +52,6 @@ def get_latent_scoring_weights() -> Dict[str, float]:
         "structural_weight": float(settings.latent_structural_weight),
         "state_momentum": float(settings.latent_state_momentum),
     }
-    try:
-        reg = TypeRegistry.get_instance()
-        sem = reg.get_verification_semantics("latent_scoring_weights")
-        if sem:
-            for item in sem:
-                if isinstance(item, str) and "=" in item:
-                    k, v = item.split("=", 1)
-                    k = k.strip().lower()
-                    if k in defaults:
-                        defaults[k] = float(v.strip())
-    except Exception as e:
-        logger.debug("[COGNITIVE PATHFINDER] Weight config lookup fallback: %s", e)
-    return defaults
 
 
 class LatentVectorExtractor:
@@ -109,16 +93,18 @@ class LatentVectorExtractor:
         llm_dir = os.path.join(MODELS_DIR, "llms")
         errors: List[str] = []
 
-        # 0. Check if Profile 0 (Pure Symbolic, zero neural models) is active
+        # 0. Check if active profile is Pure Symbolic or Autoencoder via centralized ProfileSpec
         try:
             try:
+                from .config import active_profile_spec, resolve_profile_spec
                 from .inference import ModelManager
             except (ImportError, ValueError):
+                from config import active_profile_spec, resolve_profile_spec
                 from inference import ModelManager
             mm = ModelManager.get_instance()
             if mm.profile is not None:
                 prof_id = str(getattr(mm.profile, "profile_id", "") or "")
-                if prof_id == "0":
+                if prof_id and resolve_profile_spec(prof_id).pure_symbolic:
                     self._model = None
                     self._backend = "unavailable"
                     self._init_error = "Profile 0 is pure symbolic: neural embeddings are disabled."
@@ -127,12 +113,16 @@ class LatentVectorExtractor:
         except Exception as e:
             errors.append(f"Profile 0 check: {e}")
 
-        if settings.profile == "0" or os.environ.get("NSTL_PROFILE") == "0":
-            self._model = None
-            self._backend = "unavailable"
-            self._init_error = "Profile 0 is pure symbolic: neural embeddings are disabled."
-            logger.info("[COGNITIVE PATHFINDER] Profile 0 configured: neural latent extractor disabled.")
-            return
+        try:
+            from config import active_profile_spec
+            if active_profile_spec().pure_symbolic:
+                self._model = None
+                self._backend = "unavailable"
+                self._init_error = "Profile 0 is pure symbolic: neural embeddings are disabled."
+                logger.info("[COGNITIVE PATHFINDER] Profile 0 configured: neural latent extractor disabled.")
+                return
+        except Exception:
+            pass
 
         # 1. Check ModelManager active profile boundaries before standalone loading
         active_profile_present = False
@@ -144,8 +134,7 @@ class LatentVectorExtractor:
             mm = ModelManager.get_instance()
             if mm.profile is not None:
                 active_profile_present = True
-                emb_name = str(getattr(mm.profile, "embedder_name", "") or "").lower()
-                if getattr(mm.profile, "autoencoder", None) is not None or emb_name == "transition_autoencoder":
+                if getattr(mm.profile, "autoencoder", None) is not None:
                     self._model = None
                     self._backend = "unavailable"
                     self._init_error = "Profile AE uses structural transition autoencoder only; neural text latent extractor disabled."
@@ -197,6 +186,12 @@ class LatentVectorExtractor:
                 import torch
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+                if device == "cuda":
+                    try:
+                        self._model = self._model.to(torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16)
+                        torch.cuda.empty_cache()
+                    except Exception:
+                        pass
                 self._backend = "sentence_transformers"
                 sample = self._model.encode("probe", normalize_embeddings=True)
                 self._dim = int(sample.shape[-1])

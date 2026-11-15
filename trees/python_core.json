@@ -5,70 +5,321 @@
   "description": "Standard Python algorithmic morphisms and data structure utilities.",
   "types": {
     "any": {
-      "parent": null
+      "parent": null,
+      "kind": "top"
     },
     "object": {
       "parent": "any"
     },
     "scalar": {
-      "parent": "object"
+      "parent": "object",
+      "kind": "scalar",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "numeric": {
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "numeric",
+      "empty_expr": "0",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "number": {
-      "parent": "numeric"
+      "parent": "numeric",
+      "kind": "numeric",
+      "empty_expr": "0",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "int": {
-      "parent": "numeric"
+      "parent": "numeric",
+      "kind": "numeric",
+      "empty_expr": "0",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "float": {
-      "parent": "numeric"
+      "parent": "numeric",
+      "kind": "numeric",
+      "empty_expr": "0.0",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "bool": {
-      "parent": "int"
+      "parent": "int",
+      "kind": "boolean",
+      "empty_expr": "False",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "logical": {
+      "parent": "bool",
+      "kind": "boolean",
+      "empty_expr": "False",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "primitive": {
+      "parent": "scalar",
+      "kind": "scalar",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "str": {
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "string",
+      "empty_expr": "''",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "bytes": {
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "scalar",
+      "empty_expr": "b''",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "literal": {
-      "parent": "scalar"
+      "parent": "scalar",
+      "kind": "scalar",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
     },
     "collection": {
-      "parent": "object"
+      "parent": "object",
+      "kind": "collection",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "sequence": {
-      "parent": "collection"
+      "parent": "collection",
+      "kind": "collection",
+      "empty_expr": "[]",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "mapping": {
-      "parent": "collection"
+      "parent": "collection",
+      "kind": "mapping",
+      "empty_expr": "{}",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "dict": {
-      "parent": "mapping"
+      "parent": "mapping",
+      "kind": "mapping",
+      "empty_expr": "{}",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "list": {
-      "parent": "sequence"
+      "parent": "sequence",
+      "kind": "collection",
+      "empty_expr": "[]",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "tuple": {
-      "parent": "sequence"
+      "parent": "sequence",
+      "kind": "collection",
+      "empty_expr": "()",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "set": {
-      "parent": "collection"
+      "parent": "collection",
+      "kind": "collection",
+      "empty_expr": "set()",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
     },
     "none": {
-      "parent": "object"
+      "parent": null,
+      "kind": "void",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true,
+        "is_empty_carrier": true
+      }
     },
     "nonetype": {
-      "parent": "none"
+      "parent": "none",
+      "kind": "void",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true,
+        "is_empty_carrier": true
+      }
     },
     "void": {
-      "parent": "none"
+      "parent": "none",
+      "kind": "void",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true,
+        "is_empty_carrier": true
+      }
     },
     "unit": {
-      "parent": "none"
+      "parent": "none",
+      "kind": "void",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true,
+        "is_empty_carrier": true
+      }
+    },
+    "top": {
+      "parent": null,
+      "kind": "top"
+    },
+    "unknown": {
+      "parent": null,
+      "kind": "top"
+    },
+    "generic": {
+      "parent": null,
+      "kind": "top"
+    },
+    "text": {
+      "parent": "str",
+      "kind": "string",
+      "empty_expr": "''",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "enum": {
+      "parent": "scalar",
+      "kind": "scalar",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "path": {
+      "parent": "object",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "filepath": {
+      "parent": "str",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "uri": {
+      "parent": "str",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "url": {
+      "parent": "str",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
+    "bottom": {
+      "parent": null,
+      "kind": "bottom",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true
+      }
+    },
+    "null": {
+      "parent": null,
+      "kind": "bottom",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true
+      }
+    },
+    "undefined": {
+      "parent": null,
+      "kind": "bottom",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true
+      }
+    },
+    "nil": {
+      "parent": null,
+      "kind": "bottom",
+      "empty_expr": "None",
+      "properties": {
+        "is_atomic": true
+      }
+    },
+    "format": {
+      "parent": "object",
+      "kind": "format",
+      "properties": {
+        "protocols": [
+          "file",
+          "http",
+          "https",
+          "s3",
+          "gs",
+          "ftp",
+          "sql",
+          "sqlite",
+          "memory"
+        ],
+        "generic_extensions": [
+          "dat",
+          "bin",
+          "txt",
+          "json"
+        ]
+      }
     }
   },
   "top_types": [
@@ -76,7 +327,8 @@
     "*",
     "top",
     "unknown",
-    "\u22a4"
+    "generic",
+    "⊤"
   ],
   "top_states": [
     "any",
@@ -85,14 +337,22 @@
     "unregistered",
     "unbound",
     "top",
-    "none",
-    "\u22a4"
+    "⊤"
   ],
   "product_constructors": [
     "tuple",
     "pair",
     "product",
     "record"
+  ],
+  "advisory_qualifiers": [
+    "primary",
+    "optional",
+    "collection",
+    "const",
+    "estimator",
+    "scalar",
+    "vector"
   ],
   "cells": [
     {
@@ -906,6 +1166,129 @@
         "carrier_type": "object",
         "description": "extracted_value typestate",
         "properties": {}
+      },
+      {
+        "name": "condition",
+        "properties": {
+          "is_condition": true
+        }
+      },
+      {
+        "name": "boolean_expression",
+        "properties": {
+          "is_condition": true
+        }
+      },
+      {
+        "name": "target",
+        "properties": {
+          "is_target_identifier": true
+        }
+      },
+      {
+        "name": "target_name",
+        "properties": {
+          "is_target_identifier": true
+        }
+      },
+      {
+        "name": "target_identifier",
+        "properties": {
+          "is_target_identifier": true
+        }
+      },
+      {
+        "name": "source_identifier",
+        "properties": {
+          "is_source_identifier": true
+        }
+      },
+      {
+        "name": "input_path",
+        "properties": {
+          "is_source_identifier": true
+        }
+      },
+      {
+        "name": "source_path",
+        "properties": {
+          "is_source_identifier": true
+        }
+      },
+      {
+        "name": "file_path",
+        "properties": {
+          "is_source_identifier": true
+        }
+      },
+      {
+        "name": "materialization",
+        "properties": {
+          "is_materialized": true,
+          "is_destination_identifier": true
+        }
+      },
+      {
+        "name": "destination",
+        "properties": {
+          "is_destination_identifier": true
+        }
+      },
+      {
+        "name": "serialized",
+        "properties": {
+          "is_materialized": true,
+          "is_terminal": true
+        }
+      },
+      {
+        "name": "closed",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "destroyed",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "freed",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "disposed",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "invalid",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "deleted",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
+      },
+      {
+        "name": "nonexistent",
+        "properties": {
+          "is_invalid": true,
+          "is_terminal_invalid": true
+        }
       }
     ],
     "transitions": [],
@@ -958,417 +1341,60 @@
     "displayed",
     "plotted"
   ],
-  "role_semantics": {
-    "atomic_carrier_roots": [
-      "scalar",
-      "numeric",
-      "number",
-      "int",
-      "float",
-      "bool",
-      "str",
-      "bytes",
-      "literal",
-      "none",
-      "nonetype",
-      "void",
-      "unit",
-      "path",
-      "filepath",
-      "uri",
-      "url",
-      "text",
-      "logical"
+  "language_spec": {
+    "name": "python",
+    "file_extension": ".py",
+    "ast_backend": "python_ast",
+    "runtime": "python",
+    "assignment_operator": "=",
+    "statement_terminator": "",
+    "line_comment": "#",
+    "dependency_prefixes": [
+      "import ",
+      "from "
     ],
-    "composite_carrier_roots": [
-      "collection",
-      "sequence",
-      "mapping",
-      "dict",
-      "list",
-      "tuple",
-      "set"
+    "declaration_prefixes": [],
+    "function_keyword": "def ",
+    "catch_keyword": "except",
+    "subscript_open": "[",
+    "subscript_close": "]",
+    "attr_separator": ".",
+    "block_keywords": [
+      "def",
+      "class",
+      "with",
+      "for",
+      "while",
+      "if",
+      "try"
     ],
-    "literal_types": [
-      "int",
-      "float",
-      "bool",
-      "str",
-      "numeric",
-      "number",
-      "scalar",
-      "literal",
-      "bytes",
-      "path",
-      "filepath",
-      "uri",
-      "url",
-      "enum"
-    ],
-    "universal_top_types": [
-      "any",
-      "*",
-      "top",
-      "unknown",
-      "generic",
-      "\u22a4"
-    ],
-    "void_types": [
-      "none",
-      "nonetype",
-      "void",
-      "unit",
-      "1",
-      "effect[io]",
-      ""
-    ],
-    "bottom_types": [
-      "none",
-      "null",
-      "undefined",
-      "bottom",
-      "empty",
-      "void",
-      "unit",
-      "nil",
-      "\u22a5",
-      ""
-    ],
-    "empty_carrier_types": [
-      "none",
-      "nonetype",
-      "void",
-      "unit"
-    ],
-    "output_targets": [
-      "output_var",
-      "output",
-      "out",
-      "result",
-      "res"
-    ],
-    "receiver_roles": [
-      "receiver",
-      "self",
-      "instance",
-      "owner",
-      "target_object",
-      "carrier"
-    ],
-    "receiver_port_names": [
-      "self",
-      "obj",
-      "instance",
-      "carrier",
-      "container"
-    ],
-    "carrier_binds": [
-      "data_carrier",
-      "receiver",
-      "carrier",
-      "primary_operand",
-      "state",
-      "container"
-    ],
-    "dataflow_roles": [
-      "data_input",
-      "carrier",
-      "data_carrier",
-      "receiver",
-      "primary_operand",
-      "source_data",
-      "state",
-      "container"
-    ],
-    "config_roles": [
-      "config",
-      "configuration",
-      "hyperparameter",
-      "option",
-      "flag",
-      "parameter",
-      "literal_parameter"
-    ],
-    "configuration_roles": [
-      "config",
-      "configuration",
-      "hyperparameter",
-      "option",
-      "flag",
-      "parameter",
-      "literal_parameter"
-    ],
-    "parameter_roles": [
-      "parameter",
-      "literal_parameter",
-      "hyperparameter",
-      "option",
-      "flag",
-      "config"
-    ],
-    "key_roles": [
-      "key",
-      "key_selector",
-      "column_key",
-      "field_key",
-      "attr_key",
-      "index_key",
-      "coordinate"
-    ],
-    "key_binds": [
-      "key",
-      "component_key",
-      "key_selector",
-      "column_key",
-      "field_key",
-      "attr_key",
-      "index_key",
-      "coordinate"
-    ],
-    "assigned_value_roles": [
-      "value_input",
-      "assigned_value",
-      "column_value",
-      "field_value",
-      "value"
-    ],
-    "assigned_value_binds": [
-      "assigned_value",
-      "column_value",
-      "field_value",
-      "value"
-    ],
-    "assigned_value_port_names": [
-      "value",
-      "val",
-      "new_value",
-      "data"
-    ],
-    "projective_roles": [
-      "key",
-      "key_selector",
-      "projection",
-      "target_projection",
-      "feature_projection",
-      "field_key",
-      "attr_key",
-      "index_key"
-    ],
-    "projective_binds": [
-      "key",
-      "key_selector",
-      "column_key",
-      "field_key",
-      "attr_key",
-      "index_key",
-      "projection"
-    ],
-    "projection_roles": [
-      "projection",
-      "key_selector"
-    ],
-    "projection_port_names": [
-      "key",
-      "keys",
-      "field",
-      "fields",
-      "index"
-    ],
-    "terminal_output_roles": [
-      "terminal_output",
-      "sink_output",
-      "output",
-      "result"
-    ],
-    "source_data_roles": [
-      "source",
-      "ingress",
-      "source_data",
-      "src"
-    ],
-    "destination_roles": [
-      "destination",
-      "dest",
-      "sink",
-      "egress",
-      "terminal",
-      "output"
-    ],
-    "source_roles": [
-      "source",
-      "ingress",
-      "source_data",
-      "src"
-    ],
-    "ingress_roles": [
-      "source",
-      "ingress",
-      "io_ingress",
-      "generator",
-      "constructor"
-    ],
-    "sink_roles": [
-      "sink",
-      "terminal",
-      "egress",
-      "export",
-      "io_egress"
-    ],
-    "terminal_roles": [
-      "sink",
-      "terminal",
-      "egress",
-      "io_egress",
-      "export",
-      "evaluator",
-      "metric",
-      "consumer",
-      "output"
-    ],
-    "transform_roles": [
-      "transformation",
-      "transform",
-      "filter",
-      "aggregation",
-      "endomorphism",
-      "operator",
-      "bridge"
-    ],
-    "bridge_roles": [
-      "bridge",
-      "tunnel",
-      "adapter",
-      "adaptor",
-      "cast",
-      "coercion",
-      "projection"
-    ],
-    "ingress_stages": [
-      "1"
-    ],
-    "transform_stages": [
-      "2"
-    ],
-    "terminal_stages": [
-      "3"
-    ],
-    "source_states": [
-      "source_identifier",
-      "input_path",
-      "source_path",
-      "file_path",
-      "uri",
-      "url",
-      "filepath"
-    ],
-    "terminal_states": [
-      "saved_file",
-      "exported_file",
-      "written_file",
-      "saved",
-      "exported",
-      "written",
-      "materialized",
-      "closed",
-      "done",
-      "displayed",
-      "plotted"
-    ],
-    "materialization_states": [
-      "saved_file",
-      "exported_file",
-      "written_file",
-      "saved",
-      "exported",
-      "written",
-      "materialized"
-    ],
-    "terminal_invalid_states": [
-      "closed",
-      "destroyed",
-      "freed",
-      "disposed",
-      "invalid",
-      "deleted",
-      "nonexistent"
-    ],
-    "protocols": [
-      "file",
-      "http",
-      "https",
-      "s3",
-      "gs",
-      "ftp",
-      "sql",
-      "sqlite",
-      "memory"
-    ],
-    "condition_states": [
-      "condition",
-      "predicate",
-      "boolean_expression",
-      "filter_expr",
-      "query_expr",
-      "expression"
-    ],
-    "string_like_types": [
-      "str",
-      "string",
-      "literal",
-      "key_name"
-    ],
-    "target_roles": [
-      "target",
-      "destination",
-      "target_input",
-      "target_projection"
-    ],
-    "target_states": [
-      "target",
-      "target_name",
-      "target_identifier"
-    ],
-    "order_flag_names": [
-      "ascending",
-      "descending",
-      "reverse"
-    ],
-    "antonym_flag_pairs": [
-      [
-        "ascending",
-        "descending"
-      ]
-    ],
-    "generic_prepositions": [],
-    "generic_format_extensions": [
-      "dat",
-      "bin",
-      "txt",
-      "json"
-    ],
-    "bridge_tokens": [
-      "bridge",
-      "adapter",
-      "convert",
-      "cast",
-      "to",
-      "as"
-    ],
-    "bridge_role_weights": {
-      "target_match": 100.0,
-      "property_match": 10.0,
-      "bridge": 20.0
+    "sandbox_driver": "python",
+    "headless_env": {
+      "MPLBACKEND": "Agg",
+      "SDL_VIDEODRIVER": "dummy",
+      "SDL_AUDIODRIVER": "dummy",
+      "QT_QPA_PLATFORM": "offscreen"
     },
-    "reduction_tags": [
-      "reduction",
-      "aggregate",
-      "summary",
-      "collapse"
+    "forbidden_constructs": [
+      "rmtree"
     ],
-    "smoke_test_loop_bound": [
-      "2"
+    "forbidden_identifiers": [
+      "eval",
+      "exec",
+      "compile",
+      "__import__",
+      "open",
+      "system",
+      "popen",
+      "subprocess",
+      "globals",
+      "locals",
+      "vars",
+      "getattr",
+      "setattr",
+      "delattr"
     ],
-    "permitted_kernel_builtins": [
+    "permitted_builtins": [
       "len",
       "range",
       "min",
@@ -1396,142 +1422,305 @@
       "heapq",
       "bisect"
     ],
-    "forbidden_identifier_names": [
-      "eval",
-      "exec",
-      "compile",
-      "__import__",
-      "open",
-      "system",
-      "popen",
-      "subprocess"
+    "variadic_markers": [
+      "*",
+      "**",
+      "..."
     ],
-    "headless_environment": [
-      "MPLBACKEND=Agg",
-      "SDL_VIDEODRIVER=dummy",
-      "SDL_AUDIODRIVER=dummy",
-      "QT_QPA_PLATFORM=offscreen"
+    "output_targets": [
+      "output_var",
+      "output",
+      "out",
+      "result",
+      "res"
     ],
-    "latent_scoring_weights": [
-      "structural=0.5",
-      "semantic=0.5"
+    "condition_states": [
+      "condition",
+      "predicate",
+      "boolean_expression",
+      "filter_expr",
+      "query_expr",
+      "expression"
     ],
-    "owner_sink_roles": [
-      "instance_sink",
-      "owner_sink"
+    "null_literal": "None",
+    "bool_literals": [
+      "True",
+      "False"
     ],
-    "structural_kinds": [
+    "empty_collection_literals": [
+      "[]",
+      "()"
+    ],
+    "method_receiver_names": [
+      "self",
+      "cls"
+    ],
+    "debug_builtins": [
+      "print"
+    ],
+    "union_type_constructors": [
+      "Union"
+    ],
+    "noop_statement": "pass",
+    "return_keyword": "return",
+    "loop_keyword": "for",
+    "loop_in_keyword": "in",
+    "block_suffix": ":",
+    "container_constructors": {
+      "set": "set",
+      "dict": "dict",
+      "OrderedDict": "dict",
+      "defaultdict": "dict",
+      "Counter": "dict",
+      "list": "list",
+      "tuple": "tuple",
+      "deque": "deque"
+    },
+    "collection_append_templates": {
+      "set": "{container}.add({item})",
+      "dict": "{container}[{key}] = {item}",
+      "list": "{container}.append({item})"
+    }
+  },
+  "type_vars": [
+    "T",
+    "U",
+    "V",
+    "R",
+    "K",
+    "State"
+  ],
+  "excluded_module_tokens": [
+    "test",
+    "tests",
+    "testing",
+    "conftest",
+    "testutils",
+    "vendor",
+    "vendored",
+    "externals",
+    "third_party",
+    "compat",
+    "internal",
+    "internals"
+  ],
+  "enum_citation_triggers": [
+    "see",
+    "values in",
+    "one of",
+    "choices are",
+    "must be one of",
+    "refer to"
+  ],
+  "enum_suffixes": [
+    "flags",
+    "flag",
+    "types",
+    "type",
+    "codes",
+    "code",
+    "mode",
+    "modes",
+    "enum",
+    "enums"
+  ],
+  "symbol_stopwords": [
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "be",
+    "or",
+    "and",
+    "of",
+    "in",
+    "to",
+    "for",
+    "with",
+    "by",
+    "from",
+    "as",
+    "on",
+    "at",
+    "if",
+    "it",
+    "this",
+    "that",
+    "can",
+    "may",
+    "must",
+    "should",
+    "will",
+    "see",
+    "note",
+    "default",
+    "none",
+    "true",
+    "false"
+  ],
+  "exclusive_qualifiers": [
+    [
       "scalar",
-      "tensor",
       "vector",
-      "matrix",
-      "dataframe",
-      "series",
-      "collection",
-      "handle",
-      "record",
-      "table",
-      "mapping",
-      "composite",
-      "path_spec"
+      "matrix"
+    ]
+  ],
+  "path_port_tokens": [
+    "path",
+    "filepath",
+    "uri",
+    "url",
+    "dest_path",
+    "source_path",
+    "pathlike",
+    "buf",
+    "fp",
+    "destination",
+    "dest"
+  ],
+  "carrier_roles": {
+    "config": [
+      "config",
+      "configuration",
+      "parameter"
     ],
-    "polymorphic_structure_kinds": [
-      "tensor",
-      "collection"
+    "configuration": [
+      "config",
+      "configuration",
+      "parameter"
     ],
-    "path_compat_structure_kinds": [
-      "path_spec",
-      "scalar"
+    "parameter": [
+      "config",
+      "configuration",
+      "parameter"
     ],
-    "scalar_abstract_types": [
-      "scalar",
-      "primitive",
-      "numeric",
-      "number"
-    ],
-    "compound_structure_kinds": [
-      "tensor",
-      "collection",
-      "composite"
-    ],
-    "locator_constructors": [
-      "file",
-      "stream",
-      "path",
-      "asset"
-    ],
-    "optic_roles": [
-      "getter",
-      "setter",
-      "complement"
-    ],
-    "read_optic_roles": [
-      "getter",
-      "complement"
-    ],
-    "accessor_optic_roles": [
-      "getter",
-      "setter"
-    ],
-    "repeatable_optic_roles": [
-      "getter",
-      "setter",
-      "complement"
-    ],
-    "macro_node_types": [
-      "macro",
-      "higher_order",
-      "combinator"
-    ],
-    "macro_node_roles": [
-      "macro",
-      "higher_order",
-      "combinator"
-    ],
-    "hof_roles": [
+    "hof": [
       "functional_operator",
       "callback",
       "predicate",
       "key_fn"
     ],
-    "top_states": [
-      "any",
-      "*",
-      "default",
-      "unregistered",
-      "unbound",
-      "top",
-      "none",
-      "generic",
-      "\u22a4"
+    "receiver": [
+      "receiver",
+      "self",
+      "instance",
+      "owner",
+      "target_object",
+      "carrier"
     ],
-    "destination_states": [
-      "materialization",
-      "destination",
-      "serialized",
-      "sink"
+    "source": [
+      "source",
+      "ingress",
+      "source_data"
     ],
-    "cleaner_roles": [
+    "ingress": [
+      "source",
+      "ingress",
+      "source_data",
+      "io"
+    ],
+    "sink": [
+      "sink",
+      "terminal",
+      "egress",
+      "export",
+      "output",
+      "terminal_output",
+      "io_egress"
+    ],
+    "terminal": [
+      "terminal",
+      "sink",
+      "egress",
+      "export",
+      "output",
+      "terminal_output",
+      "io_egress",
+      "evaluator"
+    ],
+    "bridge": [
+      "bridge",
+      "tunnel",
+      "adapter",
+      "cast",
+      "coercion",
+      "interchange",
+      "array_bridge",
+      "carrier_conversion",
+      "conversion"
+    ],
+    "key": [
+      "key",
+      "projection",
+      "column_key",
+      "index_key"
+    ],
+    "assigned_value": [
+      "assigned_value",
+      "value",
+      "val"
+    ],
+    "projection": [
+      "projection"
+    ],
+    "data": [
+      "data_carrier",
+      "data_input",
+      "carrier"
+    ],
+    "clean": [
       "cleaner",
+      "clean"
+    ],
+    "transform": [
+      "transform",
       "transformer",
-      "filter"
+      "transformation"
     ],
-    "collection_types": [
-      "list",
-      "sequence",
-      "collection",
-      "mapping"
+    "estimator": [
+      "estimator"
     ],
-    "path_port_hints": [
-      "path",
+    "evaluator": [
+      "evaluator"
+    ],
+    "destination": [
       "dest",
-      "file",
-      "buf",
-      "fp"
+      "destination",
+      "dest_path",
+      "savepath",
+      "output_path",
+      "target_path"
     ],
-    "literal_roles": [
+    "literal": [
       "literal",
-      "literal_parameter"
+      "constant"
+    ],
+    "optic": [
+      "getter",
+      "setter",
+      "complement",
+      "lens"
+    ],
+    "owner_sink": [
+      "owner_sink",
+      "instance_sink"
+    ],
+    "strict": [
+      "strict"
+    ],
+    "single_projection": [
+      "single",
+      "subscript"
+    ],
+    "multi_projection": [
+      "multi"
+    ],
+    "lifecycle": [
+      "model",
+      "estimator",
+      "receiver",
+      "model_input"
     ]
   }
 }

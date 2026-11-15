@@ -160,6 +160,9 @@ class RunResponse(BaseModel):
     prompt: str
     path: List[str]
     code: str
+    emitted_code: Optional[str] = None
+    repaired_code: Optional[str] = None
+    repaired: bool = False
     latency_ms: float = 0.0
     route_latency_ms: float = 0.0
     synthesis_latency_ms: float = 0.0
@@ -229,23 +232,27 @@ def initialize_engine(
         llm_dev = llm_device
 
     p_norm = prof.strip().upper()
-    if p_norm in ("OMEGA", "Ω"):
-        p_norm = "O"
+    try:
+        from .config import resolve_profile_spec
+    except (ImportError, ValueError):
+        from config import resolve_profile_spec
+    p_spec = resolve_profile_spec(p_norm)
+    p_norm = p_spec.code
     with _engine_lock:
         _engine_ready = False
         _ensure_base_engine_loaded()
 
-        if p_norm in ("0", "SYMBOLIC", "ZERO", "PURE"):
-            _active_profile = "0"
+        if p_spec.pure_symbolic:
+            _active_profile = p_spec.code
             _active_embedder = "none"
             _active_llm = "none"
-            os.environ["NSTL_PROFILE"] = "0"
+            os.environ["NSTL_PROFILE"] = p_spec.code
             try:
-                settings.profile = "0"
+                settings.profile = p_spec.code
             except Exception:
                 pass
             mm = ModelManager.get_instance()
-            mm.initialize_profile("0")
+            mm.initialize_profile(p_spec.code)
             _internal_rag = None
             _router = LatticeRouter(orchestrator=_orchestrator, internal_rag=None, use_reranker=False)
             _gate = UnificationGate(orchestrator=_orchestrator)
@@ -270,8 +277,8 @@ def initialize_engine(
 
         if p_norm == "U":
             optimal_emb = "llm_early_exit"
-        elif p_norm == "AE":
-            optimal_emb = "transition_autoencoder"
+        elif p_spec.uses_autoencoder:
+            optimal_emb = p_spec.code
         else:
             optimal_emb = select_optimal_embedder(emb_m or "auto")
         _active_embedder = optimal_emb
@@ -434,8 +441,10 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
 
     # Layer 5 Self-Repair for Pre-Flight Lint Violations
     # Strictly disabled in symbolic/retrieval profiles (0, B, A, D, AE) to prevent benchmark backdoor cheating.
+    emitted_code = code
+    applied_repaired_code: Optional[str] = None
     repaired_via_feedback = False
-    if lint_violations and _active_profile not in ("0", "B", "A", "D", "AE") and ModelManager.get_instance().can_feedback_check():
+    if lint_violations and ModelManager.get_instance().can_feedback_check():
         mm = ModelManager.get_instance()
         if mm.profile and mm.can_feedback_check():
             err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_violations)
@@ -445,6 +454,7 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
                     rep_lint = PreflightLinter.lint(local_gate.last_pipeline_bindings, prompt=prompt, code_str=repaired_code, orchestrator=_orchestrator)
                     if rep_lint.is_valid:
                         code = repaired_code
+                        applied_repaired_code = repaired_code
                         lint_violations = []
                         repaired_via_feedback = True
                 except Exception:
@@ -456,6 +466,9 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
             prompt=prompt,
             path=[c.cell_id for c in cells],
             code="",
+            emitted_code=emitted_code,
+            repaired_code=applied_repaired_code,
+            repaired=repaired_via_feedback,
             latency_ms=round(total_dt, 2),
             route_latency_ms=round(route_dt, 2),
             synthesis_latency_ms=round(synth_dt, 2),
@@ -483,6 +496,9 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
         prompt=prompt,
         path=path_ids,
         code=code,
+        emitted_code=emitted_code,
+        repaired_code=applied_repaired_code,
+        repaired=repaired_via_feedback,
         latency_ms=round(total_dt, 2),
         route_latency_ms=round(route_dt, 2),
         synthesis_latency_ms=round(synth_dt, 2),

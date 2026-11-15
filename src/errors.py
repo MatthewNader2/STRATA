@@ -136,6 +136,7 @@ _DEPRECATED_EXCEPTIONS: Dict[str, type] = {
     "FetchError": RAGError,
     "RetrievalIndexError": RAGError,
 }
+_DEPRECATED_CLASS_CACHE: Dict[str, type] = {}
 
 
 def __getattr__(name: str) -> Any:
@@ -150,9 +151,15 @@ def __getattr__(name: str) -> Any:
             DeprecationWarning,
             stacklevel=2,
         )
-        return type(name, (target,), {
-            "__doc__": f"Deprecated alias for {target.__name__} (disconnected from runtime pipeline).",
-        })
+        cls = _DEPRECATED_CLASS_CACHE.get(name)
+        if cls is None:
+            cls = type(name, (target,), {
+                "__module__": __name__,
+                "__doc__": f"Deprecated alias for {target.__name__} (disconnected from runtime pipeline).",
+            })
+            _DEPRECATED_CLASS_CACHE[name] = cls
+            globals()[name] = cls
+        return cls
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 

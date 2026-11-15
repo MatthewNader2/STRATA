@@ -19,12 +19,12 @@ import multiprocessing
 import os
 import pickle as _pickle
 import queue as _pyqueue
-import re
 import shutil
 import signal
 import socket as _real_socket
 import sys
 import tempfile
+import threading
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -111,9 +111,9 @@ class StateProtocolRegistry:
         def _callable_check(obj: Any) -> bool:
             try:
                 from lattice import TypeRegistry
-                state_methods = TypeRegistry.get_instance().get_verification_semantics("state_check_methods") or ()
+                state_methods = TypeRegistry.get_instance().get_type_property_values("state_check_methods")
             except Exception:
-                state_methods = ()
+                state_methods = set()
             for attr in state_methods:
                 method = getattr(obj, attr, None)
                 if callable(method):
@@ -121,6 +121,11 @@ class StateProtocolRegistry:
             return False
 
         def _attribute_convention_check(obj: Any) -> bool:
+            if hasattr(obj, "fit") and hasattr(obj, "get_params"):
+                return any(
+                    k.endswith("_") and not k.startswith("__")
+                    for k in getattr(obj, "__dict__", {})
+                )
             if hasattr(obj, "__dict__"):
                 public_state = [k for k in obj.__dict__.keys() if not k.startswith("_")]
                 return len(public_state) > 0
@@ -191,9 +196,9 @@ class PostconditionRegistry:
         def _has_nans_evaluator(val: Any, expected: Any) -> bool:
             try:
                 from lattice import TypeRegistry
-                nan_methods = TypeRegistry.get_instance().get_verification_semantics("missing_value_methods") or ()
+                nan_methods = TypeRegistry.get_instance().get_type_property_values("missing_value_methods")
             except Exception:
-                nan_methods = ()
+                nan_methods = set()
             for method_name in nan_methods:
                 method = getattr(val, method_name, None)
                 if callable(method):
@@ -217,9 +222,9 @@ class PostconditionRegistry:
                     from .lattice import TypeRegistry
                 except ImportError:
                     from lattice import TypeRegistry
-                dup_methods = TypeRegistry.get_instance().get_verification_semantics("duplicate_check_methods") or ()
+                dup_methods = TypeRegistry.get_instance().get_type_property_values("duplicate_check_methods")
             except Exception:
-                dup_methods = ()
+                dup_methods = set()
             for method_name in dup_methods:
                 method = getattr(val, method_name, None)
                 if callable(method):
@@ -304,12 +309,12 @@ class TerminalIntentRegistry:
                 try:
                     from lattice import TypeRegistry
                     reg = TypeRegistry.get_instance()
-                    render_hooks = set(reg.get_verification_semantics("render_hooks") or ())
-                    visual_types = set(reg.get_verification_semantics("visual_types") or ())
+                    render_hooks = reg.get_type_property_values("render_hooks")
+                    visual_types = reg.get_types_by_kind("visual") | reg.get_types_with_property("is_visual", True)
                 except Exception:
                     render_hooks, visual_types = set(), set()
                 has_render_hook = any(hasattr(output, attr) for attr in render_hooks)
-                if has_render_hook or type(output).__name__ in visual_types:
+                if has_render_hook or type(output).__name__.lower() in visual_types:
                     return IntentVerificationResult(valid=True, reason="Visual artifact verified")
                 return IntentVerificationResult(valid=False, reason="Object lacks visual artifact rendering protocol")
 
@@ -319,11 +324,11 @@ class TerminalIntentRegistry:
             except ImportError:
                 from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            partition_keys = reg.get_verification_semantics("partition_intent_keys") or ()
-            carrier_keys = reg.get_verification_semantics("structured_carrier_intent_keys") or ()
-            visual_keys = reg.get_verification_semantics("visual_intent_keys") or ()
+            partition_keys = reg.get_roles_for_category("partition")
+            carrier_keys = reg.get_composite_carrier_roots()
+            visual_keys = reg.get_types_by_kind("visual") | reg.get_types_with_property("is_visual", True)
         except Exception:
-            partition_keys, carrier_keys, visual_keys = (), (), ()
+            partition_keys, carrier_keys, visual_keys = {"partition"}, set(), {"visual"}
 
         for key in partition_keys:
             self.register(key, PartitionIntentVerifier())
@@ -337,23 +342,20 @@ class TerminalIntentRegistry:
 # Hardened Worker Execution Layer (Track 5: RLIMIT, Network & FS Confinement)
 # ============================================================================
 
-_BLOCKED_MODULES = (
-    "subprocess",
-    "shutil",
-    "socket",
-    "ssl",
-    "http",
-    "urllib",
-    "requests",
-    "ftplib",
-    "telnetlib",
-    "smtplib",
-    "xmlrpc",
-    "ctypes",
-    "pty",
-    "commands",
-    "multiprocessing",
-)
+try:
+    from .security_policy import (
+        DEFAULT_CAPABILITY_MODULES as _SP_CAP_MODS,
+        NON_OVERRIDABLE_BLOCKED_MODULES as _SP_BLOCKED_MODS,
+        NON_OVERRIDABLE_BLOCKED_OS_OPS as _SP_BLOCKED_OS_OPS,
+    )
+except (ImportError, ValueError):
+    from security_policy import (
+        DEFAULT_CAPABILITY_MODULES as _SP_CAP_MODS,
+        NON_OVERRIDABLE_BLOCKED_MODULES as _SP_BLOCKED_MODS,
+        NON_OVERRIDABLE_BLOCKED_OS_OPS as _SP_BLOCKED_OS_OPS,
+    )
+
+_BLOCKED_MODULES = tuple(dict.fromkeys((*_SP_BLOCKED_MODS, *_SP_CAP_MODS.keys())))
 
 
 def _enforce_posix_resource_limits(max_memory_mb: int = 16384, max_cpu_seconds: int = 10) -> None:
@@ -459,14 +461,10 @@ def _create_sanitized_os():
     import os as _real_os
 
     class _SanitizedOS:
+        path = _real_os.path
+
         def __getattr__(self, name: str) -> Any:
-            blocked_ops = {
-                "system", "popen", "spawn", "spawnl", "spawnle", "spawnlp", "spawnlpe",
-                "spawnv", "spawnve", "spawnvp", "spawnvpe", "execv", "execve", "execvp",
-                "execvpe", "execl", "execle", "execlp", "execlpe", "remove", "unlink",
-                "rmdir", "removedirs", "chmod", "chown", "kill", "killpg", "fork", "forkpty",
-            }
-            if name in blocked_ops:
+            if name in _SP_BLOCKED_OS_OPS:
                 raise SecurityViolationError(f"Operating system operation 'os.{name}' is prohibited in sandbox.")
             return getattr(_real_os, name)
 
@@ -485,6 +483,9 @@ def _create_restricted_import(sec_policy: Optional[Any] = None):
             raise SecurityViolationError(f"Import of restricted module '{root_module}' is blocked.")
 
         if root_module == "os":
+            import os as _real_os
+            if name == "os.path" and fromlist:
+                return _real_os.path
             return _create_sanitized_os()
 
         real_import = builtins.__import__
@@ -527,6 +528,77 @@ class ASTLoopBounder(ast.NodeTransformer):
         return [init_stmt, node]
 
 
+_HEADLESS_ENV_SPECS_CACHE: Optional[List[str]] = None
+_SANDBOX_MP_CTX: Any = None
+_SANDBOX_CTX_LOCK = threading.Lock()
+_SANDBOX_WARMUP_STARTED = False
+
+
+def _get_headless_env_specs() -> List[str]:
+    """Resolves and caches headless environment specs in the parent process so workers avoid reloading lattice trees."""
+    global _HEADLESS_ENV_SPECS_CACHE
+    if _HEADLESS_ENV_SPECS_CACHE is not None:
+        return _HEADLESS_ENV_SPECS_CACHE
+    specs: List[str] = []
+    try:
+        from lattice import TypeRegistry
+        reg = TypeRegistry.get_instance()
+        lang_env = getattr(reg.get_language_spec(), "headless_env", None) or {}
+        specs = [f"{k}={v}" for k, v in lang_env.items()] + list(
+            reg.get_capabilities().get("headless_environment", []) or []
+        )
+    except Exception:
+        specs = []
+    _HEADLESS_ENV_SPECS_CACHE = specs
+    return specs
+
+
+def _get_sandbox_mp_context() -> Any:
+    """Returns a cached forkserver context on Linux (preloading pure-Python data libs) or spawn fallback."""
+    global _SANDBOX_MP_CTX
+    if _SANDBOX_MP_CTX is not None:
+        return _SANDBOX_MP_CTX
+    with _SANDBOX_CTX_LOCK:
+        if _SANDBOX_MP_CTX is not None:
+            return _SANDBOX_MP_CTX
+        forced = os.environ.get("NSTL_SANDBOX_START_METHOD", "").strip().lower()
+        if forced == "spawn":
+            _SANDBOX_MP_CTX = multiprocessing.get_context("spawn")
+            return _SANDBOX_MP_CTX
+        if sys.platform.startswith("linux") and "forkserver" in multiprocessing.get_all_start_methods():
+            try:
+                ctx = multiprocessing.get_context("forkserver")
+                _SANDBOX_MP_CTX = ctx
+                return ctx
+            except Exception as exc:
+                logger.debug("[SANDBOX] forkserver init fallback to spawn: %s", exc)
+        _SANDBOX_MP_CTX = multiprocessing.get_context("spawn")
+        return _SANDBOX_MP_CTX
+
+
+def warmup_sandbox_async() -> None:
+    """Starts the sandbox forkserver zygote and preloads headless specs on a background daemon thread."""
+    global _SANDBOX_WARMUP_STARTED
+    if os.environ.get("NSTL_SANDBOX_WARMUP", "1") == "0":
+        return
+    with _SANDBOX_CTX_LOCK:
+        if _SANDBOX_WARMUP_STARTED:
+            return
+        _SANDBOX_WARMUP_STARTED = True
+
+    def _warm() -> None:
+        try:
+            _get_headless_env_specs()
+            ctx = _get_sandbox_mp_context()
+            if getattr(ctx, "_name", "") == "forkserver":
+                import multiprocessing.forkserver as _fs
+                _fs.ensure_running()
+        except Exception:
+            pass
+
+    threading.Thread(target=_warm, name="sandbox-forkserver-warmup", daemon=True).start()
+
+
 def _sandbox_worker_exec(
     code_str: str,
     context: Dict[str, Any],
@@ -537,6 +609,8 @@ def _sandbox_worker_exec(
     max_memory_mb: int = 16384,
     max_cpu_seconds: int = 10,
     allowed_capabilities: Optional[List[str]] = None,
+    ingress_paths: Optional[List[str]] = None,
+    headless_env_specs: Optional[List[str]] = None,
 ) -> None:
     """
     Subprocess worker executing sandboxed code in strict process, resource,
@@ -554,9 +628,10 @@ def _sandbox_worker_exec(
 
     # Step 0: Configure headless environment for GUI, Audio, and Plotting
     try:
-        from lattice import TypeRegistry
-        reg = TypeRegistry.get_instance()
-        env_specs = list(reg.get_capabilities().get("headless_environment", []) or []) + list(reg.get_verification_semantics("headless_environment"))
+        if headless_env_specs is None:
+            env_specs = _get_headless_env_specs()
+        else:
+            env_specs = headless_env_specs
         for spec in env_specs:
             if "=" in spec:
                 k, v = spec.split("=", 1)
@@ -616,9 +691,8 @@ def _sandbox_worker_exec(
 
             if smoke_test:
                 try:
-                    from lattice import TypeRegistry
-                    raw_bound = TypeRegistry.get_instance().get_verification_semantics("smoke_test_loop_bound")
-                    loop_limit = int(next(iter(raw_bound))) if raw_bound else 5
+                    from config import settings as _sb_settings
+                    loop_limit = int(_sb_settings.smoke_test_loop_bound)
                 except Exception:
                     loop_limit = 5
                 bounder = ASTLoopBounder(max_iters=loop_limit)
@@ -662,6 +736,21 @@ def _sandbox_worker_exec(
             os.environ["TMPDIR"] = ephemeral_resolved
             os.environ["TEMP"] = ephemeral_resolved
             os.environ["TMP"] = ephemeral_resolved
+            # Stage verified relative ingress files (read-only copies) into ephemeral_dir
+            # so relative paths like 'input.csv' resolve inside the confined working dir
+            # without allowing writes back to the workspace copies.
+            ephemeral_root_p = Path(ephemeral_resolved)
+            for rel_in in ingress_paths or ():
+                rel_str = str(rel_in or "").strip()
+                if not rel_str or os.path.isabs(rel_str):
+                    continue
+                src_p = (Path(orig_cwd) / rel_str).resolve()
+                dst_p = (ephemeral_root_p / rel_str).resolve()
+                if not src_p.is_file() or not dst_p.is_relative_to(ephemeral_root_p):
+                    continue
+                dst_p.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(src_p), str(dst_p))
+            os.chdir(ephemeral_dir)
 
             # Step 4: Construct Sanitized Execution Environment
             safe_builtins: Dict[str, Any] = {}
@@ -738,6 +827,11 @@ def _sandbox_worker_exec(
                 "error": f"{type(exc).__name__}: {str(exc)}\n{formatted_exc}",
                 "results": {},
             })
+        finally:
+            try:
+                os.chdir(orig_cwd)
+            except Exception:
+                pass
 
 
 # ============================================================================
@@ -786,6 +880,13 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
             if not path_ports:
                 continue
 
+            try:
+                from .language_backend import get_active_language_backend
+            except (ImportError, ValueError):
+                from language_backend import get_active_language_backend
+            if not get_active_language_backend().is_python_ast:
+                continue
+
             # Replace {ph} with _nstl_ph_ph so ast.parse succeeds on code templates without regex
             parsed_tpl_code = tpl
             for ph in extract_template_placeholders(tpl):
@@ -803,7 +904,8 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
                 dest_states = (
                     set(reg_io.get_materialization_states() or ())
                     | set(reg_io.get_terminal_states() or ())
-                    | set(reg_io.get_verification_semantics("destination_states") or ())
+                    | reg_io.get_roles_for_category("destination")
+                    | reg_io.get_dest_port_tokens()
                 )
             except Exception:
                 is_term_role, is_in_role, dest_states = False, False, set()
@@ -907,6 +1009,7 @@ class GEVRSandbox:
         self.intents = intent_registry or TerminalIntentRegistry()
         self.state_protocols = state_registry or StateProtocolRegistry()
         self.allowed_capabilities = set(allowed_capabilities or set())
+        warmup_sandbox_async()
 
     @staticmethod
     def _verify_egress_paths(egress_paths: Optional[List[str]]) -> Dict[str, str]:
@@ -951,6 +1054,8 @@ class GEVRSandbox:
                     v_val = results[str(v_name)]
                     if v_val is None:
                         violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' evaluated to None.")
+                    elif isinstance(v_val, str) and v_val.startswith("<unpicklable:"):
+                        violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' was unpicklable ({v_val}).")
                     else:
                         try:
                             f_val = float(v_val)
@@ -984,6 +1089,18 @@ class GEVRSandbox:
                                     logger.debug("[SANDBOX] deliverable postcondition eval failed: %s", eval_err)
                 continue
 
+            if check.get("type") == "algebraic_partition_coherence":
+                if check.get("coherent") is False or (
+                    check.get("expected_partition") is not None
+                    and check.get("actual_partition") is not None
+                    and check.get("expected_partition") != check.get("actual_partition")
+                ):
+                    violations.append(
+                        check.get("violation")
+                        or f"Partition coherence failed at '{check.get('cell_id', 'unknown')}' on port '{check.get('port', '?')}'."
+                    )
+                continue
+
             expected_var = check.get("expected_var")
             actual_var = check.get("actual_var")
             if expected_var and actual_var:
@@ -993,7 +1110,14 @@ class GEVRSandbox:
                     identical = expected_val is actual_val
                     if not identical:
                         try:
-                            identical = bool(expected_val == actual_val)
+                            if hasattr(expected_val, "equals") and callable(expected_val.equals):
+                                identical = bool(expected_val.equals(actual_val))
+                            else:
+                                cmp_res = (expected_val == actual_val)
+                                if hasattr(cmp_res, "all") and callable(cmp_res.all):
+                                    identical = bool(cmp_res.all())
+                                else:
+                                    identical = bool(cmp_res)
                         except Exception:
                             identical = False
                     if not identical:
@@ -1045,7 +1169,41 @@ class GEVRSandbox:
         Execute code in a separate resource- and filesystem-confined process.
         """
         missing_inputs: List[str] = []
+        staged_inputs: List[str] = []
         egress_set: Set[str] = {str(p).strip() for p in (egress_paths or []) if p}
+
+        try:
+            try:
+                from .language_backend import get_active_language_backend
+            except (ImportError, ValueError):
+                from language_backend import get_active_language_backend
+            be_sb = get_active_language_backend()
+            if not be_sb.is_python_ast:
+                ok_sb, err_sb = be_sb.validate_syntax(code)
+                if not ok_sb:
+                    return {
+                        "success": False,
+                        "skipped": False,
+                        "status": "SYNTAX_ERROR",
+                        "returncode": 1,
+                        "stdout": "",
+                        "stderr": str(err_sb or "Syntax validation failed"),
+                        "error": str(err_sb or "Syntax validation failed"),
+                        "extrinsic": False,
+                    }
+                return {
+                    "success": False,
+                    "skipped": True,
+                    "status": "SKIPPED",
+                    "returncode": -1,
+                    "stdout": "",
+                    "stderr": "",
+                    "error": f"SKIPPED: non-Python runtime '{be_sb.runtime}' sandbox execution not configured",
+                    "extrinsic": False,
+                }
+        except Exception:
+            pass
+
         try:
             parsed_ast = ast.parse(code)
 
@@ -1055,13 +1213,22 @@ class GEVRSandbox:
                 _reg_sb = TypeRegistry.get_instance()
             except Exception:
                 _reg_sb = None
+            produced_vars: Set[str] = set()
+            for b in kwargs.get("pipeline_bindings") or []:
+                if isinstance(b, dict):
+                    ov = b.get("output_var")
+                    if isinstance(ov, str) and ov:
+                        produced_vars.add(ov)
+            for node in ast.walk(parsed_ast):
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                    produced_vars.add(node.id)
             for b in kwargs.get("pipeline_bindings") or []:
                 if isinstance(b, dict):
                     c_role = str(b.get("role", "") or b.get("node_role", "")).lower()
                     c_stage = b.get("stage")
                     if (_reg_sb is not None and _reg_sb.is_terminal_role(c_role)) or (c_stage is not None and c_stage >= 3):
                         for v in b.values():
-                            if isinstance(v, str) and not v.startswith("var_"):
+                            if isinstance(v, str) and v.split("[", 1)[0].strip() not in produced_vars:
                                 cln = v.strip("'\"")
                                 if "." in cln:
                                     egress_set.add(cln)
@@ -1115,29 +1282,33 @@ class GEVRSandbox:
                         if "r" in mode and not any(m in mode for m in ("w", "a", "x")):
                             is_ingress_call = True
 
+                    def _inspect_ingress_str(raw_s: str, flag_missing: bool = True) -> None:
+                        s = raw_s.strip()
+                        if s in egress_set:
+                            return
+                        _, raw_ext = os.path.splitext(s)
+                        clean_ext = raw_ext.lstrip(".").lower()
+                        if clean_ext and clean_ext.isalnum() and len(clean_ext) <= 6:
+                            if os.path.isfile(s) or os.path.isfile(os.path.abspath(s)):
+                                if s not in staged_inputs:
+                                    staged_inputs.append(s)
+                            elif flag_missing and s not in missing_inputs:
+                                missing_inputs.append(s)
+
                     if is_ingress_call:
                         for arg in node.args:
                             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                                s = arg.value.strip()
-                                if s in egress_set:
-                                    continue
-                                _, raw_ext = os.path.splitext(s)
-                                clean_ext = raw_ext.lstrip(".").lower()
-                                if clean_ext and clean_ext.isalnum() and len(clean_ext) <= 6:
-                                    if not os.path.exists(s) and not os.path.exists(os.path.abspath(s)):
-                                        if s not in missing_inputs:
-                                            missing_inputs.append(s)
+                                _inspect_ingress_str(arg.value, flag_missing=True)
                         for kw in node.keywords:
                             if (not ingress_kw_args or kw.arg in ingress_kw_args) and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                                s = kw.value.value.strip()
-                                if s in egress_set:
-                                    continue
-                                _, raw_ext = os.path.splitext(s)
-                                clean_ext = raw_ext.lstrip(".").lower()
-                                if clean_ext and clean_ext.isalnum() and len(clean_ext) <= 6:
-                                    if not os.path.exists(s) and not os.path.exists(os.path.abspath(s)):
-                                        if s not in missing_inputs:
-                                            missing_inputs.append(s)
+                                _inspect_ingress_str(kw.value.value, flag_missing=True)
+                    else:
+                        for arg in node.args:
+                            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                                _inspect_ingress_str(arg.value, flag_missing=False)
+                        for kw in node.keywords:
+                            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                                _inspect_ingress_str(kw.value.value, flag_missing=False)
         except Exception as ast_err:
             logger.debug("[SANDBOX] AST inspection for input files failed: %s", ast_err)
 
@@ -1159,8 +1330,9 @@ class GEVRSandbox:
 
         exec_timeout = timeout if timeout is not None else self.default_timeout
         context = context or {}
-        ctx = multiprocessing.get_context("spawn")
+        ctx = _get_sandbox_mp_context()
         parent_conn, child_conn = ctx.Pipe(duplex=False)
+        headless_env_specs = _get_headless_env_specs()
 
         smoke_test = bool(kwargs.get("smoke_test", False))
         mem_limit = int(kwargs.get("max_memory_mb", self.max_memory_mb))
@@ -1187,6 +1359,8 @@ class GEVRSandbox:
                 mem_limit,
                 cpu_limit,
                 allowed_caps,
+                staged_inputs,
+                headless_env_specs,
             ),
             daemon=True,
         )
