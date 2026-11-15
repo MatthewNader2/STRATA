@@ -176,25 +176,45 @@ class LatentVectorExtractor:
         # 2. Try optimal local SentenceTransformer embedding model
         try:
             try:
-                from .inference import select_optimal_embedder
+                from .inference import (
+                    select_optimal_embedder,
+                    _resolve_embedder_task,
+                    _build_embedder_model_kwargs,
+                    _cast_embedder_half_precision,
+                    _encode_with_modes,
+                )
             except (ImportError, ValueError):
-                from inference import select_optimal_embedder
+                from inference import (
+                    select_optimal_embedder,
+                    _resolve_embedder_task,
+                    _build_embedder_model_kwargs,
+                    _cast_embedder_half_precision,
+                    _encode_with_modes,
+                )
             opt_emb = select_optimal_embedder(model_name or "")
             emb_path = os.path.join(emb_dir, opt_emb)
             if os.path.isdir(emb_path):
                 from sentence_transformers import SentenceTransformer
                 import torch
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
-                if device == "cuda":
-                    try:
-                        self._model = self._model.to(torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16)
-                        torch.cuda.empty_cache()
-                    except Exception:
-                        pass
+                task_name = _resolve_embedder_task(emb_path)
+                model_kwargs = _build_embedder_model_kwargs(task_name, device)
+                try:
+                    self._model = SentenceTransformer(
+                        emb_path, device=device, trust_remote_code=True, model_kwargs=model_kwargs
+                    )
+                except TypeError:
+                    fallback_mk = {"default_task": task_name} if task_name else {}
+                    if fallback_mk:
+                        self._model = SentenceTransformer(
+                            emb_path, device=device, trust_remote_code=True, model_kwargs=fallback_mk
+                        )
+                    else:
+                        self._model = SentenceTransformer(emb_path, device=device, trust_remote_code=True)
+                self._model = _cast_embedder_half_precision(self._model, device)
                 self._backend = "sentence_transformers"
-                sample = self._model.encode("probe", normalize_embeddings=True)
-                self._dim = int(sample.shape[-1])
+                sample = _encode_with_modes(self._model, ["probe"], mode="document")
+                self._dim = len(sample[0]) if sample and sample[0] else 0
                 logger.info(
                     "[COGNITIVE PATHFINDER] Loaded optimal embedder '%s' on %s (dim=%d)",
                     opt_emb,
@@ -273,8 +293,12 @@ class LatentVectorExtractor:
                 return self._cache[text]
 
             if self._backend == "sentence_transformers" and self._model is not None:
-                vec = self._model.encode(text, normalize_embeddings=True)
-                raw_vec = np.array(vec, dtype=np.float32)
+                try:
+                    from .inference import _encode_with_modes
+                except (ImportError, ValueError):
+                    from inference import _encode_with_modes
+                vecs = _encode_with_modes(self._model, [text], mode="document")
+                raw_vec = np.array(vecs[0], dtype=np.float32) if vecs else np.zeros(self._dim, dtype=np.float32)
                 norm = float(np.linalg.norm(raw_vec))
                 norm_vec = raw_vec / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
 
@@ -322,7 +346,11 @@ class LatentVectorExtractor:
 
             if uncached_texts:
                 if self._backend == "sentence_transformers" and self._model is not None:
-                    vecs = self._model.encode(uncached_texts, normalize_embeddings=True)
+                    try:
+                        from .inference import _encode_with_modes
+                    except (ImportError, ValueError):
+                        from inference import _encode_with_modes
+                    vecs = _encode_with_modes(self._model, uncached_texts, mode="document")
                     for idx, vec in zip(uncached_indices, vecs):
                         raw_vec = np.array(vec, dtype=np.float32)
                         norm = float(np.linalg.norm(raw_vec))

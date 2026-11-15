@@ -3,17 +3,7 @@ src/tokenizer.py - STRATA (Symbolic Topological Routing Architecture for Typed A
 Domain-Agnostic Sub-Word and Identifier Tokenizer.
 
 Deterministic, mathematically formal character-level transition scanner.
-Zero regular expressions.
-
-Morphological normalization is provided by an OPT-IN English Porter-class
-suffix stripper. It is applied IDENTICALLY to prompt tokens and identifier
-tokens when enabled, so English morphological variants ("testing"/"test",
-"training"/"train", "regression"/"regressor", "normalized"/"normalize")
-collapse to the same token. The stemmer is (a) gated by the module-level
-`ENABLE_ENGLISH_STEMMING` flag and (b) applied only to purely ASCII-alphabetic
-tokens. Non-Latin scripts and any token containing digits or symbols pass
-through unchanged. This is an English-language heuristic, not a universal
-normalizer; disabling the flag yields a purely character-level tokenizer.
+Zero regular expressions and zero English-language morphological or stopword heuristics.
 """
 
 from __future__ import annotations
@@ -24,8 +14,6 @@ from typing import Set, Tuple, List
 # --------------------------------------------------------------------------- #
 # Universal token normalizer
 # --------------------------------------------------------------------------- #
-
-ENABLE_ENGLISH_STEMMING: bool = False
 
 
 @functools.lru_cache(maxsize=32768)
@@ -120,10 +108,6 @@ def _tokenize_identifier_cached(identifier: str, expand_aliases: bool = True) ->
         t = "".join(chunk).lower().strip()
         if len(t) > 1:
             tokens.add(t)
-            if ENABLE_ENGLISH_STEMMING:
-                s = normalize_token(t)
-                if len(s) > 1:
-                    tokens.add(s)
 
     seg, chunk = [], []
     for ch in clean:
@@ -191,9 +175,7 @@ class CellTokenizer:
     def tokenize_identifier(cls, identifier: str) -> Set[str]:
         """
         Splits camelCase, snake_case, kebab-case, and dotted identifiers into distinct sub-tokens
-        using a deterministic character-level transition scanner. Each emitted token is paired
-        with its morphological stem (when the English stemmer is enabled) so cross-side variant
-        matches succeed symmetrically.
+        using a deterministic character-level transition scanner.
         """
         if not identifier:
             return set()
@@ -207,10 +189,10 @@ class CellTokenizer:
         return _tokenize_identifier_cached(str(identifier), not _is_profile_zero())
 
     @classmethod
-    def tokenize_prompt(cls, prompt: str, remove_stopwords: bool = False) -> Set[str]:
+    def tokenize_prompt(cls, prompt: str) -> Set[str]:
         if not prompt:
             return set()
-        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), len(_ALIASES), ENABLE_ENGLISH_STEMMING))
+        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), len(_ALIASES)))
 
     @classmethod
     def tokenize_cell(cls, cell_id: str, keywords: Set[str]) -> Set[str]:
@@ -339,7 +321,6 @@ def _tokenize_prompt_cached(
     prompt: str,
     profile_zero: bool,
     aliases_len: int,
-    stemming_enabled: bool,
 ) -> Tuple[str, ...]:
     tokens = set()
     cur = []
@@ -351,19 +332,11 @@ def _tokenize_prompt_cached(
                 w = "".join(cur)
                 if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
                     tokens.add(w)
-                    if stemming_enabled and w.isalpha():
-                        s = normalize_token(w)
-                        if len(s) > 1:
-                            tokens.add(s)
                 cur = []
     if cur:
         w = "".join(cur)
         if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
             tokens.add(w)
-            if stemming_enabled and w.isalpha():
-                s = normalize_token(w)
-                if len(s) > 1:
-                    tokens.add(s)
     for raw in prompt.split():
         cw = raw.strip(",;.:!?()[]{}\'\"")
         if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):

@@ -75,7 +75,8 @@ class TestMonteCarloEngine(unittest.TestCase):
 
 class TestStaticAnalyses(unittest.TestCase):
     def test_column_read_before_it_is_defined_is_found(self):
-        from row_lineage import analyze_column_definitions
+        from preflight import PreflightLinter
+        analyze_column_definitions = PreflightLinter._verify_causal_key_def_use
         read = _Cell("READ", path=None)
         fit = _Cell("FIT", X=None, y=None)
         setc = _Cell("SET", df="data_carrier", column="column_key", value="assigned_value")
@@ -88,7 +89,8 @@ class TestStaticAnalyses(unittest.TestCase):
         self.assertEqual([(i["column"], i["read_at"], i["defined_at"]) for i in issues], [("Z", 1, 2)])
 
     def test_updating_a_column_is_not_use_before_define(self):
-        from row_lineage import analyze_column_definitions
+        from preflight import PreflightLinter
+        analyze_column_definitions = PreflightLinter._verify_causal_key_def_use
         setc = _Cell("SET", df="data_carrier", column="column_key", value="assigned_value")
         bindings = [
             (_Cell("READ", path=None), {"path": "'in.csv'", "output_var": "var_1"}),

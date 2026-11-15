@@ -108,6 +108,7 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                         float(_o.get("name_precision", 0.0)),
                         float(_o.get("precision", 0.0)),
                         float(_o.get("f", 0.0)),
+                        float(_o.get("recall", 0.0)),
                     )
                     if conf <= locked_tau and len(anchor_pool) > 1:
                         self._trace("m6_anchor_unlocked_low_precision", cell=c.cell_id, clause_idx=idx, confidence=round(conf, 3))

@@ -156,15 +156,26 @@ class M10MonteCarloRouteMethod(RouteMethod):
                 nxt = proto[cid]
                 if cur:
                     if not (self.step_unifies(cur[-1], nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur)):
-                        br = self.find_bridge(cur[-1], nxt, pool, orch, prev_path=cur)
-                        if br is not None:
+                        # Try up to 2 ancestor bridges (covers 2-branch join cells like fit(X, y) or property repair)
+                        bridged_ok = False
+                        used_br_ids: set = set()
+                        for _attempt in range(2):
+                            br = None
+                            for anc in reversed(cur):
+                                cand_br = self.find_bridge(anc, nxt, pool, orch, prev_path=cur)
+                                if cand_br is not None and cand_br.cell_id not in used_br_ids:
+                                    br = cand_br
+                                    break
+                            if br is None:
+                                break
+                            used_br_ids.add(br.cell_id)
                             cur.append(br)
                             appended.append((br.cell_id, idx))
                             proto.setdefault(br.cell_id, br)
-                            if not (self.step_unifies(br, nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur)):
-                                connect_cache[ckey] = None
-                                return None
-                        else:
+                            if self.step_unifies(br, nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur):
+                                bridged_ok = True
+                                break
+                        if not bridged_ok:
                             tagged = nxt.clone() if hasattr(nxt, "clone") else nxt
                             tagged.matched_clause_idx = idx
                             tagged.clause_literals = list(literals[idx])
@@ -182,6 +193,15 @@ class M10MonteCarloRouteMethod(RouteMethod):
                             cur.append(prod)
                             appended.append((prod.cell_id, idx))
                             proto.setdefault(prod.cell_id, prod)
+                            if not (self.step_unifies(cur[-1], nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur)):
+                                nbr = self.find_bridge(cur[-1], nxt, pool, orch, prev_path=cur)
+                                if nbr is not None:
+                                    cur.append(nbr)
+                                    appended.append((nbr.cell_id, idx))
+                                    proto.setdefault(nbr.cell_id, nbr)
+                                if not (self.step_unifies(cur[-1], nxt, prev_path=cur) or self.step_unifies_dag(nxt, cur)):
+                                    connect_cache[ckey] = None
+                                    return None
                 cur.append(nxt)
                 appended.append((cid, idx))
             connect_cache[ckey] = appended
@@ -274,7 +294,16 @@ class M10MonteCarloRouteMethod(RouteMethod):
                 return 0.0
             if path_t in unif_reward_cache:
                 return unif_reward_cache[path_t]
-            mat_cells = _finalize_cells(materialize(path_t))
+            raw_cells = materialize(path_t)
+            # Fast coverage audit before paying heavy property-bridge/unification cost on empty rollouts
+            raw_res = _audit(raw_cells, prompt, orch)
+            raw_infos = [c for c in raw_res.get("clauses", []) if c["status"] in ("served", "UNSERVED")]
+            raw_served = (sum(1 for c in raw_infos if c["status"] == "served") / len(raw_infos)) if raw_infos else 0.0
+            if raw_served <= 0.0:
+                unif_reward_cache[path_t] = 0.0
+                return 0.0
+
+            mat_cells = _finalize_cells(raw_cells)
             # Fast structural port-compatibility check between adjacent steps
             compat_factor = 1.0
             for i in range(len(mat_cells) - 1):

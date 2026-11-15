@@ -443,7 +443,7 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 440.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Frequency of sine wave in Hz.",
           "structure_kind": "scalar",
@@ -470,7 +470,7 @@
           "state": "duration_sec",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 1.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Duration in seconds.",
           "structure_kind": "scalar",
@@ -603,7 +603,7 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 440.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Frequency of square wave in Hz.",
           "structure_kind": "scalar",
@@ -630,7 +630,7 @@
           "state": "duration_sec",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 1.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Duration in seconds.",
           "structure_kind": "scalar",
@@ -791,7 +791,7 @@
           "state": "duration_sec",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 1.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Duration in seconds.",
           "structure_kind": "scalar",
@@ -924,7 +924,7 @@
           "state": "duration_sec",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 1.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Duration in seconds.",
           "structure_kind": "scalar",
@@ -1057,7 +1057,7 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 20.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Starting frequency in Hz.",
           "structure_kind": "scalar",
@@ -1084,7 +1084,7 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 2000.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Terminal frequency in Hz.",
           "structure_kind": "scalar",
@@ -1111,7 +1111,7 @@
           "state": "duration_sec",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 2.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Duration of sweep in seconds.",
           "structure_kind": "scalar",
@@ -1250,7 +1250,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -2066,7 +2066,6 @@
       "semantic_tags": [
         "normalize",
         "peak_normalization",
-        "gain",
         "audio_scaling"
       ],
       "inputs": {
@@ -2311,7 +2310,7 @@
           "state": "db_scale",
           "abstract_type": "scalar",
           "required": true,
-          "default_value": 0.0,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Gain adjustment in decibels.",
           "structure_kind": "scalar",
@@ -2420,7 +2419,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -2491,7 +2490,7 @@
           "invariants": []
         }
       },
-      "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n_ramp = np.linspace(0.0, 1.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(0.0, 1.0, _samples)\n{faded_waveform} = {waveform}.copy()\n{faded_waveform}[:_samples] = {faded_waveform}[:_samples] * _ramp",
+      "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n{faded_waveform} = np.concatenate([{waveform}[:_samples] * (np.linspace(0.0, 1.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(0.0, 1.0, _samples)), {waveform}[_samples:]], axis=0)",
       "dependencies": [
         "import numpy as np"
       ],
@@ -2559,7 +2558,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -2630,7 +2629,7 @@
           "invariants": []
         }
       },
-      "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n_ramp = np.linspace(1.0, 0.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(1.0, 0.0, _samples)\n{faded_waveform} = {waveform}.copy()\n{faded_waveform}[-_samples:] = {faded_waveform}[-_samples:] * _ramp",
+      "code_template": "_samples = min(int({sample_rate} * {fade_duration}), len({waveform}))\n{faded_waveform} = np.concatenate([{waveform}[:-_samples], {waveform}[-_samples:] * (np.linspace(1.0, 0.0, _samples)[:, None] if {waveform}.ndim > 1 else np.linspace(1.0, 0.0, _samples))], axis=0) if _samples > 0 else {waveform}.copy()",
       "dependencies": [
         "import numpy as np"
       ],
@@ -2692,8 +2691,8 @@
           "type_name": "float",
           "state": "max_amplitude",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": 1.0,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Symmetric clipping threshold boundary.",
           "structure_kind": "scalar",
@@ -2804,7 +2803,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -2902,7 +2901,7 @@
           "invariants": []
         }
       },
-      "code_template": "_s = max(0, int({start_sec} * {sample_rate}))\n_e = min(len({waveform}), int({end_sec} * {sample_rate}))\n{sliced_waveform} = {waveform}[_s:_e]",
+      "code_template": "{sliced_waveform} = {waveform}[max(0, int({start_sec} * {sample_rate})):min(len({waveform}), int({end_sec} * {sample_rate}))]",
       "dependencies": [],
       "primary_in": "waveform",
       "primary_out": "sliced_waveform",
@@ -3012,7 +3011,7 @@
           "invariants": []
         }
       },
-      "code_template": "_mask = np.max(np.abs({waveform}), axis=-1) > {threshold} if {waveform}.ndim > 1 else np.abs({waveform}) > {threshold}\n_idx = np.where(_mask)[0]\n{trimmed_waveform} = {waveform}[_idx[0]:_idx[-1] + 1] if len(_idx) > 0 else {waveform}[:0]",
+      "code_template": "_idx = np.where(np.max(np.abs({waveform}), axis=-1) > {threshold} if {waveform}.ndim > 1 else np.abs({waveform}) > {threshold})[0]\n{trimmed_waveform} = {waveform}[_idx[0]:_idx[-1] + 1] if len(_idx) > 0 else {waveform}[:0]",
       "dependencies": [
         "import numpy as np"
       ],
@@ -3253,7 +3252,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -3351,7 +3350,7 @@
           "invariants": []
         }
       },
-      "code_template": "_n_start = int({pad_start_sec} * {sample_rate})\n_n_end = int({pad_end_sec} * {sample_rate})\n_pad_width = ((_n_start, _n_end), (0, 0)) if {waveform}.ndim > 1 else ((_n_start, _n_end),)\n{padded_waveform} = np.pad({waveform}, _pad_width, mode='constant')",
+      "code_template": "{padded_waveform} = np.pad({waveform}, ((int({pad_start_sec} * {sample_rate}), int({pad_end_sec} * {sample_rate})), (0, 0)) if {waveform}.ndim > 1 else ((int({pad_start_sec} * {sample_rate}), int({pad_end_sec} * {sample_rate})),), mode='constant')",
       "dependencies": [
         "import numpy as np"
       ],
@@ -3419,7 +3418,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -3446,7 +3445,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 22050,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -3515,7 +3514,7 @@
           "invariants": []
         }
       },
-      "code_template": "_target_num = int(round(len({waveform}) * float({target_sr}) / float({orig_sr})))\n{resampled_waveform} = signal.resample({waveform}, _target_num, axis=0).astype({waveform}.dtype)\n{new_sr} = int({target_sr})",
+      "code_template": "{resampled_waveform}, {new_sr} = signal.resample({waveform}, int(round(len({waveform}) * float({target_sr}) / float({orig_sr}))), axis=0).astype({waveform}.dtype), int({target_sr})",
       "dependencies": [
         "from scipy import signal"
       ],
@@ -3576,7 +3575,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -3674,7 +3673,7 @@
           "invariants": []
         }
       },
-      "code_template": "_delay_samples = int({delay_sec} * {sample_rate})\n_pad_shape = (_delay_samples, {waveform}.shape[1]) if {waveform}.ndim > 1 else (_delay_samples,)\n_delayed = np.concatenate([np.zeros(_pad_shape, dtype={waveform}.dtype), {waveform}], axis=0)\n_original = np.concatenate([{waveform}, np.zeros(_pad_shape, dtype={waveform}.dtype)], axis=0)\n{echo_waveform} = _original + {decay} * _delayed",
+      "code_template": "_pad = np.zeros((int({delay_sec} * {sample_rate}), {waveform}.shape[1]) if {waveform}.ndim > 1 else (int({delay_sec} * {sample_rate}),), dtype={waveform}.dtype)\n{echo_waveform} = np.concatenate([{waveform}, _pad], axis=0) + {decay} * np.concatenate([_pad, {waveform}], axis=0)",
       "dependencies": [
         "import numpy as np"
       ],
@@ -3742,7 +3741,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -3931,7 +3930,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4061,7 +4060,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4250,7 +4249,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4321,7 +4320,7 @@
           "invariants": []
         }
       },
-      "code_template": "_n_freqs = {spectrogram}.shape[0]\n_m_pts = np.linspace(0.0, 2595.0 * np.log10(1.0 + ({sample_rate} / 2.0) / 700.0), {n_mels} + 2)\n_hz_pts = 700.0 * (10.0 ** (_m_pts / 2595.0) - 1.0)\n_bins = np.clip(np.floor((_n_freqs - 1) * 2 * _hz_pts / {sample_rate}).astype(int), 0, _n_freqs - 1)\n_fb = np.zeros(({n_mels}, _n_freqs), dtype=np.float32)\nfor _i in range(1, {n_mels} + 1):\n    if _bins[_i] > _bins[_i - 1]:\n        _fb[_i - 1, _bins[_i - 1]:_bins[_i]] = np.linspace(0.0, 1.0, _bins[_i] - _bins[_i - 1], endpoint=False)\n    if _bins[_i + 1] > _bins[_i]:\n        _fb[_i - 1, _bins[_i]:_bins[_i + 1]] = np.linspace(1.0, 0.0, _bins[_i + 1] - _bins[_i], endpoint=False)\n{mel_spectrogram} = np.dot(_fb, {spectrogram})",
+      "code_template": "_freqs, _m = np.linspace(0.0, {sample_rate} / 2.0, {spectrogram}.shape[0]), 700.0 * (10.0 ** (np.linspace(0.0, 2595.0 * np.log10(1.0 + ({sample_rate} / 2.0) / 700.0), {n_mels} + 2) / 2595.0) - 1.0)\n{mel_spectrogram} = np.maximum(0.0, np.minimum((_freqs[None, :] - _m[:-2, None]) / np.maximum(_m[1:-1, None] - _m[:-2, None], 1e-12), (_m[2:, None] - _freqs[None, :]) / np.maximum(_m[2:, None] - _m[1:-1, None], 1e-12))).astype(np.float32) @ {spectrogram}",
       "dependencies": [
         "import numpy as np"
       ],
@@ -4592,7 +4591,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4613,7 +4612,8 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 1000.0,
+          "default_value": 4000.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Cutoff frequency in Hz.",
           "structure_kind": "scalar",
@@ -4640,7 +4640,8 @@
           "state": "filter_order",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 5,
+          "default_value": 4,
+          "value_constraints": {"min": 1},
           "port_role": "configuration",
           "description": "Butterworth filter order.",
           "structure_kind": "scalar",
@@ -4765,7 +4766,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4786,7 +4787,8 @@
           "state": "frequency_hz",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 300.0,
+          "default_value": 100.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Highpass cutoff frequency in Hz.",
           "structure_kind": "scalar",
@@ -4813,7 +4815,8 @@
           "state": "filter_order",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 5,
+          "default_value": 4,
+          "value_constraints": {"min": 1},
           "port_role": "configuration",
           "description": "Butterworth filter order.",
           "structure_kind": "scalar",
@@ -4931,7 +4934,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -4953,6 +4956,7 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 300.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Lower passband edge in Hz.",
           "structure_kind": "scalar",
@@ -4980,6 +4984,7 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 3000.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Upper passband edge in Hz.",
           "structure_kind": "scalar",
@@ -5006,7 +5011,8 @@
           "state": "filter_order",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 5,
+          "default_value": 4,
+          "value_constraints": {"min": 1},
           "port_role": "configuration",
           "description": "Filter order.",
           "structure_kind": "scalar",
@@ -5124,7 +5130,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -5146,6 +5152,7 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 60.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Frequency to notch out in Hz.",
           "structure_kind": "scalar",
@@ -5173,6 +5180,7 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 30.0,
+          "value_constraints": {"exclusive_min": 0},
           "port_role": "configuration",
           "description": "Quality factor Q of the notch filter.",
           "structure_kind": "scalar",
@@ -5330,7 +5338,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -5480,7 +5488,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 44100,
+          "default_value": null,
           "carrier": "sample_rate",
           "layout": {
             "rank": 0,
@@ -5530,7 +5538,7 @@
           "invariants": []
         }
       },
-      "code_template": "_pcm = np.clip({waveform}, -1.0, 1.0)\n_pcm_16 = (_pcm * 32767).astype(np.int16) if np.issubdtype({waveform}.dtype, np.floating) else {waveform}\nwavfile.write({filepath}, {sample_rate}, _pcm_16)\n{out_path} = {filepath}",
+      "code_template": "wavfile.write({filepath}, {sample_rate}, (np.clip({waveform}, -1.0, 1.0) * 32767).astype(np.int16) if np.issubdtype({waveform}.dtype, np.floating) else {waveform})\n{out_path} = {filepath}",
       "dependencies": [
         "from scipy.io import wavfile",
         "import numpy as np"
@@ -5624,8 +5632,8 @@
           "type_name": "sample_rate",
           "state": "frequency_hz",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": 44100,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Sampling frequency in Hz for axis frequency mapping.",
           "structure_kind": "scalar",
@@ -5681,7 +5689,7 @@
           "invariants": []
         }
       },
-      "code_template": "_extent = [0, {spectrogram}.shape[1], 0, float({sample_rate}) / 2.0]\n_fig, _ax = plt.subplots(figsize=(10, 4))\n_im = _ax.imshow({spectrogram}, origin='lower', aspect='auto', cmap='magma', extent=_extent)\n_ax.set_title('Spectrogram')\n_ax.set_xlabel('Time Frame')\n_ax.set_ylabel('Frequency (Hz)')\n_fig.colorbar(_im, ax=_ax)\n_fig.tight_layout()\n_fig.savefig({image_path}, dpi=150)\nplt.close(_fig)\n{out_image_path} = {image_path}",
+      "code_template": "plt.imsave({image_path}, {spectrogram}, origin='lower', cmap='magma')\n{out_image_path} = {image_path}",
       "dependencies": [
         "import matplotlib.pyplot as plt"
       ],
@@ -5767,8 +5775,8 @@
           "type_name": "sample_rate",
           "state": "frequency_hz",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": 44100,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Sampling rate in Hz for time-axis scaling.",
           "structure_kind": "scalar",
@@ -5824,7 +5832,7 @@
           "invariants": []
         }
       },
-      "code_template": "_fig, _ax = plt.subplots(figsize=(10, 3))\n_time_axis = np.linspace(0.0, len({waveform}) / float({sample_rate}), len({waveform}), endpoint=False)\n_ax.plot(_time_axis, {waveform}, linewidth=0.5)\n_ax.set_title('Waveform Envelope')\n_ax.set_xlabel('Time (s)')\n_ax.set_ylabel('Amplitude')\n_fig.tight_layout()\n_fig.savefig({image_path}, dpi=150)\nplt.close(_fig)\n{out_image_path} = {image_path}",
+      "code_template": "(_fig := plt.figure(figsize=(10, 3))).add_subplot(111).plot(np.linspace(0.0, len({waveform}) / float({sample_rate}), len({waveform}), endpoint=False), {waveform}, linewidth=0.5)\n{out_image_path} = ({image_path}, _fig.axes[0].set(title='Waveform Envelope', xlabel='Time (s)', ylabel='Amplitude'), _fig.tight_layout(), _fig.savefig({image_path}, dpi=150), plt.close(_fig))[0]",
       "dependencies": [
         "import matplotlib.pyplot as plt",
         "import numpy as np"

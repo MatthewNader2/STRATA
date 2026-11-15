@@ -123,7 +123,7 @@ class TypeCoercionStage:
     Stage 2 of Unification:
     Resolves poset subtype compatibility, heterogeneous tuple/product member
     projections (`var[i]`), and declared bridge-morphism coercion expressions
-    (e.g. `table -> series -> ndarray`).
+    over arbitrary container/element carriers in the type lattice.
     """
 
     def __init__(self, gate: Any) -> None:
@@ -146,16 +146,6 @@ class TypeCoercionStage:
             dst_sig=dst_sig,
             ctx=ctx,
         )
-
-    def rederive_stale_series(
-        self,
-        cell: Cell,
-        port_name: str,
-        var_name: str,
-        ctx: ExecutionContext,
-        registry: TypeRegistry,
-    ) -> Optional[str]:
-        return None
 
 
 class ScopeResolutionStage:

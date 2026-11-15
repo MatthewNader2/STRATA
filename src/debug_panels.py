@@ -26,6 +26,7 @@ def render_planning_diagnostics(console: Any, router: Any, cells: List[Any], pro
         for col in ("Clause", "Cell", "Recall", "Name-P", "Prec", "F", "Matched tokens", "Verdict"):
             cand.add_column(col, overflow="fold")
         shown: Dict[int, int] = {}
+        anchor_rows = 0
         for e in trace:
             if e.get("event") != "anchor_candidate" or "accepted" not in e or "clause_idx" not in e:
                 continue
@@ -40,44 +41,55 @@ def render_planning_diagnostics(console: Any, router: Any, cells: List[Any], pro
             cand.add_row(str(cl_idx + 1), str(e.get("cell", "")), f'{float(e.get("recall", 0.0)):.3f}', f'{float(e.get("name_precision", 0.0)):.3f}',
                          f'{float(e.get("precision", 0.0)):.3f}', f'{float(e.get("f", 0.0)):.3f}', ",".join(e.get("tokens") or ()),
                          ("[green]ACCEPT[/green] " if accepted else "[dim]rejected[/dim] ") + str(e.get("reason", ""))[:48])
+            anchor_rows += 1
+        if anchor_rows == 0:
+            for e in trace:
+                if e.get("event") != "omega_target_candidates":
+                    continue
+                tgt = e.get("target")
+                cl_str = str(tgt[0] + 1) if isinstance(tgt, (tuple, list)) and tgt else str(tgt)
+                c_list = list(e.get("candidates") or ())
+                cand.add_row(cl_str, ", ".join(str(x) for x in c_list[:4]), "-", "-", "-", "-", "-", "[cyan]OMEGA target[/cyan]")
         console.print(cand)
         for e in trace:
-            if e["event"] == "anchor_dropped":
-                console.print(f"[bold red]✗ ANCHOR DROPPED[/bold red] {e['cell']} (clause {e['clause_idx'] + 1 if e['clause_idx'] is not None else '?'}): {e['reason']}\n"
-                              f"    needs: {e['needs']}\n    ancestor outputs: {e['ancestor_outputs']}")
-            elif e["event"] == "method_fallback":
-                console.print(f"[bold yellow]⚠ METHOD FELL BACK[/bold yellow] requested {e['requested']} → effective {e['to']}: {e['reason']}\n"
-                              f"    (the path below is {e['to']}'s, not {e['requested']}'s)")
-            elif e["event"] == "mcts_space":
-                console.print(f"[bold cyan]🎲 MONTE CARLO SEARCH SPACE[/bold cyan] {e['clauses']} clauses; alternatives per clause "
-                              f"(tied evidence): {[[g[0] if len(g) == 1 else g for g in gl] for gl in e['groups']]}; "
-                              f"bridge candidates (tree postconditions that satisfy preconditions): {e['bridges']}")
-            elif e["event"] == "mcts_summary":
+            ev = e.get("event")
+            if ev == "anchor_dropped":
+                _cidx = e.get("clause_idx")
+                console.print(f"[bold red]✗ ANCHOR DROPPED[/bold red] {e.get('cell')} (clause {_cidx + 1 if _cidx is not None else '?'}): {e.get('reason', '')}\n"
+                              f"    needs: {e.get('needs')}\n    ancestor outputs: {e.get('ancestor_outputs')}")
+            elif ev == "method_fallback":
+                console.print(f"[bold yellow]⚠ METHOD FELL BACK[/bold yellow] requested {e.get('requested')} → effective {e.get('to')}: {e.get('reason', '')}\n"
+                              f"    (the path below is {e.get('to')}'s, not {e.get('requested')}'s)")
+            elif ev == "mcts_space":
+                console.print(f"[bold cyan]🎲 MONTE CARLO SEARCH SPACE[/bold cyan] {e.get('clauses')} clauses; alternatives per clause "
+                              f"(tied evidence): {[[g[0] if len(g) == 1 else g for g in gl] for gl in (e.get('groups') or [])]}; "
+                              f"bridge candidates (tree postconditions that satisfy preconditions): {e.get('bridges')}")
+            elif ev == "mcts_summary":
                 v = e.get("verdict") or {}
-                console.print(f"[bold cyan]🎲 MONTE CARLO RESULT[/bold cyan] iterations={e['iterations']} distinct evaluations={e['evaluations']} "
-                              f"cache hits={e['cache_hits']} seed={e['seed']} {e['elapsed_ms']} ms (stopped by {e['stopped_by']}); "
-                              f"best reward={e['best_reward']}  verdict: served={v.get('served')} quality={v.get('quality')} "
+                console.print(f"[bold cyan]🎲 MONTE CARLO RESULT[/bold cyan] iterations={e.get('iterations')} distinct evaluations={e.get('evaluations')} "
+                              f"cache hits={e.get('cache_hits')} seed={e.get('seed')} {e.get('elapsed_ms')} ms (stopped by {e.get('stopped_by')}); "
+                              f"best reward={e.get('best_reward')}  verdict: served={v.get('served')} quality={v.get('quality')} "
                               f"violations={v.get('violations')} {v.get('first') or ''}")
                 tb = _t("🎲 Root statistics (UCT): how the budget was spent")
                 for col in ("First decision", "Visits", "Mean reward"):
                     tb.add_column(col, overflow="fold")
                 for r in e.get("root", []):
-                    tb.add_row(str(r["action"]), str(r["visits"]), str(r["mean_reward"]))
+                    tb.add_row(str(r.get("action")), str(r.get("visits")), str(r.get("mean_reward")))
                 console.print(tb)
-                console.print(f"    most-visited line: {[(x['action'], x['visits']) for x in e.get('best_line', [])]}")
-            elif e["event"] in ("mcts_bridge_removed", "mcts_baseline_kept"):
-                console.print(f"[cyan]🎲 {e['event']}[/cyan] {({k: v for k, v in e.items() if k != 'event'})}")
-            elif e["event"] in ("pruned_unrequested", "prune_blocked"):
-                col = "green" if e["event"] == "pruned_unrequested" else "yellow"
-                console.print(f"[bold {col}]✂ {e['event'].upper()}[/bold {col}] {e['cell']}: {e['reason']} (better explained by {e.get('winners')})")
-            elif e["event"] in ("column_commit_inserted", "column_commit_blocked"):
-                col = "green" if e["event"] == "column_commit_inserted" else "yellow"
-                console.print(f"[bold {col}]↩ {e['event'].upper()}[/bold {col}] {e.get('commit')} after {e['after']} "
-                              f"(column {e.get('column')}): {e['reason']}")
-            elif e["event"] == "producer_inserted":
-                console.print(f"[bold green]+ PRODUCER INSERTED[/bold green] {e['cell']} for {e['for_anchor']}: {e['reason']}")
-            elif e["event"] in ("anchor_fallback_retrieval_only", "clause_without_anchor"):
-                console.print(f"[yellow]! {e['event']}[/yellow] {e}")
+                console.print(f"    most-visited line: {[(x.get('action'), x.get('visits')) for x in e.get('best_line', [])]}")
+            elif ev in ("mcts_bridge_removed", "mcts_baseline_kept"):
+                console.print(f"[cyan]🎲 {ev}[/cyan] {({k: v for k, v in e.items() if k != 'event'})}")
+            elif ev in ("pruned_unrequested", "prune_blocked"):
+                col = "green" if ev == "pruned_unrequested" else "yellow"
+                console.print(f"[bold {col}]✂ {ev.upper()}[/bold {col}] {e.get('cell')}: {e.get('reason', '')} (better explained by {e.get('winners')})")
+            elif ev in ("column_commit_inserted", "column_commit_blocked"):
+                col = "green" if ev == "column_commit_inserted" else "yellow"
+                console.print(f"[bold {col}]↩ {ev.upper()}[/bold {col}] {e.get('commit', e.get('cell'))} after {e.get('after')} "
+                              f"(column {e.get('column')}): {e.get('reason', '')}")
+            elif ev == "producer_inserted":
+                console.print(f"[bold green]+ PRODUCER INSERTED[/bold green] {e.get('cell')} for {e.get('for_anchor')}: {e.get('reason', '')}")
+            elif ev in ("anchor_fallback_retrieval_only", "clause_without_anchor"):
+                console.print(f"[yellow]! {ev}[/yellow] {e}")
     dec = list(getattr(router, "last_tagging_decisions", []) or [])
     if dec:
         tg = _t("🏷️ Clause Tagging Decisions (a cell outranked on a clause stays untagged)")

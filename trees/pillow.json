@@ -1802,7 +1802,7 @@
           "type_name": "tuple",
           "state": "dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Image size specified as a (width, height) tuple.",
           "domain": "Pillow",
           "required": true,
@@ -1839,7 +1839,8 @@
           },
           "semantics": "pillow.dimensions",
           "typestate": "pillow::dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "name": "color",
@@ -2008,7 +2009,7 @@
           "type_name": "tuple",
           "state": "dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Image dimensions as (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -2045,7 +2046,8 @@
           },
           "semantics": "pillow.dimensions",
           "typestate": "pillow::dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "name": "color",
@@ -2212,7 +2214,7 @@
           "type_name": "tuple",
           "state": "dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Image dimensions as (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -2249,7 +2251,8 @@
           },
           "semantics": "pillow.dimensions",
           "typestate": "pillow::dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "name": "color",
@@ -4165,7 +4168,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(224, 224)",
+          "default_value": null,
           "description": "Requested (width, height) tuple.",
           "domain": "Pillow",
           "required": true,
@@ -4202,7 +4205,8 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4371,7 +4375,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(128, 128)",
+          "default_value": null,
           "description": "Target dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -4408,7 +4412,8 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4479,8 +4484,7 @@
       "semantic_tags": [
         "transform",
         "resize",
-        "nearest",
-        "mask"
+        "nearest"
       ],
       "keywords": [
         "resize",
@@ -4561,7 +4565,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(64, 64)",
+          "default_value": null,
           "description": "Target dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -4598,7 +4602,8 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4751,7 +4756,7 @@
           "type_name": "tuple",
           "state": "crop_box",
           "qualifiers": [],
-          "default_value": "(0, 0, 100, 100)",
+          "default_value": null,
           "description": "Cropping coordinates (left, upper, right, lower).",
           "domain": "Pillow",
           "required": true,
@@ -4788,7 +4793,8 @@
           },
           "semantics": "pillow.crop_box",
           "typestate": "pillow::crop_box",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4950,7 +4956,7 @@
           "type_name": "float",
           "state": "degrees",
           "qualifiers": [],
-          "default_value": "90.0",
+          "default_value": null,
           "description": "Counter-clockwise angle in degrees.",
           "domain": "Pillow",
           "required": true,
@@ -5511,13 +5517,11 @@
       "semantic_tags": [
         "filter",
         "blur",
-        "gaussian",
-        "smooth"
+        "gaussian"
       ],
       "keywords": [
         "gaussian",
         "blur",
-        "smooth",
         "filter"
       ],
       "code_template": "{output_var} = {image}.filter(ImageFilter.GaussianBlur(radius={radius}))",
@@ -5713,8 +5717,7 @@
       "keywords": [
         "boxblur",
         "blur",
-        "average",
-        "smooth"
+        "average"
       ],
       "code_template": "{output_var} = {image}.filter(ImageFilter.BoxBlur(radius={radius}))",
       "slots": [
@@ -5900,8 +5903,7 @@
       "keywords": [
         "edges",
         "detect",
-        "find_edges",
-        "gradient"
+        "find_edges"
       ],
       "code_template": "{output_var} = {image}.filter(ImageFilter.FIND_EDGES)",
       "slots": [
@@ -6334,12 +6336,10 @@
       ],
       "semantic_tags": [
         "filter",
-        "unsharp_mask",
-        "sharpen"
+        "unsharp_mask"
       ],
       "keywords": [
         "unsharp_mask",
-        "sharpen",
         "radius",
         "threshold"
       ],
@@ -6858,7 +6858,7 @@
           "type_name": "float",
           "state": "contrast_factor",
           "qualifiers": [],
-          "default_value": "1.5",
+          "default_value": null,
           "description": "Contrast multiplier. 1.0 gives original, 0.0 gives flat solid gray.",
           "domain": "Pillow",
           "required": true,
@@ -7041,7 +7041,7 @@
           "type_name": "float",
           "state": "brightness_factor",
           "qualifiers": [],
-          "default_value": "1.2",
+          "default_value": null,
           "description": "Brightness multiplier. 0.0 gives black, 1.0 is unchanged.",
           "domain": "Pillow",
           "required": true,
@@ -7221,7 +7221,7 @@
           "type_name": "float",
           "state": "saturation_factor",
           "qualifiers": [],
-          "default_value": "1.3",
+          "default_value": null,
           "description": "Saturation multiplier. 0.0 gives black and white, 1.0 is original.",
           "domain": "Pillow",
           "required": true,
@@ -7419,7 +7419,7 @@
           "type_name": "float",
           "state": "sharpness_factor",
           "qualifiers": [],
-          "default_value": "2.0",
+          "default_value": null,
           "description": "Sharpness factor. 0.0 gives blurred, 1.0 is original, 2.0+ is sharpened.",
           "domain": "Pillow",
           "required": true,
@@ -7719,7 +7719,7 @@
           "type_name": "list",
           "state": "coordinates_seq",
           "qualifiers": [],
-          "default_value": "[(0, 0), (100, 100)]",
+          "default_value": null,
           "description": "Sequence of 2-tuples [(x1, y1), (x2, y2)] or flat coordinates [x1, y1, x2, y2].",
           "domain": "Pillow",
           "required": true,
@@ -7756,7 +7756,8 @@
           },
           "semantics": "pillow.coordinates_seq",
           "typestate": "pillow::coordinates_seq",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "fill": {
           "name": "fill",
@@ -7919,7 +7920,7 @@
           "type_name": "tuple",
           "state": "rect_coordinates",
           "qualifiers": [],
-          "default_value": "(10, 10, 100, 100)",
+          "default_value": null,
           "description": "Bounding box coordinates as (x0, y0, x1, y1).",
           "domain": "Pillow",
           "required": true,
@@ -7956,7 +7957,8 @@
           },
           "semantics": "pillow.rect_coordinates",
           "typestate": "pillow::rect_coordinates",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "fill": {
           "name": "fill",
@@ -8159,7 +8161,7 @@
           "type_name": "tuple",
           "state": "ellipse_bounds",
           "qualifiers": [],
-          "default_value": "(20, 20, 80, 80)",
+          "default_value": null,
           "description": "Bounding box coordinates (x0, y0, x1, y1).",
           "domain": "Pillow",
           "required": true,
@@ -8196,7 +8198,8 @@
           },
           "semantics": "pillow.ellipse_bounds",
           "typestate": "pillow::ellipse_bounds",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "fill": {
           "name": "fill",
@@ -8391,7 +8394,7 @@
           "type_name": "tuple",
           "state": "anchor_point",
           "qualifiers": [],
-          "default_value": "(10, 10)",
+          "default_value": null,
           "description": "Anchor point coordinates (x, y).",
           "domain": "Pillow",
           "required": true,
@@ -8428,14 +8431,15 @@
           },
           "semantics": "pillow.anchor_point",
           "typestate": "pillow::anchor_point",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "text": {
           "name": "text",
           "type_name": "str",
           "state": "raw_text",
           "qualifiers": [],
-          "default_value": "'Label'",
+          "default_value": null,
           "description": "Text content string to render.",
           "domain": "Pillow",
           "required": true,
@@ -8526,7 +8530,6 @@
       "semantic_tags": [
         "composite",
         "alpha",
-        "blend",
         "overlay"
       ],
       "keywords": [
@@ -8872,7 +8875,7 @@
           "type_name": "float",
           "state": "blend_weight",
           "qualifiers": [],
-          "default_value": "0.5",
+          "default_value": null,
           "description": "Interpolation weight between 0.0 (image1) and 1.0 (image2).",
           "domain": "Pillow",
           "required": true,
@@ -10162,7 +10165,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Requested target dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -10199,7 +10202,8 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "name": "color",
@@ -10317,9 +10321,7 @@
       ],
       "keywords": [
         "fit",
-        "crop",
-        "thumbnail",
-        "cover"
+        "thumbnail"
       ],
       "code_template": "{output_var} = ImageOps.fit({image}, {size}, method=Image.Resampling.LANCZOS)",
       "slots": [
@@ -10394,7 +10396,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Requested dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -10431,7 +10433,8 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -11202,7 +11205,7 @@
           "type_name": "str",
           "state": "image_mode_str",
           "qualifiers": [],
-          "default_value": "'RGB'",
+          "default_value": null,
           "description": "Pixel format mode.",
           "domain": "Pillow",
           "required": true,
@@ -11243,7 +11246,7 @@
           "type_name": "tuple",
           "state": "dimensions",
           "qualifiers": [],
-          "default_value": "(128, 128)",
+          "default_value": null,
           "description": "Image dimensions as (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -11280,7 +11283,8 @@
           },
           "semantics": "pillow.dimensions",
           "typestate": "pillow::dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "data": {
           "name": "data",
@@ -11426,10 +11430,10 @@
           "type_name": "str",
           "state": "gradient_mode",
           "qualifiers": [],
-          "default_value": "'L'",
+          "default_value": null,
           "description": "Color mode (typically 'L').",
           "domain": "Pillow",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             "L"
@@ -11454,7 +11458,8 @@
           },
           "semantics": "pillow.gradient_mode",
           "typestate": "pillow::gradient_mode",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -11565,10 +11570,10 @@
           "type_name": "str",
           "state": "gradient_mode",
           "qualifiers": [],
-          "default_value": "'L'",
+          "default_value": null,
           "description": "Color mode (strictly 'L').",
           "domain": "Pillow",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             "L"
@@ -11593,7 +11598,8 @@
           },
           "semantics": "pillow.gradient_mode",
           "typestate": "pillow::gradient_mode",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -11677,7 +11683,6 @@
       "keywords": [
         "exif",
         "orientation",
-        "rotate",
         "camera"
       ],
       "code_template": "{output_var} = ImageOps.exif_transpose({image})",
@@ -13006,7 +13011,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Output dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -13043,14 +13048,15 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "data": {
           "name": "data",
           "type_name": "tuple",
           "state": "affine_coefficients",
           "qualifiers": [],
-          "default_value": "(1.0, 0.0, 0.0, 0.0, 1.0, 0.0)",
+          "default_value": null,
           "description": "Affine coefficients (a, b, c, d, e, f) for transformation mapping.",
           "domain": "Pillow",
           "required": true,
@@ -13087,7 +13093,8 @@
           },
           "semantics": "pillow.affine_coefficients",
           "typestate": "pillow::affine_coefficients",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -13241,7 +13248,7 @@
           "type_name": "tuple",
           "state": "target_dimensions",
           "qualifiers": [],
-          "default_value": "(256, 256)",
+          "default_value": null,
           "description": "Target dimensions (width, height).",
           "domain": "Pillow",
           "required": true,
@@ -13278,14 +13285,15 @@
           },
           "semantics": "pillow.target_dimensions",
           "typestate": "pillow::target_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "data": {
           "name": "data",
           "type_name": "tuple",
           "state": "perspective_coefficients",
           "qualifiers": [],
-          "default_value": "(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)",
+          "default_value": null,
           "description": "Perspective coefficients (8 values: a, b, c, d, e, f, g, h).",
           "domain": "Pillow",
           "required": true,
@@ -13322,7 +13330,8 @@
           },
           "semantics": "pillow.perspective_coefficients",
           "typestate": "pillow::perspective_coefficients",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -13401,7 +13410,6 @@
       ],
       "keywords": [
         "contain",
-        "fit",
         "proportional",
         "scale"
       ],
@@ -13478,7 +13486,7 @@
           "type_name": "tuple",
           "state": "bounding_box",
           "qualifiers": [],
-          "default_value": "(300, 300)",
+          "default_value": null,
           "description": "Maximum boundary (max_w, max_h).",
           "domain": "Pillow",
           "required": true,
@@ -13515,7 +13523,8 @@
           },
           "semantics": "pillow.bounding_box",
           "typestate": "pillow::bounding_box",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -13667,7 +13676,7 @@
           "type_name": "tuple",
           "state": "target_boundary",
           "qualifiers": [],
-          "default_value": "(400, 400)",
+          "default_value": null,
           "description": "Minimum boundary dimensions (min_w, min_h).",
           "domain": "Pillow",
           "required": true,
@@ -13704,7 +13713,8 @@
           },
           "semantics": "pillow.target_boundary",
           "typestate": "pillow::target_boundary",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -13859,7 +13869,7 @@
           "type_name": "tuple",
           "state": "kernel_dimensions",
           "qualifiers": [],
-          "default_value": "(3, 3)",
+          "default_value": null,
           "description": "Kernel grid shape (3, 3) or (5, 5).",
           "domain": "Pillow",
           "required": true,
@@ -13896,14 +13906,15 @@
           },
           "semantics": "pillow.kernel_dimensions",
           "typestate": "pillow::kernel_dimensions",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "kernel": {
           "name": "kernel",
           "type_name": "tuple",
           "state": "kernel_weights",
           "qualifiers": [],
-          "default_value": "(0, -1, 0, -1, 5, -1, 0, -1, 0)",
+          "default_value": null,
           "description": "Flattened weights sequence matching size product.",
           "domain": "Pillow",
           "required": true,
@@ -13929,7 +13940,8 @@
           },
           "semantics": "pillow.kernel_weights",
           "typestate": "pillow::kernel_weights",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "scale": {
           "name": "scale",
@@ -14282,7 +14294,7 @@
           "type_name": "tuple",
           "state": "shadow_color",
           "qualifiers": [],
-          "default_value": "(0, 0, 128)",
+          "default_value": null,
           "description": "RGB color assigned to black pixels.",
           "domain": "Pillow",
           "required": true,
@@ -14319,14 +14331,15 @@
           },
           "semantics": "pillow.shadow_color",
           "typestate": "pillow::shadow_color",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "white": {
           "name": "white",
           "type_name": "tuple",
           "state": "highlight_color",
           "qualifiers": [],
-          "default_value": "(255, 255, 0)",
+          "default_value": null,
           "description": "RGB color assigned to white pixels.",
           "domain": "Pillow",
           "required": true,
@@ -14363,7 +14376,8 @@
           },
           "semantics": "pillow.highlight_color",
           "typestate": "pillow::highlight_color",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -14465,7 +14479,6 @@
       ],
       "keywords": [
         "solarize",
-        "invert",
         "threshold",
         "sabatier"
       ],
@@ -14695,7 +14708,7 @@
           "type_name": "tuple",
           "state": "bounding_box",
           "qualifiers": [],
-          "default_value": "(20, 20, 180, 100)",
+          "default_value": null,
           "description": "Rectangle bounds (x0, y0, x1, y1).",
           "domain": "Pillow",
           "required": true,
@@ -14732,7 +14745,8 @@
           },
           "semantics": "pillow.bounding_box",
           "typestate": "pillow::bounding_box",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "radius": {
           "name": "radius",
@@ -14965,7 +14979,7 @@
           "type_name": "tuple",
           "state": "text_origin",
           "qualifiers": [],
-          "default_value": "(10, 10)",
+          "default_value": null,
           "description": "Origin anchor coordinate (x, y).",
           "domain": "Pillow",
           "required": true,
@@ -15002,14 +15016,15 @@
           },
           "semantics": "pillow.text_origin",
           "typestate": "pillow::text_origin",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "text": {
           "name": "text",
           "type_name": "str",
           "state": "multiline_content",
           "qualifiers": [],
-          "default_value": "'First Line\\nSecond Line'",
+          "default_value": null,
           "description": "String containing newline characters.",
           "domain": "Pillow",
           "required": true,
@@ -15169,7 +15184,6 @@
       ],
       "semantic_tags": [
         "paste",
-        "composite",
         "in_place"
       ],
       "keywords": [
@@ -15437,7 +15451,7 @@
           "type_name": "str",
           "state": "channel_identifier",
           "qualifiers": [],
-          "default_value": "'A'",
+          "default_value": null,
           "description": "Channel index int or channel name string (e.g. 'R', 'G', 'B', 'A').",
           "domain": "Pillow",
           "required": true,
@@ -15568,9 +15582,7 @@
       ],
       "keywords": [
         "add",
-        "arithmetic",
-        "blend",
-        "composite"
+        "arithmetic"
       ],
       "code_template": "{output_var} = ImageChops.add({image1}, {image2}, scale={scale}, offset={offset})",
       "slots": [
@@ -15992,8 +16004,7 @@
       ],
       "semantic_tags": [
         "imagechops",
-        "multiply",
-        "blend"
+        "multiply"
       ],
       "keywords": [
         "multiply",
@@ -16716,7 +16727,7 @@
           "type_name": "int",
           "state": "frame_index",
           "qualifiers": [],
-          "default_value": "0",
+          "default_value": null,
           "description": "Target zero-based frame index.",
           "domain": "Pillow",
           "required": true,

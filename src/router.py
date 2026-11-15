@@ -146,23 +146,6 @@ DENSE_RAG_MIN_PER_SPAN: int = int(_cfg("dense_rag_min_per_span", 15))
 DENSE_RAG_MAX_PER_SPAN: int = int(_cfg("dense_rag_max_per_span", 30))
 
 
-# --- Clause delimiter fallback -------------------------------------------
-# Sub-clause split points are DECLARED language vocabulary: the union of the
-# registry's sentence connectives and relational preposition triggers, both
-# harvested from the loaded domain trees. The engine carries no language
-# literals of its own; with no trees loaded the delimiter set is empty and
-# only punctuation-based splitting remains.
-def _get_clause_delims() -> Set[str]:
-    delims = getattr(CellTokenizer, "CLAUSE_DELIMITERS", None)
-    if delims:
-        return set(delims)
-    try:
-        reg = TypeRegistry.get_instance()
-        return set(reg.get_sentence_connectives()) | set(reg.get_preposition_triggers())
-    except Exception:
-        return set()
-
-
 def _extract_id(item):
     if hasattr(item, "cell_id"):
         return item.cell_id
@@ -939,6 +922,35 @@ class LatticeRouter:
                             relevance_map.get(cell.cell_id, 0.0), self.epsilon * 2.0
                         )
 
+        # Runtime-dependency sibling admission: if a tunnel cell's declared library is not installed
+        # in this runtime, admit installed sibling cells from the same (domain, stage) so downstream
+        # planning can seamlessly fall back to available backends without pruning synthetic domains.
+        try:
+            try:
+                from .route_methods.omega_astar import _cell_missing_runtime_dep
+            except (ImportError, ValueError):
+                from route_methods.omega_astar import _cell_missing_runtime_dep
+            missing_dom_stages = {
+                (getattr(c, "domain_name", ""), getattr(c, "stage", None)): max(
+                    relevance_map.get(c.cell_id, 0.0), self.epsilon * 2.0
+                )
+                for c in list(final_tunnel)
+                if _cell_missing_runtime_dep(c)
+            }
+            if missing_dom_stages:
+                for alt in self.orchestrator.loaded_cells.values():
+                    if alt.cell_id in tunnel_ids:
+                        continue
+                    key = (getattr(alt, "domain_name", ""), getattr(alt, "stage", None))
+                    if key in missing_dom_stages and not _cell_missing_runtime_dep(alt):
+                        final_tunnel.append(alt)
+                        tunnel_ids.add(alt.cell_id)
+                        relevance_map[alt.cell_id] = max(
+                            relevance_map.get(alt.cell_id, 0.0), missing_dom_stages[key]
+                        )
+        except Exception:
+            pass
+
         # Category-Theoretic Bridge Morphisms are discovered dynamically during Layer 2
         # topological routing (via find_shortest_bridge_path in the lattice graph), preserving
         # Layer 1 semantic query-grounding purity. Zero ungrounded bridge injection in Layer 1.
@@ -1502,7 +1514,7 @@ class LatticeRouter:
         prompt_toks = CellTokenizer.tokenize_prompt(prompt) if prompt else set()
         try:
             reg = TypeRegistry.get_instance()
-            stop = set(reg.get_function_words()) | set(reg.get_sentence_connectives())
+            stop = set(reg.get_function_words())
         except Exception:
             stop = set()
         try:
@@ -1601,9 +1613,8 @@ class LatticeRouter:
         entirely: their clause-level decomposition already covers their
         structure, and sliding windows on 4-6 tokens just re-emit substrings.
 
-        The delimiter set used to break compound clauses comes from
-        CellTokenizer.CLAUSE_DELIMITERS when present; a module-local fallback
-        keeps this function usable before that lands.
+        Clause segmentation relies strictly on universal punctuation boundaries via
+        `_segment_prompt_clauses` (zero English connective/delimiter fallbacks).
         """
         tokens = text.strip().split()
         if len(tokens) <= 3:
@@ -1620,22 +1631,9 @@ class LatticeRouter:
 
         _add(text.strip())
 
-        # 1. Clause-level decomposition and sub-action split on delimiters
-        clauses = _segment_prompt_clauses(text)
-        delims = _get_clause_delims()
-        for cl in clauses:
+        # 1. Clause-level decomposition on universal punctuation boundaries
+        for cl in _segment_prompt_clauses(text):
             _add(cl)
-            current_chunk: List[str] = []
-            for w in cl.split():
-                cw = w.lower().strip(" ,.;:'\"")
-                if cw in delims:
-                    if current_chunk:
-                        _add(" ".join(current_chunk))
-                        current_chunk = []
-                else:
-                    current_chunk.append(w)
-            if current_chunk:
-                _add(" ".join(current_chunk))
 
         # Short prompts: clause-level decomposition is sufficient; sliding
         # windows would only re-emit overlapping substrings of the same few
@@ -2321,15 +2319,7 @@ class LatticeRouter:
             # 3. Sub-lattice recursive planning for cells with slots (control-flow, macros)
             try:
                 from unification import Substitution
-                for cell in path:
-                    if getattr(cell, "slots", None):
-                        for slot_name, slot_contract in getattr(cell, "slots", {}).items():
-                            if slot_name not in getattr(cell, "bound_slots", {}):
-                                sub_plan = self.planner.plan_sublattice(
-                                    cell, slot_name, slot_contract, tunnel_cells, relevance_map, Substitution(), prompt
-                                )
-                                if sub_plan:
-                                    cell.bound_slots[slot_name] = sub_plan
+                path = self.planner._bind_chain_slots(path, tunnel_cells, relevance_map, Substitution(), prompt)
             except Exception as _sl_err:
                 logger.debug(f"[ROUTER] Sublattice slot planning skipped: {_sl_err}")
 

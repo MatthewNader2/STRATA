@@ -305,27 +305,31 @@ def _compute_cell_structural_role(cell: Any, registry: Any, inputs: Any, outputs
     if not inputs and prim_out:
         return "source"
 
-    path_tokens = registry.get_path_port_name_tokens() if registry else set()
-    source_roles = (registry.get_ingress_roles_set() | registry.get_roles_for_category("source")) if registry else set()
-    source_states = registry.get_source_port_tokens() if registry else set()
+    source_roles = (registry.get_ingress_roles_set() | registry.get_roles_for_category("source") | {"source_data"}) if registry else {"source_data"}
+    source_states = registry.get_states_by_property("is_source_identifier", True) if registry else set()
+    try:
+        from .lattice import is_path_port
+    except (ImportError, ValueError):
+        from lattice import is_path_port
     in_is_locator = False
     for p in inputs.values():
-        p_tn = str(getattr(getattr(p, "signature", p), "type_name", "") or "").lower()
-        p_st = str(getattr(getattr(p, "signature", p), "state", "") or "").lower()
+        p_sig = getattr(p, "signature", p)
+        p_tn = str(getattr(p_sig, "type_name", "") or "").lower()
+        p_st = str(getattr(p_sig, "state", "") or "").lower()
         p_role = str(getattr(p, "port_role", None) or getattr(p, "derived_role", "") or "").lower()
-        if (p_st and p_st in source_states) or (p_role and p_role in source_roles) or (p_tn and p_tn in path_tokens):
-            in_is_locator = True
-            break
-        if registry and p_tn and any(registry.is_subtype(p_tn, pt) for pt in path_tokens):
+        if (p_st and p_st in source_states) or (p_role and p_role in source_roles) or is_path_port(p, registry):
             in_is_locator = True
             break
 
     if in_is_locator and prim_out:
-        if out_tn not in path_tokens and (not registry or not any(registry.is_subtype(out_tn, pt) for pt in path_tokens)):
+        if not is_path_port(prim_out, registry):
             return "source"
 
     # 3. Egress (sink) / Terminal Morphism
-    mat_states = registry.get_materialization_states() if registry else set()
+    mat_states = (
+        registry.get_states_by_property("is_materialized", True)
+        | registry.get_states_by_property("is_terminal", True)
+    ) if registry else set()
     term_states = registry.get_terminal_states() if registry else set()
     void_types = registry.get_void_types_set() if registry else {""}
     try:

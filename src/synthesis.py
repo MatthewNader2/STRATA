@@ -392,18 +392,18 @@ class SynthesisEngine:
         reg = TypeRegistry.get_instance()
         top_types = reg.get_top_types_set()
         empty_types = reg.get_void_types_set() | reg.get_bottom_types_set()
-        path_type_names = reg.get_types_by_kind("path")
-        path_tokens = set(reg.get_path_port_name_tokens() or ()) | path_type_names
+        path_type_names = set(reg.get_types_by_kind("path") or ()) | {"path", "file"}
 
         def _is_path_type(t_name: Optional[str]) -> bool:
             if not t_name:
                 return False
             clean = str(t_name).strip().lower()
-            if clean in path_tokens:
+            base = clean.partition("[")[0].strip() if ("[" in clean and clean.endswith("]")) else clean
+            if clean in path_type_names or base in path_type_names:
                 return True
             try:
                 for pt in path_type_names:
-                    if reg.is_known_type_name(pt) and reg.is_subtype(clean, pt):
+                    if reg.is_known_type_name(pt) and (reg.is_subtype(clean, pt) or reg.is_subtype(base, pt)):
                         return True
             except Exception:
                 pass

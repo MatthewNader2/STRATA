@@ -420,8 +420,8 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": [
-            800,
-            600
+            0,
+            0
           ],
           "port_role": "configuration",
           "description": "Resolution width and height pair.",
@@ -499,7 +499,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "Pygame Window",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -676,7 +676,7 @@
           "state": "configuration",
           "abstract_type": "scalar",
           "required": false,
-          "default_value": 60,
+          "default_value": 0,
           "port_role": "configuration",
           "description": "Target frames per second.",
           "structure_kind": "scalar",
@@ -814,7 +814,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1172,7 +1172,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1253,10 +1253,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": [
-            800,
-            600
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -1345,11 +1342,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": [
-            0,
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int, int]",
           "layout": {
             "rank": 0,
@@ -1454,10 +1447,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -1781,7 +1771,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1808,7 +1798,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1836,7 +1826,7 @@
           "element_type": "int64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 100,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1864,7 +1854,7 @@
           "element_type": "int64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 100,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1952,7 +1942,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -1979,7 +1969,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -2067,7 +2057,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -2094,7 +2084,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -2269,10 +2259,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -2555,10 +2542,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -2639,12 +2623,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            0,
-            0
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -2748,12 +2728,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            0,
-            255,
-            0
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -2786,10 +2762,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -2816,7 +2789,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -2897,12 +2870,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -2935,10 +2904,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -2965,10 +2931,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -3076,12 +3039,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -3107,8 +3066,8 @@
           "type_name": "bool",
           "state": "logical_state",
           "abstract_type": "logical",
-          "required": false,
-          "default_value": false,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "If True, connects the first and last points.",
           "structure_kind": "scalar",
@@ -3260,12 +3219,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            0,
-            0,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -3390,12 +3345,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            0
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -3791,8 +3742,8 @@
           "type_name": "str",
           "state": "configuration",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": "Arial",
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Font family name.",
           "structure_kind": "scalar",
@@ -3818,8 +3769,8 @@
           "type_name": "int",
           "state": "configuration",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": 24,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Font point size.",
           "structure_kind": "scalar",
@@ -3987,8 +3938,8 @@
           "type_name": "bool",
           "state": "configuration",
           "abstract_type": "logical",
-          "required": false,
-          "default_value": true,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Smooth edges flag.",
           "structure_kind": "scalar",
@@ -4014,12 +3965,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Text RGB color.",
           "structure_kind": "scalar",
@@ -4737,7 +4684,7 @@
           "state": "loop_condition",
           "abstract_type": "logical",
           "required": true,
-          "default_value": true,
+          "default_value": null,
           "port_role": "data_input",
           "description": "Loop continuation flag.",
           "structure_kind": "scalar",
@@ -4962,10 +4909,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -5053,7 +4997,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5080,7 +5024,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 1.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5168,7 +5112,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5256,7 +5200,7 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false,
+          "default_value": null,
           "carrier": "bool",
           "layout": {
             "rank": 0,
@@ -5283,7 +5227,7 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false,
+          "default_value": null,
           "carrier": "bool",
           "layout": {
             "rank": 0,
@@ -5372,10 +5316,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -5463,7 +5404,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 1.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5612,7 +5553,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5639,7 +5580,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -5883,7 +5824,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -6102,7 +6043,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -6260,7 +6201,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 8,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -6287,7 +6228,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -6314,7 +6255,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -6446,7 +6387,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -6934,8 +6875,8 @@
           "type_name": "bool",
           "state": "configuration",
           "abstract_type": "logical",
-          "required": false,
-          "default_value": false,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "If True, removes colliding sprites from group_a.",
           "structure_kind": "scalar",
@@ -6961,8 +6902,8 @@
           "type_name": "bool",
           "state": "configuration",
           "abstract_type": "logical",
-          "required": false,
-          "default_value": false,
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "If True, removes colliding sprites from group_b.",
           "structure_kind": "scalar",
@@ -7240,7 +7181,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "",
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -7748,7 +7689,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -7845,7 +7786,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -7916,7 +7857,7 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": false,
+          "default_value": null,
           "carrier": "bool",
           "layout": {
             "rank": 0,
@@ -7996,7 +7937,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "",
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -8156,12 +8097,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -8194,10 +8131,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -8224,10 +8158,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
             "rank": 0,
@@ -8335,12 +8266,8 @@
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
           "structure_kind": "scalar",
@@ -8390,7 +8317,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -8417,7 +8344,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -8515,7 +8442,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -8542,7 +8469,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -8719,7 +8646,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 0,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -8824,7 +8751,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -8851,7 +8778,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 0.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,

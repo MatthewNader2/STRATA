@@ -16,10 +16,13 @@ Combines:
 
 from __future__ import annotations
 
+import ast
 from collections import deque
 import copy
-import time
 import heapq
+import importlib.util
+import sys
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
@@ -46,6 +49,84 @@ except (ImportError, ValueError):
     from tokenizer import CellTokenizer
 
 
+_STDLIB_MODULES = frozenset(getattr(sys, "stdlib_module_names", ()))
+_MODULE_SPEC_CACHE: Dict[str, bool] = {}
+
+
+def _is_module_installed(top_mod: str) -> bool:
+    """Checks via stdlib importlib.util.find_spec whether a top-level package exists in the active runtime."""
+    if not top_mod or top_mod in _STDLIB_MODULES or top_mod in sys.builtin_module_names or top_mod in sys.modules:
+        return True
+    cached = _MODULE_SPEC_CACHE.get(top_mod)
+    if cached is not None:
+        return cached
+    try:
+        installed = importlib.util.find_spec(top_mod) is not None
+    except (ValueError, AttributeError, ImportError):
+        installed = False
+    _MODULE_SPEC_CACHE[top_mod] = installed
+    return installed
+
+
+def _cell_missing_runtime_dep(cell: Any) -> bool:
+    """True when AST/dependency inspection of a cell's declared deps/imports/template reveals an uninstallable top-level package."""
+    cached = getattr(cell, "_cached_missing_runtime_dep", None)
+    if isinstance(cached, bool):
+        return cached
+    sources: List[str] = []
+    bare_deps: List[str] = []
+    for attr in ("imports", "dependencies"):
+        for imp in (getattr(cell, attr, None) or ()):
+            if not isinstance(imp, str):
+                continue
+            s = imp.strip()
+            if not s:
+                continue
+            if s.startswith(("import ", "from ")):
+                sources.append(s)
+            else:
+                bare_deps.append(s)
+    tmpl = getattr(cell, "code_template", None) or ""
+    if isinstance(tmpl, str) and tmpl:
+        for raw_ln in tmpl.splitlines():
+            ln = raw_ln.strip()
+            if ln.startswith(("import ", "from ")):
+                sources.append(ln)
+    missing = False
+    for bdep in bare_deps:
+        top = bdep.split(".", 1)[0].strip()
+        if top and top.isidentifier() and not _is_module_installed(top):
+            missing = True
+            break
+    if not missing:
+        for stmt in sources:
+            try:
+                tree = ast.parse(stmt, mode="exec")
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = (alias.name or "").split(".", 1)[0]
+                        if top and not _is_module_installed(top):
+                            missing = True
+                            break
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    top = node.module.split(".", 1)[0]
+                    if top and not _is_module_installed(top):
+                        missing = True
+                        break
+                if missing:
+                    break
+            if missing:
+                break
+    try:
+        cell._cached_missing_runtime_dep = missing
+    except Exception:
+        pass
+    return missing
+
+
 def _port_requires_carrier(cell: Any, port: Any, reg: Optional[Any] = None) -> bool:
     """True iff `port` is a required dataflow carrier input (cannot rely solely on eta_tau)."""
     if not getattr(port, "required", True):
@@ -56,6 +137,8 @@ def _port_requires_carrier(cell: Any, port: Any, reg: Optional[Any] = None) -> b
         except Exception:
             reg = None
     role = str(getattr(port, "port_role", "") or getattr(port, "role", "") or "").strip().lower()
+    if str(getattr(port, "state", "") or "").strip().lower() == "hyperparameter":
+        return False
     if reg is not None:
         if reg.is_config_role(role) or reg.is_hof_role(role) or role in reg.get_roles_for_category("parameter"):
             return False
@@ -71,7 +154,8 @@ def _port_requires_carrier(cell: Any, port: Any, reg: Optional[Any] = None) -> b
     if _pointed_default(port, cell) is not None:
         return False
     builtin_scalars = {cls.__name__.lower() for cls in (int, float, bool, str)}
-    if sk == "scalar" and (reg.is_scalar_primitive(t_name) if reg is not None else t_name in builtin_scalars):
+    is_bytes_carrier = bool(t_name == "bytes" or (reg is not None and reg.is_subtype(t_name, "bytes")))
+    if sk == "scalar" and not is_bytes_carrier and (reg.is_scalar_primitive(t_name) if reg is not None else t_name in builtin_scalars):
         return False
     return True
 
@@ -425,6 +509,156 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             reg = None
 
         orch_ref = orchestrator or getattr(self, "orchestrator", None)
+
+        # Structural lattice augmentation: top-K RAG tunnels emphasize semantic anchors
+        # and often omit structural coercion bridges, container optics, property-repair
+        # transformers, and unproduced handle initializers. Pull only structurally typed
+        # morphisms reachable from carriers/demands already in `pool`.
+        if orch_ref is not None and getattr(orch_ref, "loaded_cells", None):
+            _p_domains = {
+                str(getattr(c, "domain_name", "") or getattr(c, "domain", "") or "").strip().lower()
+                for c in pool
+            } - {""}
+            _p_outs = [
+                getattr(op, "signature", op)
+                for c in pool
+                for op in (getattr(c, "outputs", {}) or {}).values()
+                if getattr(op, "signature", op) is not None
+            ]
+            _p_ins = [
+                (ip, getattr(ip, "signature", ip))
+                for c in pool
+                for _, ip in _cell_required_data_inputs(c, reg=reg)
+                if getattr(ip, "signature", ip) is not None
+            ]
+            _p_prompt_toks = set(CellTokenizer.tokenize_prompt(prompt)) if prompt else set()
+
+            def _add_struct_cell(sc: Any) -> bool:
+                scid = getattr(sc, "cell_id", None)
+                if not scid or scid in seen_ids or getattr(sc, "node_type", "") == "constant":
+                    return False
+                if getattr(sc, "cell_type", "") == "macro" and str(getattr(sc, "node_role", "") or "").lower() != "bridge":
+                    return False
+                pool.append(sc)
+                seen_ids.add(scid)
+                _p_outs.extend(
+                    getattr(op, "signature", op)
+                    for op in (getattr(sc, "outputs", {}) or {}).values()
+                    if getattr(op, "signature", op) is not None
+                )
+                _p_ins.extend(
+                    (ip, getattr(ip, "signature", ip))
+                    for _, ip in _cell_required_data_inputs(sc, reg=reg)
+                    if getattr(ip, "signature", ip) is not None
+                )
+                return True
+
+            # Rule D: Unproduced handle producers (e.g. initializer/trainer for a handle consumer)
+            _unmet_handles = [
+                ip for ip, isig in _p_ins
+                if getattr(ip, "required", True)
+                and getattr(ip, "default_value", None) is None
+                and self.is_handle_port(ip)
+                and not any(unify(osig, isig) is not None for osig in _p_outs)
+            ]
+            for h_in in _unmet_handles:
+                h_sig = getattr(h_in, "signature", h_in)
+                h_nom = str(getattr(h_in, "nominal_type", "") or "").strip().lower()
+                h_cands: List[Tuple[Tuple[int, int, int], Any]] = []
+                for lc in orch_ref.loaded_cells.values():
+                    lcid = getattr(lc, "cell_id", None)
+                    if not lcid or lcid in seen_ids or is_terminal_sink(lc, orch_ref):
+                        continue
+                    lc_outs = list((getattr(lc, "outputs", {}) or {}).values())
+                    if not any(
+                        getattr(op, "signature", op) is not None
+                        and unify(getattr(op, "signature", op), h_sig) is not None
+                        for op in lc_outs
+                    ):
+                        continue
+                    nom_hit = 1 if (
+                        h_nom and any(str(getattr(op, "nominal_type", "") or "").strip().lower() == h_nom for op in lc_outs)
+                    ) else 0
+                    lc_id_toks = set(getattr(lc, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(lcid))
+                    id_ov = len(_p_prompt_toks & lc_id_toks)
+                    all_ov = len(_p_prompt_toks & (set(getattr(lc, "token_set", None) or ()) | lc_id_toks))
+                    if nom_hit or id_ov > 0:
+                        h_cands.append(((nom_hit, id_ov, all_ov), lc))
+                h_cands.sort(key=lambda item: item[0], reverse=True)
+                for _, h_prod in h_cands[:2]:
+                    _add_struct_cell(h_prod)
+
+            # Rule A: Declared carrier/state coercion bridges reachable from pool
+            _bridge_pool = list(getattr(orch_ref, "bridge_cells", ()) or ()) + [
+                lc for lc in orch_ref.loaded_cells.values()
+                if str(getattr(lc, "node_role", "") or "").strip().lower() == "bridge"
+            ]
+            for bc in _bridge_pool:
+                bcid = getattr(bc, "cell_id", None)
+                if not bcid or bcid in seen_ids or is_ingress_source(bc, orch_ref) or is_terminal_sink(bc, orch_ref):
+                    continue
+                b_ins = _cell_required_data_inputs(bc, reg=reg)
+                b_outs = [
+                    getattr(op, "signature", op)
+                    for op in (getattr(bc, "outputs", {}) or {}).values()
+                    if getattr(op, "signature", op) is not None
+                ]
+                if not b_ins or not b_outs:
+                    continue
+                b_in_sig = getattr(b_ins[0][1], "signature", b_ins[0][1])
+                in_reachable = any(unify(osig, b_in_sig) is not None for osig in _p_outs)
+                out_useful = any(unify(bo, isig) is not None for bo in b_outs for _, isig in _p_ins)
+                if in_reachable and out_useful:
+                    _add_struct_cell(bc)
+
+            # Rule B: Container optics matching domains/carriers in pool
+            _optic_roles = set(reg.get_roles_for_category("optic")) if reg is not None else {"getter", "setter", "complement"}
+            for lc in orch_ref.loaded_cells.values():
+                lcid = getattr(lc, "cell_id", None)
+                if not lcid or lcid in seen_ids:
+                    continue
+                lc_or = str(getattr(lc, "optic_role", "") or "").strip().lower()
+                lc_nr = str(getattr(lc, "node_role", "") or "").strip().lower()
+                if lc_or not in _optic_roles and lc_nr != "optic":
+                    continue
+                lc_dom = str(getattr(lc, "domain_name", "") or getattr(lc, "domain", "") or "").strip().lower()
+                if lc_dom in _p_domains:
+                    _add_struct_cell(lc)
+                    continue
+                lc_req = _cell_required_data_inputs(lc, reg=reg)
+                if lc_req and any(unify(osig, getattr(lc_req[0][1], "signature", lc_req[0][1])) is not None for osig in _p_outs):
+                    _add_struct_cell(lc)
+
+            # Rule C: Property-repair transformers resolving preconditions in pool
+            _demanded_props: Set[Tuple[str, str]] = set()
+            for c in pool:
+                for pre in (getattr(c, "preconditions", None) or ()):
+                    p_n = pre.get("property") if isinstance(pre, dict) else getattr(pre, "property", None)
+                    p_op = pre.get("operator") if isinstance(pre, dict) else getattr(pre, "operator", None)
+                    p_val = pre.get("value") if isinstance(pre, dict) else getattr(pre, "value", None)
+                    if p_op == "==" and p_n is not None:
+                        _demanded_props.add((str(p_n), repr(p_val)))
+            if _demanded_props:
+                for lc in orch_ref.loaded_cells.values():
+                    lcid = getattr(lc, "cell_id", None)
+                    if not lcid or lcid in seen_ids or is_ingress_source(lc, orch_ref) or is_terminal_sink(lc, orch_ref):
+                        continue
+                    lc_posts = getattr(lc, "postconditions", None) or ()
+                    if not any(
+                        (q.get("operator") if isinstance(q, dict) else getattr(q, "operator", None)) == "=="
+                        and (
+                            str(q.get("property") if isinstance(q, dict) else getattr(q, "property", None)),
+                            repr(q.get("value") if isinstance(q, dict) else getattr(q, "value", None)),
+                        ) in _demanded_props
+                        for q in lc_posts
+                    ):
+                        continue
+                    lc_req = _cell_required_data_inputs(lc, reg=reg)
+                    if len(lc_req) == 1:
+                        in_s = getattr(lc_req[0][1], "signature", lc_req[0][1])
+                        if any(unify(osig, in_s) is not None for osig in _p_outs):
+                            _add_struct_cell(lc)
+
         cur_reg_gen = int(getattr(reg, "_generation", 0)) if reg is not None else 0
         persistent_bag = None
         if orch_ref is not None:
@@ -592,6 +826,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             c.cell_id: (set(getattr(c, "identity_tokens", None) or ()) | cell_sp_id_map[c.cell_id])
             for c in pool
         }
+        cell_missing_dep_map: Dict[str, bool] = {
+            c.cell_id: _cell_missing_runtime_dep(c) for c in pool
+        }
 
         try:
             try:
@@ -755,7 +992,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         sem_rel = (sem_sc / max_sem) if max_sem > 0.0 else 0.0
                         strength = 0.70 * cf_rel + 0.30 * sem_rel
                         clause_cell_strength[(cid, t_id)] = strength
-                        if cf_rel >= 0.80 or (best_cf[0] == 0.0 and sem_rel >= 0.85):
+                        if cf_rel >= 0.80 or (best_cf[0] == 0.0 and sem_rel >= 0.85) or (sem_hit and sem_rel >= 0.90 and best_cf[0] < 0.85):
                             top_cids.add(cid)
                 if top_cids:
                     clause_top_cells[t_id] = top_cids
@@ -829,6 +1066,31 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 top_by_rel = sorted(pool, key=lambda c: cell_lex_score.get(c.cell_id, 0.0), reverse=True)
                 for c in top_by_rel[: max(2, min(5, len(top_by_rel)))]:
                     goal_ids.add(c.cell_id)
+
+        clause_has_installed: Dict[TargetId, bool] = {
+            cl_t: any(not cell_missing_dep_map.get(tcid, False) for tcid in t_cids)
+            for cl_t, t_cids in clause_top_cells.items()
+        }
+        installed_ingress_in_dom: Set[str] = {
+            cell_domain_map[c.cell_id]
+            for c in pool
+            if (
+                cell_domain_map[c.cell_id]
+                and is_ingress_map[c.cell_id]
+                and not cell_missing_dep_map[c.cell_id]
+                and (not src_file_literals or not cand_needs_path_map[c.cell_id] or self.file_compat(c, src_file_literals[0]) >= 0)
+            )
+        }
+        installed_sink_in_dom: Set[str] = {
+            cell_domain_map[c.cell_id]
+            for c in pool
+            if (
+                cell_domain_map[c.cell_id]
+                and is_sink_map[c.cell_id]
+                and not cell_missing_dep_map[c.cell_id]
+                and (not dest_file_literals or not cand_needs_path_map[c.cell_id] or self.file_compat(c, dest_file_literals[0]) >= 0)
+            )
+        }
 
         # Build backward adjacency inside tunnel via cached unification for h_bwd heuristic
         pool_by_id = {c.cell_id: c for c in pool}
@@ -957,6 +1219,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         )
         scorer_calls = 0
         max_scorer_calls = 4
+        scorer_wall_s = 0.0
         _choice_score_cache: Dict[Tuple[Tuple[str, ...], str], Dict[str, float]] = {}
 
         def _heuristic(
@@ -1015,6 +1278,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
 
         cell_has_handle_out_map: Dict[str, bool] = {
             c.cell_id: any(self.is_handle_port(osig) for _, osig in cell_out_ports_map[c.cell_id])
+            for c in pool
+        }
+        cell_has_composite_out_map: Dict[str, bool] = {
+            c.cell_id: any(
+                (
+                    lambda tl: bool(tl) and reg is not None and bool(reg.is_composite_carrier(tl))
+                )(str(getattr(osig, "type_name", "") or "").strip().lower())
+                for _, osig in cell_out_ports_map[c.cell_id]
+            )
             for c in pool
         }
         cell_optic_role_map: Dict[str, str] = {
@@ -1110,7 +1382,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         visited_states: Set[Tuple[Tuple[str, ...], Tuple[TargetId, ...], Tuple[str, ...]]] = set()
 
         max_expansions = int(kwargs.get("max_expansions", max(900, n_clauses * 240)))
-        max_chain_len = int(kwargs.get("max_chain_len", 18))
+        max_chain_len = int(kwargs.get("max_chain_len", max(18, n_clauses + 8)))
         branch_factor = int(kwargs.get("branch_factor", 8))
         _budget_ms = float(kwargs.get("planner_time_budget_ms", 18000.0))
         _search_deadline = time.perf_counter() + max(_budget_ms, 500.0) / 1000.0
@@ -1201,14 +1473,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
 
                 if best_partial is None or quality > best_partial[0]:
                     best_partial = (quality, chain_ids, step_clauses)
-                if n_cov_target <= 1 or len(cov_cl) >= n_cov_target:
+                if (n_cov_target <= 1 and reaches_goal) or (n_cov_target > 1 and len(cov_cl) >= n_cov_target):
                     full_score = quality + (0.6 if reaches_goal else 0.0)
                     if best_full_complete is None:
                         first_full_exp = expansions
                         best_full_complete = (full_score, chain_ids, step_clauses)
                     elif full_score > best_full_complete[0]:
                         best_full_complete = (full_score, chain_ids, step_clauses)
-                if reaches_goal and (n_clauses <= 1 or len(cov_cl) >= max(1, n_clauses // 2)):
+                min_steps_for_multi = (
+                    min(len(clause_top_cells), max(2, n_clauses // 3))
+                    if (n_clauses > 2 and len(clause_top_cells) >= 3)
+                    else 1
+                )
+                if reaches_goal and len(chain_ids) >= min_steps_for_multi and (n_clauses <= 1 or len(cov_cl) >= max(1, n_clauses // 2)):
                     if best_complete is None or quality > best_complete[0]:
                         best_complete = (quality, chain_ids, step_clauses)
 
@@ -1225,7 +1502,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             active_prop_dict = dict(active_props)
             num_sources_used = sum(
                 1 for cid in chain_ids
-                if is_ingress_map[cid] or (not cell_req_ins_map[cid] and cand_needs_path_map[cid])
+                if cand_needs_path_map[cid] and not is_sink_map[cid]
             )
 
             # Precompute O(1) integer bitmask of current pool producers in gamma when empty_sub & raw sigs
@@ -1289,6 +1566,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             ]
             blocked_missing_ins: Dict[str, List[Any]] = {}
             unlock_depth: Dict[str, int] = {tc.cell_id: 0 for tc in blocked_targets}
+            prereq_bridge_cids: Set[str] = set()
             unlock_clause_hits: Dict[str, Set[TargetId]] = {
                 tc.cell_id: (cell_clause_hits.get(tc.cell_id, set()) - cov_cl_set)
                 for tc in blocked_targets
@@ -1367,8 +1645,10 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                 | tc_prop_hits
                                 | (cell_clause_hits.get(pc.cell_id, set()) - cov_cl_set)
                             )
-                            if pc.cell_id not in unlock_depth:
-                                unlock_depth[pc.cell_id] = depth_hop
+                            prereq_bridge_cids.add(pc.cell_id)
+                            if pc.cell_id not in unlock_depth or depth_hop > 0 and not (cell_clause_hits.get(pc.cell_id, set()) - cov_cl_set):
+                                if pc.cell_id not in unlock_depth:
+                                    unlock_depth[pc.cell_id] = depth_hop
                                 _missing_req_ins_for(pc)
                                 next_frontier_bt.append(pc)
                 frontier_bt = next_frontier_bt
@@ -1477,7 +1757,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     tc_req = cell_req_ins_map.get(tc_cid, ())
                     if not tc_req:
                         continue
-                    if unlock_depth.get(tc_cid, 0) > 0:
+                    if unlock_depth.get(tc_cid, 0) > 0 or tc_cid in prereq_bridge_cids:
                         for _, ip in tc_req:
                             state_downstream_unblock_cids.update(port_can_receive_from.get(id(ip), ()))
                     elif len(tc_req) >= 2 and gamma:
@@ -1508,27 +1788,56 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                     for idx_j in range(len(tc_req))
                                 ):
                                     state_downstream_unblock_cids.update(port_can_receive_from.get(id(ip_i), ()))
-                    if gamma_cids:
-                        for _, ip in tc_req:
-                            recv_ip = port_can_receive_from.get(id(ip))
-                            if not recv_ip or not (gamma_cids & recv_ip):
-                                continue
-                            if any(
+                if gamma_cids:
+                    frontier_gamma_tc: List[Tuple[str, Any]] = []
+                    seen_gamma_tc: Set[str] = set()
+                    for tc_b in blocked_chain_targets:
+                        if tc_b.cell_id in seen_gamma_tc:
+                            continue
+                        req_b = cell_req_ins_map.get(tc_b.cell_id, ())
+                        if not req_b:
+                            continue
+                        if any(
+                            (recv_b := port_can_receive_from.get(id(ip_b)))
+                            and (gamma_cids & recv_b)
+                            and any(
                                 isinstance(gs, tuple) and len(gs) == 3
-                                and gs[2] is not None and gs[2].cell_id in recv_ip
+                                and gs[2] is not None and gs[2].cell_id in recv_b
                                 and _unify_cached(
                                     gs[0],
-                                    getattr(ip, "signature", ip),
+                                    getattr(ip_b, "signature", ip_b),
                                     out_port=gs[1],
-                                    in_port=ip,
+                                    in_port=ip_b,
                                     prod_cell=gs[2],
-                                    cons_cell=tc,
+                                    cons_cell=tc_b,
                                 )
                                 for gs in gamma
-                            ):
-                                for _, ip_u in tc_req:
-                                    state_connects_gamma_cids.update(port_can_receive_from.get(id(ip_u), ()))
-                                break
+                            )
+                            for _, ip_b in req_b
+                        ):
+                            seen_gamma_tc.add(tc_b.cell_id)
+                            frontier_gamma_tc.append((tc_b.cell_id, req_b))
+                    # Propagate gamma connectivity across multi-hop missing prerequisites
+                    for _ in range(3):
+                        if not frontier_gamma_tc:
+                            break
+                        next_frontier_gtc: List[Tuple[str, Any]] = []
+                        for ft_cid, ft_req in frontier_gamma_tc:
+                            miss_ips = blocked_missing_ins.get(ft_cid)
+                            if miss_ips is None:
+                                miss_ips = [ip_u for _, ip_u in ft_req]
+                            for ip_u in miss_ips:
+                                recv_u = port_can_receive_from.get(id(ip_u), ())
+                                state_connects_gamma_cids.update(recv_u)
+                                for prod_cid in recv_u:
+                                    if prod_cid not in seen_gamma_tc and (
+                                        unlock_depth.get(prod_cid, 0) > 0 or prod_cid in prereq_bridge_cids
+                                    ):
+                                        seen_gamma_tc.add(prod_cid)
+                                        next_frontier_gtc.append(
+                                            (prod_cid, cell_req_ins_map.get(prod_cid, ()))
+                                        )
+                        frontier_gamma_tc = next_frontier_gtc
 
                 state_unlock_ng = {}
                 state_unlock_g = {}
@@ -1670,12 +1979,52 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     prior_sc += 0.20 / (1.0 + bwd_dist[cand.cell_id])
                 cand_needs_path = cand_needs_path_map[cand.cell_id]
                 cand_has_handle_out = cell_has_handle_out_map[cand.cell_id]
+                cand_has_composite_out = cell_has_composite_out_map[cand.cell_id]
+                gamma_has_composite = bool(
+                    gamma
+                    and reg is not None
+                    and any(
+                        reg.is_composite_carrier(
+                            str(getattr(gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs, "type_name", "") or "").strip().lower()
+                        )
+                        for gs in gamma
+                        if gs is not None
+                    )
+                )
+                cand_unlocks_prereq = bool(
+                    state_connects_gamma_cids is not None and cand.cell_id in state_connects_gamma_cids
+                )
+                if (
+                    not chain_ids
+                    and n_clauses > 1
+                    and is_sink_map[cand.cell_id]
+                    and any(
+                        not is_sink_map[c.cell_id] and can_fire_map[c.cell_id] is not None
+                        for c in pool
+                    )
+                ):
+                    continue
+                # Once all prompt-declared input files are ingested into active composite carriers in gamma,
+                # zero-input Stage-1 synthetic dataset generators must not hijack the pipeline mid-chain.
                 if (
                     chain_ids
                     and is_ingress_map[cand.cell_id]
                     and not cand_needs_path
                     and not cell_req_ins_map[cand.cell_id]
                     and not cand_has_handle_out
+                    and cand_has_composite_out
+                    and gamma_has_composite
+                    and src_file_literals
+                    and num_sources_used >= len(src_file_literals)
+                ):
+                    continue
+                if (
+                    chain_ids
+                    and is_ingress_map[cand.cell_id]
+                    and not cand_needs_path
+                    and not cell_req_ins_map[cand.cell_id]
+                    and not cand_has_handle_out
+                    and not cand_unlocks_prereq
                     and src_file_literals
                     and num_sources_used >= len(src_file_literals)
                     and not (
@@ -1705,8 +2054,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         prior_sc += 0.45
                 elif chain_ids and not cell_req_ins_map[cand.cell_id]:
                     # Zero-input non-path dataset generators (e.g. make_blobs, load_*) must not hijack
-                    # an already-started pipeline mid-chain unless directly requested by an uncovered clause.
-                    if is_ingress_map[cand.cell_id] and not cand_needs_path and not new_hits:
+                    # an already-started pipeline mid-chain unless directly requested by an uncovered clause
+                    # or acting as a typed prerequisite unlocker connected to active gamma.
+                    if is_ingress_map[cand.cell_id] and not cand_needs_path and not new_hits and not cand_unlocks_prereq:
                         continue
                     # Zero-input sources/generators mid-chain are valid when either:
                     # (a) an unmatched external source file remains in the prompt, OR
@@ -1723,8 +2073,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             unblocks_downstream = bool(eff_new_hits)
                         else:
                             cand_outs = cell_out_ports_map.get(cand.cell_id, ())
-                            unblocks_downstream = (bool(eff_new_hits) and not is_ingress_map[cand.cell_id]) or (
-                                (bool(cand_outs and cand.cell_id in state_downstream_unblock_cids))
+                            unblocks_downstream = (
+                                bool(eff_new_hits)
+                                and (
+                                    not is_ingress_map[cand.cell_id]
+                                    or cand_has_handle_out
+                                    or not cand_has_composite_out
+                                )
+                            ) or (
+                                (bool(cand_outs and (cand.cell_id in state_downstream_unblock_cids or cand_unlocks_prereq)))
                                 if state_downstream_unblock_cids is not None
                                 else any(
                                     (
@@ -1973,6 +2330,16 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     and not (not uncovered_cl and cand.cell_id in goal_ids)
                 ):
                     continue
+                if cell_missing_dep_map.get(cand.cell_id, False):
+                    has_installed_alt = (
+                        any(clause_has_installed.get(cl_t, False) for cl_t in cand_hits)
+                        or (is_ingress_map[cand.cell_id] and cand_dom in installed_ingress_in_dom)
+                        or (is_sink_map[cand.cell_id] and cand_dom in installed_sink_in_dom)
+                    )
+                    if has_installed_alt:
+                        prior_sc -= 3.25
+                        order_cost_penalty += 3.25
+
                 e_valid.append((cand, next_sigma, prior_sc, unlock_credit, order_cost_penalty, step_cl_idx))
 
             if not e_valid:
@@ -1999,13 +2366,22 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cache_key = (cand_ids_tuple, gamma_desc)
                 if cache_key in _choice_score_cache:
                     choice_scores = _choice_score_cache[cache_key]
-                elif scorer_calls < max_scorer_calls:
+                elif (
+                    scorer_calls < max_scorer_calls
+                    and scorer_wall_s < 4.5
+                    and not (n_clauses >= 10 and scorer_calls >= 2)
+                ):
                     scorer_calls += 1
+                    _t_sc0 = time.perf_counter()
                     choice_scores = mm.score_choices(
                         prompt,
                         list(cand_ids_tuple),
                         context_desc=f"chain={[x for x in chain_ids]}, available_carriers=[{gamma_desc}]",
                     ) or {}
+                    _dt_sc = time.perf_counter() - _t_sc0
+                    scorer_wall_s += _dt_sc
+                    # Compensate search deadline so slow synchronous SLM calls don't starve A* expansions.
+                    _search_deadline += min(_dt_sc, 6.0)
                     _choice_score_cache[cache_key] = choice_scores
 
             scored_children: List[Tuple[float, float, Cell, Any, float, Optional[int]]] = []

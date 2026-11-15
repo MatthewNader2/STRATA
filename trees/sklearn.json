@@ -29,6 +29,9 @@
   "top_level_carriers": [
     "model"
   ],
+  "advisory_qualifiers": [
+    "estimator"
+  ],
   "carrier_roles": {
     "model_input": [
       "model",
@@ -67,10 +70,8 @@
       "target"
     ],
     "projection": [
-      "feature_input",
-      "target_input",
-      "features",
-      "target"
+      "feature_projection",
+      "target_projection"
     ],
     "instance_sink": [
       "model_sink"
@@ -8111,8 +8112,7 @@
       "keywords": [
         "pipeline",
         "chain",
-        "fit",
-        "transform"
+        "fit"
       ],
       "code_template": "{pipe} = Pipeline(steps={steps}).fit({X}, {y})",
       "slots": [
@@ -8174,7 +8174,8 @@
           "typestate": "sklearn::hyperparameter",
           "invariants": [
             "collection"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "X": {
           "name": "X",
@@ -8482,7 +8483,8 @@
           "typestate": "sklearn::hyperparameter",
           "invariants": [
             "collection"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "cv": {
           "name": "cv",
@@ -10737,7 +10739,7 @@
           "qualifiers": [
             "scalar"
           ],
-          "default_value": "'model.joblib'",
+          "default_value": null,
           "description": "Output path for the serialized object.",
           "domain": "sklearn",
           "required": true,
@@ -10835,7 +10837,7 @@
           "qualifiers": [
             "scalar"
           ],
-          "default_value": "'model.joblib'",
+          "default_value": null,
           "description": "Filesystem path pointing to serialized joblib payload.",
           "domain": "sklearn",
           "required": true,
@@ -16413,7 +16415,6 @@
         "decision_tree",
         "gini",
         "entropy",
-        "split",
         "train"
       ],
       "code_template": "{model} = DecisionTreeClassifier(max_depth={max_depth}, random_state={random_state}).fit({X}, {y})",
@@ -20792,7 +20793,8 @@
           "typestate": "sklearn::hyperparameter",
           "invariants": [
             "collection"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "X": {
           "name": "X",
@@ -21043,7 +21045,8 @@
           "typestate": "sklearn::hyperparameter",
           "invariants": [
             "collection"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "n_iter": {
           "name": "n_iter",
@@ -27551,27 +27554,6 @@
     "modelformat": {
       "parent": "format"
     }
-  },
-  "mock_fixtures": [
-    {
-      "match_type_tokens": [
-        "model",
-        "estimator",
-        "classifier",
-        "regressor",
-        "pipeline"
-      ],
-      "match_domain_tokens": [
-        "sklearn"
-      ],
-      "template": "class _MockModel_{var_name}:\n    def fit(self, *a, **k): return self\n    def predict(self, *a, **k): return [0, 1]\n    def transform(self, *a, **k): return a[0] if a else []\n    def evaluate(self, *a, **k): return {'metric': 1.0}\n{var_name} = _MockModel_{var_name}()"
-    }
-  ],
-  "pointed_defaults": {
-    "int": 1,
-    "float": 1.0,
-    "bool": false,
-    "str": "'l2'"
   },
   "exclusive_roles": [
     [

@@ -75,6 +75,160 @@ def _check_src_hygiene() -> list[str]:
     return violations
 
 
+def _iter_scope_without_inner_classes(fn_node: ast.AST):
+    """Yield AST nodes within a method scope, skipping nested class definitions."""
+    stack: list[ast.AST] = list(getattr(fn_node, "body", ()))
+    while stack:
+        curr = stack.pop()
+        if isinstance(curr, ast.ClassDef):
+            continue
+        yield curr
+        stack.extend(ast.iter_child_nodes(curr))
+
+
+def _extract_self_attrs_from_target(tgt: ast.AST) -> set[str]:
+    attrs: set[str] = set()
+    for node in ast.walk(tgt):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+        ):
+            attrs.add(node.attr)
+    return attrs
+
+
+def _collect_self_attr_assignments(fn_node: ast.AST) -> set[str]:
+    attrs: set[str] = set()
+    for node in _iter_scope_without_inner_classes(fn_node):
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                attrs.update(_extract_self_attrs_from_target(tgt))
+        elif isinstance(node, ast.AnnAssign):
+            attrs.update(_extract_self_attrs_from_target(node.target))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "setattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "self"
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            attrs.add(node.args[1].value)
+    return attrs
+
+
+def _check_self_method_resolution() -> list[str]:
+    """
+    AST static gate: for classes in src/ whose inheritance closes within src/ (or object),
+    verify every direct `self.<method>(...)` call resolves to a defined method/attribute
+    on the class or its ancestors. Catches typos such as calling `self.get_type_kind`
+    instead of `self.has_type_kind`.
+    """
+    src_dir = ROOT_DIR / "src"
+    class_records: dict[str, dict] = {}
+    parsed_files: list[tuple[str, ast.AST]] = []
+
+    for py_path in sorted(src_dir.rglob("*.py")):
+        if py_path.name in LEGACY_EXEMPT:
+            continue
+        rel = py_path.relative_to(ROOT_DIR).as_posix()
+        try:
+            tree = ast.parse(py_path.read_text(encoding="utf-8"), filename=rel)
+        except SyntaxError:
+            continue
+        parsed_files.append((rel, tree))
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            members: set[str] = set()
+            has_getattr = False
+            bases: list[str] = []
+            for b in node.bases:
+                if isinstance(b, ast.Name):
+                    bases.append(b.id)
+                elif isinstance(b, ast.Attribute):
+                    bases.append(b.attr)
+
+            for stmt in node.body:
+                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    members.add(stmt.name)
+                    if stmt.name == "__getattr__":
+                        has_getattr = True
+                    members.update(_collect_self_attr_assignments(stmt))
+                elif isinstance(stmt, ast.Assign):
+                    for tgt in stmt.targets:
+                        if isinstance(tgt, ast.Name):
+                            members.add(tgt.id)
+                elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                    members.add(stmt.target.id)
+
+            rec = class_records.setdefault(
+                node.name,
+                {"bases": set(), "members": set(), "has_getattr": False},
+            )
+            rec["bases"].update(bases)
+            rec["members"].update(members)
+            rec["has_getattr"] = rec["has_getattr"] or has_getattr
+
+    def _is_closed_hierarchy(cls_name: str, seen: set[str]) -> bool:
+        if cls_name in seen:
+            return True
+        rec = class_records.get(cls_name)
+        if rec is None:
+            return False
+        if rec["has_getattr"]:
+            return False
+        seen.add(cls_name)
+        for base in rec["bases"]:
+            if base == "object":
+                continue
+            if base not in class_records or not _is_closed_hierarchy(base, seen):
+                return False
+        return True
+
+    def _all_members(cls_name: str, seen: set[str]) -> set[str]:
+        if cls_name in seen:
+            return set()
+        seen.add(cls_name)
+        rec = class_records.get(cls_name)
+        if rec is None:
+            return set()
+        out = set(rec["members"])
+        for base in rec["bases"]:
+            if base != "object":
+                out.update(_all_members(base, seen))
+        return out
+
+    violations: list[str] = []
+    for rel, tree in parsed_files:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not _is_closed_hierarchy(node.name, set()):
+                continue
+            resolved_members = _all_members(node.name, set())
+            for stmt in node.body:
+                if not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for inner in _iter_scope_without_inner_classes(stmt):
+                    if (
+                        isinstance(inner, ast.Call)
+                        and isinstance(inner.func, ast.Attribute)
+                        and isinstance(inner.func.value, ast.Name)
+                        and inner.func.value.id == "self"
+                    ):
+                        attr = inner.func.attr
+                        if attr not in resolved_members:
+                            violations.append(
+                                f"{rel}:{inner.lineno}: {node.name}.{stmt.name} calls unresolved `self.{attr}(...)`"
+                            )
+    return violations
+
+
 def main() -> int:
     try:
         import pyflakes  # noqa: F401
@@ -90,6 +244,13 @@ def main() -> int:
     if hygiene_violations:
         print("[check_static] FAIL — architectural hygiene violations in src/:\n")
         for line in hygiene_violations:
+            print(f"  {line}")
+        return 1
+
+    method_violations = _check_self_method_resolution()
+    if method_violations:
+        print("[check_static] FAIL — unresolved self.<method>() calls in src/:\n")
+        for line in method_violations:
             print(f"  {line}")
         return 1
 

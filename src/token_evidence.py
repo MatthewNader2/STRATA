@@ -93,7 +93,6 @@ class TokenEvidence:
                 from lattice import TypeRegistry
                 reg = TypeRegistry.get_instance()
                 skip |= set(reg.get_prompt_filler_tokens())
-                skip |= set(reg.get_sentence_connectives())
                 skip |= set(reg.get_function_words())
                 skip |= set(reg.get_generic_prepositions())
             except Exception:
@@ -271,16 +270,30 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
     """
     relevance = relevance or {}
     toks = ev.clause_tokens(clause)
+    pool_list = list(pool)
+    max_rel = max((float(relevance.get(c.cell_id, 0.0) or 0.0) for c in pool_list), default=0.0)
+    use_rel_weighting = (not getattr(ev, "_pure_symbolic", False)) and (max_rel > 0.0)
     scored = []
-    for c in pool:
+    for c in pool_list:
         o = ev.identity_overlap(toks, c)
         if o["hit"] > 0.0:
-            scored.append((o["rank"], relevance.get(c.cell_id, 0.0), c, o))
-    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+            rel = float(relevance.get(c.cell_id, 0.0) or 0.0)
+            if use_rel_weighting:
+                rel_norm = min(1.0, max(0.0, rel) / max_rel)
+                lex_scalar = 0.55 * o["recall"] + 0.30 * o["name_precision"] + 0.15 * o["f"]
+                combined_key: Any = (
+                    round(lex_scalar * (0.45 + 0.55 * rel_norm) + 0.15 * rel_norm, 6),
+                    o["rank"],
+                    rel,
+                )
+            else:
+                combined_key = (o["rank"], rel)
+            scored.append((combined_key, rel, c, o))
+    scored.sort(key=lambda x: x[0], reverse=True)
     accepted: list = []
     covered: Set[str] = set()
     primary_f = None
-    for rank, rel, c, o in scored:
+    for _, rel, c, o in scored:
         if not accepted:
             primary_f = o["f"]
             covered |= set(o["tokens"])
@@ -315,13 +328,70 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
 
                 f12 = any(is_edge_valid(out_p, in_p, prim_cell, c) for out_p in prim_cell.outputs.values() for in_p in c.inputs.values())
                 f21 = any(is_edge_valid(out_p, in_p, c, prim_cell) for out_p in c.outputs.values() for in_p in prim_cell.inputs.values())
-                t1 = {getattr(getattr(p, "signature", p), "type_name", "") for p in prim_cell.inputs.values()}
-                t2 = {getattr(getattr(p, "signature", p), "type_name", "") for p in c.inputs.values()}
+                f_bridge = False
+                if not f12 and not f21 and orch is not None:
+                    bridge_cache = getattr(orch, "_te_bridge_cells", None)
+                    if bridge_cache is None:
+                        try:
+                            try:
+                                from .unification import is_bridge_cell as _is_br_cell
+                            except (ImportError, ValueError):
+                                from unification import is_bridge_cell as _is_br_cell
+                        except Exception:
+                            _is_br_cell = lambda _bc, _rg=None: str(getattr(_bc, "node_role", "") or "").lower() == "bridge"
+                        bridge_cache = [
+                            bc for bc in (getattr(orch, "loaded_cells", {}) or {}).values()
+                            if _is_br_cell(bc)
+                        ]
+                        try:
+                            orch._te_bridge_cells = bridge_cache
+                        except Exception:
+                            pass
+                    for bc in bridge_cache:
+                        if (
+                            any(is_edge_valid(op, bip, prim_cell, bc) for op in prim_cell.outputs.values() for bip in bc.inputs.values())
+                            and any(is_edge_valid(bop, ip, bc, c) for bop in bc.outputs.values() for ip in c.inputs.values())
+                        ):
+                            f_bridge = True
+                            break
+                _reg_te = None
+                try:
+                    try:
+                        from .lattice import TypeRegistry as _TR_te
+                    except (ImportError, ValueError):
+                        from lattice import TypeRegistry as _TR_te
+                    _reg_te = _TR_te.get_instance()
+                except Exception:
+                    _reg_te = None
+
+                def _non_scalar_in_types(cell_obj: Any) -> Set[str]:
+                    res_t: Set[str] = set()
+                    for p in (getattr(cell_obj, "inputs", {}) or {}).values():
+                        tn = str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip()
+                        tl = tn.lower()
+                        if not tl:
+                            continue
+                        sk = str(getattr(p, "structure_kind", "") or "").strip().lower()
+                        if _reg_te is not None and (
+                            sk == "scalar"
+                            or _reg_te.is_subtype(tl, "scalar")
+                            or _reg_te.is_subtype(tl, "numeric")
+                            or _reg_te.is_subtype(tl, "bool")
+                            or _reg_te.is_subtype(tl, "str")
+                        ) and not _reg_te.is_composite_carrier(tl) and not _reg_te.is_abstract_carrier(tl):
+                            continue
+                        res_t.add(tn)
+                    return res_t
+
+                t1 = _non_scalar_in_types(prim_cell)
+                t2 = _non_scalar_in_types(c)
                 share_in = bool(t1 & t2)
 
-                is_ing = (getattr(c, "stage", None) == 1 or getattr(c, "node_role", "") == "ingress") and (clause_idx is not None and clause_idx > 0)
+                is_ing = (getattr(c, "stage", None) == 1 or getattr(c, "node_role", "") == "ingress") and (
+                    (clause_idx is not None and clause_idx > 0) or (not f12 and not f21)
+                )
 
-                if not (f12 or f21 or share_in) or is_ing:
+                if not (f12 or f21 or f_bridge or share_in) or is_ing:
                     ok = False
                     why = "secondary: no categorical composition with primary anchor %s" % prim_cell.cell_id
                 else:
@@ -598,28 +668,89 @@ def audit_clause_coverage(
     #    exploits a whole-path union immediately).
     for j, toks in enumerate(ctoks):
         claimed = [i for i in range(len(cells)) if j in claims[i] and table[i][j]]
-        lattice_best = lattice_best_fit = 0.0
+        lattice_best = lattice_best_fit = lattice_joint = 0.0
         if toks:
             memo = ev.__dict__.setdefault("_lattice_best_memo", {})
             key = tuple(sorted(toks))
             if key not in memo:
                 lb = lbf = 0.0
-                for lc in getattr(ev.orch, "loaded_cells", {}).values():
+                best_lc_cell = None
+                best_lc_toks: set = set()
+                best_lc_f = 0.0
+                best_lc_rank = None
+                loaded_list = list(getattr(ev.orch, "loaded_cells", {}).values())
+                for lc in loaded_list:
                     lo = ev.identity_overlap(toks, lc)
                     # fit = how much of the clause the cell explains x how completely the clause NAMES the cell
-                    lb, lbf = max(lb, lo["recall"]), max(lbf, lo["recall"] * lo["name_precision"])
-                memo[key] = (lb, lbf)
-            lattice_best, lattice_best_fit = memo[key]
+                    lb = max(lb, lo["recall"])
+                    lbf = max(lbf, lo["recall"] * lo["name_precision"])
+                    if lo["hit"] > 0.0 and (best_lc_rank is None or lo["rank"] > best_lc_rank):
+                        best_lc_rank = lo["rank"]
+                        best_lc_cell = lc
+                        best_lc_toks = set(lo["tokens"])
+                        best_lc_f = lo["f"]
+                # Greedy residual lattice cover for compound unpunctuated clauses (same multi-anchor
+                # criteria as anchors_for_clause): if a single cell explains only part of a compound
+                # clause while distinct unvisited cells strongly explain residual operational tokens,
+                # record achievable joint recall so missing tail operations aren't marked "served".
+                joint_toks: set = set(best_lc_toks)
+                best_lc_is_ing = bool(
+                    best_lc_cell is not None
+                    and (getattr(best_lc_cell, "stage", None) == 1 or getattr(best_lc_cell, "node_role", "") == "ingress")
+                )
+                if best_lc_cell is not None and len(toks - joint_toks) >= 2:
+                    min_rec = getattr(settings, "secondary_anchor_min_recall", 0.15)
+                    min_f = getattr(settings, "secondary_anchor_min_f", 0.15)
+                    f_ratio = getattr(settings, "secondary_anchor_f_ratio", 0.45)
+                    min_np = getattr(settings, "secondary_anchor_min_name_precision", 0.20)
+                    for _round in range(3):
+                        rem_toks = toks - joint_toks
+                        if len(rem_toks) < 2:
+                            break
+                        best_sec_toks: set = set()
+                        best_sec_rank = None
+                        for lc in loaded_list:
+                            lc_is_ing = getattr(lc, "stage", None) == 1 or getattr(lc, "node_role", "") == "ingress"
+                            if lc_is_ing and (j > 0 or not best_lc_is_ing):
+                                continue
+                            r_ov = ev.identity_overlap(rem_toks, lc)
+                            if r_ov["hit"] <= 0.0:
+                                continue
+                            sec_ok = (
+                                r_ov["recall"] >= min_rec
+                                and r_ov["name_precision"] >= min_np
+                                and (r_ov["f"] >= min_f or r_ov["f"] >= best_lc_f * f_ratio)
+                            )
+                            if sec_ok and len(r_ov["tokens"]) < 2:
+                                sec_ok = bool(
+                                    r_ov["f"] >= best_lc_f * 0.70
+                                    or (r_ov["name_precision"] >= 0.25 and r_ov["recall"] >= 0.50)
+                                )
+                            if sec_ok and (best_sec_rank is None or r_ov["rank"] > best_sec_rank):
+                                best_sec_rank = r_ov["rank"]
+                                best_sec_toks = set(r_ov["tokens"])
+                        if not best_sec_toks:
+                            break
+                        joint_toks |= best_sec_toks
+                lj = (ev.mass(joint_toks) / ev.mass(toks)) if (joint_toks and ev.mass(toks) > 0) else lb
+                memo[key] = (lb, lbf, max(lb, lj))
+            memo_entry = memo[key]
+            if len(memo_entry) >= 3:
+                lattice_best, lattice_best_fit, lattice_joint = memo_entry[0], memo_entry[1], memo_entry[2]
+            else:
+                lattice_best, lattice_best_fit = memo_entry[0], memo_entry[1]
+                lattice_joint = lattice_best
         c_mass = ev.mass(toks)
         path_tokens: set = set()
         for i in claimed:
             path_tokens |= set(table[i][j]["tokens"])
         path_best = (ev.mass(path_tokens) / c_mass) if c_mass > 0 else 0.0
+        target_recall = max(lattice_best, lattice_joint)
         quality = (max(table[i][j]["recall"] * table[i][j]["name_precision"] for i in claimed) / lattice_best_fit) if (claimed and lattice_best_fit > 0) else 0.0
         if not toks or lattice_best <= 0.0:
             status = "no-evidence" if not toks else "unservable"
         else:
-            status = "served" if path_best >= lattice_best - 1e-9 else "UNSERVED"
+            status = "served" if path_best >= target_recall - 1e-9 else "UNSERVED"
         if status != "served" and clause_sem is not None and j < len(clause_sem):
             sem_map = clause_sem[j] or {}
             max_sem_j = max(sem_map.values(), default=0.0)
@@ -627,7 +758,9 @@ def audit_clause_coverage(
             claimed_sem = max((float(sem_map.get(cells[i].cell_id, 0.0) or 0.0) for i in claimed_any), default=0.0)
             sem_floor = 0.70 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.35
             sem_rel = 0.88 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.70
-            if claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:
+            # Never override when a compound multi-operation clause left major residual lexical operations unserved
+            compound_unserved_gap = (lattice_joint > lattice_best + 0.15) and (path_best < 0.75 * lattice_joint)
+            if not compound_unserved_gap and claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:
                 status = "served"
                 path_best = max(path_best, claimed_sem)
                 quality = max(quality, claimed_sem / max_sem_j)
@@ -636,11 +769,11 @@ def audit_clause_coverage(
             "idx": j, "text": clauses[j], "tokens": sorted(toks),
             "winner": cells[best_i].cell_id if best_i is not None else None,
             "claimed_by": [cells[i].cell_id for i in claimed],
-            "path_recall": round(path_best, 3), "lattice_best_recall": round(lattice_best, 3),
+            "path_recall": round(path_best, 3), "lattice_best_recall": round(target_recall, 3),
             "quality": round(min(quality, 1.0), 3), "status": status})
         if status == "UNSERVED":
             out["issues"].append({"kind": "clause_unserved", "clause_idx": j, "clause": clauses[j],
-                                  "path_recall": round(path_best, 3), "lattice_best_recall": round(lattice_best, 3),
+                                  "path_recall": round(path_best, 3), "lattice_best_recall": round(target_recall, 3),
                                   "best_on_path": cells[best_i].cell_id if best_i is not None else None})
     total_cl = len(out["clauses"])
     served_cl = sum(1 for c in out["clauses"] if c.get("status") in ("served", "no-evidence"))

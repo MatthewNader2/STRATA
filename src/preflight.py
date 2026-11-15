@@ -363,8 +363,15 @@ class PreflightLinter:
             inputs = getattr(cell, "inputs", {}) or {}
             typed_map = getattr(cell, "typed_bindings", {}) or {}
 
+            proj_roles = (
+                cls._registry().get_roles_for_category("projection")
+                | set(cls._registry().get_projection_tokens() or ())
+                | key_bind_tags
+            )
+
             def _keys_of_port(p_name: str, expr: Any) -> Set[str]:
-                rec = typed_map.get(p_name) or resolve_typed_binding_record(cell, p_name, expr, inputs.get(p_name))
+                p_obj = inputs.get(p_name)
+                rec = typed_map.get(p_name) or resolve_typed_binding_record(cell, p_name, expr, p_obj)
                 found: Set[str] = set()
                 if rec and rec.kind == "projection" and rec.projection:
                     k = rec.projection.get("key")
@@ -374,6 +381,21 @@ class PreflightLinter:
                         found.add(k.strip("'\""))
                 if not found:
                     found.update(_extract_subscript_keys(expr))
+                if not found and p_obj is not None and isinstance(expr, str):
+                    p_role = str(getattr(p_obj, "port_role", "") or "").strip().lower()
+                    p_state = str(getattr(p_obj, "state", "") or "").strip().lower()
+                    p_binds = str(getattr(p_obj, "binds", "") or "").strip().lower()
+                    if p_role in proj_roles or p_state in proj_roles or p_binds in proj_roles:
+                        if get_active_language_backend(cls._registry()).is_python_ast:
+                            try:
+                                tree = ast.parse(expr, mode="eval")
+                                for sub in ast.walk(tree):
+                                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                                        s_val = sub.value.strip()
+                                        if s_val:
+                                            found.add(s_val)
+                            except Exception:
+                                pass
                 if not found and isinstance(expr, str) and expr.strip() in var_key_lineage:
                     found.update(var_key_lineage[expr.strip()])
                 return found
@@ -1061,7 +1083,12 @@ class PreflightLinter:
                         has_handle_output = True
                         break
 
-                if has_handle_output and i < n_steps - 1:
+                is_teardown_tail = (
+                    getattr(cell, "stage", None) == 2
+                    and bool(pipeline_bindings[i + 1 :])
+                    and all(_is_sink_cell(dc) for dc, _ in pipeline_bindings[i + 1 :])
+                )
+                if has_handle_output and i < n_steps - 1 and not is_teardown_tail:
                     dead_v = next(iter(produced_vars))
                     msg = (
                         f"Cell '{cell.cell_id}' produced linear handle / stateful resource '{dead_v}' "
@@ -1586,6 +1613,19 @@ class PreflightLinter:
                     cell_id=_ri["cell"], details=_ri)
         except Exception as _row_err:
             warnings.append(f"carrier extent analysis unavailable: {type(_row_err).__name__}: {_row_err}")
+
+        # -----------------------------------------------------------------
+        # Check 10b: Key-Space Causal Def-Use (a column/key must not be read before it is defined).
+        # -----------------------------------------------------------------
+        try:
+            for _ci in cls._verify_causal_key_def_use(pipeline_bindings):
+                _add_violation(
+                    "column_used_before_defined",
+                    f"Cell '{_ci['cell']}' reads column {_ci['column']!r} (port '{_ci['port']}', step {_ci['read_at'] + 1}) before "
+                    f"'{_ci['defined_by']}' defines it (step {_ci['defined_at'] + 1}); this raises KeyError at runtime.",
+                    cell_id=_ci["cell"], details=_ci)
+        except Exception as _cd_err:
+            warnings.append(f"column definition analysis unavailable: {type(_cd_err).__name__}: {_cd_err}")
 
 
         # -----------------------------------------------------------------

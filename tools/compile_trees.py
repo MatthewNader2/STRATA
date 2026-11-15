@@ -824,23 +824,15 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
         _merge_list_mapping(merged_dependent_ports, data.get("dependent_ports"), lower_keys=True)
 
         mappings = [
-            ("dest_port_tokens", "dest_port_token"),
-            ("source_port_tokens", "source_port_token"),
             ("data_bearing_roles", "data_bearing_role"),
             ("abstract_carriers", "abstract_carrier"),
             ("type_vars", "type_var"),
             ("top_types", "top_type"),
             ("top_states", "top_state"),
             ("product_constructors", "product_constructor"),
-            ("materialization_states", "materialization_state"),
             ("top_level_carriers", "top_level_carrier"),
-            ("path_port_tokens", "path_port_token"),
             ("identifier_root_states", "identifier_root_state"),
             ("supported_formats", "supported_format"),
-            ("excluded_module_tokens", "excluded_module_token"),
-            ("enum_citation_triggers", "enum_citation_trigger"),
-            ("enum_suffixes", "enum_suffix"),
-            ("symbol_stopwords", "symbol_stopword"),
         ]
         for key, cat in mappings:
             items = data.get(key)
@@ -874,24 +866,6 @@ def _persist_structural_metadata(conn: sqlite3.Connection, tree_files: List[Path
                     _insert("type_default", f"{dom}:{k_low}", json.dumps(val))
                 if dom in core_domains:
                     _insert("type_default", k_low, json.dumps(val))
-
-        if isinstance(data.get("enum_constant_rules"), list):
-            for rule in data["enum_constant_rules"]:
-                if isinstance(rule, dict):
-                    rule_json = json.dumps(rule, sort_keys=True)
-                    _insert("enum_constant_rule", rule_json, rule_json)
-
-        probes = data.get("mock_probes")
-        if not probes:
-            for k_p, v_p in data.items():
-                if k_p.startswith("mock_") and isinstance(v_p, list):
-                    probes = v_p
-                    break
-        if isinstance(probes, list):
-            for probe in probes:
-                if isinstance(probe, dict):
-                    probe_json = json.dumps(probe, sort_keys=True)
-                    _insert("mock_probe", probe_json, probe_json)
 
         _merge_list_mapping(merged_capabilities, data.get("capabilities"), lower_keys=False)
         _merge_list_mapping(merged_carrier_roles, data.get("carrier_roles"), lower_keys=True)

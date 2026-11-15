@@ -242,6 +242,14 @@
         "literal_compatible": true
       }
     },
+    "file": {
+      "parent": "path",
+      "kind": "path",
+      "properties": {
+        "is_atomic": true,
+        "literal_compatible": true
+      }
+    },
     "filepath": {
       "parent": "str",
       "kind": "path",
@@ -320,6 +328,37 @@
           "json"
         ]
       }
+    },
+    "iterable": {
+      "parent": "collection",
+      "kind": "collection",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
+    },
+    "iterator": {
+      "parent": "iterable",
+      "kind": "collection",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
+    },
+    "range": {
+      "parent": "sequence",
+      "kind": "collection",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true
+      }
+    },
+    "callable": {
+      "parent": "object",
+      "kind": "callable",
+      "properties": {
+        "is_atomic": false
+      }
     }
   },
   "top_types": [
@@ -328,7 +367,7 @@
     "top",
     "unknown",
     "generic",
-    "⊤"
+    "\u22a4"
   ],
   "top_states": [
     "any",
@@ -337,7 +376,7 @@
     "unregistered",
     "unbound",
     "top",
-    "⊤"
+    "\u22a4"
   ],
   "product_constructors": [
     "tuple",
@@ -349,48 +388,38 @@
     "primary",
     "optional",
     "collection",
-    "const",
-    "estimator",
-    "scalar",
-    "vector"
+    "const"
   ],
   "cells": [
     {
-      "cell_id": "PYTHON_DIJKSTRA_ALGORITHM",
-      "stage": 2,
+      "cell_id": "PYTHON_LIST_INIT",
+      "stage": 1,
       "domain_name": "python_core",
       "node_type": "function",
-      "node_role": "transformation",
-      "docstring": "Dijkstra shortest path algorithm on graph adjacency dictionary.",
+      "node_role": "source",
+      "docstring": "Construct a Python list from an optional iterable.",
       "keywords": [
-        "algorithm",
-        "dijkstra",
-        "shortest_path",
-        "shortest",
-        "path",
-        "graph",
-        "distances",
-        "heapq",
-        "bfs",
-        "dfs",
-        "traversal",
-        "search"
+        "list",
+        "builtin",
+        "sequence",
+        "construct"
       ],
       "inputs": {
-        "graph": {
-          "type_name": "dict",
-          "state": "adjacency_dict",
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
           "required": false,
-          "default_value": "{}",
           "port_role": "data_input",
-          "structure_kind": "composite",
-          "rank": 0,
+          "structure_kind": "collection",
+          "rank": 1,
           "element_type": "composite_record",
           "supported_formats": [],
-          "carrier": "dict",
+          "carrier": "iterable",
           "layout": {
-            "rank": 0,
-            "shape": null,
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
             "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
@@ -398,49 +427,39 @@
             "channel_axis": null,
             "length": null
           },
-          "semantics": "python_core.adjacency_dict",
-          "typestate": "python_core::adjacency_dict",
-          "invariants": []
-        },
-        "start": {
-          "type_name": "str",
-          "state": "source_node",
-          "required": false,
-          "default_value": "''",
-          "port_role": "literal_parameter",
-          "structure_kind": "scalar",
-          "rank": 0,
-          "element_type": "string",
-          "supported_formats": [],
-          "carrier": "str",
-          "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "string",
-            "memory_order": "any",
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": "()",
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
-          },
-          "semantics": "python_core.source_node",
-          "typestate": "python_core::source_node",
-          "invariants": []
+            "len": null
+          }
         }
       },
       "outputs": {
         "output_var": {
-          "type_name": "dict",
-          "state": "distances",
+          "type_name": "list",
+          "state": "initialized_list",
           "required": true,
-          "structure_kind": "composite",
-          "rank": 0,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
           "element_type": "composite_record",
           "supported_formats": [],
-          "carrier": "dict",
+          "carrier": "list",
           "layout": {
-            "rank": 0,
-            "shape": null,
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
             "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
@@ -448,20 +467,750 @@
             "channel_axis": null,
             "length": null
           },
-          "semantics": "python_core.distances",
-          "typestate": "python_core::distances",
-          "invariants": []
+          "semantics": "python_core.initialized_list",
+          "typestate": "python_core::initialized_list",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
         }
       },
-      "code_template": "import heapq\n\ndef dijkstra(graph, start):\n    distances = dict.fromkeys(graph, float('inf'))\n    if start in distances:\n        distances[start] = 0\n    pq = [(0, start)] if start in distances else []\n    while pq:\n        curr_dist, curr_node = heapq.heappop(pq)\n        if curr_dist > distances.get(curr_node, float('inf')):\n            continue\n        for neighbor, weight in graph.get(curr_node, {}).items():\n            dist = curr_dist + weight\n            if dist < distances.get(neighbor, float('inf')):\n                distances[neighbor] = dist\n                heapq.heappush(pq, (dist, neighbor))\n    return distances\n\n{output_var} = dijkstra({graph}, {start})",
-      "primary_in": "graph",
+      "code_template": "{output_var} = list({iterable})",
+      "primary_in": "iterable",
       "primary_out": "output_var",
-      "dependencies": [
-        "import heapq"
-      ],
+      "dependencies": [],
       "verified": 1,
       "slots": [
-        "graph",
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_SET_INIT",
+      "stage": 1,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "source",
+      "docstring": "Construct a Python set from an optional iterable.",
+      "keywords": [
+        "set",
+        "builtin",
+        "unique",
+        "construct"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": false,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": "()",
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "set",
+          "state": "initialized_set",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "set",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_set",
+          "typestate": "python_core::initialized_set",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = set({iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_TUPLE_INIT",
+      "stage": 1,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "source",
+      "docstring": "Construct a Python tuple from an optional iterable.",
+      "keywords": [
+        "tuple",
+        "builtin",
+        "immutable",
+        "construct"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": false,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": "()",
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "tuple",
+          "state": "initialized_tuple",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "tuple",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.initialized_tuple",
+          "typestate": "python_core::initialized_tuple",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = tuple({iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_SORTED",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Return a new sorted list from the items in an iterable.",
+      "keywords": [
+        "sorted",
+        "sort",
+        "order",
+        "builtin"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        },
+        "reverse": {
+          "type_name": "bool",
+          "state": "boolean_expression",
+          "required": false,
+          "port_role": "configuration",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "bool",
+          "supported_formats": [],
+          "carrier": "bool",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.boolean_expression",
+          "typestate": "python_core::boolean_expression",
+          "invariants": [],
+          "default_value": false,
+          "abstract_type": "logical"
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "list",
+          "state": "sorted_list",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.sorted_list",
+          "typestate": "python_core::sorted_list",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = sorted({iterable}, reverse={reverse})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "reverse",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_LEN",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Return the number of items in a container or sequence.",
+      "keywords": [
+        "len",
+        "length",
+        "size",
+        "count",
+        "builtin"
+      ],
+      "inputs": {
+        "obj": {
+          "type_name": "collection",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "collection",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "int",
+          "state": "length_value",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.length_value",
+          "typestate": "python_core::length_value",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "code_template": "{output_var} = len({obj})",
+      "primary_in": "obj",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "obj",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_RANGE",
+      "stage": 1,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "source",
+      "docstring": "Construct an arithmetic progression range from start to stop by step.",
+      "keywords": [
+        "range",
+        "sequence",
+        "integers",
+        "builtin"
+      ],
+      "inputs": {
+        "start": {
+          "type_name": "int",
+          "state": "range_bound",
+          "required": false,
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_bound",
+          "typestate": "python_core::range_bound",
+          "invariants": [],
+          "default_value": 0,
+          "abstract_type": "scalar"
+        },
+        "stop": {
+          "type_name": "int",
+          "state": "range_bound",
+          "required": true,
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_bound",
+          "typestate": "python_core::range_bound",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        },
+        "step": {
+          "type_name": "int",
+          "state": "range_step",
+          "required": false,
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_step",
+          "typestate": "python_core::range_step",
+          "invariants": [],
+          "default_value": 1,
+          "abstract_type": "scalar"
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "range",
+          "state": "range_seq",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "range",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_seq",
+          "typestate": "python_core::range_seq",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = range({start}, {stop}, {step})",
+      "primary_in": "stop",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "start",
+        "stop",
+        "step",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_ENUMERATE",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Return an enumerate object yielding index-element pairs over an iterable.",
+      "keywords": [
+        "enumerate",
+        "index",
+        "pairs",
+        "builtin"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        },
+        "start": {
+          "type_name": "int",
+          "state": "range_bound",
+          "required": false,
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "int64",
+          "supported_formats": [],
+          "carrier": "int",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_bound",
+          "typestate": "python_core::range_bound",
+          "invariants": [],
+          "default_value": 0,
+          "abstract_type": "scalar"
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "iterator",
+          "state": "enumerated_pairs",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterator",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.enumerated_pairs",
+          "typestate": "python_core::enumerated_pairs",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = enumerate({iterable}, start={start})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
         "start",
         "output_var"
       ],
@@ -470,33 +1219,45 @@
       "mutation_type": "pure"
     },
     {
-      "cell_id": "PYTHON_BINARY_SEARCH_SORT",
+      "cell_id": "PYTHON_ZIP",
       "stage": 2,
       "domain_name": "python_core",
       "node_type": "function",
       "node_role": "transformation",
-      "docstring": "Binary search on a sorted list.",
+      "docstring": "Aggregate elements from two iterables into a tuple iterator.",
       "keywords": [
-        "algorithm",
-        "binary_search",
-        "binary",
-        "search",
-        "sorted",
-        "list",
-        "sort",
-        "lookup"
+        "zip",
+        "pair",
+        "combine",
+        "builtin"
       ],
       "inputs": {
-        "data": {
-          "type_name": "list",
-          "state": "sorted_list",
-          "required": false,
-          "default_value": "[]",
+        "iter_a": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
           "port_role": "data_input",
           "structure_kind": "collection",
           "rank": 1,
           "element_type": "composite_record",
           "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
           "abstract_type": "collection",
           "shape_contract": {
             "ndim": 1,
@@ -507,8 +1268,934 @@
             "channel_count": null,
             "channel_axis": null,
             "len": null
+          }
+        },
+        "iter_b": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
           },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "iterator",
+          "state": "zipped_pairs",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterator",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.zipped_pairs",
+          "typestate": "python_core::zipped_pairs",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = zip({iter_a}, {iter_b})",
+      "primary_in": "iter_a",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iter_a",
+        "iter_b",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_MAP",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Apply a callable function to every item of an iterable lazily.",
+      "keywords": [
+        "map",
+        "transform",
+        "apply",
+        "builtin"
+      ],
+      "inputs": {
+        "func": {
+          "type_name": "callable",
+          "state": "transform_callable",
+          "required": true,
+          "port_role": "functional_operator",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "callable",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.transform_callable",
+          "typestate": "python_core::transform_callable",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "callable"
+        },
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "iterator",
+          "state": "mapped_stream",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterator",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.mapped_stream",
+          "typestate": "python_core::mapped_stream",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = map({func}, {iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "func",
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_FILTER",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Construct an iterator from elements of an iterable for which a predicate returns true.",
+      "keywords": [
+        "filter",
+        "predicate",
+        "select",
+        "builtin"
+      ],
+      "inputs": {
+        "func": {
+          "type_name": "callable",
+          "state": "predicate_callable",
+          "required": true,
+          "port_role": "functional_operator",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "callable",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.predicate_callable",
+          "typestate": "python_core::predicate_callable",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "callable"
+        },
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "iterator",
+          "state": "filtered_stream",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterator",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.filtered_stream",
+          "typestate": "python_core::filtered_stream",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "{output_var} = filter({func}, {iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "func",
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_SUM",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Sum the items of a numeric iterable from left to right plus start.",
+      "keywords": [
+        "sum",
+        "total",
+        "accumulate",
+        "builtin"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "float64",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        },
+        "start": {
+          "type_name": "float",
+          "state": "range_bound",
+          "required": false,
+          "port_role": "literal_parameter",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "float64",
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.range_bound",
+          "typestate": "python_core::range_bound",
+          "invariants": [],
+          "default_value": 0,
+          "abstract_type": "scalar"
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "float",
+          "state": "aggregated_scalar",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "float64",
+          "supported_formats": [],
+          "carrier": "float",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.aggregated_scalar",
+          "typestate": "python_core::aggregated_scalar",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "code_template": "{output_var} = sum({iterable}, start={start})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "start",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_MIN",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Return the smallest item in an iterable.",
+      "keywords": [
+        "min",
+        "minimum",
+        "smallest",
+        "builtin"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "object",
+          "state": "extremum_item",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.extremum_item",
+          "typestate": "python_core::extremum_item",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "code_template": "{output_var} = min({iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_MAX",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Return the largest item in an iterable.",
+      "keywords": [
+        "max",
+        "maximum",
+        "largest",
+        "builtin"
+      ],
+      "inputs": {
+        "iterable": {
+          "type_name": "iterable",
+          "state": "raw_collection",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "iterable",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.raw_collection",
+          "typestate": "python_core::raw_collection",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "output_var": {
+          "type_name": "object",
+          "state": "extremum_item",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.extremum_item",
+          "typestate": "python_core::extremum_item",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "code_template": "{output_var} = max({iterable})",
+      "primary_in": "iterable",
+      "primary_out": "output_var",
+      "dependencies": [],
+      "verified": 1,
+      "slots": [
+        "iterable",
+        "output_var"
+      ],
+      "endable": true,
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "PYTHON_HEAPQ_HEAPPUSH",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Push an item onto a binary min-heap list while maintaining the heap invariant.",
+      "keywords": [
+        "heapq",
+        "heappush",
+        "priority_queue",
+        "heap"
+      ],
+      "inputs": {
+        "heap": {
+          "type_name": "list",
+          "state": "heap_list",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
           "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.heap_list",
+          "typestate": "python_core::heap_list",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        },
+        "item": {
+          "type_name": "object",
+          "state": "heap_item",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.heap_item",
+          "typestate": "python_core::heap_item",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "outputs": {
+        "out_heap": {
+          "type_name": "list",
+          "state": "heap_list",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.heap_list",
+          "typestate": "python_core::heap_list",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "code_template": "heapq.heappush({heap}, {item})\n{out_heap} = {heap}",
+      "primary_in": "heap",
+      "primary_out": "out_heap",
+      "dependencies": [
+        "import heapq"
+      ],
+      "verified": 1,
+      "slots": [
+        "heap",
+        "item",
+        "out_heap"
+      ],
+      "endable": true,
+      "effects": [
+        "mutates_heap"
+      ],
+      "mutation_type": "in_place"
+    },
+    {
+      "cell_id": "PYTHON_HEAPQ_HEAPPOP",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Pop and return the smallest item from a binary min-heap list.",
+      "keywords": [
+        "heapq",
+        "heappop",
+        "priority_queue",
+        "heap"
+      ],
+      "inputs": {
+        "heap": {
+          "type_name": "list",
+          "state": "heap_list",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "list",
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "composite_record",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.heap_list",
+          "typestate": "python_core::heap_list",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
+        }
+      },
+      "outputs": {
+        "item": {
+          "type_name": "object",
+          "state": "popped_item",
+          "required": true,
+          "port_role": "result",
+          "structure_kind": "scalar",
+          "rank": 0,
+          "element_type": "object",
+          "supported_formats": [],
+          "carrier": "object",
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "object",
+            "memory_order": "any",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "semantics": "python_core.popped_item",
+          "typestate": "python_core::popped_item",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
+        }
+      },
+      "code_template": "{item} = heapq.heappop({heap})",
+      "primary_in": "heap",
+      "primary_out": "item",
+      "dependencies": [
+        "import heapq"
+      ],
+      "verified": 1,
+      "slots": [
+        "heap",
+        "item"
+      ],
+      "endable": true,
+      "effects": [
+        "mutates_heap"
+      ],
+      "mutation_type": "in_place"
+    },
+    {
+      "cell_id": "PYTHON_BISECT_LEFT",
+      "stage": 2,
+      "domain_name": "python_core",
+      "node_type": "function",
+      "node_role": "transformation",
+      "docstring": "Locate the leftmost insertion point for a value in a sorted sequence to maintain sorted order.",
+      "keywords": [
+        "bisect",
+        "bisect_left",
+        "insertion_point"
+      ],
+      "inputs": {
+        "seq": {
+          "type_name": "sequence",
+          "state": "sorted_list",
+          "required": true,
+          "port_role": "data_input",
+          "structure_kind": "collection",
+          "rank": 1,
+          "element_type": "composite_record",
+          "supported_formats": [],
+          "carrier": "sequence",
           "layout": {
             "rank": 1,
             "shape": [
@@ -523,23 +2210,34 @@
           },
           "semantics": "python_core.sorted_list",
           "typestate": "python_core::sorted_list",
-          "invariants": []
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "collection",
+          "shape_contract": {
+            "ndim": 1,
+            "shape": [
+              "N"
+            ],
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "len": null
+          }
         },
-        "target": {
-          "type_name": "int",
+        "value": {
+          "type_name": "object",
           "state": "query",
-          "required": false,
-          "default_value": "0",
+          "required": true,
           "port_role": "literal_parameter",
           "structure_kind": "scalar",
           "rank": 0,
-          "element_type": "int64",
+          "element_type": "object",
           "supported_formats": [],
-          "carrier": "int",
+          "carrier": "object",
           "layout": {
             "rank": 0,
             "shape": null,
-            "dtype": "int64",
+            "dtype": "object",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -548,14 +2246,17 @@
           },
           "semantics": "python_core.query",
           "typestate": "python_core::query",
-          "invariants": []
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
         }
       },
       "outputs": {
-        "output_var": {
+        "index": {
           "type_name": "int",
-          "state": "index",
+          "state": "insertion_index",
           "required": true,
+          "port_role": "result",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "int64",
@@ -571,127 +2272,24 @@
             "channel_axis": null,
             "length": null
           },
-          "semantics": "python_core.index",
-          "typestate": "python_core::index",
-          "invariants": []
+          "semantics": "python_core.insertion_index",
+          "typestate": "python_core::insertion_index",
+          "invariants": [],
+          "default_value": null,
+          "abstract_type": "scalar"
         }
       },
-      "code_template": "def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n\n{output_var} = binary_search({data}, {target})",
-      "primary_in": "data",
-      "primary_out": "output_var",
-      "dependencies": [],
+      "code_template": "{index} = bisect.bisect_left({seq}, {value})",
+      "primary_in": "seq",
+      "primary_out": "index",
+      "dependencies": [
+        "import bisect"
+      ],
       "verified": 1,
       "slots": [
-        "data",
-        "target",
-        "output_var"
-      ],
-      "endable": true,
-      "effects": [],
-      "mutation_type": "pure"
-    },
-    {
-      "cell_id": "PYTHON_MERGE_SORT_ALGORITHM",
-      "stage": 2,
-      "domain_name": "python_core",
-      "node_type": "function",
-      "node_role": "transformation",
-      "docstring": "Merge sort algorithm on a list.",
-      "keywords": [
-        "algorithm",
-        "merge_sort",
-        "merge",
-        "sort",
-        "sorting",
-        "list",
-        "divide_and_conquer"
-      ],
-      "inputs": {
-        "data": {
-          "type_name": "list",
-          "state": "raw_list",
-          "required": false,
-          "default_value": "[]",
-          "port_role": "data_input",
-          "structure_kind": "collection",
-          "rank": 1,
-          "element_type": "composite_record",
-          "supported_formats": [],
-          "abstract_type": "collection",
-          "shape_contract": {
-            "ndim": 1,
-            "shape": [
-              "N"
-            ],
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "len": null
-          },
-          "carrier": "list",
-          "layout": {
-            "rank": 1,
-            "shape": [
-              "N"
-            ],
-            "dtype": "composite_record",
-            "memory_order": "any",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "semantics": "python_core.raw_list",
-          "typestate": "python_core::raw_list",
-          "invariants": []
-        }
-      },
-      "outputs": {
-        "output_var": {
-          "type_name": "list",
-          "state": "sorted_list",
-          "required": true,
-          "structure_kind": "collection",
-          "rank": 1,
-          "element_type": "composite_record",
-          "supported_formats": [],
-          "abstract_type": "collection",
-          "shape_contract": {
-            "ndim": 1,
-            "shape": [
-              "N"
-            ],
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "len": null
-          },
-          "carrier": "list",
-          "layout": {
-            "rank": 1,
-            "shape": [
-              "N"
-            ],
-            "dtype": "composite_record",
-            "memory_order": "any",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "semantics": "python_core.sorted_list",
-          "typestate": "python_core::sorted_list",
-          "invariants": []
-        }
-      },
-      "code_template": "def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    res = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            res.append(left[i])\n            i += 1\n        else:\n            res.append(right[j])\n            j += 1\n    res.extend(left[i:])\n    res.extend(right[j:])\n    return res\n\n{output_var} = merge_sort({data})",
-      "primary_in": "data",
-      "primary_out": "output_var",
-      "dependencies": [],
-      "verified": 1,
-      "slots": [
-        "data",
-        "output_var"
+        "seq",
+        "value",
+        "index"
       ],
       "endable": true,
       "effects": [],
@@ -708,8 +2306,7 @@
         "dict",
         "dictionary",
         "state",
-        "init",
-        "map"
+        "init"
       ],
       "inputs": {},
       "outputs": {
@@ -764,7 +2361,7 @@
         "dict_get",
         "get",
         "lookup",
-        "project_key"
+        "mapping"
       ],
       "inputs": {
         "mapping": {
@@ -795,8 +2392,8 @@
           "type_name": "str",
           "state": "key_name",
           "required": true,
-          "default_value": "''",
-          "port_role": "key_selector",
+          "default_value": null,
+          "port_role": "key",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
@@ -902,8 +2499,8 @@
           "type_name": "str",
           "state": "key_name",
           "required": true,
-          "default_value": "''",
-          "port_role": "key_selector",
+          "default_value": null,
+          "port_role": "key",
           "structure_kind": "scalar",
           "rank": 0,
           "element_type": "string",
@@ -1006,7 +2603,7 @@
           "type_name": "list",
           "state": "raw_list",
           "required": true,
-          "default_value": "[]",
+          "default_value": null,
           "port_role": "data_input",
           "structure_kind": "collection",
           "rank": 1,
@@ -1031,7 +2628,7 @@
           "type_name": "object",
           "state": "extracted_value",
           "required": true,
-          "default_value": "None",
+          "default_value": null,
           "port_role": "literal_parameter",
           "structure_kind": "scalar",
           "rank": 0,
@@ -1098,27 +2695,6 @@
     "domain": "python_core",
     "states": [
       {
-        "name": "adjacency_dict",
-        "parent_state": null,
-        "carrier_type": "dict",
-        "description": "adjacency_dict typestate",
-        "properties": {}
-      },
-      {
-        "name": "distances",
-        "parent_state": null,
-        "carrier_type": "dict",
-        "description": "distances typestate",
-        "properties": {}
-      },
-      {
-        "name": "index",
-        "parent_state": null,
-        "carrier_type": "int",
-        "description": "index typestate",
-        "properties": {}
-      },
-      {
         "name": "query",
         "parent_state": null,
         "carrier_type": "int",
@@ -1137,13 +2713,6 @@
         "parent_state": null,
         "carrier_type": "list",
         "description": "sorted_list typestate",
-        "properties": {}
-      },
-      {
-        "name": "source_node",
-        "parent_state": null,
-        "carrier_type": "str",
-        "description": "source_node typestate",
         "properties": {}
       },
       {
@@ -1180,31 +2749,7 @@
         }
       },
       {
-        "name": "target",
-        "properties": {
-          "is_target_identifier": true
-        }
-      },
-      {
-        "name": "target_name",
-        "properties": {
-          "is_target_identifier": true
-        }
-      },
-      {
-        "name": "target_identifier",
-        "properties": {
-          "is_target_identifier": true
-        }
-      },
-      {
         "name": "source_identifier",
-        "properties": {
-          "is_source_identifier": true
-        }
-      },
-      {
-        "name": "input_path",
         "properties": {
           "is_source_identifier": true
         }
@@ -1222,23 +2767,30 @@
         }
       },
       {
-        "name": "materialization",
-        "properties": {
-          "is_materialized": true,
-          "is_destination_identifier": true
-        }
-      },
-      {
-        "name": "destination",
-        "properties": {
-          "is_destination_identifier": true
-        }
-      },
-      {
-        "name": "serialized",
+        "name": "written",
         "properties": {
           "is_materialized": true,
           "is_terminal": true
+        }
+      },
+      {
+        "name": "saved",
+        "properties": {
+          "is_materialized": true,
+          "is_terminal": true
+        }
+      },
+      {
+        "name": "exported",
+        "properties": {
+          "is_materialized": true,
+          "is_terminal": true
+        }
+      },
+      {
+        "name": "destination_path",
+        "properties": {
+          "is_destination_identifier": true
         }
       },
       {
@@ -1249,46 +2801,144 @@
         }
       },
       {
-        "name": "destroyed",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "raw_collection",
+        "parent_state": null,
+        "carrier_type": "iterable",
+        "description": "raw_collection typestate",
+        "properties": {}
       },
       {
-        "name": "freed",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "initialized_list",
+        "parent_state": null,
+        "carrier_type": "list",
+        "description": "initialized_list typestate",
+        "properties": {}
       },
       {
-        "name": "disposed",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "initialized_set",
+        "parent_state": null,
+        "carrier_type": "set",
+        "description": "initialized_set typestate",
+        "properties": {}
       },
       {
-        "name": "invalid",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "initialized_tuple",
+        "parent_state": null,
+        "carrier_type": "tuple",
+        "description": "initialized_tuple typestate",
+        "properties": {}
       },
       {
-        "name": "deleted",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "length_value",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "length_value typestate",
+        "properties": {}
       },
       {
-        "name": "nonexistent",
-        "properties": {
-          "is_invalid": true,
-          "is_terminal_invalid": true
-        }
+        "name": "range_bound",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "range_bound typestate",
+        "properties": {}
+      },
+      {
+        "name": "range_step",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "range_step typestate",
+        "properties": {}
+      },
+      {
+        "name": "range_seq",
+        "parent_state": null,
+        "carrier_type": "range",
+        "description": "range_seq typestate",
+        "properties": {}
+      },
+      {
+        "name": "enumerated_pairs",
+        "parent_state": null,
+        "carrier_type": "iterator",
+        "description": "enumerated_pairs typestate",
+        "properties": {}
+      },
+      {
+        "name": "zipped_pairs",
+        "parent_state": null,
+        "carrier_type": "iterator",
+        "description": "zipped_pairs typestate",
+        "properties": {}
+      },
+      {
+        "name": "transform_callable",
+        "parent_state": null,
+        "carrier_type": "callable",
+        "description": "transform_callable typestate",
+        "properties": {}
+      },
+      {
+        "name": "predicate_callable",
+        "parent_state": null,
+        "carrier_type": "callable",
+        "description": "predicate_callable typestate",
+        "properties": {}
+      },
+      {
+        "name": "mapped_stream",
+        "parent_state": null,
+        "carrier_type": "iterator",
+        "description": "mapped_stream typestate",
+        "properties": {}
+      },
+      {
+        "name": "filtered_stream",
+        "parent_state": null,
+        "carrier_type": "iterator",
+        "description": "filtered_stream typestate",
+        "properties": {}
+      },
+      {
+        "name": "aggregated_scalar",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "aggregated_scalar typestate",
+        "properties": {}
+      },
+      {
+        "name": "extremum_item",
+        "parent_state": null,
+        "carrier_type": "object",
+        "description": "extremum_item typestate",
+        "properties": {}
+      },
+      {
+        "name": "heap_list",
+        "parent_state": null,
+        "carrier_type": "list",
+        "description": "heap_list typestate",
+        "properties": {}
+      },
+      {
+        "name": "heap_item",
+        "parent_state": null,
+        "carrier_type": "object",
+        "description": "heap_item typestate",
+        "properties": {}
+      },
+      {
+        "name": "popped_item",
+        "parent_state": null,
+        "carrier_type": "object",
+        "description": "popped_item typestate",
+        "properties": {}
+      },
+      {
+        "name": "insertion_index",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "insertion_index typestate",
+        "properties": {}
       }
     ],
     "transitions": [],
@@ -1298,49 +2948,9 @@
   "pointed_defaults": {
     "dict": "{}",
     "list": "[]",
-    "int": 0,
-    "float": 0.0,
-    "str": "''",
-    "bool": false
+    "set": "set()",
+    "tuple": "()"
   },
-  "dest_port_tokens": [
-    "dest",
-    "destination",
-    "output",
-    "out",
-    "target",
-    "save",
-    "export",
-    "write",
-    "savepath",
-    "output_path",
-    "target_path",
-    "dest_path"
-  ],
-  "source_port_tokens": [
-    "source",
-    "src",
-    "input",
-    "in",
-    "load",
-    "read",
-    "filepath",
-    "source_path",
-    "file_path"
-  ],
-  "materialization_states": [
-    "saved_file",
-    "exported_file",
-    "written_file",
-    "saved",
-    "exported",
-    "written",
-    "materialized",
-    "closed",
-    "done",
-    "displayed",
-    "plotted"
-  ],
   "language_spec": {
     "name": "python",
     "file_extension": ".py",
@@ -1369,12 +2979,6 @@
       "try"
     ],
     "sandbox_driver": "python",
-    "headless_env": {
-      "MPLBACKEND": "Agg",
-      "SDL_VIDEODRIVER": "dummy",
-      "SDL_AUDIODRIVER": "dummy",
-      "QT_QPA_PLATFORM": "offscreen"
-    },
     "forbidden_constructs": [
       "rmtree"
     ],
@@ -1417,30 +3021,12 @@
       "any",
       "all",
       "map",
-      "filter",
-      "math",
-      "heapq",
-      "bisect"
+      "filter"
     ],
     "variadic_markers": [
       "*",
       "**",
       "..."
-    ],
-    "output_targets": [
-      "output_var",
-      "output",
-      "out",
-      "result",
-      "res"
-    ],
-    "condition_states": [
-      "condition",
-      "predicate",
-      "boolean_expression",
-      "filter_expr",
-      "query_expr",
-      "expression"
     ],
     "null_literal": "None",
     "bool_literals": [
@@ -1469,12 +3055,8 @@
     "container_constructors": {
       "set": "set",
       "dict": "dict",
-      "OrderedDict": "dict",
-      "defaultdict": "dict",
-      "Counter": "dict",
       "list": "list",
-      "tuple": "tuple",
-      "deque": "deque"
+      "tuple": "tuple"
     },
     "collection_append_templates": {
       "set": "{container}.add({item})",
@@ -1489,95 +3071,6 @@
     "R",
     "K",
     "State"
-  ],
-  "excluded_module_tokens": [
-    "test",
-    "tests",
-    "testing",
-    "conftest",
-    "testutils",
-    "vendor",
-    "vendored",
-    "externals",
-    "third_party",
-    "compat",
-    "internal",
-    "internals"
-  ],
-  "enum_citation_triggers": [
-    "see",
-    "values in",
-    "one of",
-    "choices are",
-    "must be one of",
-    "refer to"
-  ],
-  "enum_suffixes": [
-    "flags",
-    "flag",
-    "types",
-    "type",
-    "codes",
-    "code",
-    "mode",
-    "modes",
-    "enum",
-    "enums"
-  ],
-  "symbol_stopwords": [
-    "the",
-    "a",
-    "an",
-    "is",
-    "are",
-    "be",
-    "or",
-    "and",
-    "of",
-    "in",
-    "to",
-    "for",
-    "with",
-    "by",
-    "from",
-    "as",
-    "on",
-    "at",
-    "if",
-    "it",
-    "this",
-    "that",
-    "can",
-    "may",
-    "must",
-    "should",
-    "will",
-    "see",
-    "note",
-    "default",
-    "none",
-    "true",
-    "false"
-  ],
-  "exclusive_qualifiers": [
-    [
-      "scalar",
-      "vector",
-      "matrix"
-    ]
-  ],
-  "path_port_tokens": [
-    "path",
-    "filepath",
-    "uri",
-    "url",
-    "dest_path",
-    "source_path",
-    "pathlike",
-    "buf",
-    "fp",
-    "destination",
-    "dest"
   ],
   "carrier_roles": {
     "config": [
@@ -1636,8 +3129,7 @@
       "export",
       "output",
       "terminal_output",
-      "io_egress",
-      "evaluator"
+      "io_egress"
     ],
     "bridge": [
       "bridge",
@@ -1646,51 +3138,29 @@
       "cast",
       "coercion",
       "interchange",
-      "array_bridge",
       "carrier_conversion",
       "conversion"
     ],
     "key": [
-      "key",
-      "projection",
-      "column_key",
-      "index_key"
+      "key"
     ],
     "assigned_value": [
       "assigned_value",
       "value",
       "val"
     ],
-    "projection": [
-      "projection"
-    ],
     "data": [
       "data_carrier",
       "data_input",
       "carrier"
     ],
-    "clean": [
-      "cleaner",
-      "clean"
-    ],
     "transform": [
       "transform",
-      "transformer",
       "transformation"
     ],
-    "estimator": [
-      "estimator"
-    ],
-    "evaluator": [
-      "evaluator"
-    ],
     "destination": [
-      "dest",
       "destination",
-      "dest_path",
-      "savepath",
-      "output_path",
-      "target_path"
+      "dest_sink"
     ],
     "literal": [
       "literal",
@@ -1708,19 +3178,6 @@
     ],
     "strict": [
       "strict"
-    ],
-    "single_projection": [
-      "single",
-      "subscript"
-    ],
-    "multi_projection": [
-      "multi"
-    ],
-    "lifecycle": [
-      "model",
-      "estimator",
-      "receiver",
-      "model_input"
     ]
   }
 }

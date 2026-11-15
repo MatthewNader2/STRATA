@@ -326,7 +326,6 @@ class TypeRegistry:
         self._product_constructors: Set[str] = set()
         self._function_words: Optional[Tuple[str, ...]] = None
         self._egress_tokens: Set[str] = set()
-        self._materialization_states: Set[str] = set()
         self._terminal_states: Set[str] = set()
         self._role_carriers: Set[str] = set()
         self._polarity_hints: Dict[str, Set[str]] = {}
@@ -334,16 +333,12 @@ class TypeRegistry:
         self._advisory_qualifiers: Set[Tuple[str, ...]] = set()
         self._abstract_carriers: Set[str] = set()
         self._abstract_carrier_mapping: Dict[str, str] = {}
-        self._dest_port_tokens: Set[str] = set()
-        self._source_port_tokens: Set[str] = set()
         self._data_bearing_roles: Set[str] = set()
         self._estimator_verbs: Set[str] = set()
         self._projection_tokens: Set[str] = set()
         self._column_projection_tokens = self._projection_tokens
-        self._stopwords: Set[str] = set()
         self._preposition_triggers: Set[str] = set()
         self._generic_prepositions: Set[str] = set()
-        self._sentence_connectives: Set[str] = set()
         self._coordinating_conjunctions: Set[str] = set()
         self._sequencing_connectives: Set[str] = set()
         self._filter_context_tokens: Set[str] = set()
@@ -352,25 +347,15 @@ class TypeRegistry:
         self._output_asset_placeholders: Dict[str, str] = {}
         self._operation_tokens: Set[str] = set()
         self._ancestry_cache: Dict[Tuple[str, Tuple[str, ...]], bool] = {}
-        # (apply_fixes_v7) P6 — configurable enum-citation triggers
-        self._enum_citation_triggers: Set[str] = set()
-        self._excluded_module_tokens: Set[str] = set()
-        self._enum_suffixes: Set[str] = set()
-        self._symbol_stopwords: Set[str] = set()
         # Data-driven extension registries (declared ONLY in tree JSON; empty by
         # default so the engine core never carries domain information):
         #   semantic_flag_patterns  — keyword->flag observers for slot extraction
-        #   enum_constant_rules     — placeholder->module-constant grounding rules
-        #   mock_probes             — mock probe templates for sandbox dry-runs
         #   port_name_type_hints    — declared port-name/affix -> type_name hints
         self._semantic_flag_patterns: List[Dict[str, Any]] = []
-        self._enum_constant_rules: List[Dict[str, Any]] = []
-        self._mock_probes: List[Dict[str, Any]] = []
         self._port_name_type_hints: Dict[str, str] = {}
         self._port_name_morphology_hints: List[Dict[str, str]] = []
         # Data-driven structural vocabulary (declared in tree JSON; empty by default)
         self._top_level_carriers: Set[str] = set()
-        self._path_port_tokens: Set[str] = set()
         self._registered_supported_formats: Set[str] = set()
         self._state_role_ancestors: Dict[str, Set[str]] = {}
         self._state_role_markers: Dict[str, Tuple[str, ...]] = {}
@@ -400,7 +385,6 @@ class TypeRegistry:
         self._state_carrier_cache: Dict[str, Optional[str]] = {}
         self._state_compatible_cache: Dict[Tuple[Any, ...], bool] = {}
         self._terminal_sink_states_cache: Optional[Set[str]] = None
-        self._path_port_name_tokens_cache: Optional[Set[str]] = None
         self._path_port_sig_cache: Dict[Any, bool] = {}
         self._unifies_cache: Dict[Tuple[Any, Any], bool] = {}
         self._top_cache: Dict[str, bool] = {}
@@ -412,11 +396,7 @@ class TypeRegistry:
         self._cached_cell_init_roles: Optional[Tuple[Set[str], ...]] = None
         self._cached_abstract_carriers: Optional[Set[str]] = None
         self._cached_top_level_carriers: Optional[Set[str]] = None
-        self._cached_path_port_tokens: Optional[Set[str]] = None
-        self._cached_dest_port_tokens: Optional[Set[str]] = None
-        self._cached_source_port_tokens: Optional[Set[str]] = None
         self._cached_terminal_states: Optional[Set[str]] = None
-        self._cached_materialization_states: Optional[Set[str]] = None
         self._cached_advisory_qualifiers: Optional[Set[Any]] = None
         self._cached_projection_tokens: Optional[Set[str]] = None
         self._cached_edge_sem_bundle: Optional[Tuple[Set[Any], ...]] = None
@@ -913,12 +893,6 @@ class TypeRegistry:
                             self.register_forbidden_side_effects(data["forbidden_side_effects"])
                         if isinstance(data.get("top_level_carriers"), list):
                             self.register_top_level_carriers(data["top_level_carriers"])
-                        if isinstance(data.get("path_port_tokens"), list):
-                            self.register_path_port_tokens(data["path_port_tokens"])
-                        if isinstance(data.get("source_port_tokens"), list):
-                            self.register_source_port_tokens(data["source_port_tokens"])
-                        if isinstance(data.get("dest_port_tokens"), list):
-                            self.register_dest_port_tokens(data["dest_port_tokens"])
                         if isinstance(data.get("state_role_ancestors"), dict):
                             self.register_state_role_ancestors(data["state_role_ancestors"])
                         if isinstance(data.get("state_role_markers"), dict):
@@ -927,8 +901,6 @@ class TypeRegistry:
                             self.register_carrier_roles(data["carrier_roles"])
                         if isinstance(data.get("identifier_root_states"), list):
                             self.register_identifier_root_states(data["identifier_root_states"])
-                        if isinstance(data.get("materialization_states"), list):
-                            self.register_materialization_states(data["materialization_states"])
                         if isinstance(data.get("supported_formats"), list):
                             self.register_supported_formats(data["supported_formats"])
                         if isinstance(data.get("capabilities"), dict):
@@ -982,14 +954,6 @@ class TypeRegistry:
                                         self.register_type(t_name, parent or None)
                         if "type_vars" in data and isinstance(data["type_vars"], list):
                             self.register_type_vars(data["type_vars"])
-                        if isinstance(data.get("excluded_module_tokens"), list):
-                            self.register_excluded_module_tokens(data["excluded_module_tokens"])
-                        if isinstance(data.get("enum_citation_triggers"), list):
-                            self.register_enum_citation_triggers(data["enum_citation_triggers"])
-                        if isinstance(data.get("enum_suffixes"), list):
-                            self.register_enum_suffixes(data["enum_suffixes"])
-                        if isinstance(data.get("symbol_stopwords"), list):
-                            self.register_symbol_stopwords(data["symbol_stopwords"])
                         if "aliases" in data and isinstance(data["aliases"], dict):
                             for a_k, a_v in data["aliases"].items():
                                 self.register_alias(a_k, a_v)
@@ -1009,8 +973,6 @@ class TypeRegistry:
                                         parts = str(r).replace(":", ".").rsplit(".", 1)
                                         if len(parts) == 2:
                                             self.register_artifact_reader(cat, parts[0], parts[1])
-                        if "materialization_states" in data and isinstance(data["materialization_states"], list):
-                            self.register_materialization_states(data["materialization_states"])
                         if "cells" in data and isinstance(data["cells"], list):
                             for c in data["cells"]:
                                 if isinstance(c, dict):
@@ -1039,22 +1001,8 @@ class TypeRegistry:
                             self.register_abstract_carriers(data["abstract_carriers"])
                         if "abstract_carrier_mapping" in data and isinstance(data["abstract_carrier_mapping"], dict):
                             self.register_abstract_carrier_mapping(data["abstract_carrier_mapping"])
-                        if "dest_port_tokens" in data and isinstance(data["dest_port_tokens"], list):
-                            self.register_dest_port_tokens(data["dest_port_tokens"])
-                        if "source_port_tokens" in data and isinstance(data["source_port_tokens"], list):
-                            self.register_source_port_tokens(data["source_port_tokens"])
                         if "data_bearing_roles" in data and isinstance(data["data_bearing_roles"], list):
                             self.register_data_bearing_roles(data["data_bearing_roles"])
-                        if "enum_constant_rules" in data and isinstance(data["enum_constant_rules"], list):
-                            self.register_enum_constant_rules(data["enum_constant_rules"])
-                        probes = data.get("mock_probes")
-                        if not probes:
-                            for k_p, v_p in data.items():
-                                if k_p.startswith("mock_") and isinstance(v_p, list):
-                                    probes = v_p
-                                    break
-                        if isinstance(probes, list):
-                            self.register_mock_probes(probes)
                 except Exception as e:
                     logger.debug("suppressed: %s", e, exc_info=False)
 
@@ -1074,7 +1022,6 @@ class TypeRegistry:
             self._state_carrier_cache.clear()
             self._state_compatible_cache.clear()
             self._terminal_sink_states_cache = None
-            self._path_port_name_tokens_cache = None
             self._path_port_sig_cache.clear()
             self._unifies_cache.clear()
             self._top_cache.clear()
@@ -1083,11 +1030,7 @@ class TypeRegistry:
             self._cached_cell_init_roles = None
             self._cached_abstract_carriers = None
             self._cached_top_level_carriers = None
-            self._cached_path_port_tokens = None
-            self._cached_dest_port_tokens = None
-            self._cached_source_port_tokens = None
             self._cached_terminal_states = None
-            self._cached_materialization_states = None
             self._cached_advisory_qualifiers = None
             self._cached_projection_tokens = None
             self._cached_edge_sem_bundle = None
@@ -1127,41 +1070,6 @@ class TypeRegistry:
             return cached
         res = set(self._top_level_carriers)
         self._cached_top_level_carriers = res
-        return res
-
-    @_locked
-    def register_path_port_tokens(self, tokens: Any) -> None:
-        """Roles / abstract types / carrier types / type names that mark a filesystem-path port."""
-        mutated = False
-        for t in tokens or ():
-            s_ = str(t).strip().lower()
-            if s_ and s_ not in self._path_port_tokens:
-                self._path_port_tokens.add(s_)
-                mutated = True
-        if mutated:
-            self._invalidate_caches()
-
-    def get_path_port_tokens(self) -> Set[str]:
-        cached = self._cached_path_port_tokens
-        if cached is not None:
-            return cached
-        res = set(self._path_port_tokens)
-        self._cached_path_port_tokens = res
-        return res
-
-    def get_path_port_name_tokens(self) -> Set[str]:
-        cached = self._path_port_name_tokens_cache
-        if cached is not None:
-            return cached
-        gen = self._generation
-        res = (
-            set(self.get_path_port_tokens())
-            | set(self.get_types_by_kind("path"))
-            | set(self.get_roles_for_category("path"))
-        )
-        with self._lock:
-            if gen == self._generation:
-                self._path_port_name_tokens_cache = res
         return res
 
     def get_bridge_candidate_bundle(self) -> Tuple[Set[str], Set[str], Set[str], Set[str], Set[str]]:
@@ -1478,10 +1386,11 @@ class TypeRegistry:
         if cached is not None:
             return cached
         gen = self._generation
-        res: Set[str] = set()
-        for k in SCALAR_PRIMITIVE_KINDS:
-            res.update(self.get_types_by_kind(k))
-        res -= set(self.get_path_port_name_tokens() or ())
+        res: Set[str] = {
+            t for t, tk in self._type_kinds.items()
+            if tk in SCALAR_PRIMITIVE_KINDS
+        }
+        res -= set(self.get_types_by_kind("path") or ())
         with self._lock:
             if gen == self._generation:
                 self._cached_scalar_types = res
@@ -1542,14 +1451,14 @@ class TypeRegistry:
         """Checks whether a single path port is compatible with lowercase extension `ext`."""
         port_fmts = getattr(port, "supported_formats", None)
         if port_fmts:
-            clean_fmts = {str(f).strip().lower() for f in port_fmts}
-            if "*" not in clean_fmts and ext not in clean_fmts:
-                return False
+            clean_fmts = {str(f).strip().lower() for f in port_fmts if str(f).strip()}
+            if clean_fmts:
+                return "*" in clean_fmts or "any" in clean_fmts or ext in clean_fmts
         tn = str(getattr(port, "type_name", "") or "").strip()
         if not ("[" in tn and tn.endswith("]")):
             return True
         ctor, _, inner = tn[:-1].partition("[")
-        loc_ctors = self.get_types_by_kind("path") | self.get_path_port_name_tokens()
+        loc_ctors = set(self.get_types_by_kind("path") or ()) | {"path", "file"}
         if ctor.strip().lower() not in loc_ctors:
             return True
         parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
@@ -1723,25 +1632,6 @@ class TypeRegistry:
 
     def get_egress_tokens(self) -> Set[str]:
         return set(self._egress_tokens)
-
-    @_locked
-    def register_materialization_states(self, states: Any) -> None:
-        mutated = False
-        for st in states or ():
-            s = str(st).strip().lower()
-            if s and s not in self._materialization_states:
-                self._materialization_states.add(s)
-                mutated = True
-        if mutated:
-            self._invalidate_caches()
-
-    def get_materialization_states(self) -> Set[str]:
-        cached = self._cached_materialization_states
-        if cached is not None:
-            return cached
-        res = set(self._materialization_states)
-        self._cached_materialization_states = res
-        return res
 
     @_locked
     def register_terminal_states(self, states: Any) -> None:
@@ -1994,46 +1884,6 @@ class TypeRegistry:
         literal_roots = self.get_types_with_property("literal_compatible", True)
         return any(self.is_subtype(t, root) for root in literal_roots)
 
-    # --- Destination port tokens (data-driven from tree declarations) ---
-    @_locked
-    def register_dest_port_tokens(self, tokens: Any) -> None:
-        mutated = False
-        for t in tokens or ():
-            s = str(t).strip().lower()
-            if s and s not in self._dest_port_tokens:
-                self._dest_port_tokens.add(s)
-                mutated = True
-        if mutated:
-            self._invalidate_caches()
-
-    def get_dest_port_tokens(self) -> Set[str]:
-        cached = self._cached_dest_port_tokens
-        if cached is not None:
-            return cached
-        res = set(self._dest_port_tokens)
-        self._cached_dest_port_tokens = res
-        return res
-
-    # --- Source port tokens (data-driven from tree declarations) ---
-    @_locked
-    def register_source_port_tokens(self, tokens: Any) -> None:
-        mutated = False
-        for t in tokens or ():
-            s = str(t).strip().lower()
-            if s and s not in self._source_port_tokens:
-                self._source_port_tokens.add(s)
-                mutated = True
-        if mutated:
-            self._invalidate_caches()
-
-    def get_source_port_tokens(self) -> Set[str]:
-        cached = self._cached_source_port_tokens
-        if cached is not None:
-            return cached
-        res = set(self._source_port_tokens)
-        self._cached_source_port_tokens = res
-        return res
-
     # --- Data-bearing roles (data-driven from tree declarations) ---
     @_locked
     def register_data_bearing_roles(self, roles: Any) -> None:
@@ -2096,26 +1946,12 @@ class TypeRegistry:
             if t != "format" and self.is_subtype(t, "format") and (
                 "format" in self._parents.get(t, ())
                 or any(t in parents for parents in self._parents.values())
-                or self.get_type_kind(t) == "format_group"
+                or self.has_type_kind(t, "format_group")
                 or bool(self._type_properties.get(t, {}).get("is_format_group"))
             )
         }
         self._cached_format_groups = (self._generation, groups)
         return groups
-
-    # --- Stopwords (deprecated: zero hardcoded stopwords, empty by default) ---
-    @_locked
-    def register_stopwords(self, words: Any) -> None:
-        pass
-
-    def get_stopwords(self) -> Set[str]:
-        return (
-            set(self.get_prompt_filler_tokens())
-            | set(self.get_sentence_connectives())
-            | set(self.get_function_words())
-            | set(self.get_coordinating_conjunctions())
-            | set(self.get_sequencing_connectives())
-        )
 
     # --- Preposition triggers (data-driven from tree declarations) ---
     @_locked
@@ -2136,16 +1972,6 @@ class TypeRegistry:
 
     def get_generic_prepositions(self) -> Set[str]:
         return set(self._generic_prepositions)
-
-    # --- Sentence connectives (data-driven from tree declarations) ---
-    @_locked
-    def register_sentence_connectives(self, connectives: Any) -> None:
-        if connectives:
-            for c in connectives:
-                self._sentence_connectives.add(str(c).strip().lower())
-
-    def get_sentence_connectives(self) -> Set[str]:
-        return set(self._sentence_connectives)
 
     # --- Coordinating conjunctions (data-driven from tree declarations) ---
     @_locked
@@ -2187,18 +2013,16 @@ class TypeRegistry:
         return set(self._prompt_filler_tokens)
 
     def _get_edge_sem_bundle(self) -> Tuple[Set[Any], ...]:
-        """Cached 6-tuple of schema-derived role/state sets used on every edge check."""
+        """Cached 5-tuple of schema-derived role/state sets used on every edge check."""
         cached = self._cached_edge_sem_bundle
         if cached is not None:
             return cached
         gen = self._generation
-        out_targets = set(getattr(self._active_language_spec, "output_targets", None) or ())
         bundle = (
             self.get_roles_for_category("prediction_in"),
             self.get_roles_for_category("prediction_out"),
             self.get_states_by_property("is_prediction", True),
             self.get_states_by_property("is_invalid", True) | self.get_states_by_property("is_terminal_invalid", True),
-            {str(x).strip().lower() for x in out_targets if str(x).strip()},
             {str(x).strip().lower() for x in self.get_type_property_values("protocols")},
         )
         with self._lock:
@@ -2400,45 +2224,6 @@ class TypeRegistry:
             if mutated:
                 self._invalidate_caches()
 
-    @_locked
-    def register_enum_citation_triggers(self, triggers) -> None:
-        for t in triggers or ():
-            s = str(t).strip().lower()
-            if len(s) >= 2: self._enum_citation_triggers.add(s)
-
-    def get_enum_citation_triggers(self) -> Set[str]:
-        return set(self._enum_citation_triggers)
-
-    @_locked
-    def register_excluded_module_tokens(self, tokens: Any) -> None:
-        for t in tokens or ():
-            s = str(t).strip().lower()
-            if s:
-                self._excluded_module_tokens.add(s)
-
-    def get_excluded_module_tokens(self) -> Set[str]:
-        return set(self._excluded_module_tokens)
-
-    @_locked
-    def register_enum_suffixes(self, suffixes: Any) -> None:
-        for s in suffixes or ():
-            s_ = str(s).strip().lower()
-            if s_:
-                self._enum_suffixes.add(s_)
-
-    def get_enum_suffixes(self) -> Set[str]:
-        return set(self._enum_suffixes)
-
-    @_locked
-    def register_symbol_stopwords(self, words: Any) -> None:
-        for w in words or ():
-            s = str(w).strip().lower()
-            if s:
-                self._symbol_stopwords.add(s)
-
-    def get_symbol_stopwords(self) -> Set[str]:
-        return set(self._symbol_stopwords)
-
     # ---------------------------------------------------------------------
     # Data-driven extension registries (all populated from trees/*.json)
     # ---------------------------------------------------------------------
@@ -2457,81 +2242,6 @@ class TypeRegistry:
 
     def get_semantic_flag_patterns(self) -> List[Dict[str, Any]]:
         return list(self._semantic_flag_patterns)
-
-    @_locked
-    def register_enum_constant_rules(self, rules: Any) -> None:
-        """Registers declared placeholder->module-constant grounding rules."""
-        for r in rules or ():
-            if isinstance(r, dict) and r.get("placeholder_names"):
-                entry = {
-                    "placeholder_names": set(str(n).lower() for n in r["placeholder_names"]),
-                    "module_attribute_prefix": str(r.get("module_attribute_prefix", "")),
-                    "format_flags": dict(r.get("format_flags") or {}),
-                    "default_format": str(r.get("default_format", "")),
-                }
-                if entry not in self._enum_constant_rules:
-                    self._enum_constant_rules.append(entry)
-
-    def get_enum_constant_rules(self) -> List[Dict[str, Any]]:
-        return list(self._enum_constant_rules)
-
-    @_locked
-    def register_mock_probes(self, probes: Any) -> None:
-        """Registers declared dry-run mock probes keyed by type/domain tokens."""
-        for f in probes or ():
-            if isinstance(f, dict) and f.get("template"):
-                entry = {
-                    "match_type_tokens": set(str(t).lower() for t in (f.get("match_type_tokens") or ())),
-                    "match_domain_tokens": set(str(d).lower() for d in (f.get("match_domain_tokens") or ())),
-                    "template": str(f["template"]),
-                }
-                if entry not in self._mock_probes:
-                    self._mock_probes.append(entry)
-
-    @staticmethod
-    def _name_parts(value: str) -> Set[str]:
-        """Splits a type/domain name into alphanumeric word parts (zero regex)."""
-        parts: Set[str] = set()
-        buf: List[str] = []
-        for ch in str(value or "").lower():
-            if ch.isalnum() or ch == "_":
-                buf.append(ch)
-            elif buf:
-                parts.add("".join(buf).strip("_"))
-                buf = []
-        if buf:
-            parts.add("".join(buf).strip("_"))
-        return {p for p in parts if p}
-
-    def find_mock_probe(self, type_name: str, domain_name: str = "") -> Optional[str]:
-        """Returns the declared mock probe template for a type/domain pair, or None.
-
-        Matching is DECLARED-vocabulary only and part-based: a probe token
-        matches when its word parts are all present in the candidate name's
-        word parts (e.g. declared token `sample_rate` matches type
-        `sample_rate` or `audio.sample_rate`; declared token `frame` does NOT
-        match `dataframe`, whose single part is `dataframe`).
-        """
-        t_parts = self._name_parts(type_name)
-        d_parts = self._name_parts(domain_name)
-        if not t_parts and not d_parts:
-            return None
-        for probe in self._mock_probes:
-            tt = probe["match_type_tokens"]
-            dt = probe["match_domain_tokens"]
-
-            def _hits(tokens: Set[str], parts: Set[str]) -> bool:
-                for tok in tokens:
-                    tok_parts = self._name_parts(tok)
-                    if tok_parts and tok_parts.issubset(parts):
-                        return True
-                return False
-
-            type_hit = _hits(tt, t_parts)
-            domain_hit = _hits(dt, d_parts) or _hits(dt, t_parts)
-            if type_hit or domain_hit:
-                return probe["template"]
-        return None
 
     @_locked
     def register_port_name_type_hints(self, hints: Any) -> None:
@@ -3169,12 +2879,25 @@ class TypeRegistry:
                     if self.state_ancestry_reaches(p_state, (tgt,)):
                         if not self.has_property_conflict(p_state, tgt):
                             return True
-            curr_p = p_par if p_par else self.get_state_parent(p_state)
-            if curr_p and self.state_ancestry_reaches(curr_p, tgt_tuple):
-                for tgt in target_ancestors:
-                    if self.state_ancestry_reaches(curr_p, (tgt,)):
-                        if not self.has_property_conflict(curr_p, tgt):
-                            return True
+            curr_p = (
+                p_par
+                or (self._domain_state_parents.get((p_dom, p_state)) if p_dom else None)
+                or self.get_state_parent(p_state)
+            )
+            seen_dp: Set[str] = {p_state}
+            while curr_p and curr_p not in seen_dp:
+                seen_dp.add(curr_p)
+                if curr_p in target_ancestors and not self.has_property_conflict(curr_p, curr_p):
+                    return True
+                if self.state_ancestry_reaches(curr_p, tgt_tuple):
+                    for tgt in target_ancestors:
+                        if self.state_ancestry_reaches(curr_p, (tgt,)):
+                            if not self.has_property_conflict(curr_p, tgt):
+                                return True
+                curr_p = (
+                    (self._domain_state_parents.get((p_dom, curr_p)) if p_dom else None)
+                    or self.get_state_parent(curr_p)
+                )
 
         # 6. Ingress/egress asset identifier state equivalence (e.g. source_identifier <-> valid_path / file_path)
         def _get_root_state(s: str) -> str:
@@ -3294,62 +3017,55 @@ def is_path_port(port: Any, registry: Optional[TypeRegistry] = None) -> bool:
 def _compute_is_path_port(port: Any, registry: Optional[TypeRegistry] = None) -> bool:
     if registry is None:
         registry = TypeRegistry.get_instance()
-    path_tokens = registry.get_path_port_name_tokens()
-    role = str(getattr(port, "port_role", None) or getattr(port, "role", None) or "").strip().lower()
-    if role and role in path_tokens:
+    if str(getattr(port, "structure_kind", "") or "").strip().lower() == "path_spec":
         return True
     sig = getattr(port, "signature", port)
-    t_name = str(getattr(sig, "type_name", "") or "").lower()
-    path_types = registry.get_types_by_kind("path") | path_tokens
-    if t_name and (t_name in path_types or any(registry.is_subtype(t_name, tok) for tok in path_types) or registry.is_subtype(t_name, "path")):
+
+    def _is_path_type(candidate: str) -> bool:
+        c = str(candidate or "").strip().lower()
+        if not c:
+            return False
+        base = c.partition("[")[0].strip() if ("[" in c and c.endswith("]")) else c
+        path_types = set(registry.get_types_by_kind("path") or ()) | {"path", "file"}
+        for tok in (c, base):
+            if not tok:
+                continue
+            if (
+                tok in path_types
+                or registry.has_type_kind(tok, "path")
+                or registry.is_subtype(tok, "path")
+                or registry.is_subtype(tok, "file")
+            ):
+                return True
+            aliased = registry._aliases.get(tok)
+            if aliased:
+                al = str(aliased).strip().lower()
+                if (
+                    al in path_types
+                    or registry.has_type_kind(al, "path")
+                    or registry.is_subtype(al, "path")
+                    or registry.is_subtype(al, "file")
+                ):
+                    return True
+        return False
+
+    t_name = str(getattr(sig, "type_name", "") or "")
+    if _is_path_type(t_name):
         return True
     abstract_t = str(
         getattr(port, "abstract_type", "") or getattr(sig, "abstract_type", "") or ""
-    ).lower()
-    if abstract_t and abstract_t in path_types:
+    )
+    if _is_path_type(abstract_t):
         return True
-    state = str(getattr(sig, "state", "") or "").lower()
-    if state:
-        mat_sem = registry.get_materialization_states() | registry.get_states_by_property("is_materialized", True)
-        src_sem = registry.get_states_by_property("is_source_identifier", True)
-        if state in mat_sem or state in src_sem:
-            return True
-        source_ancestors = registry._state_role_ancestors.get("source_data")
-        if source_ancestors and registry.state_ancestry_reaches(state, source_ancestors):
-            return True
-    aliases = registry._aliases
-    if t_name and t_name in aliases:
-        aliased_t = str(aliases[t_name]).lower()
-        if aliased_t in path_types or registry.is_subtype(aliased_t, "path"):
-            return True
-    c_type = str(getattr(sig, "carrier_type", "") or getattr(port, "carrier_type", "") or "").lower()
-    if c_type and (c_type in path_types or registry.is_subtype(c_type, "path")):
-        return True
-    str_types = {"", "any", "*"} | registry.get_types_by_kind("string")
-    if t_name and t_name not in str_types and not registry.has_type_kind(t_name, "string"):
-        return False
-    name = str(getattr(port, "name", "") or "").lower()
-    if not name:
-        return False
-    name_tokens = set(tokenize_alphanumeric(name, min_len=2))
-    if name_tokens & path_tokens:
+    c_type = str(
+        getattr(sig, "carrier_type", "")
+        or getattr(port, "carrier_type", "")
+        or getattr(port, "carrier", "")
+        or ""
+    )
+    if _is_path_type(c_type):
         return True
     return False
-
-
-class _DynamicPathPortTokens(collections.abc.Set):
-    """Dynamic naming-convention fallback tokens for path ports backed by TypeRegistry."""
-    _from_iterable = staticmethod(set)
-    def _tokens(self) -> Set[str]:
-        return TypeRegistry.get_instance().get_path_port_name_tokens()
-    def __contains__(self, item):
-        return str(item).lower() in self._tokens()
-    def __iter__(self):
-        return iter(self._tokens())
-    def __len__(self):
-        return len(self._tokens())
-
-PATH_PORT_NAME_TOKENS = _DynamicPathPortTokens()
 
 
 def _clean_abs_carrier(val: Any) -> str:
@@ -4715,8 +4431,7 @@ class Cell(ABC):
         tpl = str(getattr(self, "code_template", "") or "").strip()
         if tpl:
             try:
-                reg = TypeRegistry.get_instance()
-                skip_calls = reg.get_symbol_stopwords() | set(active_be.debug_builtins)
+                skip_calls = set(active_be.debug_builtins)
                 calls = active_be.extract_call_names(tpl)
                 for cname in calls:
                     if cname and cname not in skip_calls:
@@ -4808,7 +4523,7 @@ class Cell(ABC):
             return True
         if not self.outputs:
             return True
-        term_states = reg.get_terminal_states() | reg.get_materialization_states()
+        term_states = reg.get_terminal_states() | reg.get_states_by_property("is_materialized", True) | reg.get_states_by_property("is_terminal", True)
         for out_p in self.outputs.values():
             out_sig = getattr(out_p, "signature", out_p)
             out_tn = getattr(out_sig, "type_name", "")
@@ -4838,6 +4553,8 @@ class Cell(ABC):
         if self.stage == 1:
             return True
         reg = TypeRegistry.get_instance()
+        if self.stage == 3 or reg.is_terminal_role(self.node_role) or getattr(self, "is_sink", False):
+            return False
         if reg.is_ingress_role(self.node_role):
             return True
         try:
@@ -4846,11 +4563,21 @@ class Cell(ABC):
             from runtime_poset import classify_cell_structural_role
         if classify_cell_structural_role(self, reg) == "source":
             return True
+        param_roles = reg.get_roles_for_category("parameter")
         ins = self.inputs or {}
-        req_data = [
-            p for p in ins.values()
-            if p.required and getattr(p, "structure_kind", None) != "scalar" and not is_path_port(p)
-        ]
+        req_data = []
+        for p in ins.values():
+            if not p.required or is_path_port(p, reg):
+                continue
+            sk = str(getattr(p, "structure_kind", "") or "").strip().lower()
+            if sk != "scalar":
+                req_data.append(p)
+                continue
+            p_t = str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower()
+            p_role = str(getattr(p, "port_role", "") or getattr(p, "role", "") or "").strip().lower()
+            if not reg.is_config_role(p_role) and p_role not in param_roles:
+                if not reg.is_scalar_primitive(p_t) or reg.is_subtype(p_t, "bytes") or p_t == "bytes":
+                    req_data.append(p)
         return bool(self.outputs) and not req_data
 
     @property
@@ -4899,10 +4626,9 @@ class Cell(ABC):
 
         def _is_asset_carrier(p: PortSignature) -> bool:
             tn = p.type_name.lower()
-            path_roots = registry.get_path_port_name_tokens() | registry.get_types_by_kind("path")
+            path_roots = set(registry.get_types_by_kind("path") or ()) | {"path", "file"}
             return (
-                registry.has_type_kind(tn, "string")
-                or registry.has_type_kind(tn, "path")
+                registry.has_type_kind(tn, "path")
                 or tn in path_roots
                 or any(registry.is_subtype(tn, pt) for pt in path_roots)
             )
@@ -5505,12 +5231,6 @@ class LatticeOrchestrator:
                     reg.register_forbidden_side_effects(data["forbidden_side_effects"])
                 if isinstance(data.get("top_level_carriers"), list):
                     reg.register_top_level_carriers(data["top_level_carriers"])
-                if isinstance(data.get("path_port_tokens"), list):
-                    reg.register_path_port_tokens(data["path_port_tokens"])
-                if isinstance(data.get("source_port_tokens"), list):
-                    reg.register_source_port_tokens(data["source_port_tokens"])
-                if isinstance(data.get("dest_port_tokens"), list):
-                    reg.register_dest_port_tokens(data["dest_port_tokens"])
                 if isinstance(data.get("state_role_ancestors"), dict):
                     reg.register_state_role_ancestors(data["state_role_ancestors"])
                 if isinstance(data.get("state_role_markers"), dict):
@@ -5519,8 +5239,6 @@ class LatticeOrchestrator:
                     reg.register_carrier_roles(data["carrier_roles"])
                 if isinstance(data.get("identifier_root_states"), list):
                     reg.register_identifier_root_states(data["identifier_root_states"])
-                if isinstance(data.get("materialization_states"), list):
-                    reg.register_materialization_states(data["materialization_states"])
                 if isinstance(data.get("supported_formats"), list):
                     reg.register_supported_formats(data["supported_formats"])
                 if isinstance(data.get("capabilities"), dict):
@@ -5530,14 +5248,6 @@ class LatticeOrchestrator:
                         reg.register_type_default(td_k, td_v, domain=dom)
                 if "type_vars" in data and isinstance(data["type_vars"], list):
                     reg.register_type_vars(data["type_vars"])
-                if isinstance(data.get("excluded_module_tokens"), list):
-                    reg.register_excluded_module_tokens(data["excluded_module_tokens"])
-                if isinstance(data.get("enum_citation_triggers"), list):
-                    reg.register_enum_citation_triggers(data["enum_citation_triggers"])
-                if isinstance(data.get("enum_suffixes"), list):
-                    reg.register_enum_suffixes(data["enum_suffixes"])
-                if isinstance(data.get("symbol_stopwords"), list):
-                    reg.register_symbol_stopwords(data["symbol_stopwords"])
                 if "aliases" in data and isinstance(data["aliases"], dict):
                     for a_k, a_v in data["aliases"].items():
                         reg.register_alias(a_k, a_v)
@@ -5630,16 +5340,6 @@ class LatticeOrchestrator:
                     reg.register_abstract_carrier_mapping(data["abstract_carrier_mapping"])
                 if "data_bearing_roles" in data and isinstance(data["data_bearing_roles"], list):
                     reg.register_data_bearing_roles(data["data_bearing_roles"])
-                if "enum_constant_rules" in data and isinstance(data["enum_constant_rules"], list):
-                    reg.register_enum_constant_rules(data["enum_constant_rules"])
-                probes = data.get("mock_probes")
-                if not probes:
-                    for k_p, v_p in data.items():
-                        if k_p.startswith("mock_") and isinstance(v_p, list):
-                            probes = v_p
-                            break
-                if isinstance(probes, list):
-                    reg.register_mock_probes(probes)
 
             reg = TypeRegistry.get_instance()
             for c_dict in raw_cells:
@@ -5810,38 +5510,22 @@ class LatticeOrchestrator:
                                 reg.register_abstract_carriers([item])
                             elif cat == 'abstract_carrier_mapping':
                                 reg.register_abstract_carrier_mapping({item: extra})
-                            elif cat == 'dest_port_token':
-                                reg.register_dest_port_tokens([item])
                             elif cat == 'data_bearing_role':
                                 reg.register_data_bearing_roles([item])
                             elif cat == 'type_var':
                                 reg.register_type_vars([item])
-                            elif cat == 'excluded_module_token':
-                                reg.register_excluded_module_tokens([item])
-                            elif cat == 'enum_citation_trigger':
-                                reg.register_enum_citation_triggers([item])
-                            elif cat == 'enum_suffix':
-                                reg.register_enum_suffixes([item])
-                            elif cat == 'symbol_stopword':
-                                reg.register_symbol_stopwords([item])
                             elif cat == 'top_type':
                                 reg.register_top(item)
                             elif cat == 'top_state':
                                 reg.register_top_state(item)
                             elif cat == 'product_constructor':
                                 reg.register_product_constructor(item)
-                            elif cat == 'materialization_state':
-                                reg.register_materialization_states([item])
                             elif cat == 'terminal_state':
                                 reg.register_terminal_states([item])
                             elif cat == 'role_carrier':
                                 reg.register_role_carrier(item)
                             elif cat == 'top_level_carrier':
                                 reg.register_top_level_carriers([item])
-                            elif cat == 'path_port_token':
-                                reg.register_path_port_tokens([item])
-                            elif cat == 'source_port_token':
-                                reg.register_source_port_tokens([item])
                             elif cat == 'identifier_root_state':
                                 reg.register_identifier_root_states([item])
                             elif cat == 'supported_format':
@@ -5859,16 +5543,6 @@ class LatticeOrchestrator:
                             elif cat == 'carrier_role':
                                 try:
                                     reg.register_carrier_roles({item: json.loads(extra)})
-                                except Exception:
-                                    pass
-                            elif cat == 'enum_constant_rule':
-                                try:
-                                    reg.register_enum_constant_rules([json.loads(extra if extra is not None else item)])
-                                except Exception:
-                                    pass
-                            elif cat == 'mock_probe':
-                                try:
-                                    reg.register_mock_probes([json.loads(extra if extra is not None else item)])
                                 except Exception:
                                     pass
                             elif cat == 'type_default':
@@ -6445,7 +6119,7 @@ class LatticeOrchestrator:
                     pn_low = str(pn_in).strip().lower()
                     if pn_low:
                         in_port_names_acc.add(pn_low)
-                dest_roles_s = reg.get_roles_for_category("destination") | reg.get_dest_port_tokens()
+                dest_roles_s = reg.get_roles_for_category("destination") | reg.get_terminal_roles_set()
                 if is_sink_cell and any(
                     is_path_port(p, reg) or str(getattr(p, "port_role", "") or "").lower() in dest_roles_s
                     for p in list(c_inputs.values()) + list(c_outputs.values())
@@ -6472,20 +6146,15 @@ class LatticeOrchestrator:
             if op_tokens_acc:
                 reg.register_operation_tokens(op_tokens_acc)
             if mat_states_acc:
-                reg.register_materialization_states(mat_states_acc)
                 reg.register_terminal_states(mat_states_acc)
-            if src_tokens_acc:
-                reg.register_source_port_tokens(src_tokens_acc)
             if id_roots_acc:
                 reg.register_identifier_root_states(id_roots_acc)
             if role_anc_acc:
                 reg.register_state_role_ancestors(role_anc_acc)
             if data_roles_acc:
                 reg.register_data_bearing_roles(data_roles_acc)
-            if dest_roles_acc:
-                reg.register_dest_port_tokens(dest_roles_acc)
             if egress_tokens_acc:
-                param_or_src = (in_port_names_acc | src_tokens_acc | reg.get_source_port_tokens() | ing_kw_acc) - dest_roles_acc
+                param_or_src = (in_port_names_acc | src_tokens_acc | ing_kw_acc) - dest_roles_acc
                 egress_tokens_acc = {t for t in egress_tokens_acc if t not in param_or_src}
                 if egress_tokens_acc:
                     reg.register_egress_tokens(egress_tokens_acc)

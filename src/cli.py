@@ -1705,8 +1705,40 @@ class PipelineDebugger:
 
                     if repaired_code and repaired_code.strip() != failing_code.strip():
                         unknown = _unknown_api_references(repaired_code, failing_code, self.orchestrator.loaded_cells.values())
+                        repair_err: Optional[str] = None
                         if unknown:
-                            c.print(f"  [bold red][x] Repair rejected: references APIs absent from the lattice: {', '.join(sorted(unknown)[:5])}[/bold red]\n")
+                            repair_err = f"references APIs absent from the lattice: {', '.join(sorted(unknown)[:5])}"
+                        else:
+                            from language_backend import get_active_language_backend
+                            if get_active_language_backend().uses_python_ast:
+                                try:
+                                    ast.parse(repaired_code)
+                                except SyntaxError as _syn_err:
+                                    repair_err = f"syntax error in repair: {_syn_err}"
+                                if repair_err is None:
+                                    try:
+                                        from pyflakes.api import check as _pf_check
+                                        from pyflakes.messages import UndefinedName, UndefinedLocal
+                                        _pf_msgs: List[str] = []
+
+                                        class _RepReporter:
+                                            def unexpectedError(self, filename, msg):
+                                                _pf_msgs.append(str(msg))
+
+                                            def syntaxError(self, filename, msg, lineno, offset, text):
+                                                _pf_msgs.append(f"line {lineno}: {msg}")
+
+                                            def flake(self, msg):
+                                                if isinstance(msg, (UndefinedName, UndefinedLocal)):
+                                                    _pf_msgs.append(str(msg))
+
+                                        _pf_check(repaired_code, "<repair>", reporter=_RepReporter())
+                                        if _pf_msgs:
+                                            repair_err = f"scope/undefined error: {_pf_msgs[0]}"
+                                    except Exception:
+                                        pass
+                        if repair_err:
+                            c.print(f"  [bold red][x] Repair rejected ({repair_err})[/bold red]\n")
                         else:
                             c.print(f"  [bold green][✓] Repair accepted. Re-executing in sandbox... ({rep_dt:.1f}ms)[/bold green]")
                             final_code = repaired_code
@@ -1888,9 +1920,15 @@ class NSTLInteractiveShell(cmd.Cmd):
             console.print("\n[bold cyan][*] Initializing STRATA Neuro-Symbolic Engine...[/bold cyan]")
         t0 = time.perf_counter()
 
-        trees_dir = settings.trees_dir or Path(db_path).parent
-        ensure_lattice_compiled(trees_dir=str(trees_dir), db_path=db_path)
-        self.orchestrator = LatticeOrchestrator(trees_directory=str(trees_dir), db_path=db_path, auto_load=False)
+        env_trees = os.environ.get("NSTL_TREES_DIR")
+        trees_dir = env_trees or (
+            Path(db_path).parent
+            if db_path and str(Path(db_path).parent) not in ("", ".", "trees")
+            else (settings.trees_dir or Path(db_path).parent)
+        )
+        self.trees_dir = str(trees_dir)
+        ensure_lattice_compiled(trees_dir=self.trees_dir, db_path=db_path)
+        self.orchestrator = LatticeOrchestrator(trees_directory=self.trees_dir, db_path=db_path, auto_load=False)
         if os.path.exists(db_path):
             self.orchestrator.load_from_database(db_path)
         else:
@@ -2057,6 +2095,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             pass
         if p in ("0", "SYMBOLIC", "ZERO", "PURE"):
             self.active_profile = "0"
+            self.last_profile_load_error = None
             os.environ["NSTL_PROFILE"] = "0"
             try:
                 from config import settings
@@ -2118,7 +2157,7 @@ class NSTLInteractiveShell(cmd.Cmd):
 
             if verbose:
                 console.print(f"[*] Indexing FAISS vector space for {len(self.orchestrator.cells):,} nodes...")
-            self.rag = LocalRAG(trees_dir="trees", orchestrator=self.orchestrator)
+            self.rag = LocalRAG(trees_dir=getattr(self, "trees_dir", "trees"), orchestrator=self.orchestrator)
             self.orchestrator.rag = self.rag
             explicit_rr = getattr(self, "_explicit_reranker", None)
             rr_arg = None if explicit_rr is None else bool(explicit_rr)
@@ -2132,6 +2171,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             self.use_reranker = bool(getattr(self.router, "use_reranker", False))
 
             self.active_profile = p
+            self.last_profile_load_error = None
             self._update_prompt()
             dt = (time.perf_counter() - t0) * 1000.0
             if verbose:
@@ -2140,11 +2180,22 @@ class NSTLInteractiveShell(cmd.Cmd):
         except Exception as e:
             console.print(f"[bold red][!] Failed to load Profile {p}: {e}[/bold red]")
             console.print("[yellow][*] Reverting to Profile 0 (Pure Symbolic)...[/yellow]")
+            self.last_profile_load_error = str(e)
             try:
-                ModelManager.get_instance().cleanup()
+                mm = ModelManager.get_instance()
+                mm.cleanup()
+                mm.initialize_profile("0")
             except Exception:
                 pass
             self.active_profile = "0"
+            self.embedder_name = ""
+            self.llm_name = ""
+            os.environ["NSTL_PROFILE"] = "0"
+            try:
+                from config import settings
+                settings.profile = "0"
+            except Exception:
+                pass
             self.rag = None
             self.router = LatticeRouter(
                 self.orchestrator,
@@ -2674,6 +2725,7 @@ class NSTLInteractiveShell(cmd.Cmd):
                 embedder_name=self.embedder_name,
                 llm_name=self.llm_name,
                 console=console,
+                llm_feedback=self.llm_feedback,
                 route_method=query_method
             )
             res = debugger.run(prompt, execute_sandbox=not self.no_exec, timeout=self.timeout)

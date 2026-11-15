@@ -467,11 +467,14 @@ class M9LLMMilestonePathfinderRouteMethod(RouteMethod):
         if len(chain) < 2:
             return _fallback("verified chain shorter than 2 cells")
 
+        self.tag_cells_with_clause_indices(chain, prompt)
+        chain = self.insert_optic_commits(chain)
+        chain = self.insert_property_bridges(chain, prompt=prompt, ctx=ctx)
+
         _verr = self.verify_planned_path(chain, prompt, orch, ctx=ctx)
         if _verr:
             return _fallback(f"M9 {_verr}")
 
-        self.tag_cells_with_clause_indices(chain, prompt)
         clauses = self.segment_prompt_clauses(prompt)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
         return chain[:max_allowed]

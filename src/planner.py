@@ -72,16 +72,24 @@ EGRESS_INTENT_TOKENS = DynamicEgressTokens()
 
 
 class DynamicMaterializationStates(_collections_abc.Set):
-    """Dynamic materialization states harvested from output typestates of sink cells."""
+    """Dynamic materialization/terminal states derived from poset typestate properties and sink cells."""
     @staticmethod
     def _from_iterable(it):
         return set(it)
+    @staticmethod
+    def _states() -> Set[str]:
+        reg = TypeRegistry.get_instance()
+        return (
+            set(reg.get_terminal_states() or ())
+            | set(reg.get_states_by_property("is_materialized", True) or ())
+            | set(reg.get_states_by_property("is_terminal", True) or ())
+        )
     def __contains__(self, item):
-        return str(item).lower() in TypeRegistry.get_instance().get_materialization_states()
+        return str(item).lower() in self._states()
     def __iter__(self):
-        return iter(TypeRegistry.get_instance().get_materialization_states())
+        return iter(self._states())
     def __len__(self):
-        return len(TypeRegistry.get_instance().get_materialization_states())
+        return len(self._states())
 
 MATERIALIZATION_OUTPUT_STATES = DynamicMaterializationStates()
 
@@ -271,16 +279,43 @@ class LatticeVocabulary:
             return False
         if getattr(cell, "is_ingress", False):
             return True
-        ins = getattr(cell, "inputs", {}) or {}
-        required_data_ins = [p for p in ins.values() if getattr(p, "required", True) and getattr(p, "structure_kind", None) != "scalar"]
-        if not required_data_ins:
-            return True
         c_st = getattr(cell, "stage", None)
         if self.ingress_stage is not None and c_st == self.ingress_stage:
             return True
         r = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
         if r and r in self.ingress_roles:
             return True
+        if (
+            (self.terminal_stage is not None and c_st == self.terminal_stage)
+            or (r and r in self.terminal_roles)
+            or getattr(cell, "is_sink", False)
+        ):
+            return False
+        try:
+            from lattice import TypeRegistry, is_path_port
+            reg = TypeRegistry.get_instance()
+            param_roles = reg.get_roles_for_category("parameter")
+        except Exception:
+            reg = None
+            param_roles = {"parameter", "configuration", "config"}
+        ins = getattr(cell, "inputs", {}) or {}
+        required_data_ins = []
+        for p in ins.values():
+            if not getattr(p, "required", True):
+                continue
+            if reg is not None and is_path_port(p, reg):
+                continue
+            sk = str(getattr(p, "structure_kind", "") or "").strip().lower()
+            if sk != "scalar":
+                required_data_ins.append(p)
+                continue
+            p_t = str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower()
+            p_role = str(getattr(p, "port_role", "") or getattr(p, "role", "") or "").strip().lower()
+            if reg is not None and not reg.is_config_role(p_role) and p_role not in param_roles:
+                if not reg.is_scalar_primitive(p_t) or reg.is_subtype(p_t, "bytes") or p_t == "bytes":
+                    required_data_ins.append(p)
+        if not required_data_ins:
+            return bool(getattr(cell, "outputs", None))
         return False
 
     def is_terminal(self, cell: Any) -> bool:
@@ -376,14 +411,6 @@ class LatticeVocabulary:
                 return reg_fw
             return {t for t in self.frequent_tokens if t not in self._identity_vocab()}
         return self._get("function_words", build)
-
-    @property
-    def connectives(self) -> Set[str]:
-        """Sentence connectives exactly as the registry learned them (no static fallback)."""
-        def build():
-            raw = getattr(TypeRegistry.get_instance(), "_sentence_connectives", None) or ()
-            return {str(w).lower() for w in raw}
-        return self._get("connectives", build)
 
     @property
     def frequent_tokens(self) -> Set[str]:
@@ -620,10 +647,12 @@ class LatticeVocabulary:
 
     @property
     def terminal_states(self) -> Set[str]:
-        """Output states that terminal sinks declare, plus the registry's materialization states."""
+        """Output states that terminal sinks declare, plus formal terminal/materialized typestates."""
         def build():
-            out: Set[str] = {str(s).lower() for s in TypeRegistry.get_instance().get_materialization_states()}
-            out.update(TypeRegistry.get_instance().get_terminal_states())
+            reg = TypeRegistry.get_instance()
+            out: Set[str] = {str(s).lower() for s in reg.get_terminal_states()}
+            out.update(str(s).lower() for s in reg.get_states_by_property("is_materialized", True))
+            out.update(str(s).lower() for s in reg.get_states_by_property("is_terminal", True))
             for c in self._terminal_cells():
                 for o in (getattr(c, "outputs", {}) or {}).values():
                     st = str(getattr(getattr(o, "signature", o), "state", "") or "").lower()
@@ -939,7 +968,7 @@ def _segment_prompt_clauses(prompt: str) -> List[str]:
         has_egress = bool(tok_set & egress_words)
         if not has_egress:
             return False
-        non_egress_ops = (tok_set - _vocab.function_words - _vocab.connectives) & (_vocab.op_tokens - egress_words)
+        non_egress_ops = (tok_set - _vocab.function_words) & (_vocab.op_tokens - egress_words)
         return not non_egress_ops
 
     for p in parts:
@@ -1916,7 +1945,7 @@ class LatticePlanner:
                         fw = set()
                         try:
                             _reg = TypeRegistry.get_instance()
-                            fw = set(_reg.get_function_words()) | set(_reg.get_sentence_connectives())
+                            fw = set(_reg.get_function_words())
                         except Exception:
                             fw = set()
                         span_toks = {t for t in (toks - fw) if len(t) >= 2}
@@ -5178,46 +5207,128 @@ class LatticePlanner:
                         return [cand_child]
                 return []
 
-        # 3. Coproduct Branch Slot Planning (⊕) — declared topology dispatch.
-        elif topology == "coproduct_branch":
-            pool = [c for c in tunnel if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
-            if not pool:
-                pool = [c for c in self.orchestrator.loaded_cells.values() if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
-            if pool:
-                bound_cell_ids: Set[str] = set()
-                for b_slot, b_plan in (getattr(parent_cell, "bound_slots", {}) or {}).items():
-                    if b_slot != slot_name and isinstance(b_plan, (list, tuple)):
-                        bound_cell_ids.update(getattr(bc, "cell_id", "") for bc in b_plan if bc)
-                unbound_pool = [c for c in pool if c.cell_id not in bound_cell_ids]
-                candidate_pool = unbound_pool if unbound_pool else pool
-                pool_sorted = sorted(candidate_pool, key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)
-                return [pool_sorted[0]]
-
-        # 4. Context Manager Slot Planning (bracket resource pattern)
-        elif topology == "context_manager":
-            pool = [c for c in tunnel if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
-            if not pool:
-                pool = [c for c in self.orchestrator.loaded_cells.values() if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
-            if pool:
-                pool_sorted = sorted(pool, key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)
-                return [pool_sorted[0]]
+        # 3. Coproduct, Bracket Context, Function Scope, Exception Guard & Iteration Slot Planning
+        elif topology in {"coproduct_branch", "context_manager", "function_scope", "exception_guard", "iteration"}:
+            return self._select_sublattice_slot_cell(
+                parent_cell,
+                slot_name,
+                slot_contract,
+                tunnel,
+                relevance_map,
+                active_sigma,
+                prompt=prompt,
+            )
 
         return None
 
+    def _select_sublattice_slot_cell(
+        self,
+        parent_cell: Cell,
+        slot_name: str,
+        slot_contract: Any,
+        tunnel: List[Cell],
+        relevance_map: Dict[str, float],
+        active_sigma: Substitution,
+        prompt: str = "",
+    ) -> Optional[List[Cell]]:
+        """Selects a distinct, non-ingress, contract-aligned child cell for a macro slot."""
+        pool = [
+            c for c in tunnel
+            if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"
+        ]
+        if not pool:
+            pool = [
+                c for c in self.orchestrator.loaded_cells.values()
+                if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"
+            ]
+        if not pool:
+            return None
+
+        non_ingress = [
+            c for c in pool
+            if not (_is_ingress_cell(c) and getattr(c, "node_type", "") != "macro")
+        ]
+        if non_ingress:
+            pool = non_ingress
+
+        bound_cell_ids: Set[str] = set()
+        for b_slot, b_plan in (getattr(parent_cell, "bound_slots", {}) or {}).items():
+            if b_slot != slot_name and isinstance(b_plan, (list, tuple)):
+                bound_cell_ids.update(getattr(bc, "cell_id", "") for bc in b_plan if bc)
+        unbound_pool = [c for c in pool if c.cell_id not in bound_cell_ids]
+        candidate_pool = unbound_pool if unbound_pool else pool
+
+        slot_desc = (
+            slot_contract.get("description", "")
+            if isinstance(slot_contract, dict)
+            else str(getattr(slot_contract, "description", "") or "")
+        )
+        slot_toks = set(CellTokenizer.tokenize_identifier(slot_name))
+        if slot_desc:
+            slot_toks |= set(CellTokenizer.tokenize_prompt(slot_desc))
+        s_in_contract = (
+            slot_contract.get("input_type")
+            if isinstance(slot_contract, dict)
+            else getattr(slot_contract, "input_type", None)
+        )
+        u_slot = substitute_generics(str(s_in_contract), active_sigma) if s_in_contract else None
+        slot_clauses = (
+            [cl for cl in _segment_prompt_clauses(prompt) if CellTokenizer.tokenize_prompt(cl) & slot_toks]
+            if (prompt and slot_toks)
+            else []
+        )
+        target_toks = (
+            CellTokenizer.tokenize_prompt(" ".join(slot_clauses))
+            if slot_clauses
+            else (CellTokenizer.tokenize_prompt(prompt) if prompt else set())
+        )
+        reg = TypeRegistry.get_instance()
+        has_concrete_slot_in = bool(
+            u_slot and not reg.is_declared_top(u_slot) and not reg.is_type_variable(u_slot)
+        )
+
+        def _slot_score(cand: Cell) -> float:
+            sc = float(relevance_map.get(cand.cell_id, 0.0))
+            c_id_toks = set(getattr(cand, "identity_tokens", None) or getattr(cand, "token_set", None) or ())
+            if target_toks:
+                sc += 0.35 * len(target_toks & c_id_toks)
+            if slot_toks and (slot_toks & c_id_toks):
+                sc += 0.40 * len(slot_toks & c_id_toks)
+            if has_concrete_slot_in:
+                for p_sig in (getattr(cand, "inputs", {}) or {}).values():
+                    if unify(u_slot, p_sig.signature, active_sigma) is not None:
+                        sc += 0.75
+                        break
+            if cand.domain_name and cand.domain_name == getattr(parent_cell, "domain_name", ""):
+                sc += 0.25
+            return sc
+
+        pool_sorted = sorted(candidate_pool, key=_slot_score, reverse=True)
+        return [pool_sorted[0]]
+
     def _bind_chain_slots(self, chain: List[Cell], tunnel: List[Cell],
                           relevance_map: Dict[str, float], sigma: Substitution,
-                          prompt: str = "") -> List[Cell]:
+                          prompt: str = "", _depth: int = 0,
+                          visited_macros: Optional[Set[str]] = None) -> List[Cell]:
         """Plans macro slots on private copies of the chain's cells (never on shared lattice cells). Recursively binds nested slots."""
+        if _depth >= 3:
+            return list(chain)
+        seen = set(visited_macros or ())
         out: List[Cell] = []
         for cell in chain:
-            if getattr(cell, "slots", None):
+            if getattr(cell, "slots", None) and cell.cell_id not in seen:
                 cell = _private_copy(cell, self.orchestrator)
+                child_tunnel = [c for c in tunnel if c.cell_id != cell.cell_id and c.cell_id not in seen]
+                next_seen = seen | {cell.cell_id}
                 for slot_name, slot_contract in _safe_slots_items(cell):
                     if slot_name not in getattr(cell, "bound_slots", {}):
-                        sub_plan = self.plan_sublattice(cell, slot_name, slot_contract, tunnel, relevance_map, sigma, prompt)
+                        sub_plan = self.plan_sublattice(cell, slot_name, slot_contract, child_tunnel or tunnel, relevance_map, sigma, prompt)
                         if sub_plan:
                             # Recursively bind nested slots inside sub_plan
-                            sub_plan = self._bind_chain_slots(sub_plan, tunnel, relevance_map, sigma, prompt)
+                            sub_plan = self._bind_chain_slots(
+                                sub_plan, tunnel, relevance_map, sigma, prompt,
+                                _depth=_depth + 1, visited_macros=next_seen,
+                            )
                             cell.bound_slots[slot_name] = sub_plan
             out.append(cell)
         return out

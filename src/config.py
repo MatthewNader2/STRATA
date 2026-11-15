@@ -212,7 +212,10 @@ class NSTLSettings(BaseSettings):
     embedder_task: Optional[str] = Field(default=None, description="Optional SentenceTransformer default task prompt name.")
     llm_model: Optional[str] = Field(default=None, description="Configured GGUF LLM model identifier.")
     preferred_embedders: List[str] = Field(default_factory=list, description="Optional preference order for embedder discovery.")
-    preferred_llms: List[str] = Field(default_factory=list, description="Optional preference order for LLM discovery.")
+    preferred_llms: List[str] = Field(
+        default_factory=lambda: ["qwen3.5-0.8b-instruct"],
+        description="Optional preference order for LLM discovery.",
+    )
     preferred_rerankers: List[str] = Field(default_factory=list, description="Optional preference order for reranker discovery.")
     llm_stop_tokens: List[str] = Field(default_factory=list, description="Optional extra stop sequences for LLM generation.")
     agent_stopping_tokens: List[str] = Field(

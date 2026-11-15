@@ -142,7 +142,29 @@ def _find_carrier_input_port(cell: Any, reg: Optional[TypeRegistry] = None) -> O
             return p_name
     primary = getattr(cell, "primary_input", None)
     if primary is not None and primary.name in inputs:
-        return primary.name
+        p_sig = inputs[primary.name]
+        p_binds = str(getattr(p_sig, "binds", "") or "").strip().lower()
+        p_role = str(getattr(p_sig, "port_role", "") or getattr(p_sig, "role", "") or "").strip().lower()
+        p_kind = str(getattr(p_sig, "param_kind", "") or "").strip().lower()
+        p_alg = getattr(p_sig, "signature", p_sig)
+        t_l = str(getattr(p_alg, "type_name", "") or "").strip().lower()
+        p_state = str(getattr(p_alg, "state", "") or "").strip().lower()
+        cfg_roles = reg.get_config_roles_set() | reg.get_roles_for_category("configuration")
+        is_scalar_cfg = (
+            p_binds in cfg_roles
+            or p_role in cfg_roles
+            or p_kind in cfg_roles
+            or p_binds == "hyperparameter"
+            or p_state == "hyperparameter"
+            or (
+                bool(t_l)
+                and (reg.is_subtype(t_l, "numeric") or reg.is_subtype(t_l, "bool"))
+                and not reg.is_composite_carrier(t_l)
+                and not reg.is_abstract_carrier(t_l)
+            )
+        )
+        if not is_scalar_cfg:
+            return primary.name
     return None
 
 
@@ -176,29 +198,46 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
             )
 
     # 2. Output port mutation & partition effects
-    out_group_counts: Dict[Tuple[str, str], int] = {}
-    out_group_cursor: Dict[Tuple[str, str], int] = {}
+    def _output_group_key(sig_obj: Any) -> Tuple[Any, ...]:
+        alg = getattr(sig_obj, "signature", sig_obj)
+        rank_v = getattr(sig_obj, "rank", None)
+        if rank_v is None and alg is not None:
+            rank_v = getattr(alg, "rank", None)
+        raw_quals = getattr(sig_obj, "qualifiers", None) or (getattr(alg, "qualifiers", None) if alg is not None else None) or ()
+        norm_quals = tuple(sorted(str(q).strip().lower() for q in raw_quals if str(q).strip()))
+        return (
+            str(getattr(sig_obj, "type_name", "") or "").strip().lower(),
+            str(getattr(sig_obj, "port_role", "") or "").strip().lower(),
+            rank_v,
+            norm_quals,
+        )
+
+    out_group_counts: Dict[Tuple[Any, ...], int] = {}
+    out_group_cursor: Dict[Tuple[Any, ...], int] = {}
+    partition_label_map: Dict[str, int] = {}
+    leading_shape_dims: Set[str] = set()
     if len(outputs) >= 2:
         for out_sig in outputs.values():
-            g_key = (
-                str(getattr(out_sig, "type_name", "") or "").strip().lower(),
-                str(getattr(out_sig, "port_role", "") or "").strip().lower(),
-            )
+            g_key = _output_group_key(out_sig)
             out_group_counts[g_key] = out_group_counts.get(g_key, 0) + 1
+            sc = getattr(out_sig, "shape_contract", None) or getattr(getattr(out_sig, "signature", None), "shape_contract", None)
+            dims = getattr(sc, "shape", None) if sc is not None and not isinstance(sc, dict) else (sc.get("shape") if isinstance(sc, dict) else None)
+            if isinstance(dims, (list, tuple)) and dims and isinstance(dims[0], str) and dims[0].strip():
+                leading_shape_dims.add(dims[0].strip().lower())
 
     for idx, (out_name, out_sig) in enumerate(outputs.items()):
         mut_target = getattr(out_sig, "mutates", None)
         part_idx = getattr(out_sig, "partition_index", None)
-        g_key = (
-            str(getattr(out_sig, "type_name", "") or "").strip().lower(),
-            str(getattr(out_sig, "port_role", "") or "").strip().lower(),
-        )
+        g_key = _output_group_key(out_sig)
+        # Co-indexed outputs sharing a single leading dimension (e.g. X[N, d], y[N]) form a Cartesian
+        # product rather than a disjoint coproduct partition, even when carriers share a base type.
         is_coproduct_split = (
             len(outputs) >= 2
             and bool(carrier_in_name)
             and carrier_in_name in inputs
             and bool(g_key[0])
             and out_group_counts.get(g_key, 0) >= 2
+            and len(leading_shape_dims) != 1
         )
 
         # In-place endomorphism f: T -> T on declared carrier (skip on multi-output splitters unless explicit)
@@ -216,7 +255,7 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
             ):
                 mut_target = carrier_in_name
 
-        # Declared partition metadata or structural co-product split default
+        # Declared partition metadata, typestate partition property, shape-contract split dim, or sequential fallback
         if part_idx is None and getattr(out_sig, "partition", None) is not None:
             p_decl = getattr(out_sig, "partition")
             if isinstance(p_decl, int):
@@ -226,6 +265,29 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
                     part_idx = int(p_decl["index"])
                 except (ValueError, TypeError):
                     pass
+            elif isinstance(p_decl, str) and p_decl.strip():
+                part_idx = partition_label_map.setdefault(p_decl.strip().lower(), len(partition_label_map))
+        if part_idx is None and reg is not None:
+            for st_cand in (getattr(out_sig, "typestate", None), getattr(out_sig, "state", None)):
+                st_str = str(st_cand or "").strip()
+                if not st_str:
+                    continue
+                st_props = reg.get_state_properties(st_str)
+                if st_props and st_props.get("partition") is not None:
+                    p_val = st_props["partition"]
+                    if isinstance(p_val, int):
+                        part_idx = p_val
+                    else:
+                        p_key = str(p_val).strip().lower()
+                        if p_key:
+                            part_idx = partition_label_map.setdefault(p_key, len(partition_label_map))
+                    if part_idx is not None:
+                        break
+        if part_idx is None and is_coproduct_split and len(leading_shape_dims) >= 2:
+            sc = getattr(out_sig, "shape_contract", None) or getattr(getattr(out_sig, "signature", None), "shape_contract", None)
+            dims = getattr(sc, "shape", None) if sc is not None and not isinstance(sc, dict) else (sc.get("shape") if isinstance(sc, dict) else None)
+            if isinstance(dims, (list, tuple)) and dims and isinstance(dims[0], str) and dims[0].strip():
+                part_idx = partition_label_map.setdefault(dims[0].strip().lower(), len(partition_label_map))
         if part_idx is None and is_coproduct_split:
             part_idx = out_group_cursor.get(g_key, 0)
             out_group_cursor[g_key] = part_idx + 1

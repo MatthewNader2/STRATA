@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """
-tools/lint_trees.py
+scripts/lint_trees.py
 
 Continuous Integration (CI) linter for STRATA domain trees:
-  1. Validates each JSON file in trees/*.json against TreeSchema.
+  1. Validates each JSON file in trees/*.json strictly against TreeSchema (extra="forbid").
   2. Ensures shape_contract is unified into canonical ShapeContractSchema (no raw strings).
-  3. Enforces Pillow RGB/RGBA rank 3 and grayscale rank 2 conventions.
-  4. Requires every non-ingress required scalar input port to have a port_role and default value.
-  5. Enforces that all port typestates are declared in domain typestates.
-  6. Validates structural kind integrity (no collection with rank 0, no handle as tensor/scalar).
+  3. Fails if any cell code_template in a core/library tree defines an inline `def ` or contains > 2 statements.
+  4. Fails if any cell has `required: false` on a positional argument with no default in `inspect.signature` of the target callable.
+  5. Enforces that all port typestates are declared in domain typestates and structural kind integrity.
 
 Returns exit code 0 on success, or 1 on any schema violation.
 """
 
+import ast
 import glob
+import importlib
+import inspect
 import json
 import os
+import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Add src to path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +46,138 @@ VALID_PORT_ROLES = {
 
 UNIVERSAL_STATES = {"any", "*", "default", "unregistered", "unbound", ""}
 
+# Macro/combinator domain exempt from the core/library 2-statement / no-def rule.
+STATEMENT_LIMIT_EXEMPT_DOMAINS = {"control_flow"}
+
+_RUNTIME_NS_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _get_runtime_ns() -> Dict[str, Any]:
+    global _RUNTIME_NS_CACHE
+    if _RUNTIME_NS_CACHE is not None:
+        return _RUNTIME_NS_CACHE
+    ns: Dict[str, Any] = {}
+    for mod_name, alias in (
+        ("numpy", "np"),
+        ("pandas", "pd"),
+        ("cv2", "cv2"),
+        ("matplotlib.pyplot", "plt"),
+        ("matplotlib.figure", "Figure"),
+        ("matplotlib.axes", "Axes"),
+        ("seaborn", "sns"),
+        ("sqlite3", "sqlite3"),
+        ("requests", "requests"),
+        ("pygame", "pygame"),
+        ("pathlib", "pathlib"),
+        ("PIL.Image", "Image"),
+        ("PIL.ImageDraw", "ImageDraw"),
+        ("PIL.ImageFilter", "ImageFilter"),
+        ("PIL.ImageEnhance", "ImageEnhance"),
+        ("scipy.signal", "signal"),
+        ("cryptography.fernet", "fernet"),
+        ("joblib", "joblib"),
+    ):
+        try:
+            mod = importlib.import_module(mod_name)
+            ns[alias] = mod
+            ns[mod_name] = mod
+        except Exception:
+            pass
+    if "pathlib" in ns:
+        ns["Path"] = ns["pathlib"].Path
+    _RUNTIME_NS_CACHE = ns
+    return ns
+
+
+def _resolve_call_target(cell: Any) -> Tuple[Optional[Any], Optional[ast.Call], bool]:
+    code = (cell.code_template or "").strip()
+    cid = cell.cell_id or ""
+    san = re.sub(r"\{([a-zA-Z0-9_]+)\}", r"_P_\1_", code)
+    try:
+        tree = ast.parse(san)
+    except Exception:
+        return None, None, False
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    if not calls:
+        return None, None, False
+    ns = _get_runtime_ns()
+
+    if "." in cid and " " not in cid:
+        parts = cid.split(".")
+        for k in range(len(parts), 0, -1):
+            try:
+                m = importlib.import_module(".".join(parts[:k]))
+                obj: Any = m
+                for a in parts[k:]:
+                    obj = getattr(obj, a)
+                if callable(obj):
+                    return obj, calls[0], False
+            except Exception:
+                pass
+
+    for c in calls:
+        if isinstance(c.func, ast.Attribute):
+            if isinstance(c.func.value, ast.Name) and c.func.value.id.startswith("_P_"):
+                pname = c.func.value.id[3:-1]
+                pmeta = (cell.inputs or {}).get(pname)
+                tn = str(getattr(pmeta, "type_name", "") or "").lower()
+                cls: Any = None
+                for key in (tn, pname.lower()):
+                    if "dataframe" in key and "pd" in ns:
+                        cls = ns["pd"].DataFrame
+                        break
+                    if "series" in key and "pd" in ns:
+                        cls = ns["pd"].Series
+                        break
+                    if ("axes" in key or key == "ax") and "Axes" in ns:
+                        cls = ns["Axes"].Axes
+                        break
+                    if ("figure" in key or key == "fig") and "Figure" in ns:
+                        cls = ns["Figure"].Figure
+                        break
+                    if "path" in key and "Path" in ns:
+                        cls = ns["Path"]
+                        break
+                    if ("image" in key or "img" in key) and "Image" in ns:
+                        cls = ns["Image"].Image
+                        break
+                    if "session" in key and "requests" in ns:
+                        cls = ns["requests"].Session
+                        break
+                    if ("connection" in key or "conn" in key) and "sqlite3" in ns:
+                        cls = ns["sqlite3"].Connection
+                        break
+                    if ("cursor" in key or "cur" in key) and "sqlite3" in ns:
+                        cls = ns["sqlite3"].Cursor
+                        break
+                    if "rect" in key and "pygame" in ns:
+                        cls = ns["pygame"].Rect
+                        break
+                    if ("surface" in key or "surf" in key) and "pygame" in ns:
+                        cls = ns["pygame"].Surface
+                        break
+                if cls is not None and hasattr(cls, c.func.attr):
+                    return getattr(cls, c.func.attr), c, True
+            else:
+                chain: List[str] = []
+                cur: Any = c.func
+                while isinstance(cur, ast.Attribute):
+                    chain.append(cur.attr)
+                    cur = cur.value
+                if isinstance(cur, ast.Name):
+                    chain.append(cur.id)
+                    chain.reverse()
+                    if chain[0] in ns:
+                        obj = ns[chain[0]]
+                        try:
+                            for a in chain[1:]:
+                                obj = getattr(obj, a)
+                            if callable(obj):
+                                return obj, c, False
+                        except Exception:
+                            pass
+    return None, None, False
+
 
 def lint_tree_file(path: str) -> List[str]:
     violations: List[str] = []
@@ -54,7 +189,7 @@ def lint_tree_file(path: str) -> List[str]:
     except Exception as e:
         return [f"[{rel_path}] JSON decode error: {e}"]
 
-    # 1. Pydantic TreeSchema validation
+    # 1. Strict Pydantic TreeSchema validation (extra="forbid" rejects unknown keys)
     try:
         tree = TreeSchema(**data)
     except Exception as e:
@@ -97,14 +232,54 @@ def lint_tree_file(path: str) -> List[str]:
             if isinstance(tv, dict) and (tv.get("name") or tv.get("type_name")) and tv.get("kind"):
                 type_kind_map[str(tv.get("name") or tv.get("type_name")).strip().lower()] = str(tv["kind"]).strip().lower()
 
-    path_tokens = {str(t).strip().lower() for t in (tree.path_port_tokens or [])}
-    for tok_list in (tree.carrier_roles or {}).get("source_data", ()):
-        path_tokens.add(str(tok_list).strip().lower())
-
     # 3. Check cells and ports
     for cell in tree.cells:
         cid = cell.cell_id
         stage = cell.stage
+
+        # 3a. Atomic code_template check for core/library trees (no inline def, <= 2 statements)
+        code = (cell.code_template or "").strip()
+        if code and domain not in STATEMENT_LIMIT_EXEMPT_DOMAINS:
+            san = re.sub(r"\{([a-zA-Z0-9_]+)\}", r"_P_\1_", code)
+            try:
+                c_ast = ast.parse(san)
+                if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(c_ast)):
+                    violations.append(f"[{rel_path}] {cid}: core/library cell code_template defines inline 'def'")
+                if len(c_ast.body) > 2:
+                    violations.append(f"[{rel_path}] {cid}: core/library cell code_template has {len(c_ast.body)} statements (max 2)")
+            except SyntaxError:
+                pass
+
+        # 3b. Verify required=False positional args actually have defaults in inspect.signature
+        obj, call_node, is_method = _resolve_call_target(cell)
+        if obj is not None and call_node is not None:
+            try:
+                sig = inspect.signature(obj)
+            except Exception:
+                sig = None
+            if sig is not None:
+                params = list(sig.parameters.values())
+                if is_method and params and params[0].name == "self":
+                    params = params[1:]
+                for idx, arg_node in enumerate(call_node.args):
+                    if (
+                        isinstance(arg_node, ast.Name)
+                        and arg_node.id.startswith("_P_")
+                        and arg_node.id.endswith("_")
+                        and idx < len(params)
+                    ):
+                        pname = arg_node.id[3:-1]
+                        sig_p = params[idx]
+                        port_obj = cell.inputs.get(pname)
+                        if (
+                            port_obj is not None
+                            and not port_obj.required
+                            and sig_p.default is inspect.Parameter.empty
+                            and sig_p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                        ):
+                            violations.append(
+                                f"[{rel_path}] {cid}.in:{pname}: required=False on positional arg '{sig_p.name}' with no default in inspect.signature"
+                            )
 
         # Inputs and outputs
         for port_type, ports in [("in", cell.inputs), ("out", cell.outputs)]:
@@ -163,14 +338,12 @@ def lint_tree_file(path: str) -> List[str]:
                         if (
                             role in ("source_data", "source_identifier")
                             or at == "path"
-                            or (stage == 1 and (p_name.lower() in path_tokens or tn.lower() in path_tokens or type_kind_map.get(tn.lower()) == "path"))
+                            or sk == "path_spec"
+                            or (stage == 1 and type_kind_map.get(tn.lower()) == "path")
                         ):
                             continue
                         if not role:
                             violations.append(f"{p_loc}: required scalar port missing port_role")
-                        elif role in ("configuration", "literal_parameter", "column_projection"):
-                            if port.default_value is None:
-                                violations.append(f"{p_loc}: required configuration/parameter port missing default_value")
 
     return violations
 

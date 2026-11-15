@@ -265,7 +265,7 @@ def ensure_comprehensive_prompt(prompt: str, candidate_prompt: Optional[str]) ->
         from tokenizer import CellTokenizer
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        stop = set(reg.get_function_words()) | set(reg.get_sentence_connectives())
+        stop = set(reg.get_function_words())
 
         p_toks = CellTokenizer.tokenize_prompt(p_clean)
         c_toks = CellTokenizer.tokenize_prompt(c_clean)

@@ -50,13 +50,10 @@ class LanguageSpec(BaseModel):
     attr_separator: str = "."
     block_keywords: List[str] = Field(default_factory=list)
     sandbox_driver: Optional[str] = None
-    headless_env: Dict[str, str] = Field(default_factory=dict)
     forbidden_constructs: List[str] = Field(default_factory=list)
     forbidden_identifiers: List[str] = Field(default_factory=list)
     permitted_builtins: List[str] = Field(default_factory=list)
     variadic_markers: List[str] = Field(default_factory=list)
-    output_targets: List[str] = Field(default_factory=lambda: ["output_var", "output", "out", "result", "res"])
-    condition_states: List[str] = Field(default_factory=lambda: ["boolean", "condition"])
     null_literal: str = "None"
     bool_literals: List[str] = Field(default_factory=lambda: ["True", "False"])
     empty_collection_literals: List[str] = Field(default_factory=lambda: ["[]", "()"])
@@ -788,7 +785,7 @@ class CellSchema(BaseModel):
 
 
 class TreeSchema(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     domain: str
     version: str = "1.0.0"
@@ -811,25 +808,14 @@ class TreeSchema(BaseModel):
     forbidden_side_effects: List[str] = Field(default_factory=list)
     abstract_carriers: List[str] = Field(default_factory=list)
     abstract_carrier_mapping: Dict[str, str] = Field(default_factory=dict)
-    dest_port_tokens: List[str] = Field(default_factory=list)
-    path_port_tokens: List[str] = Field(default_factory=list)
     data_bearing_roles: List[str] = Field(default_factory=list)
     pointed_defaults: Dict[str, Any] = Field(default_factory=dict)
     supported_formats: List[str] = Field(default_factory=list)
     capabilities: Dict[str, Any] = Field(default_factory=dict)
     carrier_roles: Dict[str, Any] = Field(default_factory=dict)
-    enum_constant_rules: List[Any] = Field(default_factory=list)
     is_core: Optional[bool] = None
-    materialization_states: List[str] = Field(default_factory=list)
-    mock_fixtures: List[Dict[str, Any]] = Field(default_factory=list)
-    source_port_tokens: List[str] = Field(default_factory=list)
     top_level_carriers: List[str] = Field(default_factory=list)
     top_states: List[str] = Field(default_factory=list)
-    type_vars: List[str] = Field(default_factory=list)
-    excluded_module_tokens: List[str] = Field(default_factory=list)
-    enum_citation_triggers: List[str] = Field(default_factory=list)
-    enum_suffixes: List[str] = Field(default_factory=list)
-    symbol_stopwords: List[str] = Field(default_factory=list)
 
     def model_post_init(self, __context: Any) -> None:
         if self.language_spec is not None:
