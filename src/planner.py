@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple, Any
 from log_config import get_logger
 
 try:
+    from .language_backend import get_active_language_backend
     from .lattice import LatticeOrchestrator, Cell, MicroCell, MacroCell, TypeRegistry, is_path_port as _lattice_is_path_port
     from .unification import (
         unify, Substitution, verify_traced_loop_invariant, verify_coproduct_branch,
@@ -28,6 +29,7 @@ try:
     from .tokenizer import CellTokenizer, normalize_token
     from .utils import tokenize_alphanumeric
 except (ImportError, ValueError):
+    from language_backend import get_active_language_backend
     from lattice import LatticeOrchestrator, Cell, MicroCell, MacroCell, TypeRegistry, is_path_port as _lattice_is_path_port
     from unification import (
         unify, Substitution, verify_traced_loop_invariant, verify_coproduct_branch,
@@ -87,11 +89,7 @@ MATERIALIZATION_OUTPUT_STATES = DynamicMaterializationStates()
 def _is_projection_port(p_sig: Any) -> bool:
     """True iff p_sig is a declared key/projection port."""
     reg = TypeRegistry.get_instance()
-    proj_roles = (
-        set(reg.get_verification_semantics("projection_roles"))
-        | set(reg.get_verification_semantics("key_roles"))
-        | set(reg.get_verification_semantics("key_binds"))
-    )
+    proj_roles = reg.get_roles_for_category("projection") | reg.get_roles_for_category("key")
     role = getattr(p_sig, "port_role", None) or getattr(p_sig, "derived_role", "") or getattr(p_sig, "binds", "")
     return role in proj_roles
 
@@ -107,12 +105,7 @@ def _is_carrier_projectable_port(
 ) -> bool:
     """True iff p_sig is a declared projective/key port and an upstream cell provides a composite carrier."""
     reg = TypeRegistry.get_instance()
-    proj_roles = (
-        set(reg.get_verification_semantics("projective_roles"))
-        | set(reg.get_verification_semantics("projective_binds"))
-        | set(reg.get_verification_semantics("key_roles"))
-        | set(reg.get_verification_semantics("key_binds"))
-    )
+    proj_roles = reg.get_roles_for_category("projection") | reg.get_roles_for_category("key")
     role = getattr(p_sig, "port_role", None) or getattr(p_sig, "derived_role", "") or getattr(p_sig, "binds", "")
     if role not in proj_roles:
         return False
@@ -219,31 +212,43 @@ class LatticeVocabulary:
 
     @property
     def ingress_roles(self) -> Set[str]:
-        """Node roles that occur ONLY at the ingress stage."""
+        """Node roles that predominantly occur at the ingress stage."""
         def build():
             ing = self.ingress_stage
-            at_ing: Set[str] = set()
-            elsewhere: Set[str] = set()
+            ing_counts: Dict[str, int] = {}
+            total_counts: Dict[str, int] = {}
             for c in self._cells():
                 r = str(getattr(c, "node_role", "") or "").lower()
                 if r:
-                    (at_ing if getattr(c, "stage", None) == ing else elsewhere).add(r)
-            return set(at_ing - elsewhere)
+                    total_counts[r] = total_counts.get(r, 0) + 1
+                    if getattr(c, "stage", None) == ing:
+                        ing_counts[r] = ing_counts.get(r, 0) + 1
+            return {
+                r for r, cnt in ing_counts.items()
+                if total_counts.get(r, 0) > 0 and (cnt / total_counts[r]) >= 0.8
+            }
         return self._get("ingress_roles", build)
 
     @property
     def terminal_roles(self) -> Set[str]:
-        """Node roles that occur ONLY at the terminal stage."""
+        """Node roles that predominantly occur at the terminal stage."""
         def build():
             ts = self.terminal_stage
-            at_terminal: Set[str] = set()
-            elsewhere: Set[str] = set()
+            if ts is None:
+                return set()
+            term_counts: Dict[str, int] = {}
+            total_counts: Dict[str, int] = {}
             for c in self._cells():
                 r = str(getattr(c, "node_role", "") or "").lower()
                 if not r:
                     continue
-                (at_terminal if getattr(c, "stage", None) == ts else elsewhere).add(r)
-            return set(at_terminal - elsewhere) if ts is not None else set()
+                total_counts[r] = total_counts.get(r, 0) + 1
+                if getattr(c, "stage", None) == ts:
+                    term_counts[r] = term_counts.get(r, 0) + 1
+            return {
+                r for r, cnt in term_counts.items()
+                if total_counts.get(r, 0) > 0 and (cnt / total_counts[r]) >= 0.8
+            }
         return self._get("terminal_roles", build)
 
     @property
@@ -776,10 +781,19 @@ def _literal_groundable(p_sig: Any, cand: Any, quoted_str_literals: Sequence[Any
     object ports no step could ever produce, deferring the failure to Layer 3.
     """
     registry = TypeRegistry.get_instance()
-    vocab = _active_vocab()
     t = _port_type(p_sig)
-    role = _declared_role(p_sig)
     has_text = bool(quoted_str_literals or identifier_literals)
+    if (
+        (registry.is_subtype(t, "str") and has_text)
+        or (registry.is_subtype(t, "numeric") and bool(numeric_literals))
+        or registry.is_subtype(t, "bool")
+        or registry.is_subtype(t, "filepath")
+        or registry.is_subtype(t, "uri")
+        or _lattice_is_path_port(p_sig)
+        or (registry.is_subtype(t, "scalar") and (has_text or bool(numeric_literals)))
+        or bool(getattr(p_sig, "enum_values", None))
+    ):
+        return True
     # Literal-capable carriers: primitives the emitter can synthesize as an
     # expression, declared enum choices, and untyped wildcards. Everything else
     # (class instances, containers of class instances, handles) requires a wire.
@@ -789,32 +803,19 @@ def _literal_groundable(p_sig: Any, cand: Any, quoted_str_literals: Sequence[Any
         or registry.is_subtype(t, "str")
         or registry.is_subtype(t, "text")
         or registry.is_subtype(t, "numeric")
-        or registry.is_subtype(t, "bool")
         or registry.is_subtype(t, "logical")
-        or registry.is_subtype(t, "filepath")
-        or registry.is_subtype(t, "uri")
         or registry.is_subtype(t, "path")
-        or bool(getattr(p_sig, "enum_values", None))
     )
+    vocab = _active_vocab()
+    if not carrier_literal_capable:
+        return bool(has_text and vocab.is_key_port(p_sig))
+    role = _declared_role(p_sig)
     return (
         (role != "" and role in vocab.literal_roles)
-        or (registry.is_subtype(t, "str") and has_text)
-        or (registry.is_subtype(t, "numeric") and bool(numeric_literals))
-        or registry.is_subtype(t, "bool")
-        or registry.is_subtype(t, "filepath")
-        or registry.is_subtype(t, "uri")
-        or _lattice_is_path_port(p_sig)
-        or (registry.is_subtype(t, "scalar") and (has_text or bool(numeric_literals)))
-        or bool(getattr(p_sig, "enum_values", None))
-        or (
-            carrier_literal_capable
-            and role != ""
-            and role in vocab.slot_roles
-        )
+        or (role != "" and role in vocab.slot_roles)
         or (vocab.is_key_port(p_sig) and has_text)
         or (
-            carrier_literal_capable
-            and bool(getattr(cand, "slots", None))
+            bool(getattr(cand, "slots", None))
             and getattr(p_sig, "name", None) in getattr(cand, "slots", {})
         )
     )
@@ -1110,7 +1111,7 @@ class LatticePlanner:
                     port_tokens.add(r)
                 tn = str(getattr(ps.signature, "type_name", "")).lower()
                 is_key_slot = self._vocab.is_key_port(ps)
-                multi_projs = set(reg.get_verification_semantics("multi_projection_kinds")) if reg else set()
+                multi_projs = reg.get_roles_for_category("multi_projection") if reg else set()
                 if is_key_slot and reg is not None and (
                     reg.is_subtype(tn, "collection")
                     or getattr(c, "projection", "") in multi_projs
@@ -1662,77 +1663,45 @@ class LatticePlanner:
             path_ports = [p for p in cell.inputs.values() if _lattice_is_path_port(p)]
             if not path_ports:
                 return True
+            reg = TypeRegistry.get_instance()
             for p in path_ports:
-                port_fmts = getattr(p, "supported_formats", None)
-                if port_fmts:
-                    clean_fmts = {str(f).strip().lower() for f in port_fmts}
-                    if "*" not in clean_fmts and ext not in clean_fmts:
-                        return False
-                tn = str(getattr(p, "type_name", "") or "").strip()
-                reg = TypeRegistry.get_instance()
-                loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
-                if "[" in tn and tn.endswith("]"):
-                    ctor, _, inner = tn[:-1].partition("[")
-                    if ctor.strip().lower() in loc_ctors:
-                        parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
-                        if len(parts) >= 2:
-                            fmt = parts[1]
-                            if not fmt or fmt == "generic" or reg.is_declared_top(fmt):
-                                carrier = parts[0]
-                                try:
-                                    placeholder = reg.get_asset_placeholder(carrier, "")
-                                    if placeholder and "." in placeholder:
-                                        carrier_ext = placeholder.rpartition(".")[2].strip().lower()
-                                        generic_exts = set(reg.get_verification_semantics("generic_format_extensions"))
-                                        if carrier_ext and carrier_ext not in generic_exts:
-                                            if ext == carrier_ext or reg.is_subtype(ext, carrier_ext) or reg.is_subtype(carrier_ext, ext):
-                                                return True
-                                            for anc in reg.get_format_groups():
-                                                if reg.is_subtype(ext, anc) and reg.is_subtype(carrier_ext, anc):
-                                                    return True
-                                            return False
-                                except Exception as _exc:
-                                    logger.debug("[PLANNER DIAGNOSTIC] Suppressed exception: %s", _exc, exc_info=True)
-                                return True
-                            if ext == fmt or fmt in ext or ext in fmt or reg.is_subtype(ext, fmt) or reg.is_subtype(fmt, ext):
-                                return True
-                            for anc in reg.get_format_groups():
-                                if reg.is_subtype(ext, anc) and (reg.is_subtype(fmt, anc) or fmt in anc):
-                                    return True
-                            return False
-                        elif len(parts) == 1:
-                            target = parts[0]
-                            reg = TypeRegistry.get_instance()
-                            if not target or target == "generic" or reg.is_declared_top(target):
-                                return True
-                            if ext == target or target in ext or ext in target or reg.is_subtype(ext, target) or reg.is_subtype(target, ext):
-                                return True
-                            for anc in reg.get_format_groups():
-                                if reg.is_subtype(ext, anc) and (reg.is_subtype(target, anc) or target in anc):
-                                    return True
-                            try:
-                                placeholder = reg.get_asset_placeholder(target, "")
-                                if placeholder and "." in placeholder:
-                                    carrier_ext = placeholder.rpartition(".")[2].strip().lower()
-                                    generic_exts = set(reg.get_verification_semantics("generic_format_extensions"))
-                                    if carrier_ext and carrier_ext not in generic_exts:
-                                        if ext == carrier_ext or reg.is_subtype(ext, carrier_ext) or reg.is_subtype(carrier_ext, ext):
-                                            return True
-                                        for anc in reg.get_format_groups():
-                                            if reg.is_subtype(ext, anc) and reg.is_subtype(carrier_ext, anc):
-                                                return True
-                                        return False
-                            except Exception:
-                                pass
-                            return False
+                if not reg.is_format_extension_compatible(ext, p, check_concrete_prefix=False):
+                    return False
             return True
 
-        mut_excl_roles = registry.get_verification_semantics("mutually_exclusive_roles") or ()
+        mut_excl_groups = tuple(
+            tuple(str(r) for r in grp if str(r).strip())
+            for grp in registry.get_exclusive_roles()
+        )
+        mut_excl_roles = tuple(r for grp in mut_excl_groups for r in grp)
+        def _same_exclusive_group(r1: str, r2: str) -> bool:
+            return r1 != r2 and any(r1 in grp and r2 in grp for grp in mut_excl_groups)
+        _excl_roles_memo: Dict[str, Set[str]] = {}
+        _orch_excl_cache: Optional[Dict[Any, Set[str]]] = None
+        if self.orchestrator is not None:
+            _orch_excl_cache = getattr(self.orchestrator, "_excl_roles_cache", None)
+            if _orch_excl_cache is None:
+                _orch_excl_cache = {}
+                try:
+                    self.orchestrator._excl_roles_cache = _orch_excl_cache
+                except Exception:
+                    _orch_excl_cache = None
+        _excl_cache_epoch = (registry.generation(), mut_excl_roles)
 
         def _cell_mutually_exclusive_roles(cell: Cell) -> Set[str]:
             if not mut_excl_roles:
                 return set()
-            roles = set()
+            cid = cell.cell_id
+            hit = _excl_roles_memo.get(cid)
+            if hit is not None:
+                return hit
+            if _orch_excl_cache is not None:
+                o_key = (_excl_cache_epoch, cid)
+                o_hit = _orch_excl_cache.get(o_key)
+                if o_hit is not None:
+                    _excl_roles_memo[cid] = o_hit
+                    return o_hit
+            roles: Set[str] = set()
             all_ports = list(cell.inputs.values()) + list(cell.outputs.values())
             for p in all_ports:
                 sig = getattr(p, "signature", p)
@@ -1740,13 +1709,13 @@ class LatticePlanner:
                 t_state = str(getattr(sig, "state", "")).lower()
                 for r in mut_excl_roles:
                     r_low = r.lower()
-                    if registry.is_subtype(t_name, r_low) or registry.is_subtype(t_state, r_low) or r_low in t_name or r_low in t_state:
+                    if r_low in t_name or r_low in t_state or registry.is_subtype(t_name, r_low) or (t_state in registry._parents and registry.is_subtype(t_state, r_low)):
                         roles.add(r)
             for tag in getattr(cell, "semantic_tags", []) or []:
                 t_low = str(tag).lower()
                 for r in mut_excl_roles:
                     r_low = r.lower()
-                    if r_low == t_low or normalize_token(t_low) == normalize_token(r_low) or registry.is_subtype(t_low, r_low):
+                    if r_low == t_low or normalize_token(t_low) == normalize_token(r_low) or (t_low in registry._parents and registry.is_subtype(t_low, r_low)):
                         roles.add(r)
             for r_attr in (getattr(cell, "node_role", ""), getattr(cell, "role", "")):
                 if r_attr:
@@ -1754,6 +1723,9 @@ class LatticePlanner:
                     for r in mut_excl_roles:
                         if r.lower() in r_low:
                             roles.add(r)
+            _excl_roles_memo[cid] = roles
+            if _orch_excl_cache is not None:
+                _orch_excl_cache[(_excl_cache_epoch, cid)] = roles
             return roles
 
         numeric_literals = [
@@ -1805,17 +1777,32 @@ class LatticePlanner:
             )
 
         def _producer_index() -> Dict[str, List[Any]]:
-            idx = getattr(self, "_producer_index_cache", None)
-            stamp = self._lattice_stamp()
+            stamp = (self._lattice_stamp(), registry.generation())
+            owner = self.orchestrator if self.orchestrator is not None else self
+            idx = getattr(owner, "_producer_index_cache", None)
             if idx is not None and idx[0] == stamp:
                 return idx[1]
             by_type: Dict[str, List[Any]] = {}
-            for c in self.orchestrator.loaded_cells.values():
+            seen_by_type: Dict[str, Set[Tuple[Any, ...]]] = {}
+            loaded = getattr(self.orchestrator, "loaded_cells", None) or {} if self.orchestrator is not None else {}
+            for c in loaded.values():
                 for out_p in c.outputs.values():
                     sig = getattr(out_p, "signature", out_p)
                     t_key = str(getattr(sig, "type_name", "") or "").lower()
-                    by_type.setdefault(t_key, []).append(sig)
-            self._producer_index_cache = (stamp, by_type)
+                    dedup_key = (
+                        t_key,
+                        str(getattr(sig, "state", "") or "").lower(),
+                        tuple(getattr(sig, "accepted_states", ()) or ()),
+                        getattr(sig, "parent_state", None),
+                    )
+                    seen_set = seen_by_type.setdefault(t_key, set())
+                    if dedup_key not in seen_set:
+                        seen_set.add(dedup_key)
+                        by_type.setdefault(t_key, []).append(sig)
+            try:
+                owner._producer_index_cache = (stamp, by_type)
+            except Exception:
+                self._producer_index_cache = (stamp, by_type)
             return by_type
 
         _prod_idx = _producer_index()
@@ -1827,9 +1814,10 @@ class LatticePlanner:
             time, a false 'infeasible' would drop a workable cell."""
             groups: List[List[Any]] = []
             for pt, sigs in _prod_idx.items():
-                if (
-                    pt == t
-                    or _is_wildcard_carrier(pt, registry)
+                if pt == t:
+                    groups.insert(0, sigs)
+                elif (
+                    _is_wildcard_carrier(pt, registry)
                     or _is_wildcard_carrier(t, registry)
                     or (len(pt) == 1 and pt.isalpha())
                     or (len(t) == 1 and t.isalpha())
@@ -1839,6 +1827,18 @@ class LatticePlanner:
                 ):
                     groups.append(sigs)
             return groups
+
+        _probe_stamp = (self._lattice_stamp(), registry.generation())
+        _probe_owner = self.orchestrator if self.orchestrator is not None else self
+        _cached_probe = getattr(_probe_owner, "_producer_probe_cache", None)
+        if _cached_probe is not None and _cached_probe[0] == _probe_stamp:
+            _producer_probe_memo: Dict[Tuple[str, str], bool] = _cached_probe[1]
+        else:
+            _producer_probe_memo = {}
+            try:
+                _probe_owner._producer_probe_cache = (_probe_stamp, _producer_probe_memo)
+            except Exception:
+                pass
 
         def _has_lattice_producer(p_sig: Any) -> bool:
             sig = getattr(p_sig, "signature", p_sig)
@@ -1856,8 +1856,6 @@ class LatticePlanner:
                         break
                 _producer_probe_memo[key] = hit
             return hit
-
-        _producer_probe_memo: Dict[Tuple[str, str], bool] = {}
 
         def _required_receiver_sigs(c: Cell) -> List[Tuple[str, Any]]:
             """Required ports that need a producer wire (mirrors the beam's own
@@ -1882,6 +1880,8 @@ class LatticePlanner:
         def _probe_infeasible(cells: List[Cell]) -> List[Tuple[Cell, str, Any]]:
             bad: List[Tuple[Cell, str, Any]] = []
             for c in cells:
+                if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                    break
                 if getattr(c, "node_type", "") == "constructor":
                     continue
                 for p_name, p_sig in _required_receiver_sigs(c):
@@ -1889,7 +1889,7 @@ class LatticePlanner:
                         bad.append((c, p_name, p_sig))
             return bad
 
-        if start_sig is None:
+        if start_sig is None and _budget_ms >= 1000.0 and time.perf_counter() < self._plan_deadline:
             infeasible = _probe_infeasible(candidates)
             demanded = [(c, pn, ps) for c, pn, ps in infeasible
                         if relevance_map.get(c.cell_id, 0.0) > 0.0]
@@ -2160,18 +2160,19 @@ class LatticePlanner:
         # mass (token_set / full identity) but NO clause-coverage evidence. Without
         # this separation, a cell whose only operative overlap with a clause is a
         # generic port name plus a verb can falsely claim that clause's coverage.
+        try:
+            _core_aliases = registry.get_all_aliases()
+        except Exception:
+            _core_aliases = {}
+
         def _core_identity_tokens(cell: Cell) -> Set[str]:
             if _is_p0:
                 return set(getattr(cell, "formal_identifiers", None) or {cell.cell_id.lower()})
             toks = CellTokenizer.tokenize_cell(cell.cell_id, getattr(cell, "keywords", ()) or ())
             if getattr(cell, "domain_name", None) and cell.domain_name != "generic":
                 toks = toks - CellTokenizer.tokenize_identifier(cell.domain_name)
-            try:
-                aliases = TypeRegistry.get_instance().get_all_aliases()
-            except Exception:
-                aliases = {}
-            if aliases:
-                toks = toks - {t for t in toks if t in aliases}
+            if _core_aliases:
+                toks = toks - {t for t in toks if t in _core_aliases}
             return toks
 
         core_identity_cache: Dict[str, Set[str]] = {}
@@ -2290,7 +2291,7 @@ class LatticePlanner:
                     for c in candidates:
                         if demanded:
                             c_excl = _cell_mutually_exclusive_roles(c)
-                            if c_excl and any(r != demanded for r in c_excl):
+                            if c_excl and any(_same_exclusive_group(r, demanded) for r in c_excl):
                                 continue
                         sv = float(sem_map.get(c.cell_id, 0.0) or 0.0)
                         if sv > best_sem:
@@ -2305,7 +2306,7 @@ class LatticePlanner:
             # Clause COVERAGE is decided by core identity only (R6-5); the full
             # identity still feeds ranking via _match_mass below.
             core_toks = core_identity_cache.get(c.cell_id) or id_toks
-            c_excl_roles = _cell_mutually_exclusive_roles(c)
+            c_excl_roles = _cell_mutually_exclusive_roles(c) if pipeline_demanded_roles else set()
             _cid_toks = {t for t in CellTokenizer.tokenize_identifier(str(c.cell_id)) if _idf(t) > 0.0}
             _cid_mass = sum(_idf(t) for t in _cid_toks)
             cell_cov_strong[c.cell_id] = content_prompt_tokens & id_toks
@@ -2488,6 +2489,9 @@ class LatticePlanner:
         # that need an in-path producer such as a constructor morphism).
         cell_receiver_sigs: Dict[str, List[Any]] = {}
         for c in candidates:
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                cell_receiver_sigs[c.cell_id] = []
+                continue
             if getattr(c, "node_type", "") == "constructor":
                 cell_receiver_sigs[c.cell_id] = []
                 continue
@@ -2580,7 +2584,8 @@ class LatticePlanner:
                 if p_role in ROLE_CARRIERS:
                     t_name = str(p_sig.signature.type_name)
                     def_val = p_sig.default_value
-                    if def_val is not None and str(def_val).strip() not in ("None", "none", "null", ""):
+                    def_s = str(def_val).strip() if def_val is not None else ""
+                    if def_s and not get_active_language_backend().is_null_literal(def_s):
                         continue
                     if _port_literal_groundable(t_name):
                         continue
@@ -2607,10 +2612,8 @@ class LatticePlanner:
                             and not any(unify(prod, p_sig.signature) is not None for prod in produced)
                         )
                         if not already_penalized:
-                            projective_roles = (
-                                set(TypeRegistry.get_instance().get_verification_semantics("projective_roles"))
-                                | set(TypeRegistry.get_instance().get_verification_semantics("projective_binds"))
-                            )
+                            reg_proj = TypeRegistry.get_instance()
+                            projective_roles = reg_proj.get_roles_for_category("projection") | reg_proj.get_roles_for_category("key")
                             if p_role in projective_roles:
                                 if not _is_carrier_projectable_port(p_sig, prev_path, quoted_str_literals, identifier_literals):
                                     count += 1
@@ -3088,7 +3091,7 @@ class LatticePlanner:
                         if vocab.is_key_port(p_sig):
                             trigger_port_tokens |= set(CellTokenizer.tokenize_identifier(p_name))
                             trigger_port_tokens |= set(CellTokenizer.tokenize_identifier(str(getattr(p_sig.signature, "state", ""))))
-                target_roles = set(registry.get_verification_semantics("target_roles"))
+                target_roles = registry.get_roles_for_category("target") | registry.get_roles_for_category("destination")
                 target_role_tokens: Set[str] = set()
                 for r in target_roles:
                     target_role_tokens |= set(vocab.role_tokens(r))
@@ -3197,7 +3200,7 @@ class LatticePlanner:
                     if not c_excl:
                         continue
                     for demanded in pipeline_demanded_roles:
-                        if any(excl != demanded for excl in c_excl):
+                        if any(_same_exclusive_group(excl, demanded) for excl in c_excl):
                             role_conflicts += 1
 
             defects = (
@@ -3256,8 +3259,12 @@ class LatticePlanner:
         def rank_items(items, is_final: bool = False, extra_terms=None):
             """Best-first list of (item, aggregate): defects lexicographically, then the
             rank-aggregate of all terms across `items` (see _rank_paths)."""
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                return [(it, float(it[2])) for it in sorted(items, key=lambda x: x[2], reverse=True)]
             rows = []
             for it in items:
+                if rows and hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                    return _rank_paths(rows) + [(rem, 0.0) for rem in items[len(rows):]]
                 ps = compute_path_score(it, is_final)
                 if extra_terms is not None:
                     ex = extra_terms(it)
@@ -3375,10 +3382,65 @@ class LatticePlanner:
 
         def _cells_connect_any(cell: Cell) -> bool:
             hit = _consumer_memo.get(cell.cell_id)
-            if hit is None:
-                hit = any(o.cell_id != cell.cell_id and self._cells_connect(cell, o) for o in candidates)
-                _consumer_memo[cell.cell_id] = hit
-            return hit
+            if hit is not None:
+                return hit
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                return False
+            for edge in getattr(cell, "edges", ()) or ():
+                tgt_id = edge.get("target_cell_id") if isinstance(edge, dict) else getattr(edge, "target_cell_id", None)
+                if tgt_id:
+                    tgt_cell = candidate_map.get(tgt_id) or candidate_map_lower.get(str(tgt_id).lower())
+                    if tgt_cell is not None and tgt_cell.cell_id != cell.cell_id:
+                        _consumer_memo[cell.cell_id] = True
+                        return True
+            outputs_to_check = list(cell.outputs.values()) if cell.outputs else ([cell.primary_output] if cell.primary_output else [])
+            timed_out = False
+            for out_port in outputs_to_check:
+                if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                    timed_out = True
+                    break
+                out_sig = getattr(out_port, "signature", out_port)
+                out_t = str(getattr(out_sig, "type_name", "") or "")
+                out_s = str(getattr(out_sig, "state", "") or "")
+                is_type_var = out_t.isalpha() and len(out_t) == 1 and out_t.isupper()
+                if "[" in out_t or is_type_var:
+                    for o in candidates:
+                        if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                            timed_out = True
+                            break
+                        if o.cell_id != cell.cell_id and self._cells_connect(cell, o):
+                            _consumer_memo[cell.cell_id] = True
+                            return True
+                    if timed_out:
+                        break
+                    continue
+                for in_t, cell_list in cells_by_in_type.items():
+                    in_is_tvar = in_t.isalpha() and len(in_t) == 1 and in_t.isupper()
+                    if "[" in in_t or in_is_tvar:
+                        for c in cell_list:
+                            if c.cell_id != cell.cell_id and self._cells_connect(cell, c):
+                                _consumer_memo[cell.cell_id] = True
+                                return True
+                        continue
+                    if not registry.is_subtype(out_t, in_t):
+                        continue
+                    for c in cell_list:
+                        if c.cell_id == cell.cell_id:
+                            continue
+                        cand_in_ports = list(c.inputs.values()) if c.inputs else [c.primary_input]
+                        if any(registry.is_state_compatible(
+                            producer_state=out_s,
+                            consumer_state=getattr(p_sig.signature, "state", "any"),
+                            producer_accepted=getattr(out_sig, "accepted_states", ()),
+                            consumer_accepted=getattr(p_sig.signature, "accepted_states", ()),
+                            consumer_parent=getattr(p_sig.signature, "parent_state", None),
+                            producer_parent=getattr(out_sig, "parent_state", None),
+                        ) for p_sig in cand_in_ports):
+                            _consumer_memo[cell.cell_id] = True
+                            return True
+            if not timed_out:
+                _consumer_memo[cell.cell_id] = False
+            return False
 
         # Valid terminal boundary filter (Endable Nodes):
         def _is_valid_terminal(cand_path: List[Cell]) -> bool:
@@ -3389,15 +3451,15 @@ class LatticePlanner:
 
             # Data-driven dependent terminal input verification:
             # If the terminal has required inputs that depend on prior producers, ensure the path produced them.
-            dep_terminal_roles = registry.get_verification_semantics("dependent_terminal_input_roles")
+            dep_terminal_roles = registry.get_dependent_ports()
             if dep_terminal_roles:
                 for p in terminal.inputs.values():
-                    p_role = getattr(p, "port_role", "") or getattr(p, "derived_role", "")
+                    p_role = str(getattr(p, "port_role", "") or getattr(p, "derived_role", "") or "").strip().lower()
                     if p.required and p_role in dep_terminal_roles:
-                        required_producers = set(dep_terminal_roles.get(p_role) or registry.get_verification_semantics(f"dependent_terminal_input_roles:{p_role}"))
+                        required_producers = dep_terminal_roles.get(p_role, set())
                         if required_producers:
                             path_has_producer = any(
-                                any(getattr(o, "port_role", "") in required_producers for o in c.outputs.values())
+                                any(str(getattr(o, "port_role", "") or "").lower() in required_producers for o in c.outputs.values())
                                 for c in cand_path[:-1]
                             )
                             if not path_has_producer:
@@ -3411,8 +3473,9 @@ class LatticePlanner:
                 return True
             t_role = str(getattr(terminal, "node_role", "") or "").lower()
             term_out_roles = (
-                set(registry.get_verification_semantics("terminal_output_roles"))
-                | set(registry.get_verification_semantics("prediction_output_roles"))
+                registry.get_roles_for_category("terminal_output")
+                | registry.get_states_by_property("is_terminal", True)
+                | registry.get_states_by_property("is_prediction", True)
             )
             is_pred_terminal = any(
                 getattr(op, "port_role", "") in term_out_roles
@@ -3435,10 +3498,10 @@ class LatticePlanner:
                 )
             )
             if (
-                _is_terminal_sink_cell(terminal) is False
-                and _cells_connect_any(terminal)
-                and not is_pred_terminal
+                not is_pred_terminal
                 and not transformer_completes_non_egress_prompt
+                and _is_terminal_sink_cell(terminal) is False
+                and _cells_connect_any(terminal)
             ):
                 return False
 
@@ -3531,26 +3594,29 @@ class LatticePlanner:
                     valid_candidates = matching_goals
 
             # 2. Valid terminal boundary filter (Endable Nodes):
-            endable_candidates = [item for item in valid_candidates if _is_valid_terminal(item[0])]
-            if endable_candidates:
-                valid_candidates = endable_candidates
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                scored_candidates = [(max(valid_candidates, key=lambda item: item[2]), 0.0)] if valid_candidates else []
+            else:
+                endable_candidates = [item for item in valid_candidates if _is_valid_terminal(item[0])]
+                if endable_candidates:
+                    valid_candidates = endable_candidates
 
-            # === HARD CONSTRAINTS (apply_fixes_v8) ===
-            _uc = ExecutionContext._extract_universal_literals(prompt or "")
-            _ul = [
-                (k, v) for _, k, v in _uc
-                if k in ("file_asset", "identifier", "quoted_str", "numeric")
-                and not (k == "identifier" and target_sink and str(v).lower() == target_sink.lower())
-            ]
-            _nl = [v for k, v in _ul if k == "numeric"]
-            _ql = [v for k, v in _ul if k == "quoted_str"]
-            _il = [v for k, v in _ul if k == "identifier"]
-            valid_candidates, _tier = self._hard_constraint_filter(
-                valid_candidates, _ul, _nl, _ql, _il, clause_tokens_list,
-                cell_covered=cell_covered,
-            )
-            # === end hard constraints ===
-            scored_candidates = rank_items(valid_candidates, is_final=True)
+                # === HARD CONSTRAINTS (apply_fixes_v8) ===
+                _uc = ExecutionContext._extract_universal_literals(prompt or "")
+                _ul = [
+                    (k, v) for _, k, v in _uc
+                    if k in ("file_asset", "identifier", "quoted_str", "numeric")
+                    and not (k == "identifier" and target_sink and str(v).lower() == target_sink.lower())
+                ]
+                _nl = [v for k, v in _ul if k == "numeric"]
+                _ql = [v for k, v in _ul if k == "quoted_str"]
+                _il = [v for k, v in _ul if k == "identifier"]
+                valid_candidates, _tier = self._hard_constraint_filter(
+                    valid_candidates, _ul, _nl, _ql, _il, clause_tokens_list,
+                    cell_covered=cell_covered,
+                )
+                # === end hard constraints ===
+                scored_candidates = rank_items(valid_candidates, is_final=True)
 
             if _debug_plan:
                 dbg_top = [
@@ -3586,7 +3652,7 @@ class LatticePlanner:
             trial_slot_cells: Dict[Tuple[str, ...], List[Cell]] = {}
             trials = 0
             for it, _agg in scored_candidates:
-                if trials >= budget.slot_trials:
+                if trials >= budget.slot_trials or time.perf_counter() >= self._plan_deadline:
                     break
                 cand_path = it[0]
                 prefix = tuple(c.cell_id for c in cand_path)
@@ -3639,7 +3705,7 @@ class LatticePlanner:
             chosen_candidate = None
             acceptance_deadline = min(getattr(self, "_plan_deadline", time.perf_counter() + 15.0), time.perf_counter() + 10.0)
             for cand_idx, (it, sc) in enumerate(scored_candidates):
-                if cand_idx >= 5 and time.perf_counter() > acceptance_deadline:
+                if time.perf_counter() >= self._plan_deadline or (cand_idx >= 5 and time.perf_counter() > acceptance_deadline):
                     logger.debug("[PLANNER] Plan deadline exceeded during candidate acceptance loop.")
                     break
                 cand_p = it[0]
@@ -3703,11 +3769,13 @@ class LatticePlanner:
                         str(e)[:200],
                     )
                     continue
-            if chosen_candidate is None and scored_candidates:
+            if chosen_candidate is None and scored_candidates and time.perf_counter() < self._plan_deadline:
                 # Semantic repair stage (Section 3.4): attempt dynamic repair of candidate cells
                 try:
                     from semantic_repair_engine import repair_cell_semantics
                     for it, _ in scored_candidates:
+                        if time.perf_counter() >= self._plan_deadline:
+                            break
                         cand_p = it[0]
                         repaired_cells = []
                         any_repaired = False
@@ -3728,19 +3796,6 @@ class LatticePlanner:
                     logger.debug(f"[PLANNER] Semantic repair pass: {e}")
 
             if chosen_candidate is None:
-                chosen_candidate = scored_candidates[0][0] if scored_candidates else None
-            if chosen_candidate is None:
-                if settings.allow_fallback:
-                    logger.info("[PLANNER] Trellis candidate empty: running Monte Carlo fallback...")
-                    try:
-                        mcts_path = self._monte_carlo_chain_search(prompt, tunnel, relevance_map)
-                    except Exception:
-                        mcts_path = []
-                    if mcts_path:
-                        if not hasattr(self, "trace_events"):
-                            self.trace_events = []
-                        self.trace_events.append({"event": "m0_mcts_fallback_triggered", "plan_len": len(mcts_path)})
-                        return mcts_path
                 self.last_refusal = {
                     "reason": "coverage_below_floor",
                     "coverage_fraction": 0.0,
@@ -3835,9 +3890,32 @@ class LatticePlanner:
                                     break
                                 v_res = self._cells_connect(best_path[-1], cand, allow_bridge=True) if best_path else False
                                 if v_res:
-                                    best_path.append(cand)
-                                    best_path_ids.add(cand.cell_id.lower())
-                                    covered_clauses |= cell_covered.get(cand.cell_id, set())
+                                    c_inst = _private_copy(cand, self.orchestrator)
+                                    if getattr(c_inst, "matched_clause_idx", None) is None:
+                                        c_inst.matched_clause_idx = cl_i
+                                    if time.perf_counter() >= greedy_deadline:
+                                        break
+                                    bridge_chain = [
+                                        _private_copy(bc, self.orchestrator)
+                                        for bc in self.find_bridge_chain(best_path[-1], c_inst, max_hops=3)
+                                    ]
+                                    if time.perf_counter() >= greedy_deadline:
+                                        break
+                                    trial_path = best_path + bridge_chain + [c_inst]
+                                    try:
+                                        trial_res = gate.unify_pipeline(
+                                            trial_path,
+                                            ExecutionContext(prompt=prompt),
+                                            extract_llm_slots=False,
+                                        )
+                                        if not (isinstance(trial_res, Success) and not trial_res.is_bottom()):
+                                            continue
+                                    except Exception:
+                                        continue
+                                    best_path.extend(bridge_chain + [c_inst])
+                                    for added_c in bridge_chain + [c_inst]:
+                                        best_path_ids.add(added_c.cell_id.lower())
+                                        covered_clauses |= cell_covered.get(added_c.cell_id, set())
                                     break
                         cov_frac = len(covered_clauses) / total_clauses if total_clauses else 1.0
                         uncovered = [i for i in range(total_clauses) if i not in covered_clauses]
@@ -3874,21 +3952,6 @@ class LatticePlanner:
                 return best_path
 
             return best_path
-
-        # Step 4: Monte Carlo Tree Search over chains if the Trellis was disconnected (gated on allow_fallback)
-        if settings.allow_fallback:
-            logger.info("[PLANNER] Trellis disconnected: running Monte Carlo Tree Search fallback...")
-            try:
-                mcts_path = self._monte_carlo_chain_search(prompt, tunnel, relevance_map)
-            except Exception as mcts_err:
-                logger.debug(f"[PLANNER] MCTS chain search encountered error: {mcts_err}")
-                mcts_path = []
-
-            if mcts_path:
-                if not hasattr(self, "trace_events"):
-                    self.trace_events = []
-                self.trace_events.append({"event": "m0_mcts_fallback_triggered", "plan_len": len(mcts_path)})
-                return mcts_path
 
         self.last_refusal = {
             "reason": "coverage_below_floor",
@@ -3941,7 +4004,7 @@ class LatticePlanner:
             if getattr(cell, "node_type", "") == "constructor":
                 return False
             # Cells that accept collection or column projection inputs consume multiplicity directly
-            coll_types = set(registry.get_verification_semantics("collection_types") or ())
+            coll_types = registry.get_composite_carrier_roots()
             for p_sig in cell.inputs.values():
                 t_name = str(p_sig.signature.type_name).lower()
                 if (
@@ -4359,6 +4422,8 @@ class LatticePlanner:
 
             if not candidates_for_next:
                 break
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                break
 
             _hi, _lo = budget.pool_limits(budget.linear_beam_width, max_steps)
             if len(all_valid_paths) > _hi:
@@ -4422,6 +4487,8 @@ class LatticePlanner:
         # Step t = 1: Initialize beam with entry sources
         current_beam: List[Tuple[List[Cell], Substitution, float, int, int]] = []
         for entry in candidate_entries:
+            if current_beam and hasattr(self, "_plan_deadline") and time.perf_counter() > self._plan_deadline:
+                break
             sc = log_probs.get(entry.cell_id, -10.0)
             p_tuple = ([entry], Substitution(), sc, 0, _new_unbindable(entry, []))
             current_beam.append(p_tuple)
@@ -4807,6 +4874,10 @@ class LatticePlanner:
 
             if not candidates_for_next:
                 break
+            if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                candidates_for_next.sort(key=lambda it: it[2], reverse=True)
+                current_beam = candidates_for_next[:budget.beam_width]
+                break
             # Cheap likelihood prefilter: the full Borda rank (semantic
             # objective over every candidate extension) is the search's
             # dominant cost. Bounding the ranked set to a constant multiple of
@@ -4840,6 +4911,8 @@ class LatticePlanner:
 
             # Valid completed paths addition:
             for item in candidates_for_next:
+                if hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline:
+                    break
                 term_cell = item[0][-1]
                 if is_valid_terminal is not None:
                     if is_valid_terminal(item[0]):
@@ -4858,14 +4931,15 @@ class LatticePlanner:
 
         # Greedy completion: if all_valid_paths is empty, OR if all_valid_paths has paths
         # but the best path has clause coverage < 1.0 (uncovered clauses exist when num_clauses > 1).
+        deadline_expired = hasattr(self, "_plan_deadline") and time.perf_counter() >= self._plan_deadline
         max_cov = 0
-        if all_valid_paths and num_clauses > 1:
+        if not deadline_expired and all_valid_paths and num_clauses > 1:
             max_cov = max(
                 len(set().union(*(cell_covered.get(c.cell_id, set()) for c in it[0])))
                 for it in all_valid_paths
             )
 
-        should_greedy_complete = allow_greedy_completion and (
+        should_greedy_complete = (not deadline_expired) and allow_greedy_completion and (
             (not all_valid_paths and bool(current_beam)) or (
                 num_clauses > 1 and max_cov < num_clauses and (bool(all_valid_paths) or bool(current_beam))
             )
@@ -5046,7 +5120,7 @@ class LatticePlanner:
                     return [best_child]
 
         # 2. State Loop / Fixed Point / While Loop / Repeat Until (Tr^{State}: State -> State)
-        elif topology in set(TypeRegistry.get_instance().get_verification_semantics("state_loop_topologies") or ()):
+        elif topology in (TypeRegistry.get_instance().get_roles_for_category("state_loop") | {"state_loop"}):
             s_in_contract = slot_contract.get("input_type") if isinstance(slot_contract, dict) else getattr(slot_contract, "input_type", None)
             u_raw = getattr(parent_cell, "feedback_state_type", None) or s_in_contract or "State"
             u_concrete = substitute_generics(str(u_raw), active_sigma)
@@ -5098,11 +5172,11 @@ class LatticePlanner:
 
             if child_candidates:
                 child_candidates.sort(key=lambda x: x[1], reverse=True)
-                best_child, _, child_sigma = child_candidates[0]
-                valid, _ = verify_traced_loop_invariant(u_concrete, u_concrete, child_sigma)
-                if valid:
-                    return [best_child]
-                return [best_child]
+                for cand_child, _, child_sigma in child_candidates:
+                    valid, _ = verify_traced_loop_invariant(u_concrete, u_concrete, child_sigma)
+                    if valid:
+                        return [cand_child]
+                return []
 
         # 3. Coproduct Branch Slot Planning (⊕) — declared topology dispatch.
         elif topology == "coproduct_branch":

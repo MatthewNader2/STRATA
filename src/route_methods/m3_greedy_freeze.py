@@ -7,7 +7,7 @@ Greedily commits the best next morphism at each step without backtracking.
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
-from .base import RouteMethod, is_terminal_sink, is_macro_cell
+from .base import RouteMethod, is_terminal_sink, is_macro_cell, is_combinator_cell
 
 try:
     from ..lattice import Cell, LatticeOrchestrator
@@ -57,7 +57,7 @@ class M3GreedyFreezeRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ]
@@ -157,25 +157,11 @@ class M3GreedyFreezeRouteMethod(RouteMethod):
             if self.is_sink_node(best_next, orch) and not (prompt_tokens - covered_tokens):
                 break
 
-        # Verify linear/DAG unification without silently delegating to M1
-        try:
-            try:
-                from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
-            except (ImportError, ValueError):
-                from ..unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
-            _gate = UnificationGate(orchestrator=orch)
-            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
-            _ur = _gate.unify_pipeline(committed_path, _tctx, extract_llm_slots=False)
-            has_unresolved = bool(
-                getattr(_ur, "value", None)
-                and any(v is UNRESOLVED_PORT for _, b in _ur.value for v in b.values())
-            )
-            if _ur.is_bottom() or not getattr(_ur, "value", None) or has_unresolved:
-                reason = "M3 myopic greedy path failed type unification or left unresolved input ports"
-                self.fallback_reason = reason
-                self._trace("method_failure", requested=type(self).__name__, reason=reason)
-                return []
-        except Exception as _chk_exc:
-            logger.debug("[M3] Unification verification check skipped: %s", _chk_exc)
+        _verr = self.verify_planned_path(committed_path, prompt, orch, ctx=ctx)
+        if _verr:
+            reason = f"M3 {_verr}"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         return committed_path

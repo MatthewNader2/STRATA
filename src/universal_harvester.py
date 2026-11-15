@@ -380,7 +380,8 @@ def _populate_five_axis_contract(domain_name: str, cells: List[CellSchema]) -> L
     except Exception:
         reg = None
     for cell in cells:
-        cell.source_priority = 100
+        if not getattr(cell, "source_priority", None):
+            cell.source_priority = 100
         if not cell.effects and cell.postconditions:
             cell.effects = list(cell.postconditions)
         elif cell.effects is None:
@@ -762,10 +763,6 @@ class UniversalHarvester:
             if not has_source and not ret_is_union and ret_clean.lower() == "self":
                 return True, "annotation:Self (stub)"
             return False, ""
-        if has_source and _returns_self_in_source(src):
-            return True, "source:return self"
-        if not has_source and not ret_is_union and ret_clean.lower() == "self":
-            return True, "annotation:Self (stub)"
         if ret_is_none:
             return True, "annotation:None"
         return False, ""
@@ -2124,8 +2121,8 @@ class UniversalHarvester:
                     dest_port = path_ports[0]
                     if not inputs[dest_port].required:
                         inputs[dest_port].required = True
-                        if f"{{{dest_port}}}" not in required_template_args:
-                            required_template_args.insert(0, f"{{{dest_port}}}")
+                        if f"{{{dest_port}}}" not in required_template_args and f"{dest_port}={{{dest_port}}}" not in required_template_args:
+                            required_template_args.append(f"{dest_port}={{{dest_port}}}")
                 code_template = f"{{data}}.{attr}({', '.join(required_template_args)})\n{{output_var}} = 'done'"
             elif produces_domain:
                 stage = 2
@@ -2274,9 +2271,19 @@ class UniversalHarvester:
     def harvest_and_save(self, out_file: Union[str, Path]) -> TreeSchema:
         cells = self.harvest_all()
         out_path = Path(out_file)
+        existing_meta: Dict[str, Any] = {}
         if out_path.exists():
             cells = self.enrich_from_existing_trees(self.domain_name, cells, [out_path])
-        tree = TreeSchema(domain=self.domain_name, cells=cells)
+            try:
+                raw_existing = json.loads(out_path.read_text(encoding="utf-8"))
+                if isinstance(raw_existing, dict):
+                    existing_meta = {
+                        k: v for k, v in raw_existing.items()
+                        if k not in ("domain", "cells")
+                    }
+            except Exception as meta_err:
+                logger.warning(f"[{self.domain_name}] Could not read existing tree metadata from {out_path}: {meta_err}")
+        tree = TreeSchema(domain=self.domain_name, cells=cells, **existing_meta)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(tree.model_dump_json(indent=2))

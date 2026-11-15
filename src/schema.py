@@ -1,7 +1,175 @@
 # src/schema.py
-from typing import Dict, List, Optional, Literal, Any, Union, Set
+from typing import AbstractSet, Collection, Dict, List, Optional, Literal, Any, Union, Set, Tuple
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-import ast
+
+try:
+    from language_backend import (
+        DEFAULT_STATE_SYMBOLS,
+        LexicalLanguageBackend,
+        UNIVERSAL_BOTTOM_SYMBOLS,
+        UNIVERSAL_TOP_SYMBOLS,
+        get_active_language_backend,
+        get_language_backend,
+        validate_placeholder_braces,
+    )
+except ImportError:
+    from .language_backend import (
+        DEFAULT_STATE_SYMBOLS,
+        LexicalLanguageBackend,
+        UNIVERSAL_BOTTOM_SYMBOLS,
+        UNIVERSAL_TOP_SYMBOLS,
+        get_active_language_backend,
+        get_language_backend,
+        validate_placeholder_braces,
+    )
+
+_SCHEMA_LEXER = LexicalLanguageBackend(None)
+
+
+class LanguageSpec(BaseModel):
+    """
+    Target-language syntax, comment, assignment, and runtime specification
+    declared on a core tree (e.g. python_core.json, rust_core.json).
+    Allows `src/` to stay 100% target-language-agnostic.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    file_extension: str = ""
+    ast_backend: str = "lexical"  # "python_ast" | "lexical"
+    runtime: Optional[str] = None
+    assignment_operator: str = "="
+    statement_terminator: str = ""
+    line_comment: str = "#"
+    dependency_prefixes: List[str] = Field(default_factory=list)
+    declaration_prefixes: List[str] = Field(default_factory=list)
+    function_keyword: str = ""
+    catch_keyword: str = ""
+    subscript_open: str = "["
+    subscript_close: str = "]"
+    attr_separator: str = "."
+    block_keywords: List[str] = Field(default_factory=list)
+    sandbox_driver: Optional[str] = None
+    headless_env: Dict[str, str] = Field(default_factory=dict)
+    forbidden_constructs: List[str] = Field(default_factory=list)
+    forbidden_identifiers: List[str] = Field(default_factory=list)
+    permitted_builtins: List[str] = Field(default_factory=list)
+    variadic_markers: List[str] = Field(default_factory=list)
+    output_targets: List[str] = Field(default_factory=lambda: ["output_var", "output", "out", "result", "res"])
+    condition_states: List[str] = Field(default_factory=lambda: ["boolean", "condition"])
+    null_literal: str = "None"
+    bool_literals: List[str] = Field(default_factory=lambda: ["True", "False"])
+    empty_collection_literals: List[str] = Field(default_factory=lambda: ["[]", "()"])
+    method_receiver_names: List[str] = Field(default_factory=lambda: ["self", "cls"])
+    debug_builtins: List[str] = Field(default_factory=list)
+    union_type_constructors: List[str] = Field(default_factory=lambda: ["Union"])
+    noop_statement: str = "pass"
+    return_keyword: str = "return"
+    loop_keyword: str = "for"
+    loop_in_keyword: str = "in"
+    block_suffix: str = ":"
+    container_constructors: Dict[str, str] = Field(default_factory=dict)
+    collection_append_templates: Dict[str, str] = Field(default_factory=dict)
+
+
+# Canonical domain-agnostic structural schema tuples (from ConditionPredicate, Cell, PortSignature)
+EXTENT_EFFECT_KINDS: Tuple[str, ...] = ("extent_mutation", "dedup", "schema_removal")
+COMPONENT_CLEAN_EFFECT_KINDS: Tuple[str, ...] = ("clean", "component_transform")
+DESTRUCTIVE_OR_CLEAN_EFFECT_KINDS: Tuple[str, ...] = ("clean", "dedup", "extent_mutation", "schema_removal")
+STRUCTURAL_COMPOUND_KINDS: Tuple[str, ...] = ("composite", "collection", "tensor", "mapping")
+STRUCTURAL_PATH_COMPAT_KINDS: Tuple[str, ...] = ("path_spec", "scalar", "string")
+ATOMIC_TYPE_KINDS: Tuple[str, ...] = ("scalar", "numeric", "boolean", "string", "path", "void", "bottom")
+SCALAR_PRIMITIVE_KINDS: Tuple[str, ...] = ("scalar", "numeric", "boolean", "string")
+COMPOSITE_TYPE_KINDS: Tuple[str, ...] = ("composite", "collection", "array", "mapping")
+NON_HANDLE_DATA_KINDS: Tuple[str, ...] = ("tensor", "scalar", "collection", "mapping", "path_spec", "composite")
+VALUE_LEAF_KINDS: Tuple[str, ...] = ("scalar", "handle", "path_spec")
+UNRESOLVED_SENTINELS: Tuple[str, ...] = ("<UNRESOLVED_PORT>", "<UNRESOLVED>", "<unbound>")
+
+
+def is_unresolved_value(val: Any) -> bool:
+    """True when `val` is an unresolved-port sentinel object or marker string."""
+    if val is None:
+        return False
+    if type(val).__name__ == "_UnresolvedPortSentinel":
+        return True
+    return isinstance(val, str) and val in UNRESOLVED_SENTINELS
+
+
+def get_effect_kind(eff: Any) -> str:
+    """Returns canonical normalized effect_kind from a ConditionPredicate or dict."""
+    if isinstance(eff, dict):
+        return str(eff.get("effect_kind", "") or "").strip().lower()
+    return str(getattr(eff, "effect_kind", "") or "").strip().lower()
+
+
+def cell_has_effect_kind(cell: Any, kinds: Collection[str]) -> bool:
+    """True if any declared effect on `cell` has `effect_kind` in `kinds`."""
+    return any(get_effect_kind(e) in kinds for e in (getattr(cell, "effects", None) or ()))
+
+
+def get_optic_role(cell: Any) -> str:
+    """Returns normalized optic_role ('getter' | 'setter' | 'complement' | 'lens' | '')."""
+    return str(getattr(cell, "optic_role", "") or "").strip().lower()
+
+
+def is_getter_cell(cell: Any) -> bool:
+    return get_optic_role(cell) == "getter"
+
+
+def is_setter_cell(cell: Any) -> bool:
+    return get_optic_role(cell) == "setter"
+
+
+def is_complement_cell(cell: Any) -> bool:
+    return get_optic_role(cell) == "complement"
+
+
+def is_combinator_cell(cell: Any, reg: Optional[Any] = None) -> bool:
+    """True iff `cell` is a combinator / macro / higher-order node."""
+    if cell is None:
+        return False
+    if getattr(cell, "is_combinator", False):
+        return True
+    comb_roles: Collection[str] = reg.get_roles_for_category("combinator") if reg is not None else ("combinator", "macro", "higher_order")
+    nr = str(getattr(cell, "node_role", "") or "").strip().lower()
+    rl = str(getattr(cell, "role", "") or "").strip().lower()
+    nt = str(getattr(cell, "node_type", "") or "").strip().lower()
+    ct = str(getattr(cell, "cell_type", "") or "").strip().lower()
+    top = str(getattr(cell, "topology_type", "") or "").strip().lower()
+    return (
+        nr in comb_roles
+        or rl in comb_roles
+        or nt in comb_roles
+        or ct in comb_roles
+        or (bool(top) and top in comb_roles)
+    )
+
+
+def is_bridge_cell(cell: Any, reg: Optional[Any] = None) -> bool:
+    """True iff `cell` is declared as a bridge / tunnel / adapter node."""
+    if cell is None:
+        return False
+    nr = str(getattr(cell, "node_role", "") or "").strip().lower()
+    nt = str(getattr(cell, "node_type", "") or "").strip().lower()
+    bridge_roles: Collection[str] = reg.get_bridge_roles_set() if reg is not None else ("bridge", "tunnel", "adapter")
+    return nr in bridge_roles or nt in bridge_roles or nt == "tunnel"
+
+
+def is_macro_cell_dict(raw: Dict[str, Any], reg: Optional[Any] = None, check_slots: bool = False) -> bool:
+    """True iff a raw cell dictionary represents a MacroCell / higher-order combinator."""
+    nt = str(raw.get("node_type", "") or "").strip().lower()
+    nr = str(raw.get("node_role", "") or "").strip().lower()
+    top = str(raw.get("topology_type", "") or "").strip().lower()
+    comb_roles: Collection[str] = reg.get_roles_for_category("combinator") if reg is not None else ("combinator", "macro", "higher_order")
+    if nt in comb_roles or nr in comb_roles or nt.startswith("macro_") or nr.startswith("macro_"):
+        return True
+    if top and top in comb_roles:
+        return True
+    if raw.get("sub_cells"):
+        return True
+    if check_slots and raw.get("slots"):
+        return True
+    return False
 
 
 class ConditionPredicate(BaseModel):
@@ -12,13 +180,14 @@ class ConditionPredicate(BaseModel):
     """
     model_config = ConfigDict(extra="ignore")
 
-    target: Optional[str] = None       # Port name or variable identifier (e.g. "image", "df", "self")
-    property: Optional[str] = None     # Property being evaluated (e.g. "channels", "dtype", "is_fitted")
+    target: Optional[str] = None       # Port name or variable identifier
+    property: Optional[str] = None     # Property being evaluated
     operator: str = "=="               # "==", "!=", ">", ">=", "<", "<=", "in", "is", "matches"
-    value: Any = None                  # Target value (e.g. 1, "binary", True)
-    expression: Optional[str] = None   # Raw string expression (e.g. "channels == 1")
+    value: Any = None                  # Target value
+    expression: Optional[str] = None   # Raw string expression
     description: Optional[str] = None  # Human-readable explanation
-    name: Optional[str] = None         # Structured predicate / effect name (e.g. "removes_columns")
+    name: Optional[str] = None         # Structured predicate / effect name
+    effect_kind: Optional[str] = None  # Canonical structural effect kind (e.g. extent_mutation, component_transform, schema_removal, state_mutation)
     from_port: Optional[str] = None    # Port specifying affected items (e.g. "port_1")
 
     @classmethod
@@ -31,59 +200,9 @@ class ConditionPredicate(BaseModel):
             if not expr:
                 return cls(expression=expr)
 
-            # Robust AST-based parsing.  Compound expressions are preserved as
-            # `expression` instead of being silently truncated at the first operator.
-            try:
-                tree = ast.parse(expr, mode="eval")
-            except SyntaxError:
-                return cls(expression=expr)
-
-            body = tree.body
-            if isinstance(body, ast.Compare) and len(body.ops) == 1 and len(body.comparators) == 1:
-                op_map = {
-                    ast.Eq: "==",
-                    ast.NotEq: "!=",
-                    ast.Gt: ">",
-                    ast.GtE: ">=",
-                    ast.Lt: "<",
-                    ast.LtE: "<=",
-                    ast.In: "in",
-                    ast.NotIn: "not in",
-                    ast.Is: "is",
-                    ast.IsNot: "is not",
-                }
-                op = op_map.get(type(body.ops[0]))
-                if op:
-                    left = body.left
-                    try:
-                        prop = ast.unparse(left)
-                    except Exception:
-                        prop = None
-
-                    def _is_valid_prop_ast(node: ast.AST) -> bool:
-                        if isinstance(node, ast.Name):
-                            return node.id.isidentifier()
-                        if isinstance(node, ast.Attribute):
-                            return node.attr.isidentifier() and _is_valid_prop_ast(node.value)
-                        if isinstance(node, ast.Subscript):
-                            return _is_valid_prop_ast(node.value)
-                        return False
-
-                    if prop and _is_valid_prop_ast(left):
-                        right = body.comparators[0]
-                        try:
-                            val = ast.literal_eval(right)
-                        except Exception:
-                            try:
-                                val = ast.unparse(right)
-                            except Exception:
-                                val = None
-                        return cls(
-                            property=prop,
-                            operator=op,
-                            value=val,
-                            expression=expr,
-                        )
+            parsed = _SCHEMA_LEXER.parse_comparison(expr)
+            if parsed is not None:
+                return cls(**parsed)
 
             # Compound / complex expressions are retained intact.
             return cls(expression=expr)
@@ -137,26 +256,6 @@ class TypestateDefinition(BaseModel):
     properties: Dict[str, Any] = Field(default_factory=dict)
 
 
-def _schema_reg_semantics(key: str) -> Set[str]:
-    try:
-        from lattice import TypeRegistry
-        return {str(x).strip().lower() for x in (TypeRegistry.get_instance().get_verification_semantics(key) or ()) if str(x).strip()}
-    except Exception:
-        return set()
-
-
-def _void_or_top_shape() -> Set[str]:
-    return _schema_reg_semantics("void_types") | _schema_reg_semantics("universal_top_types") | _schema_reg_semantics("bottom_types")
-
-
-def _top_or_default_state() -> Set[str]:
-    return _schema_reg_semantics("top_states") | {""}
-
-
-def _scalar_primary_abstract() -> Set[str]:
-    return _schema_reg_semantics("atomic_carrier_roots") | _schema_reg_semantics("scalar_abstract_types")
-
-
 class ShapeContractSchema(BaseModel):
     """
     Unified formal contract for port tensor shapes and rank constraints.
@@ -201,7 +300,8 @@ class ShapeContractSchema(BaseModel):
             )
         if isinstance(v, str):
             s = v.strip()
-            if not s or s.lower() in _void_or_top_shape():
+            s_low = s.lower()
+            if not s or s_low in UNIVERSAL_TOP_SYMBOLS or s_low in UNIVERSAL_BOTTOM_SYMBOLS:
                 return cls(
                     ndim=None,
                     shape=None,
@@ -224,8 +324,12 @@ class ShapeContractSchema(BaseModel):
             ch = None
             ch_ax = None
             l = None
-            height_tokens = _schema_reg_semantics("height_axis_tokens")
-            if ndim == 3 and str(shape_elements[0]) in height_tokens and isinstance(shape_elements[2], int):
+            if (
+                ndim == 3
+                and isinstance(shape_elements[0], str)
+                and isinstance(shape_elements[1], str)
+                and isinstance(shape_elements[2], int)
+            ):
                 ch = shape_elements[2]
                 ch_ax = -1
             elif ndim == 1 and isinstance(shape_elements[0], int):
@@ -314,13 +418,14 @@ class TypestateVocabularySchema(BaseModel):
 
 
 class PortSchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
 
     type_name: str
     state: str = "default"
     parent_state: Optional[str] = None
     accepted_states: List[str] = Field(default_factory=list)
     qualifiers: List[Any] = Field(default_factory=list)
+    rejected_qualifiers: List[Any] = Field(default_factory=list)
     default_value: Optional[Any] = None
     description: Optional[str] = None
     domain: Optional[str] = None
@@ -341,6 +446,14 @@ class PortSchema(BaseModel):
     complement_of_port: Optional[str] = None
     disjoint_from_port: Optional[str] = None
     key_from_upstream_role: Optional[str] = None
+    mutates: Optional[str] = None
+    key_of: Optional[str] = None
+    key_effect: Optional[str] = None
+    partition_index: Optional[int] = None
+    partition: Optional[Any] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
+    default: Optional[Any] = None
     # --- 5-Axis Product Fields (C, M, Sigma, S, Phi) ---
     carrier: Optional[str] = None
     nominal_type: Optional[str] = None
@@ -372,12 +485,12 @@ class PortSchema(BaseModel):
         if self.typestate is None and self.state:
             dom = str(self.domain or "").strip().lower()
             st = str(self.state).strip().lower()
-            is_top_d = st in _top_or_default_state()
+            is_top_d = st in DEFAULT_STATE_SYMBOLS
             self.typestate = f"{dom}::{st}" if (dom and "::" not in st and not is_top_d) else st
         if self.semantics is None and self.state:
             dom = str(self.domain or "").strip().lower()
             st = str(self.state).strip().lower()
-            is_top_d = st in _top_or_default_state()
+            is_top_d = st in DEFAULT_STATE_SYMBOLS
             self.semantics = "any" if is_top_d else (f"{dom}.{st}" if (dom and "." not in st and "::" not in st) else st)
 
     @field_validator("shape_contract", mode="before")
@@ -530,9 +643,7 @@ class CellSchema(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if not self.code_template and self.code_templates:
-            self.code_template = self.code_templates.get(
-                "python", next(iter(self.code_templates.values()), "")
-            )
+            self.code_template = get_active_language_backend().select_cell_template(self)
         if self.doc and not self.docstring:
             self.docstring = self.doc
         if self.docstring and not self.doc:
@@ -646,11 +757,11 @@ class CellSchema(BaseModel):
             return self.inputs[self.primary_in]
         required = [p for p in self.inputs.values() if p.required]
         if required:
-            scalar_abs = _scalar_primary_abstract()
             non_scalar = [
                 p
                 for p in required
-                if (p.abstract_type or "").lower() not in scalar_abs
+                if (p.structure_kind or "").lower() != "scalar"
+                and (p.abstract_type or "").lower() != "scalar"
             ]
             return non_scalar[0] if non_scalar else required[0]
         return next(iter(self.inputs.values()))
@@ -671,40 +782,19 @@ class CellSchema(BaseModel):
         v_str = str(v)
         if not v_str.strip():
             return v_str
-
-        seen: Dict[str, str] = {}
-        res = []
-        i = 0
-        n = len(v_str)
-        while i < n:
-            if v_str[i] == "{" and i + 1 < n:
-                end = v_str.find("}", i + 1)
-                if end != -1:
-                    inner = v_str[i + 1 : end]
-                    if inner.isidentifier():
-                        key = f"{{{inner}}}"
-                        if key not in seen:
-                            seen[key] = f"_ph_{len(seen)}"
-                        res.append(seen[key])
-                        i = end + 1
-                        continue
-            res.append(v_str[i])
-            i += 1
-
-        dummy_code = "".join(res)
-        try:
-            ast.parse(dummy_code)
-        except SyntaxError as e:
-            raise ValueError(f"Invalid code_template syntax: {v_str}. Error: {e}")
+        if not validate_placeholder_braces(v_str):
+            raise ValueError(f"Unbalanced placeholder braces in code_template: {v_str}")
         return v_str
 
 
 class TreeSchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")
 
     domain: str
     version: str = "1.0.0"
     description: Optional[str] = None
+    language_spec: Optional[LanguageSpec] = None
+    target_language: Optional[str] = None
     cells: List[CellSchema]
     types: Optional[Union[Dict[str, Any], List[Any]]] = Field(default_factory=dict)
     typestates: Optional[Union[TypestateVocabularySchema, Dict[str, Any], List[str]]] = None
@@ -714,15 +804,44 @@ class TreeSchema(BaseModel):
     top: Optional[Union[bool, List[str]]] = None
     product_constructors: List[str] = Field(default_factory=list)
     artifact_readers: Dict[str, List[str]] = Field(default_factory=dict)
-    advisory_qualifiers: List[List[str]] = Field(default_factory=list)
+    advisory_qualifiers: List[Union[str, List[str]]] = Field(default_factory=list)
+    exclusive_qualifiers: List[List[str]] = Field(default_factory=list)
+    exclusive_roles: List[List[str]] = Field(default_factory=list)
+    dependent_ports: Dict[str, List[str]] = Field(default_factory=dict)
+    forbidden_side_effects: List[str] = Field(default_factory=list)
     abstract_carriers: List[str] = Field(default_factory=list)
     abstract_carrier_mapping: Dict[str, str] = Field(default_factory=dict)
     dest_port_tokens: List[str] = Field(default_factory=list)
+    path_port_tokens: List[str] = Field(default_factory=list)
     data_bearing_roles: List[str] = Field(default_factory=list)
     pointed_defaults: Dict[str, Any] = Field(default_factory=dict)
-    role_semantics: Dict[str, Any] = Field(default_factory=dict)  # declared structural roles/types/effects
     supported_formats: List[str] = Field(default_factory=list)
     capabilities: Dict[str, Any] = Field(default_factory=dict)
+    carrier_roles: Dict[str, Any] = Field(default_factory=dict)
+    enum_constant_rules: List[Any] = Field(default_factory=list)
+    is_core: Optional[bool] = None
+    materialization_states: List[str] = Field(default_factory=list)
+    mock_fixtures: List[Dict[str, Any]] = Field(default_factory=list)
+    source_port_tokens: List[str] = Field(default_factory=list)
+    top_level_carriers: List[str] = Field(default_factory=list)
+    top_states: List[str] = Field(default_factory=list)
+    type_vars: List[str] = Field(default_factory=list)
+    excluded_module_tokens: List[str] = Field(default_factory=list)
+    enum_citation_triggers: List[str] = Field(default_factory=list)
+    enum_suffixes: List[str] = Field(default_factory=list)
+    symbol_stopwords: List[str] = Field(default_factory=list)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.language_spec is not None:
+            backend = get_language_backend(self.language_spec)
+            for cell in self.cells:
+                tmpl = backend.select_cell_template(cell)
+                if tmpl:
+                    ok, err = backend.validate_syntax(tmpl, allow_placeholders=True)
+                    if not ok:
+                        raise ValueError(
+                            f"Invalid {self.language_spec.name} template in {cell.cell_id}: {tmpl}. Error: {err}"
+                        )
 
     @field_validator("types", mode="before")
     @classmethod

@@ -13,6 +13,16 @@ from log_config import get_logger
 
 try:
     from ..lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port, is_macro_cell
+    from ..schema import (
+        EXTENT_EFFECT_KINDS,
+        COMPONENT_CLEAN_EFFECT_KINDS,
+        get_effect_kind,
+        is_getter_cell,
+        is_setter_cell,
+        is_combinator_cell,
+        is_bridge_cell,
+        is_unresolved_value,
+    )
     from ..unification import unify, Substitution, ExecutionContext, unify_cell_with_scope
     from ..tokenizer import CellTokenizer
     from ..planner import LatticePlanner
@@ -20,6 +30,16 @@ try:
     from ..dag_plan import DAGPlan, OpenPortFrontier
 except (ImportError, ValueError):
     from lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port, is_macro_cell
+    from schema import (
+        EXTENT_EFFECT_KINDS,
+        COMPONENT_CLEAN_EFFECT_KINDS,
+        get_effect_kind,
+        is_getter_cell,
+        is_setter_cell,
+        is_combinator_cell,
+        is_bridge_cell,
+        is_unresolved_value,
+    )
     from unification import unify, Substitution, ExecutionContext, unify_cell_with_scope
     from tokenizer import CellTokenizer
     from planner import LatticePlanner
@@ -47,10 +67,11 @@ def _fmt_port_sig(p: Any) -> str:
 
 
 def _bridge_roles() -> Set[str]:
-    """Declared bridge/adapter role names come from the trees' verification_semantics."""
+    """Declared bridge/adapter role names come from the trees' structured roles."""
     try:
         from lattice import TypeRegistry
-        return {str(r).strip().lower() for r in TypeRegistry.get_instance().get_verification_semantics("bridge_roles")}
+        reg = TypeRegistry.get_instance()
+        return reg.get_bridge_roles_set() | reg.get_roles_for_category("bridge")
     except Exception:
         return set()
 
@@ -81,19 +102,14 @@ def is_terminal_sink(cell: Any, orch: Optional[Any] = None) -> bool:
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        term_roles = {str(r).lower() for r in (reg.get_verification_semantics("terminal_roles") or ())}
-        term_roles.update(str(r).lower() for r in (reg.get_verification_semantics("sink_roles") or ()))
+        term_roles = reg.get_terminal_roles_set() | reg.get_roles_for_category("sink") | reg.get_roles_for_category("terminal_output")
         role = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
         if role in term_roles:
             return True
-        term_stages = {str(s).strip() for s in (reg.get_verification_semantics("terminal_stages") or ())}
-        c_st = str(getattr(cell, "stage", "") or "").strip()
-        if term_stages and c_st in term_stages:
+        if getattr(cell, "stage", None) == 3:
             return True
     except Exception:
         term_roles = set()
-    if getattr(cell, "is_endable", False):
-        return True
     outs = getattr(cell, "outputs", {}) or {}
     if not outs:
         return True
@@ -115,14 +131,11 @@ def is_ingress_source(cell: Any, orch: Optional[Any] = None) -> bool:
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        ing_roles = {str(r).lower() for r in (reg.get_verification_semantics("ingress_roles") or ())}
-        ing_roles.update(str(r).lower() for r in (reg.get_verification_semantics("source_roles") or ()))
+        ing_roles = reg.get_ingress_roles_set() | reg.get_roles_for_category("source")
         role = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
         if role in ing_roles:
             return True
-        ing_stages = {str(s).strip() for s in (reg.get_verification_semantics("ingress_stages") or ())}
-        c_st = str(getattr(cell, "stage", "") or "").strip()
-        if ing_stages and c_st in ing_stages:
+        if getattr(cell, "stage", None) == 1:
             return True
     except Exception:
         ing_roles = set()
@@ -149,13 +162,11 @@ def is_intermediate_transform(cell: Any, orch: Optional[Any] = None) -> bool:
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        tf_roles = {str(r).lower() for r in (reg.get_verification_semantics("transform_roles") or ())}
+        tf_roles = reg.get_roles_for_category("transform")
         role = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
         if role in tf_roles:
             return True
-        tf_stages = {str(s).strip() for s in (reg.get_verification_semantics("transform_stages") or ())}
-        c_st = str(getattr(cell, "stage", "") or "").strip()
-        if tf_stages and c_st in tf_stages:
+        if getattr(cell, "stage", None) == 2:
             return True
     except Exception:
         pass
@@ -341,86 +352,9 @@ class RouteMethod(ABC):
             return True
 
         reg = TypeRegistry.get_instance()
-        fmt_groups = reg.get_format_groups()
-        loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
         for p in path_ports:
-            tn = str(getattr(p, "type_name", "") or "").strip()
-            fmt = ""
-            has_concrete_fmt = False
-            if "[" in tn and tn.endswith("]"):
-                ctor, _, inner = tn[:-1].partition("[")
-                if ctor.strip().lower() in loc_ctors:
-                    parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
-                    if len(parts) >= 2:
-                        fmt = parts[1]
-                        if fmt and fmt != "generic" and not reg.is_declared_top(fmt):
-                            has_concrete_fmt = fmt not in fmt_groups
-                            if has_concrete_fmt:
-                                if (
-                                    ext == fmt
-                                    or (len(ext) >= 2 and fmt.startswith(ext))
-                                    or reg.is_subtype(ext, fmt)
-                                    or reg.is_subtype(fmt, ext)
-                                ):
-                                    return True
-                                return False
-                            # Group-level format (e.g. TabularFormat, ImageFormat): match subtypes in that group.
-                            if reg.is_subtype(ext, fmt) or ext == fmt:
-                                return True
-                            for anc in fmt_groups:
-                                if reg.is_subtype(ext, anc) and (reg.is_subtype(fmt, anc) or fmt == anc):
-                                    return True
-                            return False
-            port_fmts = getattr(p, "supported_formats", None)
-            if port_fmts:
-                clean_fmts = {str(f).strip().lower() for f in port_fmts}
-                if "*" not in clean_fmts and ext not in clean_fmts:
-                    return False
-            if "[" in tn and tn.endswith("]"):
-                ctor, _, inner = tn[:-1].partition("[")
-                if ctor.strip().lower() in loc_ctors:
-                    parts = [part.strip().lower() for part in inner.split(",") if part.strip()]
-                    if len(parts) >= 2:
-                        fmt = parts[1]
-                        if not fmt or fmt == "generic" or reg.is_declared_top(fmt):
-                            carrier = parts[0]
-                            try:
-                                placeholder = reg.get_asset_placeholder(carrier, "")
-                                if placeholder and "." in placeholder:
-                                    carrier_ext = placeholder.rpartition(".")[2].strip().lower()
-                                    if carrier_ext and carrier_ext != "dat":
-                                        if ext == carrier_ext or reg.is_subtype(ext, carrier_ext) or reg.is_subtype(carrier_ext, ext):
-                                            return True
-                                        for anc in fmt_groups:
-                                            if reg.is_subtype(ext, anc) and reg.is_subtype(carrier_ext, anc):
-                                                return True
-                                        return False
-                            except Exception:
-                                pass
-                            return True
-                    elif len(parts) == 1:
-                        target = parts[0]
-                        if not target or target == "generic" or reg.is_declared_top(target):
-                            return True
-                        if ext == target or target in ext or ext in target or reg.is_subtype(ext, target) or reg.is_subtype(target, ext):
-                            return True
-                        for anc in reg.get_format_groups():
-                            if reg.is_subtype(ext, anc) and (reg.is_subtype(target, anc) or target in anc):
-                                return True
-                        try:
-                            placeholder = reg.get_asset_placeholder(target, "")
-                            if placeholder and "." in placeholder:
-                                carrier_ext = placeholder.rpartition(".")[2].strip().lower()
-                                if carrier_ext and carrier_ext != "dat":
-                                    if ext == carrier_ext or reg.is_subtype(ext, carrier_ext) or reg.is_subtype(carrier_ext, ext):
-                                        return True
-                                    for anc in reg.get_format_groups():
-                                        if reg.is_subtype(ext, anc) and reg.is_subtype(carrier_ext, anc):
-                                            return True
-                                    return False
-                        except Exception:
-                            pass
-                        return False
+            if not reg.is_format_extension_compatible(ext, p, check_concrete_prefix=True):
+                return False
         return True
 
     def _get_prompt_literals(self, prompt: Optional[str] = None) -> Tuple[List[Any], List[Any], List[Any]]:
@@ -522,6 +456,7 @@ class RouteMethod(ABC):
         candidates: Optional[List[Cell]] = None,
         max_hops: int = 4,
         prev_path: Optional[List[Cell]] = None,
+        orchestrator: Optional[LatticeOrchestrator] = None,
     ) -> List[Cell]:
         """
         Unified Shortest-Path Precondition Bridge Closure:
@@ -533,13 +468,7 @@ class RouteMethod(ABC):
         """
         if self.step_unifies(src_cell, dst_cell):
             return []
-        orch = self.orchestrator
-        if prev_path:
-            single = self.find_bridge(src_cell, dst_cell, candidates or [], orchestrator=orch, prev_path=prev_path)
-            if single:
-                b_cloned = single.clone() if hasattr(single, "clone") else copy.copy(single)
-                b_cloned.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
-                return [b_cloned]
+        orch = orchestrator or self.orchestrator
         if orch and hasattr(orch, "find_shortest_bridge_path"):
             chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=max_hops, candidate_pool=candidates)
             if chain:
@@ -547,6 +476,7 @@ class RouteMethod(ABC):
                 for b in chain:
                     b_cloned = b.clone() if hasattr(b, "clone") else copy.copy(b)
                     b_cloned.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+                    setattr(b_cloned, "_auto_inserted_bridge", True)
                     cloned_chain.append(b_cloned)
                 if prev_path:
                     full_scope = list(prev_path) + cloned_chain
@@ -558,7 +488,12 @@ class RouteMethod(ABC):
                 if cloned_chain:
                     return cloned_chain
         single = self.find_bridge(src_cell, dst_cell, candidates or [], orchestrator=orch, prev_path=prev_path)
-        return [single] if single else []
+        if single:
+            b_cloned = single.clone() if hasattr(single, "clone") else copy.copy(single)
+            b_cloned.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+            setattr(b_cloned, "_auto_inserted_bridge", True)
+            return [b_cloned]
+        return []
 
     def find_bridge(
         self,
@@ -580,7 +515,7 @@ class RouteMethod(ABC):
         current_scope = prev_path if prev_path else [src_cell]
 
         reg = getattr(orch, "lattice", None) or getattr(orch, "registry", None)
-        if reg is None or not hasattr(reg, "get_verification_semantics"):
+        if reg is None or not hasattr(reg, "get_roles_for_category"):
             try:
                 from lattice import TypeRegistry
                 reg = TypeRegistry.get_instance()
@@ -589,6 +524,48 @@ class RouteMethod(ABC):
 
         prompt_str = getattr(self, "prompt", "") or (getattr(orchestrator, "prompt", "") if orchestrator else "")
         prompt_l = str(prompt_str).lower()
+
+        bridge_tokens = (reg.get_bridge_roles_set() | reg.get_roles_for_category("bridge")) if reg else set()
+        assigned_val_roles = reg.get_roles_for_category("assigned_value") if reg else set()
+        assigned_val_binds = set(assigned_val_roles)
+        carrier_binds = (reg.get_roles_for_category("receiver") | reg.get_roles_for_category("data")) if reg else set()
+        df_roles = (reg.get_data_bearing_roles() | reg.get_roles_for_category("data")) if reg else set()
+        comp_roots = reg.get_composite_carrier_roots() if reg else set()
+        compound_sk = (comp_roots | reg.get_types_with_property("is_compound_structure", True)) if reg else set()
+        br_roles = _bridge_roles()
+
+        def _c_prop(c, key, default=None):
+            if isinstance(c, dict):
+                return c.get(key, default)
+            return getattr(c, key, default)
+
+        dst_pres = getattr(dst_cell, "preconditions", None) or []
+        src_posts = getattr(src_cell, "postconditions", None) or []
+        dst_rejs = set()
+        for inp in dst_cell.inputs.values():
+            r_raw = getattr(inp, "rejected_qualifiers", None) or ()
+            sig_inner = getattr(inp, "signature", None)
+            if sig_inner:
+                r_raw = r_raw or getattr(sig_inner, "rejected_qualifiers", None) or ()
+            for r in r_raw:
+                if isinstance(r, (tuple, list, set)):
+                    dst_rejs.update(str(x).lower() for x in r)
+                else:
+                    dst_rejs.add(str(r).lower())
+        conflict = set()
+        if dst_rejs:
+            src_quals = set()
+            for scope_c in (current_scope or [src_cell]):
+                for o in getattr(scope_c, "outputs", {}).values():
+                    q_raw = getattr(o, "qualifiers", None) or getattr(getattr(o, "signature", None), "qualifiers", None) or ()
+                    for q in q_raw:
+                        if isinstance(q, (tuple, list, set)):
+                            src_quals.update(str(x).lower() for x in q)
+                        else:
+                            src_quals.add(str(q).lower())
+            conflict = src_quals & dst_rejs
+
+        from unification import is_edge_valid
 
         for cand in candidates:
             if cand.cell_id in (src_cell.cell_id, dst_cell.cell_id):
@@ -602,37 +579,27 @@ class RouteMethod(ABC):
 
             cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
             cand_tags = {str(t).lower() for t in (getattr(cand, "semantic_tags", None) or [])}
-            bridge_tokens = set(reg.get_verification_semantics("bridge_tokens") or ())
-            assigned_val_roles = set(reg.get_verification_semantics("assigned_value_roles") or ())
-            assigned_val_binds = set(reg.get_verification_semantics("assigned_value_binds") or ())
-            carrier_binds = set(reg.get_verification_semantics("carrier_binds") or ())
-            df_roles = set(reg.get_verification_semantics("dataflow_roles") or ())
-            compound_sk = set(reg.get_verification_semantics("compound_structure_kinds") or ())
             # Domain-agnostic Lens Injection: a morphism that writes an assigned value/field
             # back into a composite carrier (mu : Record x Field -> Record) is an eligible bridge.
             is_lens_setter = (
-                any(getattr(p, "binds", None) in assigned_val_binds or getattr(p, "port_role", None) in assigned_val_roles for p in cand.inputs.values())
-                and any(getattr(p, "binds", None) in carrier_binds or getattr(p, "port_role", None) in df_roles for p in cand.inputs.values())
-                and any(getattr(p, "structure_kind", None) in compound_sk or getattr(p, "abstract_type", None) in reg.get_composite_carrier_roots() for p in cand.outputs.values())
+                str(getattr(cand, "optic_role", "") or "").lower() == "setter"
+                or (
+                    any(getattr(p, "binds", None) in assigned_val_binds or getattr(p, "port_role", None) in assigned_val_roles for p in cand.inputs.values())
+                    and any(getattr(p, "binds", None) in carrier_binds or getattr(p, "port_role", None) in df_roles for p in cand.inputs.values())
+                    and any(getattr(p, "structure_kind", None) in compound_sk or getattr(p, "abstract_type", None) in comp_roots for p in cand.outputs.values())
+                )
             )
 
             is_declared_bridge = (
-                cand_role in _bridge_roles()
-                or getattr(cand, "node_type", "") in _bridge_roles()
+                cand_role in br_roles
+                or getattr(cand, "node_type", "") in br_roles
                 or bool(bridge_tokens & cand_tags)
                 or is_lens_setter
             )
             resolves_property_mismatch = False
 
             # Check if cand resolves a property precondition of dst_cell violated by src_cell / current_scope
-            dst_pres = getattr(dst_cell, "preconditions", None) or []
-            src_posts = getattr(src_cell, "postconditions", None) or []
             cand_posts = getattr(cand, "postconditions", None) or []
-
-            def _c_prop(c, key, default=None):
-                if isinstance(c, dict):
-                    return c.get(key, default)
-                return getattr(c, key, default)
 
             if dst_pres and cand_posts:
                 for dp in dst_pres:
@@ -657,54 +624,30 @@ class RouteMethod(ABC):
                             break
 
             resolves_qualifier_mismatch = False
-            dst_rejs = set()
-            for inp in dst_cell.inputs.values():
-                r_raw = getattr(inp, "rejected_qualifiers", None) or ()
-                sig_inner = getattr(inp, "signature", None)
-                if sig_inner:
-                    r_raw = r_raw or getattr(sig_inner, "rejected_qualifiers", None) or ()
-                for r in r_raw:
-                    if isinstance(r, (tuple, list, set)):
-                        dst_rejs.update(str(x).lower() for x in r)
-                    else:
-                        dst_rejs.add(str(r).lower())
-
-            if dst_rejs:
-                src_quals = set()
-                for scope_c in (current_scope or [src_cell]):
-                    for o in getattr(scope_c, "outputs", {}).values():
-                        q_raw = getattr(o, "qualifiers", None) or getattr(getattr(o, "signature", None), "qualifiers", None) or ()
-                        for q in q_raw:
-                            if isinstance(q, (tuple, list, set)):
-                                src_quals.update(str(x).lower() for x in q)
-                            else:
-                                src_quals.add(str(q).lower())
-                conflict = src_quals & dst_rejs
-                if conflict:
-                    c_out = getattr(cand, "primary_output", None) or (next(iter(cand.outputs.values())) if getattr(cand, "outputs", None) else None)
-                    if c_out is not None:
-                        c_out_quals = set()
-                        raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
-                        for q in raw_co:
-                            if isinstance(q, (tuple, list, set)):
-                                c_out_quals.update(str(x).lower() for x in q)
-                            else:
-                                c_out_quals.add(str(q).lower())
-                        if not (c_out_quals & dst_rejs):
-                            for p_in in cand.inputs.values():
-                                in_acc = set()
-                                raw_acc = getattr(p_in, "accepted_states", None) or getattr(getattr(p_in, "signature", None), "accepted_states", None) or ()
-                                in_st = str(getattr(p_in, "state", "") or getattr(getattr(p_in, "signature", None), "state", "") or "")
-                                for a in raw_acc:
-                                    in_acc.update(CellTokenizer.tokenize_identifier(str(a).lower()))
-                                in_acc.update(CellTokenizer.tokenize_identifier(in_st.lower()))
-                                if in_acc & conflict:
-                                    resolves_qualifier_mismatch = True
-                                    break
+            if conflict:
+                c_out = getattr(cand, "primary_output", None) or (next(iter(cand.outputs.values())) if getattr(cand, "outputs", None) else None)
+                if c_out is not None:
+                    c_out_quals = set()
+                    raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
+                    for q in raw_co:
+                        if isinstance(q, (tuple, list, set)):
+                            c_out_quals.update(str(x).lower() for x in q)
+                        else:
+                            c_out_quals.add(str(q).lower())
+                    if not (c_out_quals & dst_rejs):
+                        for p_in in cand.inputs.values():
+                            in_acc = set()
+                            raw_acc = getattr(p_in, "accepted_states", None) or getattr(getattr(p_in, "signature", None), "accepted_states", None) or ()
+                            in_st = str(getattr(p_in, "state", "") or getattr(getattr(p_in, "signature", None), "state", "") or "")
+                            for a in raw_acc:
+                                in_acc.update(CellTokenizer.tokenize_identifier(str(a).lower()))
+                            in_acc.update(CellTokenizer.tokenize_identifier(in_st.lower()))
+                            if in_acc & conflict:
+                                resolves_qualifier_mismatch = True
+                                break
 
             if not is_declared_bridge and not resolves_property_mismatch and not resolves_qualifier_mismatch:
                 continue
-            from unification import is_edge_valid
             can_src_to_cand = self.step_unifies(src_cell, cand, prev_path=current_scope) or self.step_unifies_dag(cand, current_scope)
             # A candidate is only a bridge to dst_cell if dst_cell actually consumes an output from cand
             cand_feeds_dst = any(
@@ -731,16 +674,24 @@ class RouteMethod(ABC):
             b_inst = best_b.clone() if hasattr(best_b, "clone") else best_b
             b_inst.clause_literals = getattr(dst_cell, "clause_literals", None)
             b_inst.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+            setattr(b_inst, "_auto_inserted_bridge", True)
             return b_inst
 
         if orch and hasattr(orch, "find_shortest_bridge_path"):
             chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=3, candidate_pool=candidates)
-            if chain:
+            if chain and len(chain) == 1:
                 b = chain[0].clone() if hasattr(chain[0], "clone") else chain[0]
-                b.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
-                return b
+                if (
+                    (self.step_unifies(src_cell, b, prev_path=current_scope) or self.step_unifies_dag(b, current_scope))
+                    and (self.step_unifies(b, dst_cell, prev_path=current_scope + [b]) or self.step_unifies_dag(dst_cell, current_scope + [b]))
+                ):
+                    b.matched_clause_idx = getattr(dst_cell, "matched_clause_idx", None)
+                    setattr(b, "_auto_inserted_bridge", True)
+                    return b
 
         return None
+
+    _handle_port_cache: Dict[Tuple[str, str, str], bool] = {}
 
     @classmethod
     def is_handle_port(cls, sig: Any) -> bool:
@@ -751,26 +702,35 @@ class RouteMethod(ABC):
         if sk == "handle":
             return True
         pr = str(getattr(sig, "port_role", "") or getattr(sig, "derived_role", "") or "").lower()
+        tn = str(getattr(sig, "type_name", "") or "").lower()
+        ck = (sk, pr, tn)
+        cached = cls._handle_port_cache.get(ck)
+        if cached is not None:
+            return cached
+        res = False
         try:
             from preflight import PreflightLinter
             if PreflightLinter._is_object_receiver_role(pr):
-                return True
+                res = True
         except Exception:
             pass
-        try:
-            from lattice import TypeRegistry
-            reg = TypeRegistry.get_instance()
-            tn = str(getattr(sig, "type_name", "") or "").lower()
-            if reg and (
-                reg.is_subtype(pr, "handle")
-                or reg.is_subtype(tn, "handle")
-                or reg.is_subtype(pr, "model")
-                or reg.is_subtype(tn, "model")
-            ):
-                return True
-        except Exception:
-            pass
-        return False
+        if not res:
+            try:
+                from lattice import TypeRegistry
+                reg = TypeRegistry.get_instance()
+                if reg and (
+                    reg.is_subtype(pr, "handle")
+                    or reg.is_subtype(tn, "handle")
+                    or reg.is_subtype(pr, "model")
+                    or reg.is_subtype(tn, "model")
+                ):
+                    res = True
+            except Exception:
+                pass
+        if len(cls._handle_port_cache) >= 4096:
+            cls._handle_port_cache.clear()
+        cls._handle_port_cache[ck] = res
+        return res
 
     @classmethod
     def active_unconsumed_handles(cls, prefix: List[Cell]) -> List[Tuple[Cell, str, Any]]:
@@ -1053,6 +1013,7 @@ class RouteMethod(ABC):
         vocabulary, no thresholds: a producer must be demanded by types AND named
         by the clause."""
         from token_evidence import get_evidence
+        from unification import is_edge_valid
         ev = get_evidence(orch or self.orchestrator)
         idx = getattr(anchor, "matched_clause_idx", None)
         if idx is None and clauses:
@@ -1066,24 +1027,38 @@ class RouteMethod(ABC):
             idx = len(clauses) - 1
         ctoks = ev.clause_tokens(clauses[idx])
         in_path = {c.cell_id for c in routed_path}
-        best, best_rank = None, None
+        anchor_in_ports = list(anchor.inputs.values())
+        scored_cands = []
         for cand in candidates:
             if cand.cell_id in in_path or cand.cell_id == anchor.cell_id:
                 continue
-            o = ev.identity_overlap(ctoks, cand)
-            if o["hit"] <= 0.0:
+            if not any(
+                is_edge_valid(out, inp, cand, anchor)
+                for out in cand.outputs.values()
+                for inp in anchor_in_ports
+            ):
                 continue
+            o = ev.identity_overlap(ctoks, cand)
+            if o["hit"] > 0.0:
+                scored_cands.append((o["rank"], cand))
+        scored_cands.sort(key=lambda t: t[0], reverse=True)
+
+        best, best_rank = None, None
+        for rank, cand in scored_cands:
+            if best_rank is not None and (1, rank) <= best_rank:
+                break
             direct_cand = (
                 self.step_unifies(routed_path[-1], cand, prev_path=routed_path)
                 or self.step_unifies_dag(cand, routed_path)
             )
-            p_bridges: List[Cell] = []
             if direct_cand and (
                 self.step_unifies(cand, anchor, prev_path=routed_path + [cand])
                 or self.step_unifies_dag(anchor, routed_path + [cand])
             ):
-                cand_rank = (1, o["rank"])
+                cand_rank = (1, rank)
             else:
+                if best_rank is not None and best_rank[0] >= 1:
+                    continue
                 # Try bridging routed_path[-1] -> cand (e.g. DataFrame -> ndarray before LinearRegression.fit -> predict)
                 p_bridges = self.find_bridge_chain(
                     routed_path[-1], cand, candidates, prev_path=routed_path
@@ -1100,15 +1075,39 @@ class RouteMethod(ABC):
                     or self.step_unifies_dag(anchor, scope_after)
                 ):
                     continue
-                cand_rank = (0, o["rank"])
+                cand_rank = (0, rank)
             if best_rank is None or cand_rank > best_rank:
                 best, best_rank = cand, cand_rank
         if best is None:
             return None
         inst = best.clone() if hasattr(best, "clone") else best
         inst.matched_clause_idx = idx
-        inst.clause_literals = getattr(anchor, "clause_literals", {})
+        _al = getattr(anchor, "clause_literals", None)
+        inst.clause_literals = list(_al) if isinstance(_al, list) else dict(_al or {})
+        setattr(inst, "_is_prerequisite_producer", True)
         return inst
+
+    @staticmethod
+    def order_clause_cells(clause_cells: List[Cell]) -> List[Cell]:
+        """Topologically order multiple cells serving the same clause so producers precede consumers."""
+        if len(clause_cells) <= 1:
+            return list(clause_cells)
+        from unification import is_edge_valid
+        ordered: List[Cell] = []
+        for c in clause_cells:
+            inserted = False
+            for i, other in enumerate(ordered):
+                if any(
+                    is_edge_valid(out, inp, c, other)
+                    for out in c.outputs.values()
+                    for inp in other.inputs.values()
+                ):
+                    ordered.insert(i, c)
+                    inserted = True
+                    break
+            if not inserted:
+                ordered.append(c)
+        return ordered
 
 
     def chain_is_valid(self, path: List[Cell], prompt: Optional[str] = None) -> bool:
@@ -1120,9 +1119,140 @@ class RouteMethod(ABC):
                 return False
         return True
 
-    def insert_column_commits(self, path: List[Cell], trace: bool = True) -> List[Cell]:
-        """No-op pass-through: Universal morphism graphs do not perform tabular lens commit surgery."""
-        return path
+    def insert_optic_commits(self, path: List[Cell], trace: bool = True) -> List[Cell]:
+        """
+        Universal lens/optic commit insertion:
+        When step ``cur`` transforms a focused sub-component derived from an
+        upstream container (e.g., series/field/column) and step ``nxt`` consumes
+        or mutates the parent container's extent/schema (e.g. ``extent_mutation``,
+        ``dedup``, ``schema_removal``) without an intervening setter, insert a
+        declared ``optic_role == "setter"`` cell to commit the focused update
+        back into the container.
+        """
+        if not path or len(path) < 2 or self.orchestrator is None:
+            return path
+        try:
+            from lattice import TypeRegistry
+            from unification import is_edge_valid
+        except (ImportError, ValueError):
+            from ..lattice import TypeRegistry
+            from ..unification import is_edge_valid
+        reg = TypeRegistry.get_instance()
+        setters = [
+            c for c in (getattr(self.orchestrator, "loaded_cells", {}) or {}).values()
+            if is_setter_cell(c)
+        ]
+        if not setters:
+            return path
+
+        assigned_val_roles = reg.get_roles_for_category("assigned_value")
+        container_roles = reg.get_roles_for_category("receiver") | reg.get_roles_for_category("data")
+
+        def _has_extent_effect(cell_obj: Cell) -> bool:
+            return any(get_effect_kind(eff) in EXTENT_EFFECT_KINDS for eff in (getattr(cell_obj, "effects", None) or ()))
+
+        def _is_focused_component_mutator(cell_obj: Cell) -> bool:
+            if is_setter_cell(cell_obj) or is_getter_cell(cell_obj):
+                return False
+            out_p = getattr(cell_obj, "primary_output", None)
+            if out_p is None:
+                return False
+            osig = getattr(out_p, "signature", out_p)
+            osk = str(getattr(out_p, "structure_kind", "") or getattr(osig, "structure_kind", "") or "").lower()
+            otn = str(getattr(osig, "type_name", "") or "").lower()
+            if osk == "scalar" or reg.has_type_kind(otn, "scalar") or reg.has_type_kind(otn, "numeric"):
+                return False
+            for eff in (getattr(cell_obj, "effects", None) or ()):
+                if get_effect_kind(eff) in COMPONENT_CLEAN_EFFECT_KINDS:
+                    return True
+            return bool(getattr(cell_obj, "projection", None)) or bool(cell_obj.outputs)
+
+        result: List[Cell] = []
+        for idx, cur in enumerate(path):
+            result.append(cur)
+            if idx >= len(path) - 1:
+                continue
+            nxt = path[idx + 1]
+            if is_setter_cell(cur):
+                continue
+            if is_setter_cell(nxt):
+                continue
+            if not _is_focused_component_mutator(cur):
+                continue
+            if not _has_extent_effect(nxt):
+                continue
+
+            cur_out = getattr(cur, "primary_output", None)
+            cur_out_t = str(getattr(getattr(cur_out, "signature", cur_out), "type_name", "") or "").lower()
+
+            # Find container carrier produced before `cur` and consumed by `nxt`
+            container_out = None
+            for anc in result[:-1]:
+                a_out = getattr(anc, "primary_output", None)
+                if a_out is None:
+                    continue
+                a_t = str(getattr(getattr(a_out, "signature", a_out), "type_name", "") or "").lower()
+                if not a_t or reg.is_subtype(cur_out_t, a_t):
+                    continue
+                nxt_in = getattr(nxt, "primary_input", None)
+                if nxt_in is not None and is_edge_valid(a_out, nxt_in):
+                    container_out = a_out
+                    break
+            if container_out is None:
+                continue
+
+            # Find matching declared setter
+            chosen_setter = None
+            for cand in setters:
+                c_inputs = getattr(cand, "inputs", {}) or {}
+                c_out = getattr(cand, "primary_output", None)
+                if c_out is None:
+                    continue
+                container_port = getattr(cand, "container_port", None)
+                focus_port = getattr(cand, "focus_port", None)
+                c_in_container = c_inputs.get(container_port) if container_port else None
+                c_in_val = c_inputs.get(focus_port) if focus_port else None
+                if c_in_val is None:
+                    for p in c_inputs.values():
+                        if str(getattr(p, "binds", "") or getattr(p, "port_role", "") or "").lower() in assigned_val_roles:
+                            c_in_val = p
+                            break
+                if c_in_container is None:
+                    for p in c_inputs.values():
+                        if p is c_in_val:
+                            continue
+                        if str(getattr(p, "binds", "") or getattr(p, "port_role", "") or "").lower() in container_roles:
+                            c_in_container = p
+                            break
+                if c_in_container is None or c_in_val is None:
+                    continue
+                nxt_in = getattr(nxt, "primary_input", None)
+                if (
+                    is_edge_valid(container_out, c_in_container)
+                    and is_edge_valid(cur_out, c_in_val)
+                    and (nxt_in is None or is_edge_valid(c_out, nxt_in))
+                ):
+                    chosen_setter = cand
+                    break
+
+            if chosen_setter is not None:
+                import copy as _copy
+                cloned = chosen_setter.clone() if hasattr(chosen_setter, "clone") else _copy.copy(chosen_setter)
+                cloned.matched_clause_idx = getattr(cur, "matched_clause_idx", None)
+                _cur_lits = getattr(cur, "clause_literals", None)
+                cloned.clause_literals = list(_cur_lits) if isinstance(_cur_lits, list) else dict(_cur_lits or {})
+                cloned._auto_inserted_bridge = True
+                result.append(cloned)
+                if trace:
+                    self._trace(
+                        "column_commit_inserted",
+                        cell=cloned.cell_id,
+                        after=cur.cell_id,
+                        before=nxt.cell_id,
+                    )
+        return result
+
+    insert_column_commits = insert_optic_commits
 
     def insert_property_bridges(
         self,
@@ -1146,9 +1276,13 @@ class RouteMethod(ABC):
                 bridged_path.append(c)
             else:
                 prev_c = bridged_path[-1]
-                if not self.orchestrator.cells_directly_unify(prev_c, c):
+                if not self.orchestrator.cells_directly_unify(prev_c, c) and not self.step_unifies_dag(c, bridged_path):
                     bridges = self.orchestrator.find_shortest_bridge_path(prev_c, c)
-                    bridged_path.extend(bridges)
+                    for b in bridges:
+                        b_cl = b.clone() if hasattr(b, "clone") else copy.copy(b)
+                        b_cl.matched_clause_idx = getattr(c, "matched_clause_idx", None)
+                        setattr(b_cl, "_auto_inserted_bridge", True)
+                        bridged_path.append(b_cl)
                 bridged_path.append(c)
         path = bridged_path
 
@@ -1366,11 +1500,10 @@ class RouteMethod(ABC):
             b_roles = _bridge_roles()
             from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            est_roles = {str(r).lower() for r in reg.get_verification_semantics("estimator_roles")}
-            est_roles.update(str(r).lower() for r in reg.get_verification_semantics("model_roles"))
+            est_roles = reg.get_roles_for_category("model") | reg.get_roles_for_category("estimator") | reg.get_roles_for_category("model_input")
             from planner import _active_vocab
             vocab = _active_vocab(getattr(self, "orchestrator", None))
-            bridge_roles = set(b_roles) | set(reg.get_verification_semantics("bridge_roles"))
+            bridge_roles = set(b_roles) | reg.get_bridge_roles_set()
             idx = 1
             while idx < len(current) - 1:
                 ops_count += 1
@@ -1474,10 +1607,10 @@ class RouteMethod(ABC):
         try:
             from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            roles = {str(r).lower() for r in reg.get_verification_semantics("path_consumer_roles")}
-            abstracts = {str(r).lower() for r in reg.get_verification_semantics("path_abstract_types")}
+            roles = reg.get_path_port_name_tokens() | reg.get_roles_for_category("source") | reg.get_roles_for_category("destination")
+            abstracts = reg.get_types_by_kind("path") | {"path"}
         except Exception:
-            roles, abstracts = set(), set()
+            roles, abstracts = set(), {"path"}
         for p in cell.inputs.values():
             sig = getattr(p, "signature", p)
             if str(getattr(p, "abstract_type", "") or "").lower() in abstracts or str(getattr(sig, "abstract_type", "") or "").lower() in abstracts:
@@ -1510,7 +1643,7 @@ class RouteMethod(ABC):
         ]
         reg = TypeRegistry.get_instance()
         fmt_groups = reg.get_format_groups()
-        loc_ctors = set(reg.get_verification_semantics("locator_constructors") or ())
+        loc_ctors = reg.get_types_by_kind("path") | reg.get_path_port_name_tokens()
         for p in path_ports:
             tn = str(getattr(p, "type_name", "") or "").strip()
             has_concrete_fmt = False
@@ -1602,9 +1735,7 @@ class RouteMethod(ABC):
             if getattr(c, "node_type", "") == "constant":
                 continue
             if not getattr(c, "slots", None):
-                if is_macro_cell(c):
-                    continue
-                if getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator":
+                if is_macro_cell(c) or is_combinator_cell(c, getattr(orch, "lattice", None)):
                     continue
             filtered_cands.append(c)
 
@@ -1671,9 +1802,10 @@ class RouteMethod(ABC):
 
         # Carrier bridges in active workflow domains
         if len(selected_cells) < max_shown:
+            reg_b = getattr(orch, "lattice", None) or TypeRegistry.get_instance()
             candidate_bridges = [
                 c for c in filtered_cands
-                if (getattr(c, "node_role", "") == "bridge" or getattr(c, "node_type", "") == "tunnel")
+                if is_bridge_cell(c, reg_b)
                 and c.cell_id not in selected_ids
                 and (not getattr(c, "domain_name", "") or not primary_domains or getattr(c, "domain_name", "") in primary_domains)
             ]
@@ -1698,4 +1830,157 @@ class RouteMethod(ABC):
                     selected_ids.add(c.cell_id)
 
         return selected_cells
+
+    def verify_planned_path(
+        self,
+        path: List[Cell],
+        prompt: str,
+        orchestrator: Optional[LatticeOrchestrator] = None,
+        ctx: Optional[Any] = None,
+        check_lint: bool = True,
+    ) -> Optional[str]:
+        """Verify structural unification, port resolution, and preflight lint for a planned path.
+
+        Returns ``None`` if the path passes verification, or a short failure reason string.
+        When the active profile supports slot extraction (``can_extract_slots()``), runs
+        with ``extract_llm_slots=True`` reusing ``ctx`` so extracted slots persist. When it
+        does not, verifies dataflow wiring strictly while allowing unresolved scalar/config
+        parameter slots (to avoid false ``UnresolvedPlaceholderError`` failures).
+        """
+        if not path:
+            return "empty planned path"
+        orch = orchestrator or self.orchestrator
+        if orch is None:
+            return None
+
+        try:
+            try:
+                from ..unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT, UnificationFailure, UnresolvedPlaceholderError
+                from ..preflight import PreflightLinter
+                from ..inference import ModelManager
+            except (ImportError, ValueError):
+                from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT, UnificationFailure, UnresolvedPlaceholderError
+                from preflight import PreflightLinter
+                from inference import ModelManager
+        except Exception as exc:
+            logger.debug("[RouteMethod.verify_planned_path] Verifier imports unavailable: %s", exc)
+            return None
+
+        mm = ModelManager.get_instance()
+        can_slots = bool(mm.can_extract_slots()) if mm else False
+        tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
+        orig_unresolved = list(getattr(tctx, "unresolved_ports", ()) or ())
+        if hasattr(tctx, "unresolved_ports"):
+            tctx.unresolved_ports = []
+
+        reg = getattr(orch, "lattice", None) or getattr(orch, "registry", None)
+        if reg is None:
+            try:
+                reg = TypeRegistry.get_instance()
+            except Exception:
+                reg = None
+
+        _dataflow_roles: Set[str] = set()
+        _config_or_slot_roles: Set[str] = set()
+        _slot_binds: Set[str] = set()
+        _literal_compatible_roots: Set[str] = set()
+        _scalar_struct_kinds: Set[str] = set()
+        if reg is not None:
+            _dataflow_roles |= reg.get_dataflow_roles_set()
+            _config_or_slot_roles |= reg.get_config_or_slot_roles_set()
+            _slot_binds |= reg.get_roles_for_category("key") | reg.get_roles_for_category("projection")
+            _literal_compatible_roots |= (
+                reg.get_top_types_set()
+                | reg.get_atomic_carrier_roots()
+                | reg.get_composite_carrier_roots()
+                | reg.get_types_with_property("literal_compatible", True)
+            )
+            _scalar_struct_kinds |= reg.get_atomic_carrier_roots()
+
+        def _is_scalar_or_param_port(cell_obj: Cell, port_name: str) -> bool:
+            port = (getattr(cell_obj, "inputs", None) or {}).get(port_name)
+            if port is None:
+                return True
+            psig = getattr(port, "signature", port)
+            ptype = str(getattr(psig, "type_name", "") or "").strip()
+            ptype_low = ptype.lower()
+            pkind = str(getattr(psig, "structure_kind", "") or "").strip().lower()
+            prole = str(getattr(port, "port_role", "") or getattr(psig, "port_role", "") or "").strip().lower()
+            pbinds = str(getattr(port, "binds", "") or getattr(psig, "binds", "") or "").strip().lower()
+            if self.is_handle_port(psig):
+                return False
+            if prole in _dataflow_roles or pbinds in _dataflow_roles:
+                return False
+            if port_name in (getattr(cell_obj, "slots", None) or {}):
+                return True
+            if prole in _config_or_slot_roles or pbinds in _slot_binds:
+                return True
+            if pkind and pkind in _scalar_struct_kinds:
+                return True
+            if bool(getattr(psig, "enum_values", None)):
+                return True
+            if reg is not None:
+                if reg.is_scalar_primitive(ptype):
+                    return True
+                base_t = ptype_low.split("[", 1)[0].strip()
+                if base_t in _literal_compatible_roots or ptype_low in _literal_compatible_roots:
+                    return True
+                if any(reg.is_subtype(base_t, root) for root in _literal_compatible_roots):
+                    return True
+                if "[" in ptype_low and "]" in ptype_low:
+                    inner_t = ptype_low.split("[", 1)[1].rsplit("]", 1)[0].strip()
+                    if reg.is_scalar_primitive(inner_t) or any(reg.is_subtype(inner_t, root) for root in _literal_compatible_roots):
+                        return True
+            return False
+
+        try:
+            gate = UnificationGate(orchestrator=orch)
+            ur = gate.unify_pipeline(path, tctx, extract_llm_slots=can_slots)
+            if ur.is_bottom() or not getattr(ur, "value", None):
+                return "path failed UnificationGate (bottom)"
+
+            unresolved_items = [
+                (c_obj, p_name)
+                for c_obj, bnd in ur.value
+                for p_name, val in (bnd or {}).items()
+                if is_unresolved_value(val)
+            ]
+            if can_slots and unresolved_items:
+                ports_desc = ", ".join(f"{c_obj.cell_id}.{pn}" for c_obj, pn in unresolved_items[:3])
+                return f"left unresolved input ports: {ports_desc}"
+
+            if not can_slots:
+                broken_dataflow = [
+                    (c_obj, pn) for c_obj, pn in unresolved_items
+                    if not _is_scalar_or_param_port(c_obj, pn)
+                ]
+                if broken_dataflow:
+                    ports_desc = ", ".join(f"{c_obj.cell_id}.{pn}" for c_obj, pn in broken_dataflow[:3])
+                    return f"left unresolved dataflow ports: {ports_desc}"
+
+            if check_lint:
+                code_str: Optional[str] = None
+                if can_slots or (not unresolved_items and not getattr(tctx, "unresolved_ports", None)):
+                    try:
+                        code_str = gate.emit_code(ur.value, tctx, extract_llm_slots=can_slots)
+                    except UnresolvedPlaceholderError as exc:
+                        if can_slots:
+                            return f"verification raised UnresolvedPlaceholderError: {exc}"
+                        code_str = None
+                lint = PreflightLinter.lint(ur.value, prompt=prompt, code_str=code_str, orchestrator=orch)
+                if not lint.is_valid:
+                    return f"failed PreflightLinter: {'; '.join(lint.violations[:2])}"
+            return None
+        except UnresolvedPlaceholderError as exc:
+            if can_slots:
+                return f"verification raised UnresolvedPlaceholderError: {exc}"
+            return None
+        except UnificationFailure as exc:
+            return f"verification raised {type(exc).__name__}: {exc}"
+        except Exception as exc:
+            logger.debug("[RouteMethod.verify_planned_path] Non-fatal verifier exception: %s", exc)
+            return None
+        finally:
+            if hasattr(tctx, "unresolved_ports"):
+                tctx.unresolved_ports = orig_unresolved
 

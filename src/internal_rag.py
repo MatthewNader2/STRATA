@@ -24,14 +24,27 @@ if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
 # The neural stack (faiss/torch) is required ONLY by dense-retrieval profiles.
 # Pure-symbolic profiles (Profile 0) must not pay the dependency: imports are
 # lazy and guarded, so routing/planning/synthesis run without torch installed.
-try:
-    import faiss
-    import torch
-    NEURAL_STACK_AVAILABLE = True
-except ImportError:  # pragma: no cover - exercised in CPU-only environments
-    faiss = None  # type: ignore[assignment]
-    torch = None  # type: ignore[assignment]
-    NEURAL_STACK_AVAILABLE = False
+faiss = None  # type: ignore[assignment]
+torch = None  # type: ignore[assignment]
+NEURAL_STACK_AVAILABLE: Optional[bool] = None
+
+
+def _ensure_neural_stack() -> bool:
+    """Lazily imports faiss and torch only when dense retrieval (LocalRAG) is used."""
+    global faiss, torch, NEURAL_STACK_AVAILABLE
+    if NEURAL_STACK_AVAILABLE is not None:
+        return NEURAL_STACK_AVAILABLE
+    try:
+        import faiss as _faiss
+        import torch as _torch
+        faiss = _faiss
+        torch = _torch
+        NEURAL_STACK_AVAILABLE = True
+    except ImportError:  # pragma: no cover - exercised in CPU-only environments
+        faiss = None
+        torch = None
+        NEURAL_STACK_AVAILABLE = False
+    return NEURAL_STACK_AVAILABLE
 
 import numpy as np
 from log_config import get_logger
@@ -322,7 +335,7 @@ class LocalRAG:
         self.orchestrator = orchestrator
         self._cache_dir = os.path.join(os.path.dirname(trees_dir), _CACHE_DIR_NAME)
 
-        if not NEURAL_STACK_AVAILABLE:
+        if not _ensure_neural_stack():
             raise RuntimeError(
                 "LocalRAG requires the neural stack (faiss, torch). Install them or use Profile 0 (pure symbolic)."
             )
@@ -485,19 +498,17 @@ class LocalRAG:
                             "embedding": emb,
                             "schema": item["schema"]
                         }
-                    self._save_cache()
                     logger.info(
                         f"[RAG] Embedding Progress: {min(i + chunk_size, total_cnt)} / {total_cnt} "
                         f"({min(i + chunk_size, total_cnt) / total_cnt * 100:.1f}%)"
                     )
-
                     del texts
                     del embeddings
-                    gc.collect()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                        if (i // chunk_size) % 10 == 0:
-                            torch.cuda.ipc_collect()
+
+                self._save_cache()
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
             if not self.cell_cache:
                 self.index = None
@@ -566,7 +577,8 @@ class LocalRAG:
             os.replace(tmp_schema, schema_path)
 
             # Invalidate stale fingerprint variants of the persisted index safely
-            safe_prefix = os.path.basename(faiss_path).split("__")[0]
+            basename_parts = os.path.basename(faiss_path).split("__")
+            safe_prefix = "__".join(basename_parts[:2]) if len(basename_parts) >= 2 else basename_parts[0]
             try:
                 cache_files = os.listdir(self._cache_dir)
             except OSError:

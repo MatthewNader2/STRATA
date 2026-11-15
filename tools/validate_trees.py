@@ -85,6 +85,29 @@ def extract_template_placeholders(template: str) -> Set[str]:
     return placeholders
 
 
+def _resolve_tree_language_spec(file_path: Path, tree: TreeSchema) -> Optional[Any]:
+    if getattr(tree, "language_spec", None) is not None:
+        return tree.language_spec
+    parent_dir = file_path.parent
+    if not parent_dir.exists():
+        return None
+    fallback_spec = None
+    for sibling in sorted(parent_dir.glob("*.json")):
+        if sibling == file_path or sibling.name.startswith("_"):
+            continue
+        try:
+            with open(sibling, "r", encoding="utf-8") as fh:
+                sdata = json.load(fh)
+        except Exception:
+            continue
+        if isinstance(sdata, dict) and isinstance(sdata.get("language_spec"), dict):
+            if sdata.get("is_core"):
+                return sdata["language_spec"]
+            if fallback_spec is None:
+                fallback_spec = sdata["language_spec"]
+    return fallback_spec
+
+
 def validate_code_template(
     cell_id: str,
     template: str,
@@ -92,8 +115,9 @@ def validate_code_template(
     bound_slots: Set[str],
     cell_slots: Set[str],
     additional_identifiers: Optional[Set[str]] = None,
+    language_spec: Optional[Any] = None,
 ) -> List[str]:
-    """Validates Python syntax and placeholder coverage in template."""
+    """Validates template syntax and placeholder coverage according to `LanguageSpec`."""
     errors = []
     if not template or not template.strip():
         errors.append(f"Cell '{cell_id}' code_template is empty.")
@@ -105,7 +129,16 @@ def validate_code_template(
     if undeclared:
         errors.append(f"Cell '{cell_id}' template references undeclared placeholders: {sorted(undeclared)}")
 
-    # Replace placeholders with valid identifiers to parse AST
+    if language_spec is not None:
+        from language_backend import get_language_backend
+        backend = get_language_backend(language_spec)
+        if not backend.is_python_ast:
+            ok, syn_err = backend.validate_syntax(template, allow_placeholders=True)
+            if not ok:
+                errors.append(f"Cell '{cell_id}' template failed {backend.name or 'lexical'} syntax check: {syn_err}")
+            return errors
+
+    # Replace placeholders with valid identifiers to parse Python AST
     dummy_code = template
     for ph in placeholders:
         dummy_code = dummy_code.replace(f"{{{ph}}}", f"_ph_{ph}")
@@ -176,6 +209,7 @@ def validate_tree_json(file_path: Path) -> TreeValidationResult:
     res.supported_formats = tree.supported_formats or []
     res.total_cells = len(tree.cells)
 
+    tree_lang_spec = _resolve_tree_language_spec(file_path, tree)
     seen_cell_ids: Set[str] = set()
     tree_requires_caps: Set[str] = set()
     has_resource_ports = False
@@ -211,7 +245,9 @@ def validate_tree_json(file_path: Path) -> TreeValidationResult:
         for p in list(cell.inputs.values()) + list(cell.outputs.values()):
             if getattr(p, "binds", None):
                 extra_ids.add(p.binds)
-        tmpl_errors = validate_code_template(cid, cell.code_template, declared_ports, bound_slots, cell_slots, extra_ids)
+        tmpl_errors = validate_code_template(
+            cid, cell.code_template, declared_ports, bound_slots, cell_slots, extra_ids, language_spec=tree_lang_spec
+        )
         res.errors.extend(tmpl_errors)
 
         # Port structural typing checks

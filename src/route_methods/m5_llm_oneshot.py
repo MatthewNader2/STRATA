@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from typing import Dict, List, Optional, Any
-from .base import RouteMethod, is_macro_cell
+from .base import RouteMethod, is_macro_cell, is_combinator_cell
 from lattice import Cell, LatticeOrchestrator
 from unification import ExecutionContext
 from inference import ModelManager
@@ -15,6 +15,9 @@ class M5LLMOneShotRouteMethod(RouteMethod):
         self._current_prompt = prompt
         mm = ModelManager.get_instance()
         if not mm.can_synthesize():
+            reason = "no LLM loaded in this profile"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []
         orch = orchestrator or self.orchestrator
         if not tunnel:
@@ -26,7 +29,7 @@ class M5LLMOneShotRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ] or [tunnel[0]]
@@ -102,20 +105,9 @@ class M5LLMOneShotRouteMethod(RouteMethod):
 
         self.tag_cells_with_clause_indices(chain, prompt, orchestrator=orch)
 
-        try:
-            from unification import UnificationGate, ExecutionContext
-            from preflight import PreflightLinter
-            _gate = UnificationGate(orchestrator=orch)
-            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
-            _ur = _gate.unify_pipeline(chain, _tctx, extract_llm_slots=False)
-            if _ur.is_bottom():
-                return _fail("LLM proposed path does not unify (bottom)")
-            _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
-            _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code)
-            if not _lint.is_valid:
-                return _fail(f"LLM proposed path has pre-flight violations: {_lint.violations[0][:100]}")
-        except Exception:
-            pass
+        _verr = self.verify_planned_path(chain, prompt, orch, ctx=ctx)
+        if _verr:
+            return _fail(_verr)
 
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)

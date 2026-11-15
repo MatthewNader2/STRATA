@@ -50,6 +50,13 @@ AUDIO_DSP_TREE: Dict[str, Any] = {
     "domain": "audio_dsp",
     "version": "1.0.0",
     "description": "Digital signal processing, time-frequency morphisms, and spectral transformations.",
+    "language_spec": {
+        "name": "python",
+        "ast_backend": "python_ast",
+        "runtime": "python",
+        "file_extension": ".py",
+        "sandbox_driver": "python",
+    },
     "types": [
         {"name": "object", "parent": None},
         {"name": "scalar", "parent": "object"},
@@ -454,7 +461,10 @@ class TestUnknownDomainTrees(unittest.TestCase):
         edges_map = {}
         for cid, dom, stage, cfg_json in rows:
             cfg = json.loads(cfg_json) if cfg_json else {}
-            edges_map[cid] = cfg.get("edges", [])
+            edges_map[cid] = [
+                e.get("target_cell_id") if isinstance(e, dict) else e
+                for e in cfg.get("edges", [])
+            ]
 
         conn.close()
 
@@ -595,27 +605,22 @@ class TestUnknownDomainTrees(unittest.TestCase):
 
         # Mock runtime definitions for the domain operations
         mock_audio_runtime = (
+            "from types import SimpleNamespace\n"
             "def load_audio_buffer(path):\n"
-            "    class Signal:\n"
-            "        ndim = 1\n"
-            "        sample_rate = 44100\n"
-            "    return Signal()\n\n"
+            "    return SimpleNamespace(ndim=1, sample_rate=44100)\n\n"
             "def compute_fft_spectrum(signal):\n"
-            "    class Spectrum:\n"
-            "        ndim = 1\n"
-            "        peak_freq = 440.0\n"
-            "    return Spectrum()\n\n"
+            "    return SimpleNamespace(ndim=1, peak_freq=440.0)\n\n"
         )
         full_audio_code = mock_audio_runtime + audio_code
 
         # Run in sandbox with local execution
-        sandbox = GEVRSandbox(timeout=5.0)
+        sandbox = GEVRSandbox(default_timeout=5.0)
         res_audio = sandbox.execute(full_audio_code)
-        self.assertEqual(res_audio.exit_code, 0, f"Audio sandbox execution failed: {res_audio.stderr}")
+        self.assertEqual(res_audio.get("returncode"), 0, f"Audio sandbox execution failed: {res_audio.get('stderr') or res_audio.get('error')}")
 
         # Postcondition evaluation on the custom non-tabular domain object
         reg = PostconditionRegistry()
-        spectrum_obj = res_audio.results[list(res_audio.results.keys())[-1]]
+        spectrum_obj = res_audio["results"][list(res_audio["results"].keys())[-1]]
         self.assertTrue(reg.evaluate("ndim", spectrum_obj, 1))
         self.assertTrue(reg.evaluate("peak_freq", spectrum_obj, 440.0))
 
@@ -632,21 +637,19 @@ class TestUnknownDomainTrees(unittest.TestCase):
         net_code = gate.emit_code(pipeline_net, ctx_net, extract_llm_slots=False)
 
         mock_net_runtime = (
+            "from types import SimpleNamespace\n"
             "def capture_live_packets(iface): return {'pcap_handle': iface}\n"
             "def decode_protocol_frames(pkts): return [{'proto': 'TCP', 'payload': b'\\x01\\x02'}]\n"
             "def decrypt_payload_stream(frames): return [{'proto': 'TCP', 'plain': 'GET /login'}]\n"
             "def classify_threat_signatures(stream): return [{'severity': 'HIGH', 'rule': 'SQLi'}]\n"
             "def dispatch_security_alert(threats):\n"
-            "    class AlertResult:\n"
-            "        dispatched = True\n"
-            "        threat_count = len(threats)\n"
-            "    return AlertResult()\n\n"
+            "    return SimpleNamespace(dispatched=True, threat_count=len(threats))\n\n"
         )
         full_net_code = mock_net_runtime + net_code
         res_net = sandbox.execute(full_net_code)
-        self.assertEqual(res_net.exit_code, 0, f"NetSec sandbox execution failed: {res_net.stderr}")
+        self.assertEqual(res_net.get("returncode"), 0, f"NetSec sandbox execution failed: {res_net.get('stderr') or res_net.get('error')}")
 
-        alert_obj = res_net.results[list(res_net.results.keys())[-1]]
+        alert_obj = res_net["results"][list(res_net["results"].keys())[-1]]
         self.assertTrue(reg.evaluate("dispatched", alert_obj, True))
         self.assertTrue(reg.evaluate("threat_count", alert_obj, 1))
 

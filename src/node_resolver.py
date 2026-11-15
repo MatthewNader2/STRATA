@@ -199,11 +199,9 @@ def _create_mock_input_code(var_name: str, type_name: str, domain_name: str = ""
     elif (reg and reg.is_subtype(t_low, "collection")) or abs_low == "collection" or t_low == "collection":
         return f"{var_name} = [1.0, 2.0]"
 
-    # Universal dynamic mock carrier fallback
+    # Minimal structural container mock (never swallow missing attribute/method errors)
     return (
         f"class _NSTLMockCarrier(list):\n"
-        f"    def __getattr__(self, name): return lambda *a, **kw: _NSTLMockCarrier([1, 2, 3])\n"
-        f"    def __getitem__(self, key): return _NSTLMockCarrier([1, 2, 3])\n"
         f"    shape = (3, 3)\n"
         f"{var_name} = _NSTLMockCarrier([1, 2, 3])"
     )
@@ -286,10 +284,9 @@ class DynamicNodeResolver:
         except Exception:
             reg_nr = None
         stop_toks = (
-            {str(t).lower() for t in (reg_nr.get_verification_semantics("stopping_tokens") or ())}
-            | {str(t).lower() for t in (reg_nr.get_verification_semantics("void_types") or ())}
-            | {str(t).lower() for t in (reg_nr.get_verification_semantics("bottom_types") or ())}
-        ) if reg_nr is not None else {None.__class__.__name__.lower()}
+            {str(t).lower() for t in (settings.agent_stopping_tokens or ())}
+            | (reg_nr.get_void_types_set() | reg_nr.get_bottom_types_set() if reg_nr is not None else set())
+        )
         if not clean_id or clean_id in stop_toks:
             return None
 
@@ -436,7 +433,8 @@ class DynamicNodeResolver:
                     logger.warning(f"[Resolver] Dry-run failed with no repair available for '{cell_id}'. Discarding.")
                     return None
         except Exception as e:
-            logger.debug(f"[Resolver] Sandbox dry run skipped: {e}")
+            logger.warning(f"[Resolver] Sandbox dry run failed/unavailable for '{cell_id}': {e}. Discarding.")
+            return None
 
         clean_schema: Dict[str, Any] = {
             "cell_id": cell_id,

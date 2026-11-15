@@ -1051,7 +1051,7 @@
       ],
       "type_vars": [],
       "inputs": {
-        "port_0": {
+        "name": {
           "type_name": "str",
           "state": "unbound",
           "qualifiers": [],
@@ -1095,7 +1095,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "data": {
           "type_name": "DataFrame",
           "state": "dataframe_2d_generic",
           "qualifiers": [],
@@ -1141,8 +1141,8 @@
       ],
       "effects": [],
       "edges": [],
-      "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_in": "name",
+      "primary_out": "data"
     },
     {
       "cell_id": "sns_color_palette",
@@ -1181,7 +1181,7 @@
       ],
       "type_vars": [],
       "inputs": {
-        "port_0": {
+        "palette": {
           "type_name": "str",
           "state": "unbound",
           "qualifiers": [],
@@ -1224,7 +1224,7 @@
           "typestate": "any",
           "invariants": []
         },
-        "port_1": {
+        "n_colors": {
           "type_name": "int",
           "state": "unbound",
           "qualifiers": [],
@@ -1262,7 +1262,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "palette_list": {
           "type_name": "List[Tuple[float, float, float]]",
           "state": "color_rgb",
           "qualifiers": [],
@@ -1310,8 +1310,8 @@
       "postconditions": [],
       "effects": [],
       "edges": [],
-      "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_in": "palette",
+      "primary_out": "palette_list"
     },
     {
       "cell_id": "sns_histplot_univariate",

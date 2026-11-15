@@ -25,19 +25,22 @@ from schema import TreeSchema  # noqa: E402
 
 
 def _collect_role_vocabularies(loaded: List[Tuple[Path, Dict[str, Any]]]) -> Dict[str, Set[str]]:
-    """Aggregates `role_semantics` vocabularies dynamically from all loaded trees."""
+    """Aggregates structural vocabularies dynamically from loaded tree schemas."""
     vocab: Dict[str, Set[str]] = {}
     for _, data in loaded:
-        rs = data.get("role_semantics")
-        if not isinstance(rs, dict):
-            continue
-        for key, vals in rs.items():
-            if isinstance(vals, list):
-                vocab.setdefault(key, set()).update(str(v).strip().lower() for v in vals if isinstance(v, str) and v.strip())
+        if isinstance(data.get("top_states"), list):
+            vocab.setdefault("top_states", set()).update(
+                str(s).strip().lower() for s in data["top_states"] if str(s).strip()
+            )
+        cr = data.get("carrier_roles")
+        if isinstance(cr, dict):
+            for key, vals in cr.items():
+                if isinstance(vals, list):
+                    vocab.setdefault(key, set()).update(str(v).strip().lower() for v in vals if isinstance(v, str) and v.strip())
         ts = data.get("typestates")
         if isinstance(ts, dict):
             for st_obj in ts.get("states") or []:
-                if isinstance(st_obj, dict) and st_obj.get("is_top"):
+                if isinstance(st_obj, dict) and (st_obj.get("is_top") or (st_obj.get("properties") or {}).get("is_top")):
                     sn = str(st_obj.get("name") or "").strip().lower()
                     if sn:
                         vocab.setdefault("top_states", set()).add(sn)

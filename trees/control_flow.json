@@ -38,7 +38,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "arg_names": {
           "type_name": "str",
@@ -62,7 +63,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "body_pipeline": {
           "type_name": "Callable[..., R]",
@@ -78,7 +80,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -92,7 +95,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -142,7 +146,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "expression": {
           "type_name": "Callable[..., R]",
@@ -158,7 +163,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -172,7 +178,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -191,7 +198,8 @@
       "node_role": "combinator",
       "primary_in": "expression",
       "primary_out": "closure",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_CLASS_DEF",
@@ -220,7 +228,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "init_params": {
           "type_name": "str",
@@ -244,7 +253,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "init_assignments": {
           "type_name": "str",
@@ -268,7 +278,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "method_name": {
           "type_name": "str",
@@ -292,7 +303,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "method_params": {
           "type_name": "str",
@@ -316,7 +328,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "method_body": {
           "type_name": "Callable[..., R]",
@@ -332,7 +345,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -346,7 +360,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -366,7 +381,8 @@
       "node_role": "combinator",
       "primary_in": "class_name",
       "primary_out": "class_handle",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_RECURSIVE_FUNC",
@@ -395,7 +411,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "base_predicate": {
           "type_name": "Callable[[T], bool]",
@@ -411,7 +428,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "base_action": {
           "type_name": "Callable[[T], R]",
@@ -427,7 +445,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "step_action": {
           "type_name": "Callable[[T, Callable[[T], R]], R]",
@@ -443,7 +462,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -458,7 +478,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -472,7 +493,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -492,7 +514,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_DIVIDE_AND_CONQUER",
@@ -521,7 +544,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "base_predicate": {
           "type_name": "Callable[[T], bool]",
@@ -537,7 +561,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "base_action": {
           "type_name": "Callable[[T], R]",
@@ -553,7 +578,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "split_fn": {
           "type_name": "Callable[[T], List[T]]",
@@ -569,7 +595,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "combine_fn": {
           "type_name": "Callable[[T, List[R]], R]",
@@ -585,7 +612,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -600,7 +628,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -614,7 +643,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -634,7 +664,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_COND_CHAIN",
@@ -672,7 +703,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "default_action": {
           "type_name": "Callable[[T], R]",
@@ -688,7 +720,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -703,7 +736,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -717,7 +751,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -738,7 +773,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_NESTED_FOR_EACH",
@@ -776,7 +812,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "inner_generator": {
           "type_name": "Callable[[T], List[U]]",
@@ -792,7 +829,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[T, U, State], State]",
@@ -808,7 +846,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "init_state": {
           "type_name": "State",
@@ -823,7 +862,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -837,7 +877,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -857,7 +898,8 @@
       "node_role": "combinator",
       "primary_in": "outer_collection",
       "primary_out": "final_state",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_TOP_K",
@@ -894,7 +936,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "key_fn": {
           "type_name": "Callable[[T], Comparable]",
@@ -910,7 +953,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "k": {
           "type_name": "int",
@@ -934,7 +978,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -966,7 +1011,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -992,7 +1038,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_BOTTOM_K",
@@ -1029,7 +1076,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "key_fn": {
           "type_name": "Callable[[T], Comparable]",
@@ -1045,7 +1093,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "k": {
           "type_name": "int",
@@ -1069,7 +1118,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -1101,7 +1151,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1124,7 +1175,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_MAP",
@@ -1161,7 +1213,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "transform": {
           "type_name": "Callable[[T], U]",
@@ -1177,7 +1230,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -1209,7 +1263,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1231,7 +1286,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FILTER",
@@ -1268,7 +1324,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -1284,7 +1341,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -1316,7 +1374,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1338,7 +1397,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FLAT_MAP",
@@ -1375,7 +1435,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "transform": {
           "type_name": "Callable[[T], List[U]]",
@@ -1391,7 +1452,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -1423,7 +1485,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1443,7 +1506,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FOLD_REDUCE",
@@ -1480,7 +1544,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "accumulator": {
           "type_name": "Callable[[State, T], State]",
@@ -1496,7 +1561,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "initial": {
           "type_name": "State",
@@ -1510,7 +1576,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "dependencies": [
@@ -1527,7 +1594,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1549,7 +1617,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "accumulated_state",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_ZIP_WITH",
@@ -1587,7 +1656,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "collection_b": {
           "type_name": "List[U]",
@@ -1620,7 +1690,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "zipper": {
           "type_name": "Callable[[T, U], V]",
@@ -1636,7 +1707,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -1668,7 +1740,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1688,7 +1761,8 @@
       "node_role": "combinator",
       "primary_in": "collection_a",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FOR_EACH_STATE",
@@ -1734,7 +1808,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[T, State], State]",
@@ -1750,7 +1825,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "init_state": {
           "type_name": "State",
@@ -1765,7 +1841,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -1779,7 +1856,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1829,7 +1907,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "stop": {
           "type_name": "int",
@@ -1853,7 +1932,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "step": {
           "type_name": "int",
@@ -1877,7 +1957,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[int, State], State]",
@@ -1893,7 +1974,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "init_state": {
           "type_name": "State",
@@ -1908,7 +1990,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -1922,7 +2005,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -1943,7 +2027,8 @@
       "node_role": "combinator",
       "primary_in": "init_state",
       "primary_out": "final_state",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FOR_ENUMERATE_MAP",
@@ -1980,7 +2065,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "transform": {
           "type_name": "Callable[[int, T], U]",
@@ -1996,7 +2082,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "start_index": {
           "type_name": "int",
@@ -2020,7 +2107,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2052,7 +2140,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2071,7 +2160,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "output_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_WHILE_LOOP",
@@ -2100,7 +2190,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "cond_fn": {
           "type_name": "Callable[[State], bool]",
@@ -2116,7 +2207,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
@@ -2132,7 +2224,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -2146,7 +2239,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2197,7 +2291,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "cond_fn": {
           "type_name": "Callable[[State], bool]",
@@ -2213,7 +2308,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
@@ -2229,7 +2325,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "max_iters": {
           "type_name": "int",
@@ -2253,7 +2350,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2267,7 +2365,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2315,7 +2414,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[State], State]",
@@ -2331,7 +2431,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "until_cond_fn": {
           "type_name": "Callable[[State], bool]",
@@ -2347,7 +2448,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -2361,7 +2463,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2415,7 +2518,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "on_true": {
           "type_name": "Callable[[T], U]",
@@ -2431,7 +2535,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "on_false": {
           "type_name": "Callable[[T], U]",
@@ -2447,7 +2552,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -2462,7 +2568,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2476,7 +2583,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2527,7 +2635,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "branch_1": {
           "type_name": "Callable[[T], U]",
@@ -2543,7 +2652,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "cond_2": {
           "type_name": "bool",
@@ -2567,7 +2677,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "branch_2": {
           "type_name": "Callable[[T], U]",
@@ -2583,7 +2694,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "default_branch": {
           "type_name": "Callable[[T], U]",
@@ -2599,7 +2711,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -2614,7 +2727,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2628,7 +2742,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2648,7 +2763,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_MATCH_CASE",
@@ -2677,7 +2793,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "case_a_val": {
           "type_name": "str",
@@ -2701,7 +2818,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "action_a": {
           "type_name": "Callable[[T], U]",
@@ -2717,7 +2835,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "case_b_val": {
           "type_name": "str",
@@ -2741,7 +2860,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "action_b": {
           "type_name": "Callable[[T], U]",
@@ -2757,7 +2877,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "default_action": {
           "type_name": "Callable[[T], U]",
@@ -2773,7 +2894,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -2788,7 +2910,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2802,7 +2925,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2822,7 +2946,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_TRY_EXCEPT",
@@ -2849,7 +2974,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -2865,7 +2991,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "exception_type": {
           "type_name": "str",
@@ -2889,7 +3016,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -2904,7 +3032,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -2918,7 +3047,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -2963,7 +3093,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -2979,7 +3110,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "finalizer": {
           "type_name": "Callable[[T], None]",
@@ -2995,7 +3127,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "exception_type": {
           "type_name": "str",
@@ -3019,7 +3152,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -3034,7 +3168,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -3048,7 +3183,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3065,11 +3201,12 @@
         "catch"
       ],
       "effects": [],
-      "code_template": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})(_err, {data})\nfinally:\n    ({finalizer})({data})",
+      "code_template": "try:\n    {result} = ({action})({data})\nexcept {exception_type} as _err:\n    {result} = ({fallback})({data}, _err)\nfinally:\n    ({finalizer})({data})",
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_TRY_EXCEPT_ELSE",
@@ -3106,7 +3243,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "success_continuation": {
           "type_name": "Callable[[U], V]",
@@ -3122,7 +3260,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], V]",
@@ -3138,7 +3277,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "exception_type": {
           "type_name": "str",
@@ -3162,7 +3302,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -3177,7 +3318,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -3191,7 +3333,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3232,7 +3375,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "fallback": {
           "type_name": "Callable[[Exception, T], U]",
@@ -3248,7 +3392,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "max_retries": {
           "type_name": "int",
@@ -3272,7 +3417,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "backoff_sec": {
           "type_name": "float",
@@ -3296,7 +3442,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -3311,7 +3458,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "dependencies": [
@@ -3328,7 +3476,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3349,7 +3498,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_FIND_FIRST",
@@ -3386,7 +3536,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -3402,7 +3553,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "default_val": {
           "type_name": "Optional[T]",
@@ -3417,7 +3569,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -3431,7 +3584,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3451,7 +3605,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_ALL_SATISFY",
@@ -3488,7 +3643,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -3504,7 +3660,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -3527,7 +3684,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3546,7 +3704,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "all_match",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_ANY_SATISFY",
@@ -3583,7 +3742,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -3599,7 +3759,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -3622,7 +3783,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3641,7 +3803,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "any_match",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_PARTITION",
@@ -3678,7 +3841,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "predicate": {
           "type_name": "Callable[[T], bool]",
@@ -3694,7 +3858,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -3726,7 +3891,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "false_collection": {
           "type_name": "List[T]",
@@ -3756,7 +3922,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3775,7 +3942,8 @@
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "true_collection",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_GUARD",
@@ -3804,7 +3972,8 @@
           },
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "action": {
           "type_name": "Callable[[T], U]",
@@ -3820,7 +3989,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         },
         "fallback_val": {
           "type_name": "U",
@@ -3835,7 +4005,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "data": {
           "type_name": "T",
@@ -3850,7 +4021,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "outputs": {
@@ -3864,7 +4036,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3884,7 +4057,8 @@
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
-      "mutation_type": "combinator"
+      "mutation_type": "combinator",
+      "node_type": "combinator"
     },
     {
       "cell_id": "CF_WITH_CONTEXT",
@@ -3908,7 +4082,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         },
         "body_fn": {
           "type_name": "Callable[[C], U]",
@@ -3924,7 +4099,8 @@
           "semantics": "any",
           "typestate": "any",
           "invariants": [],
-          "effect_suspended": true
+          "effect_suspended": true,
+          "state": "any"
         }
       },
       "outputs": {
@@ -3938,7 +4114,8 @@
           "layout": null,
           "semantics": "any",
           "typestate": "any",
-          "invariants": []
+          "invariants": [],
+          "state": "any"
         }
       },
       "code_templates": {
@@ -3970,56 +4147,17 @@
     "terminal_states": []
   },
   "supported_formats": [],
-  "role_semantics": {
-    "fold_loop_topologies": [
-      "fold_loop",
-      "reduce_loop",
-      "accumulation_loop",
-      "fold",
-      "reduce"
-    ],
-    "collect_loop_topologies": [
-      "collect_loop",
-      "collection_loop",
-      "accumulate_loop"
-    ],
-    "extremum_loop_topologies": [
-      "extremum_loop",
-      "argmax_loop",
-      "argmin_loop"
-    ],
-    "fold_loop_kinds": [
-      "fold",
-      "reduce",
-      "accumulation"
-    ],
-    "collect_loop_kinds": [
-      "collect"
-    ],
-    "extremum_loop_kinds": [
-      "extremum"
-    ],
-    "combinator_roles": [
-      "combinator"
-    ],
-    "hof_roles": [
+  "carrier_roles": {
+    "hof": [
       "functional_operator",
       "callback",
       "predicate",
       "key_fn"
     ],
-    "macro_node_types": [
-      "macro",
-      "higher_order",
-      "combinator"
-    ],
-    "macro_node_roles": [
-      "macro",
-      "higher_order",
-      "combinator"
-    ],
-    "combinator_topologies": [
+    "combinator": [
       "combinator",
+      "higher_order",
+      "macro",
       "traced_loop",
       "state_loop",
       "coproduct_branch",
@@ -4027,34 +4165,45 @@
       "identity_junction",
       "context_manager",
       "function_scope",
-      "exception_guard"
-    ],
-    "control_flow_domains": [
-      "control_flow"
-    ],
-    "control_flow_topologies": [
-      "combinator",
-      "traced_loop",
-      "state_loop",
-      "coproduct_branch",
-      "product_parallel",
-      "identity_junction",
-      "context_manager",
-      "function_scope",
-      "exception_guard"
-    ],
-    "stopping_tokens": [
-      "FINISH",
-      "DONE",
-      "STOP",
-      "COMPLETE",
-      "END"
-    ],
-    "state_loop_topologies": [
-      "state_loop",
+      "exception_guard",
       "while_loop",
       "fixed_point",
-      "repeat_until"
+      "repeat_until",
+      "fold_loop",
+      "reduce_loop",
+      "accumulation_loop",
+      "collect_loop",
+      "collection_loop",
+      "accumulate_loop",
+      "extremum_loop",
+      "argmax_loop",
+      "argmin_loop"
+    ],
+    "collect": [
+      "collect",
+      "collect_loop",
+      "collection_loop",
+      "accumulate_loop"
+    ],
+    "extremum": [
+      "extremum",
+      "extremum_loop",
+      "argmax_loop",
+      "argmin_loop"
+    ],
+    "fold": [
+      "fold",
+      "fold_loop",
+      "traced_loop",
+      "reduce_loop",
+      "accumulation_loop"
+    ],
+    "min_direction": [
+      "min",
+      "minimum",
+      "argmin",
+      "asc",
+      "ascending"
     ]
   }
 }

@@ -86,9 +86,12 @@ ROUTE_METHOD_REGISTRY: Dict[str, Type[RouteMethod]] = {
 
 
 def route_method_ids() -> list:
-    """Canonical ids (M0, M1, ... in numeric order) derived from the registry, so no caller keeps its own list."""
+    """Canonical ids (M0, M1, ... in numeric order plus OMEGA) derived from the registry."""
     ids = {k.upper() for k in ROUTE_METHOD_REGISTRY if k[:1] == "m" and k[1:].isdigit()}
-    return sorted(ids, key=lambda t: int(t[1:]))
+    ordered = sorted(ids, key=lambda t: int(t[1:]))
+    if "omega" in ROUTE_METHOD_REGISTRY:
+        ordered.append("OMEGA")
+    return ordered
 
 
 def describe_route_methods() -> list:

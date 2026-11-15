@@ -27,7 +27,7 @@ set.
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
 
-from .base import RouteMethod, is_macro_cell, _fmt_port_sig
+from .base import RouteMethod, is_macro_cell, _fmt_port_sig, is_combinator_cell
 from lattice import Cell, LatticeOrchestrator
 from unification import ExecutionContext
 from inference import ModelManager
@@ -113,12 +113,6 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
     def plan(self, prompt, tunnel, relevance_map, orchestrator=None, ctx=None,
              start_sig=None, goal_sig=None, max_transforms=6, **kwargs):
         self._current_prompt = prompt
-        try:
-            from inference import ModelManager
-        except (ImportError, ValueError):
-            from ..inference import ModelManager
-        if not ModelManager.get_instance().can_synthesize():
-            return []
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
@@ -132,10 +126,14 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ] or [tunnel[0]]
+        try:
+            from inference import ModelManager
+        except (ImportError, ValueError):
+            from ..inference import ModelManager
         mm = ModelManager.get_instance()
         has_llm = mm.can_synthesize()
 
@@ -144,7 +142,7 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []
 
-        if not has_llm:
+        if not has_llm or not ModelManager.get_instance().can_synthesize():
             return _fallback("no LLM loaded in this profile")
 
         shown = self.select_stratified_candidates(prompt, candidates, relevance_map, orchestrator=orch, max_shown=MAX_SHOWN_CANDIDATES)
@@ -294,8 +292,12 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             aud = audit(chain, prompt, orch)
             if aud.get("available") and any(iss.get("kind") == "clause_unserved" for iss in aud.get("issues", [])):
                 return _fallback("LLM proposed path has unserved clauses")
-        except Exception:
-            pass
+            _verr = self.verify_planned_path(chain, prompt, orch, ctx=ctx)
+            if _verr:
+                return _fallback(_verr)
+        except Exception as _chk_exc:
+            if type(_chk_exc).__name__ in ("UnificationFailure", "UnresolvedPlaceholderError"):
+                return _fallback(f"M7 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
 
         clauses = self.segment_prompt_clauses(prompt)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)

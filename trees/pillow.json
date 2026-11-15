@@ -133,7 +133,8 @@
         "properties": {
           "channels": 3,
           "color_order": "BGR",
-          "dtype": "uint8"
+          "dtype": "uint8",
+          "expected_rank": 3
         }
       },
       {
@@ -144,7 +145,8 @@
         "properties": {
           "channels": 3,
           "color_order": "RGB",
-          "dtype": "uint8"
+          "dtype": "uint8",
+          "expected_rank": 3
         }
       },
       {
@@ -239,7 +241,10 @@
         "name": "destination_path",
         "parent_state": "source_identifier",
         "carrier_type": "str",
-        "description": "Declared by data migration (formerly engine bootstrap state 'destination_path')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'destination_path').",
+        "properties": {
+          "is_destination_identifier": true
+        }
       },
       {
         "name": "dimensions",
@@ -396,7 +401,8 @@
         "description": "A single-channel 8-bit intensity numpy array.",
         "properties": {
           "channels": 1,
-          "dtype": "uint8"
+          "dtype": "uint8",
+          "expected_rank": 2
         }
       },
       {
@@ -477,7 +483,8 @@
           "mode": "1",
           "channels": 1,
           "has_alpha": false,
-          "bits_per_channel": 1
+          "bits_per_channel": 1,
+          "expected_rank": 2
         }
       },
       {
@@ -489,7 +496,8 @@
           "mode": "CMYK",
           "channels": 4,
           "has_alpha": false,
-          "bits_per_channel": 8
+          "bits_per_channel": 8,
+          "expected_rank": 3
         }
       },
       {
@@ -500,7 +508,8 @@
         "properties": {
           "mode": "F",
           "channels": 1,
-          "bits_per_pixel": 32
+          "bits_per_pixel": 32,
+          "expected_rank": 2
         }
       },
       {
@@ -512,7 +521,8 @@
           "mode": "L",
           "channels": 1,
           "has_alpha": false,
-          "bits_per_channel": 8
+          "bits_per_channel": 8,
+          "expected_rank": 2
         }
       },
       {
@@ -522,7 +532,8 @@
         "description": "Hue, Saturation, Value color model image.",
         "properties": {
           "mode": "HSV",
-          "channels": 3
+          "channels": 3,
+          "expected_rank": 3
         }
       },
       {
@@ -533,7 +544,8 @@
         "properties": {
           "mode": "I",
           "channels": 1,
-          "bits_per_pixel": 32
+          "bits_per_pixel": 32,
+          "expected_rank": 2
         }
       },
       {
@@ -543,7 +555,8 @@
         "description": "CIE L*a*b* perceptual color space image.",
         "properties": {
           "mode": "LAB",
-          "channels": 3
+          "channels": 3,
+          "expected_rank": 3
         }
       },
       {
@@ -555,7 +568,8 @@
           "mode": "P",
           "channels": 1,
           "has_alpha": false,
-          "bits_per_channel": 8
+          "bits_per_channel": 8,
+          "expected_rank": 2
         }
       },
       {
@@ -567,7 +581,8 @@
           "mode": "RGB",
           "channels": 3,
           "has_alpha": false,
-          "bits_per_channel": 8
+          "bits_per_channel": 8,
+          "expected_rank": 3
         }
       },
       {
@@ -579,7 +594,8 @@
           "mode": "RGBA",
           "channels": 4,
           "has_alpha": true,
-          "bits_per_channel": 8
+          "bits_per_channel": 8,
+          "expected_rank": 3
         }
       },
       {
@@ -589,7 +605,8 @@
         "description": "YCbCr video color format image.",
         "properties": {
           "mode": "YCbCr",
-          "channels": 3
+          "channels": 3,
+          "expected_rank": 3
         }
       },
       {
@@ -749,7 +766,9 @@
         "carrier_type": "Image",
         "description": "Image persisted to non-volatile storage.",
         "properties": {
-          "persisted": true
+          "persisted": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -860,6 +879,25 @@
         "carrier_type": "str",
         "description": "Title string for the viewer window.",
         "properties": {}
+      },
+      {
+        "name": "mode_bgr",
+        "properties": {
+          "expected_rank": 3
+        }
+      },
+      {
+        "name": "displayed",
+        "properties": {
+          "is_terminal": true
+        }
+      },
+      {
+        "name": "closed",
+        "properties": {
+          "is_terminal": true,
+          "is_invalid": true
+        }
       }
     ],
     "transitions": [
@@ -16940,10 +16978,28 @@
   "types": {
     "PILImage": {
       "parent": "Image",
-      "description": "PIL.Image.Image instance (requires explicit bridge to/from ndarray)"
+      "description": "PIL.Image.Image instance (requires explicit bridge to/from ndarray)",
+      "kind": "array",
+      "properties": {
+        "is_visual": true,
+        "is_composite": true,
+        "render_hooks": [
+          "show",
+          "to_image"
+        ]
+      }
     },
     "Image": {
-      "parent": "Modality"
+      "parent": "Modality",
+      "kind": "array",
+      "properties": {
+        "is_visual": true,
+        "is_composite": true,
+        "render_hooks": [
+          "show",
+          "to_image"
+        ]
+      }
     },
     "PNG": {
       "parent": "ImageFormat"
@@ -16970,22 +17026,5 @@
     "webp",
     "gif",
     "ico"
-  ],
-  "role_semantics": {
-    "render_hooks": [
-      "show",
-      "to_image"
-    ],
-    "visual_types": [
-      "Image"
-    ],
-    "height_axis_tokens": [
-      "H",
-      "height",
-      "rows"
-    ],
-    "structured_carrier_intent_keys": [
-      "image_annotation_egress"
-    ]
-  }
+  ]
 }

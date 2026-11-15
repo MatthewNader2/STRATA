@@ -89,7 +89,8 @@ def _run_pipeline_for_method(orch: LatticeOrchestrator, method: str, profile_nam
         best_path = optimizer.route(BENCHMARK_PROMPT, method_name=method, relevance_map=relevance_map)
 
     if not best_path:
-        return None, None, None, [], None
+        router_fb = getattr(getattr(optimizer, "router", None), "last_fallback_reason", None)
+        return None, None, None, [], router_fb
 
     ctx = ExecutionContext(prompt=BENCHMARK_PROMPT)
     try:

@@ -124,7 +124,7 @@ def _ast_clean_type(node: ast.AST) -> str:
         return f"{left} | {right}"
     elif isinstance(node, ast.Tuple):
         if node.elts:
-            return _ast_clean_type(node.elts[0])
+            return ", ".join(_ast_clean_type(e) for e in node.elts)
         return "tuple"
     elif (
         isinstance(node, ast.Call)
@@ -427,31 +427,18 @@ def infer_abstract_carrier(anno: Any, param_name: str = "") -> Optional[str]:
                     "path" in valid and all(v in ("path", "text") for v in valid)
                 ):
                     return "path"
-        elif base_lower in (
-            "sequence",
-            "list",
-            "tuple",
-            "set",
-            "dict",
-            "mapping",
-            "map",
-            "iterable",
-            "iterator",
-            "generator",
-            "collection",
-            "queue",
-            "deque",
-        ):
+        elif base_lower:
             try:
                 from lattice import TypeRegistry
-
-                mapped = TypeRegistry.get_instance().get_abstract_carrier(base_lower)
+                reg_si = TypeRegistry.get_instance()
+                mapped = reg_si.get_abstract_carrier(base_lower)
                 if mapped:
                     return mapped
+                comp_roots = reg_si.get_composite_carrier_roots()
+                if base_lower in comp_roots or any(reg_si.is_subtype(base_lower, r) for r in comp_roots):
+                    return "collection"
             except Exception:
                 pass
-            return "collection"
-        else:
             res = infer_abstract_carrier(base)
             if res is not None:
                 return res
@@ -785,18 +772,16 @@ def extract_shape_contract(text: str) -> Optional[Dict[str, Any]]:
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        tensor_types = {
-            t.lower() for t in reg.get_abstract_carriers()
-            if reg.is_subtype(t, "tensor") or reg.is_subtype(t, "array-like") or t in ("tensor", "array-like", "collection")
-        }
-        rank_tokens = {
-            str(x).lower() for x in (
-                reg.get_verification_semantics("tensor_context_tokens")
-                or reg.get_verification_semantics("rank_tokens")
-                or ()
-            )
-        }
-        array_context_words = tensor_types | rank_tokens
+        tensor_types = (
+            {
+                t.lower() for t in reg.get_abstract_carriers()
+                if reg.is_subtype(t, "tensor") or reg.is_subtype(t, "array-like") or t in ("tensor", "array-like", "collection")
+            }
+            | reg.get_types_by_kind("array")
+            | reg.get_composite_carrier_roots()
+            | reg.get_types_with_property("is_tensor", True)
+        )
+        array_context_words = tensor_types | set(reg.get_types_with_property("has_rank", True))
     except Exception:
         array_context_words = set()
     for i, tok in enumerate(tokens):
@@ -1118,6 +1103,18 @@ def _tier1_inspect_signature(target: Any) -> Optional[inspect.Signature]:
 # TIER 2: Argument Clinic (__text_signature__) via Python AST
 # =====================================================================
 
+def _extract_ast_default_value(node: ast.AST) -> Any:
+    """Extracts Python literal defaults from AST default expressions when safe."""
+    if isinstance(node, ast.Constant):
+        if node.value is Ellipsis:
+            return "default"
+        return node.value
+    try:
+        return ast.literal_eval(node)
+    except (ValueError, SyntaxError, TypeError):
+        return ast.unparse(node) if hasattr(ast, "unparse") else "default"
+
+
 def _tier2_text_signature(target: Any) -> Optional[inspect.Signature]:
     """
     Parses CPython Argument Clinic `__text_signature__` using Python's built-in AST.
@@ -1162,7 +1159,8 @@ def _tier2_text_signature(target: Any) -> Optional[inspect.Signature]:
     for idx, arg in enumerate(pos_args):
         p_name = arg.arg
         if idx >= default_start_idx:
-            default_val: Any = "default"
+            default_node = args_node.defaults[idx - default_start_idx]
+            default_val: Any = _extract_ast_default_value(default_node)
         else:
             default_val = inspect.Parameter.empty
 
@@ -1178,7 +1176,11 @@ def _tier2_text_signature(target: Any) -> Optional[inspect.Signature]:
     for idx, arg in enumerate(args_node.kwonlyargs):
         p_name = arg.arg
         kw_default_node = args_node.kw_defaults[idx]
-        default_val = "default" if kw_default_node is not None else inspect.Parameter.empty
+        default_val = (
+            _extract_ast_default_value(kw_default_node)
+            if kw_default_node is not None
+            else inspect.Parameter.empty
+        )
         parameters.append(
             inspect.Parameter(
                 p_name, kind=inspect.Parameter.KEYWORD_ONLY, default=default_val
@@ -1297,7 +1299,8 @@ def _tier3_stub_signature(
             else inspect.Parameter.empty
         )
         if idx >= default_start_idx:
-            default_val = "default"
+            default_node = args_node.defaults[idx - default_start_idx]
+            default_val = _extract_ast_default_value(default_node)
         else:
             default_val = inspect.Parameter.empty
 
@@ -1318,7 +1321,11 @@ def _tier3_stub_signature(
             else inspect.Parameter.empty
         )
         kw_default_node = args_node.kw_defaults[idx]
-        default_val = "default" if kw_default_node is not None else inspect.Parameter.empty
+        default_val = (
+            _extract_ast_default_value(kw_default_node)
+            if kw_default_node is not None
+            else inspect.Parameter.empty
+        )
         parameters.append(
             inspect.Parameter(
                 p_name,

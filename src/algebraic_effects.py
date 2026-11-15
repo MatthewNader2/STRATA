@@ -128,6 +128,24 @@ class PortAlgebraicEffect:
     partition_index: Optional[int] = None
 
 
+def _find_carrier_input_port(cell: Any, reg: Optional[TypeRegistry] = None) -> Optional[str]:
+    """Identifies the primary data-carrier / receiver input port via declared TypeRegistry roles."""
+    inputs = getattr(cell, "inputs", {}) or {}
+    if reg is None:
+        reg = TypeRegistry.get_instance()
+    dataflow_roles = reg.get_dataflow_roles_set()
+    receiver_roles = reg.get_roles_for_category("receiver")
+    for p_name, p_sig in inputs.items():
+        binds = str(getattr(p_sig, "binds", "") or "").strip().lower()
+        prole = str(getattr(p_sig, "port_role", "") or "").strip().lower()
+        if binds in dataflow_roles or prole in receiver_roles:
+            return p_name
+    primary = getattr(cell, "primary_input", None)
+    if primary is not None and primary.name in inputs:
+        return primary.name
+    return None
+
+
 def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
     """
     Derives algebraic port effects strictly from declared cell and port metadata:
@@ -142,13 +160,7 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
     outputs = getattr(cell, "outputs", {}) or {}
 
     # Identify declared carrier input port (if any)
-    carrier_in_name: Optional[str] = None
-    for p_name, p_sig in inputs.items():
-        if getattr(p_sig, "binds", None) in ("data_carrier", "carrier") or getattr(p_sig, "port_role", None) == "receiver":
-            carrier_in_name = p_name
-            break
-    if carrier_in_name is None and getattr(cell, "primary_input", None) is not None:
-        carrier_in_name = cell.primary_input.name
+    carrier_in_name = _find_carrier_input_port(cell, reg)
 
     # 1. Input port key effects
     for p_name, p_sig in inputs.items():
@@ -164,12 +176,38 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
             )
 
     # 2. Output port mutation & partition effects
+    out_group_counts: Dict[Tuple[str, str], int] = {}
+    out_group_cursor: Dict[Tuple[str, str], int] = {}
+    if len(outputs) >= 2:
+        for out_sig in outputs.values():
+            g_key = (
+                str(getattr(out_sig, "type_name", "") or "").strip().lower(),
+                str(getattr(out_sig, "port_role", "") or "").strip().lower(),
+            )
+            out_group_counts[g_key] = out_group_counts.get(g_key, 0) + 1
+
     for idx, (out_name, out_sig) in enumerate(outputs.items()):
         mut_target = getattr(out_sig, "mutates", None)
         part_idx = getattr(out_sig, "partition_index", None)
+        g_key = (
+            str(getattr(out_sig, "type_name", "") or "").strip().lower(),
+            str(getattr(out_sig, "port_role", "") or "").strip().lower(),
+        )
+        is_coproduct_split = (
+            len(outputs) >= 2
+            and bool(carrier_in_name)
+            and carrier_in_name in inputs
+            and bool(g_key[0])
+            and out_group_counts.get(g_key, 0) >= 2
+        )
 
-        # In-place endomorphism f: T -> T on declared carrier
-        if mut_target is None and carrier_in_name and carrier_in_name in inputs:
+        # In-place endomorphism f: T -> T on declared carrier (skip on multi-output splitters unless explicit)
+        if (
+            mut_target is None
+            and carrier_in_name
+            and carrier_in_name in inputs
+            and (not is_coproduct_split or getattr(cell, "mutation_type", "") == "in_place")
+        ):
             in_t = str(getattr(inputs[carrier_in_name], "type_name", "")).lower()
             out_t = str(getattr(out_sig, "type_name", "")).lower()
             if getattr(cell, "mutation_type", "") == "in_place" or (
@@ -178,7 +216,7 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
             ):
                 mut_target = carrier_in_name
 
-        # Declared partition metadata
+        # Declared partition metadata or structural co-product split default
         if part_idx is None and getattr(out_sig, "partition", None) is not None:
             p_decl = getattr(out_sig, "partition")
             if isinstance(p_decl, int):
@@ -188,6 +226,9 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
                     part_idx = int(p_decl["index"])
                 except (ValueError, TypeError):
                     pass
+        if part_idx is None and is_coproduct_split:
+            part_idx = out_group_cursor.get(g_key, 0)
+            out_group_cursor[g_key] = part_idx + 1
 
         if mut_target is not None or part_idx is not None:
             effects_map[f"out:{out_name}"] = PortAlgebraicEffect(
@@ -196,6 +237,17 @@ def infer_cell_algebraic_effects(cell: Cell) -> Dict[str, PortAlgebraicEffect]:
             )
 
     return effects_map
+
+
+def _is_void_binding(val: Any) -> bool:
+    if not isinstance(val, str) or not val.strip():
+        return True
+    try:
+        from .lattice import TypeRegistry
+    except (ImportError, ValueError):
+        from lattice import TypeRegistry
+    head = val.strip().split("(", 1)[0].strip()
+    return TypeRegistry.get_instance().is_void_type(head)
 
 
 def build_universal_verification_contract(
@@ -208,6 +260,11 @@ def build_universal_verification_contract(
     `partition_index`, and `postconditions`) with ZERO domain-specific if/elif branches.
     """
     contract = contract_cls()
+    try:
+        from .lattice import TypeRegistry
+    except (ImportError, ValueError):
+        from lattice import TypeRegistry
+    reg = TypeRegistry.get_instance()
     latest_carrier_lineage: Dict[str, str] = {}   # root_var -> latest mutated var
     var_to_root: Dict[str, str] = {}              # var -> root_var
     var_partition: Dict[str, Tuple[str, int]] = {}  # var -> (split_cell_id, partition_index)
@@ -247,9 +304,11 @@ def build_universal_verification_contract(
                     accumulated_props.setdefault(root, {})[str(prop)] = val
 
         # 2. Track Linear Carrier Mutation Lineage & Partition Indices
+        carrier_in_name = _find_carrier_input_port(cell, reg)
+
         for out_name, out_sig in (getattr(cell, "outputs", {}) or {}).items():
             out_v = bindings.get(out_name) or bindings.get("output_var")
-            if not out_v or not isinstance(out_v, str) or out_v.startswith("None"):
+            if _is_void_binding(out_v):
                 continue
 
             out_eff = eff_map.get(f"out:{out_name}")
@@ -261,6 +320,17 @@ def build_universal_verification_contract(
                     latest_carrier_lineage[root] = out_v
                     if in_v in accumulated_props:
                         accumulated_props.setdefault(root, {}).update(accumulated_props[in_v])
+            elif out_eff and out_eff.partition_index == 0 and carrier_in_name:
+                in_v = bindings.get(carrier_in_name)
+                if in_v and isinstance(in_v, str):
+                    root = var_to_root.get(in_v, in_v)
+                    var_to_root[out_v] = root
+                    latest_carrier_lineage[root] = out_v
+                    if in_v in accumulated_props:
+                        accumulated_props.setdefault(root, {}).update(accumulated_props[in_v])
+                else:
+                    var_to_root.setdefault(out_v, out_v)
+                    latest_carrier_lineage.setdefault(out_v, out_v)
             else:
                 var_to_root.setdefault(out_v, out_v)
                 latest_carrier_lineage.setdefault(out_v, out_v)
@@ -270,6 +340,10 @@ def build_universal_verification_contract(
                 if out_eff.partition_index == 0:
                     role_key = str(getattr(out_sig, "port_role", "") or getattr(out_sig, "type_name", "data")).lower()
                     partition_zero_by_role[role_key] = out_v
+            elif out_eff and out_eff.mutates_port:
+                mut_in_v = bindings.get(out_eff.mutates_port)
+                if isinstance(mut_in_v, str) and mut_in_v in var_partition:
+                    var_partition[out_v] = var_partition[mut_in_v]
 
         # 3. Universal Co-Initial Partition Verification on Multi-Input Consumers
         bound_split_ports: List[Tuple[str, str, Tuple[str, int]]] = []
@@ -278,19 +352,43 @@ def build_universal_verification_contract(
             if isinstance(in_v, str) and in_v in var_partition:
                 bound_split_ports.append((in_name, in_v, var_partition[in_v]))
 
-        if bound_split_ports:
-            # Check partition coherence (e.g., X_train paired with y_train, never X_train with y_test or unsplit X)
-            for in_name, in_v, (split_cid, p_idx) in bound_split_ports:
-                in_role = str(getattr(cell.inputs[in_name], "port_role", "") or "").lower()
-                expected_p0 = partition_zero_by_role.get(in_role)
-                if expected_p0 and p_idx == 0:
-                    contract.terminal_checks.append({
-                        "type": "algebraic_partition_coherence",
-                        "cell_id": cell.cell_id,
-                        "port": in_name,
-                        "expected_var": expected_p0,
-                        "actual_var": in_v,
-                    })
+        if len(bound_split_ports) >= 2:
+            # Check partition coherence (e.g., X_train paired with y_train, never X_train with y_test)
+            distinct_partitions = {p_idx for _, _, (_, p_idx) in bound_split_ports}
+            anchor_port, anchor_var, (anchor_split, anchor_p_idx) = bound_split_ports[0]
+            port_details = {
+                in_name: {"var": in_v, "split_cell": split_cid, "partition_index": p_idx}
+                for in_name, in_v, (split_cid, p_idx) in bound_split_ports
+            }
+            if len(distinct_partitions) > 1:
+                for in_name, in_v, (split_cid, p_idx) in bound_split_ports[1:]:
+                    if p_idx != anchor_p_idx:
+                        contract.terminal_checks.append({
+                            "type": "algebraic_partition_coherence",
+                            "cell_id": cell.cell_id,
+                            "coherent": False,
+                            "port": in_name,
+                            "anchor_port": anchor_port,
+                            "expected_partition": anchor_p_idx,
+                            "actual_partition": p_idx,
+                            "actual_var": in_v,
+                            "ports": port_details,
+                            "violation": (
+                                f"Cell '{cell.cell_id}' mixes split partitions: "
+                                f"'{anchor_port}' ({anchor_var}) has partition {anchor_p_idx} "
+                                f"from '{anchor_split}', while '{in_name}' ({in_v}) has partition "
+                                f"{p_idx} from '{split_cid}'."
+                            ),
+                        })
+            else:
+                contract.terminal_checks.append({
+                    "type": "algebraic_partition_coherence",
+                    "cell_id": cell.cell_id,
+                    "coherent": True,
+                    "expected_partition": anchor_p_idx,
+                    "actual_partition": anchor_p_idx,
+                    "ports": port_details,
+                })
 
         # 4. Universal Linear Egress Verification on Path-Consuming Sinks
         has_path_in = any(is_path_port(p) for p in (getattr(cell, "inputs", {}) or {}).values())
@@ -322,10 +420,10 @@ def build_universal_verification_contract(
     for cell, bindings in pipeline_bindings:
         for out_name in (getattr(cell, "outputs", {}) or {}).keys():
             ov = bindings.get(out_name) or bindings.get("output_var")
-            if isinstance(ov, str) and ov and not ov.startswith("None"):
+            if not _is_void_binding(ov):
                 all_output_vars.add(ov)
         ov = bindings.get("output_var")
-        if isinstance(ov, str) and ov and not ov.startswith("None"):
+        if not _is_void_binding(ov):
             all_output_vars.add(ov)
 
     all_downstream_consumed: Set[str] = set()
@@ -333,7 +431,7 @@ def build_universal_verification_contract(
         for in_k, in_v in b_map.items():
             if isinstance(in_v, str):
                 root_v = in_v.split("[")[0].strip()
-                if root_v in all_output_vars or root_v.startswith("var_"):
+                if root_v in all_output_vars:
                     all_downstream_consumed.add(root_v)
 
     n_steps = len(pipeline_bindings)
@@ -341,7 +439,7 @@ def build_universal_verification_contract(
         is_final_step = (idx == n_steps - 1)
         for out_name, out_sig in (getattr(cell, "outputs", {}) or {}).items():
             out_v = bindings.get(out_name) or bindings.get("output_var")
-            if not out_v or not isinstance(out_v, str) or out_v.startswith("None"):
+            if _is_void_binding(out_v):
                 continue
 
             is_unconsumed = out_v not in all_downstream_consumed

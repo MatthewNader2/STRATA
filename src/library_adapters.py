@@ -87,46 +87,36 @@ def _get_type_registry():
 
 
 def _get_excluded_module_tokens() -> Set[str]:
-    """Retrieves generic internal/test module tokens, dynamically extensible via TypeRegistry."""
+    """Retrieves generic internal/test module tokens from TypeRegistry."""
     try:
         reg = _get_type_registry()
         if reg is not None:
-            tokens = reg.get_excluded_module_tokens()
-            if tokens:
-                return set(tokens)
+            return set(reg.get_excluded_module_tokens())
     except Exception:
         pass
-    return {
-        "test", "tests", "testing", "conftest", "testutils",
-        "vendor", "vendored", "externals", "third_party",
-        "compat", "internal", "internals",
-    }
+    return set()
 
 
 def _get_enum_citation_triggers() -> Set[str]:
-    """Retrieves triggers indicating enum/choice citations in docstrings."""
+    """Retrieves triggers indicating enum/choice citations in docstrings from TypeRegistry."""
     try:
         reg = _get_type_registry()
         if reg is not None:
-            triggers = reg.get_enum_citation_triggers()
-            if triggers:
-                return set(triggers)
+            return set(reg.get_enum_citation_triggers())
     except Exception:
         pass
-    return {"see", "values in", "one of", "choices are", "must be one of", "refer to"}
+    return set()
 
 
 def _get_enum_suffixes() -> Tuple[str, ...]:
-    """Retrieves candidate suffixes for enum lookup stripping."""
+    """Retrieves candidate suffixes for enum lookup stripping from TypeRegistry."""
     try:
         reg = _get_type_registry()
         if reg is not None:
-            suffixes = reg.get_enum_suffixes()
-            if suffixes:
-                return tuple(suffixes)
+            return tuple(reg.get_enum_suffixes())
     except Exception:
         pass
-    return ("flags", "flag", "types", "type", "codes", "code", "mode", "modes", "enum", "enums")
+    return ()
 
 
 def _get_symbol_stopwords() -> Set[str]:
