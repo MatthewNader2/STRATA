@@ -29,6 +29,7 @@ from log_config import get_logger
 
 try:
     from .lattice import LatticeOrchestrator, Cell, MacroCell, TypeRegistry
+    from .schema import is_bridge_cell as _schema_is_bridge_cell
     from .internal_rag import LocalRAG
     from .planner import LatticePlanner, _segment_prompt_clauses
     from .tokenizer import CellTokenizer
@@ -40,6 +41,7 @@ try:
         from reranker import LocalReranker
 except (ImportError, ValueError):
     from lattice import LatticeOrchestrator, Cell, MacroCell, TypeRegistry
+    from schema import is_bridge_cell as _schema_is_bridge_cell
     from internal_rag import LocalRAG
     from planner import LatticePlanner, _segment_prompt_clauses
     from tokenizer import CellTokenizer
@@ -326,7 +328,10 @@ class LatticeRouter:
         self.reranker = None if (is_p0 or profile_name_now == "B") else kwargs.get("reranker")
         if self.use_reranker and self.reranker is None and LocalReranker is not None:
             try:
-                self.reranker = LocalReranker(model_name_or_path=self.reranker_model)
+                if hasattr(LocalReranker, "get_shared"):
+                    self.reranker = LocalReranker.get_shared(model_name_or_path=self.reranker_model)
+                else:
+                    self.reranker = LocalReranker(model_name_or_path=self.reranker_model)
             except Exception as _e:
                 logger.warning(f"[ROUTER] Could not initialize LocalReranker: {_e}")
                 self.reranker = None
@@ -968,9 +973,9 @@ class LatticeRouter:
                     p_val = post.get("value") if isinstance(post, dict) else getattr(post, "value", None)
                     p_op = post.get("operator", "==") if isinstance(post, dict) else getattr(post, "operator", "==")
                     if p_name is not None:
-                        produced_props.append((c, c_out.lower(), p_name, p_op, p_val))
+                        produced_props.append((c, c_out.lower(), ("property", p_name), p_op, p_val))
                 for q in (getattr(c.primary_output, "qualifiers", None) or []):
-                    produced_props.append((c, c_out.lower(), f"qualifier:{str(q).lower()}", "==", True))
+                    produced_props.append((c, c_out.lower(), ("qualifier", str(q).lower()), "==", True))
 
             required_props = []
             for c in active_cells:
@@ -985,9 +990,9 @@ class LatticeRouter:
                         p_val = pre.get("value") if isinstance(pre, dict) else getattr(pre, "value", None)
                         p_op = pre.get("operator", "==") if isinstance(pre, dict) else getattr(pre, "operator", "==")
                         if p_name is not None:
-                            required_props.append((c, c_in.lower(), p_name, p_op, p_val))
+                            required_props.append((c, c_in.lower(), ("property", p_name), p_op, p_val))
                     for rq in (getattr(inp, "rejected_qualifiers", None) or []):
-                        required_props.append((c, c_in.lower(), f"qualifier:{str(rq).lower()}", "==", False))
+                        required_props.append((c, c_in.lower(), ("qualifier", str(rq).lower()), "==", False))
 
             conflicts = []
             seen_conflicts = set()
@@ -1019,17 +1024,17 @@ class LatticeRouter:
                             continue
 
                         resolves = False
-                        if prop.startswith("qualifier:"):
-                            q_name = prop.split(":", 1)[1]
+                        prop_kind, prop_key = prop
+                        if prop_kind == "qualifier":
                             cand_out_quals = [str(q).lower() for q in (getattr(cand.primary_output, "qualifiers", None) or [])]
-                            if target_val is False and q_name not in cand_out_quals:
+                            if target_val is False and prop_key not in cand_out_quals:
                                 resolves = True
                         else:
                             for cp in (getattr(cand, "postconditions", None) or []):
                                 cp_name = cp.get("property") if isinstance(cp, dict) else getattr(cp, "property", None)
                                 cp_val = cp.get("value") if isinstance(cp, dict) else getattr(cp, "value", None)
                                 cp_op = cp.get("operator", "==") if isinstance(cp, dict) else getattr(cp, "operator", "==")
-                                if cp_name == prop and cp_op == "==" and cp_val == target_val:
+                                if cp_name == prop_key and cp_op == "==" and cp_val == target_val:
                                     resolves = True
                                     break
 
@@ -1049,9 +1054,7 @@ class LatticeRouter:
             # flood drowns the trellis in noise cells (measured: +571 cells on a
             # 150-cell tunnel in the 38K-node corpus).
             ingress_stage = reg.get_ingress_stage() if hasattr(reg, "get_ingress_stage") else 1
-            ingress_roles = set(reg.get_verification_semantics("ingress_roles")) if hasattr(reg, "get_verification_semantics") else {"source"}
-            if not ingress_roles:
-                ingress_roles = {"source"}
+            ingress_roles = set(reg.get_ingress_roles_set()) if hasattr(reg, "get_ingress_roles_set") else set()
             carrier_augment_max = int(_cfg("carrier_augment_max", 35))
             carrier_min_overlap = int(_cfg("carrier_min_overlap", 2))
             augment: List[Cell] = []
@@ -1116,7 +1119,7 @@ class LatticeRouter:
                 prompt,
                 final_tunnel,
                 relevance_map,
-                top_k=min(max(top_k, 50), 80),
+                top_k=min(max(top_k, 50), 60),
             )
             tunnel_by_id = {c.cell_id: c for c in final_tunnel}
             clause_sem = [dict(d) for d in clause_dense_scores]
@@ -1136,17 +1139,21 @@ class LatticeRouter:
                     cl_clean = cl_text.strip()
                     if not cl_clean:
                         continue
+                    sorted_cl_dense = sorted(
+                        clause_dense_scores[cl_idx].items(), key=lambda kv: kv[1], reverse=True
+                    )
+                    # Skip expensive per-clause cross-encoder forward pass when dense retrieval already has a decisive margin
+                    if len(sorted_cl_dense) >= 2 and (sorted_cl_dense[0][1] - sorted_cl_dense[1][1]) >= 0.22:
+                        continue
                     cl_pool: List[Cell] = []
                     cl_pool_ids: Set[str] = set()
-                    for cid, _dsc in sorted(
-                        clause_dense_scores[cl_idx].items(), key=lambda kv: kv[1], reverse=True
-                    )[:15]:
+                    for cid, _dsc in sorted_cl_dense[:6]:
                         c_obj = tunnel_by_id.get(cid)
                         if c_obj is not None and cid not in cl_pool_ids:
                             cl_pool.append(c_obj)
                             cl_pool_ids.add(cid)
                     for c_obj in final_tunnel:
-                        if len(cl_pool) >= 25:
+                        if len(cl_pool) >= 8:
                             break
                         if c_obj.cell_id not in cl_pool_ids:
                             cl_pool.append(c_obj)
@@ -1289,7 +1296,7 @@ class LatticeRouter:
                     if not getattr(ip, "required", True) or getattr(ip, "default_value", None) is not None:
                         continue
                     role = str(getattr(ip, "port_role", "") or getattr(ip, "role", "") or "").lower()
-                    if reg.is_config_role(role) or reg.is_hof_role(role) or role in set(reg.get_verification_semantics("parameter_roles") or ()):
+                    if reg.is_config_role(role) or reg.is_hof_role(role) or role in reg.get_roles_for_category("parameter"):
                         continue
                     if is_path_port(ip) or _pointed_default(ip, target_c) is not None:
                         continue
@@ -1342,18 +1349,23 @@ class LatticeRouter:
         max_s2 = max_s2 if max_s2 is not None else max(PRUNE_S2_MIN, n * PRUNE_S2_PER_CLAUSE)
         max_s3 = max_s3 if max_s3 is not None else max(PRUNE_S3_MIN, n * PRUNE_S3_PER_CLAUSE)
 
+        _reg_st = getattr(self.orchestrator, "lattice", None) or TypeRegistry.get_instance()
+        _ingress_st = _reg_st.get_ingress_roles_set()
+        _transform_st = _reg_st.get_roles_for_category("transform")
+        _terminal_st = _reg_st.get_terminal_roles_set()
+
         def _stage_num(c):
             st = getattr(c, 'stage', -1)
             if isinstance(st, int) and st >= 0:
                 return st
-            st_str = str(st).strip().upper()
-            if st_str in ('1', 'S1', 'INGRESS'):
+            st_str = str(st).strip().lower()
+            if st_str in _ingress_st or st_str in ('1', 's1'):
                 return 1
-            if st_str in ('2', 'S2', 'TRANSFORM'):
+            if st_str in _transform_st or st_str in ('2', 's2'):
                 return 2
-            if st_str in ('3', 'S3', 'EGRESS', 'SINK'):
+            if st_str in _terminal_st or st_str in ('3', 's3'):
                 return 3
-            clean = st_str.lstrip('S')
+            clean = st_str.lstrip('s')
             if clean.isdigit():
                 return int(clean)
             return 0
@@ -1379,7 +1391,7 @@ class LatticeRouter:
             sorted_st = sorted(cells, key=lambda c: relevance_map.get(c.cell_id, 0.0), reverse=True)[:cap]
             keep_stage_cells.extend(sorted_st)
 
-        bridge_ids = {c.cell_id for c in tunnel_cells if getattr(c, "node_role", "") == "bridge" or getattr(c, "node_type", "") == "tunnel" }
+        bridge_ids = {c.cell_id for c in tunnel_cells if _schema_is_bridge_cell(c, _reg_st)}
         keep_ids = {c.cell_id for c in keep_stage_cells} | protected_ids | bridge_ids
         return [c for c in tunnel_cells if c.cell_id in keep_ids] or tunnel_cells
 
@@ -2081,11 +2093,22 @@ class LatticeRouter:
                     rag=_rag_arg,
                     **_method_kwargs
                 )
+                if getattr(method, "last_refusal", None) is not None and hasattr(self, "planner") and self.planner is not None:
+                    self.planner.last_refusal = method.last_refusal
                 effective_route = (getattr(method, "effective_method", None) or method_name).upper()
-                if getattr(method, "fallback_reason", None):
+                route_trace = list(getattr(method, "trace_events", []) or [])
+                if not path and getattr(method, "fallback_reason", None) and method_name not in ("m0", "m1"):
+                    fb_msg = str(method.fallback_reason)
+                    fallback_reason = f"{method_name.upper()} failed: {fb_msg}"
+                    route_trace.append({
+                        "event": "method_failed",
+                        "requested": method_name.upper(),
+                        "reason": fb_msg,
+                    })
+                    logger.warning(f"[ROUTER] Route method {method_name.upper()} failed honestly (no silent fallback): {fb_msg}")
+                elif getattr(method, "fallback_reason", None):
                     fallback_reason = f"{method_name.upper()} -> {effective_route}: {method.fallback_reason}"
                     logger.warning(f"[ROUTER] Route method fallback detected: {fallback_reason}")
-                route_trace = list(getattr(method, "trace_events", []) or [])
             except Exception as e:
                 logger.error(
                     f"[ROUTER] RouteMethod '{method_name}' failed: {e}",

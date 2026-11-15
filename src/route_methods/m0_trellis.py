@@ -48,7 +48,7 @@ class M0TrellisRouteMethod(RouteMethod):
         call_kwargs.setdefault("allow_m1_tagging", False)
 
         planner = LatticePlanner(orchestrator=orch, topology_mode=topo)
-        return planner.plan(
+        res = planner.plan(
             prompt=prompt,
             tunnel=tunnel,
             relevance_map=relevance_map,
@@ -58,3 +58,10 @@ class M0TrellisRouteMethod(RouteMethod):
             ctx=ctx,
             **call_kwargs
         )
+        self.last_refusal = getattr(planner, "last_refusal", None)
+        if not res and self.last_refusal:
+            self.fallback_reason = (
+                f"planner refusal: {self.last_refusal.get('reason')}; "
+                f"missing: {self.last_refusal.get('uncovered_clauses')}"
+            )
+        return res

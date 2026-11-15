@@ -15,7 +15,12 @@ from log_config import get_logger
 try:
     from .external_rag import LiveDocFetcher
     from .inference import ModelManager
+    from .language_backend import get_active_language_backend
     from .lattice import TypeRegistry
+    from .security_policy import (
+        NON_OVERRIDABLE_BLOCKED_CALLS,
+        NON_OVERRIDABLE_BLOCKED_OS_OPS,
+    )
     from .utils import (
         extract_json_from_llm,
         validate_code_template,
@@ -26,7 +31,12 @@ try:
 except (ImportError, ValueError):
     from external_rag import LiveDocFetcher
     from inference import ModelManager
+    from language_backend import get_active_language_backend
     from lattice import TypeRegistry
+    from security_policy import (
+        NON_OVERRIDABLE_BLOCKED_CALLS,
+        NON_OVERRIDABLE_BLOCKED_OS_OPS,
+    )
     from utils import (
         extract_json_from_llm,
         validate_code_template,
@@ -83,30 +93,29 @@ class ASTCapabilityValidator(ast.NodeVisitor):
     FORBIDDEN_NAMES = _ForbiddenNamesDescriptor()
     FORBIDDEN_SIDE_EFFECT_METHODS = _ForbiddenSideEffectMethodsDescriptor()
 
+    _MOD_NS_CACHE: Dict[Tuple[int, int], Set[str]] = {}
+
     @classmethod
     def get_forbidden_side_effect_methods(cls) -> Set[str]:
-        methods: Set[str] = set()
+        methods: Set[str] = set(NON_OVERRIDABLE_BLOCKED_OS_OPS)
         try:
-            try:
-                from .lattice import TypeRegistry
-            except (ImportError, ValueError):
-                from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            methods.update(reg.get_verification_semantics("forbidden_side_effect_methods") or ())
+            methods.update(reg.get_forbidden_side_effects())
+            spec = reg.get_language_spec()
+            if spec is not None:
+                methods.update(getattr(spec, "forbidden_constructs", ()) or ())
         except Exception:
             pass
         return methods
 
     @classmethod
     def get_forbidden_names(cls) -> Set[str]:
-        names: Set[str] = set()
+        names: Set[str] = set(NON_OVERRIDABLE_BLOCKED_CALLS)
         try:
-            try:
-                from .lattice import TypeRegistry
-            except (ImportError, ValueError):
-                from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            names.update(reg.get_verification_semantics("forbidden_identifier_names") or ())
+            spec = reg.get_language_spec()
+            if spec is not None:
+                names.update(getattr(spec, "forbidden_identifiers", ()) or ())
         except Exception:
             pass
         return names
@@ -120,7 +129,9 @@ class ASTCapabilityValidator(ast.NodeVisitor):
             except (ImportError, ValueError):
                 from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            builtins.update(reg.get_verification_semantics("permitted_kernel_builtins") or ())
+            spec = reg.get_language_spec()
+            if spec is not None:
+                builtins.update(getattr(spec, "permitted_builtins", ()) or ())
         except Exception:
             pass
         return builtins
@@ -138,33 +149,29 @@ class ASTCapabilityValidator(ast.NodeVisitor):
             aliases = reg.get_all_aliases()
             namespaces.update(aliases.keys())
             namespaces.update(aliases.values())
-            namespaces.update(reg.get_all_libraries())
 
             orch = LatticeOrchestrator.get_active_instance()
             if orch:
-                for cell in getattr(orch, "loaded_cells", {}).values():
-                    for dep in getattr(cell, "dependencies", []) or []:
-                        dep_s = str(dep).strip()
-                        if not dep_s:
-                            continue
-                        try:
-                            parsed_dep = ast.parse(dep_s)
-                            for d_node in ast.walk(parsed_dep):
-                                if isinstance(d_node, ast.Import):
-                                    for alias_item in d_node.names:
-                                        namespaces.add(alias_item.name.split(".")[0])
-                                        if alias_item.asname:
-                                            namespaces.add(alias_item.asname)
-                                elif isinstance(d_node, ast.ImportFrom):
-                                    if d_node.module:
-                                        namespaces.add(d_node.module.split(".")[0])
-                                    for alias_item in d_node.names:
-                                        if alias_item.asname:
-                                            namespaces.add(alias_item.asname)
-                        except Exception:
-                            mod = dep_s.split()[0].split(".")[0]
-                            if mod.isidentifier():
-                                namespaces.add(mod)
+                loaded_cells = getattr(orch, "loaded_cells", {}) or {}
+                cache_key = (id(orch), len(loaded_cells))
+                cached = cls._MOD_NS_CACHE.get(cache_key)
+                if cached is not None:
+                    namespaces.update(cached)
+                else:
+                    orch_ns: Set[str] = set()
+                    for cell in loaded_cells.values():
+                        for dep in getattr(cell, "dependencies", []) or []:
+                            dep_s = str(dep).strip()
+                            if not dep_s:
+                                continue
+                            try:
+                                from .language_backend import get_active_language_backend
+                            except (ImportError, ValueError):
+                                from language_backend import get_active_language_backend
+                            be_ns = get_active_language_backend(reg)
+                            orch_ns.update(be_ns.extract_dependency_namespaces(dep_s))
+                    cls._MOD_NS_CACHE[cache_key] = orch_ns
+                    namespaces.update(orch_ns)
         except Exception:
             pass
         return namespaces
@@ -242,7 +249,7 @@ class ASTCapabilityValidator(ast.NodeVisitor):
             | local_assigned
             | self._active_permitted_modules
             | self._active_permitted_builtins
-            | {"self", "cls"}
+            | set(get_active_language_backend().method_receiver_names)
         )
         self.visit(tree)
         return (self.error is None, self.error)
@@ -383,10 +390,10 @@ class SynthesisEngine:
         except (ImportError, ValueError):
             from .lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        top_types = set(reg.get_verification_semantics("universal_top_types") or ())
-        empty_types = set(reg.get_verification_semantics("empty_carrier_types") or ())
-        path_type_names = set(reg.get_verification_semantics("path_type_names") or ())
-        path_tokens = set(reg.get_path_port_tokens() or ()) | path_type_names
+        top_types = reg.get_top_types_set()
+        empty_types = reg.get_void_types_set() | reg.get_bottom_types_set()
+        path_type_names = reg.get_types_by_kind("path")
+        path_tokens = set(reg.get_path_port_name_tokens() or ()) | path_type_names
 
         def _is_path_type(t_name: Optional[str]) -> bool:
             if not t_name:
@@ -412,21 +419,21 @@ class SynthesisEngine:
         is_sink = (not out_str or out_str in empty_types or is_path_out)
 
         if is_source and not is_sink:
-            role = "source"
+            is_ingress_mode, is_terminal_mode = True, False
         elif is_sink and not is_source:
-            role = "sink"
+            is_ingress_mode, is_terminal_mode = False, True
         elif is_source and is_sink:
             if not in_str or in_str in top_types or in_str in empty_types:
-                role = "source"
+                is_ingress_mode, is_terminal_mode = True, False
             else:
-                role = "sink"
+                is_ingress_mode, is_terminal_mode = False, True
         else:
-            role = "transformer"
+            is_ingress_mode, is_terminal_mode = False, False
 
         in_placeholder = "{input_locator}" if is_path_in else "{input_var}"
         out_placeholder = "{output_locator}" if is_path_out else "{output_var}"
 
-        if role == "source":
+        if is_ingress_mode:
             if is_path_in:
                 template_rule = (
                     "For Source (Initial / Ingress morphism with locator input), `code_template` MUST produce the primary output "
@@ -442,7 +449,7 @@ class SynthesisEngine:
                 )
                 input_spec = "{}"
                 sample_template = "{output_var} = <package>.<source_func>()"
-        elif role == "sink":
+        elif is_terminal_mode:
             if is_path_out:
                 template_rule = (
                     "For Sink (Terminal / Egress morphism with destination locator), `code_template` MUST consume `{input_var}` and "
@@ -540,18 +547,17 @@ def synthesize_and_register(
     if registry is None:
         return cell_dict
 
-    for method_name in ("register_cell", "add_cell", "register"):
-        method = getattr(registry, method_name, None)
-        if callable(method):
-            try:
-                method(cell_dict)
-                logger.info("[SYNTHESIS] registered synthesized cell '%s'", cell_dict.get("cell_id"))
-                return cell_dict
-            except Exception as exc:
-                logger.error("[SYNTHESIS] registry.%s failed: %s", method_name, exc)
-                return cell_dict
+    register_fn = getattr(registry, "register_cell", None)
+    if callable(register_fn):
+        try:
+            register_fn(cell_dict)
+            logger.info("[SYNTHESIS] registered synthesized cell '%s'", cell_dict.get("cell_id"))
+            return cell_dict
+        except Exception as exc:
+            logger.error("[SYNTHESIS] registry.register_cell failed: %s", exc)
+            return cell_dict
 
-    logger.warning("[SYNTHESIS] no compatible register method on registry; returning raw dict")
+    logger.warning("[SYNTHESIS] no register_cell method on registry; returning raw dict")
     return cell_dict
 
 
@@ -602,9 +608,9 @@ def _declared_loop_kind(cell: Any) -> Optional[str]:
         from .lattice import TypeRegistry
     reg = TypeRegistry.get_instance()
 
-    fold_kinds = set(reg.get_verification_semantics("fold_loop_kinds") or ())
-    collect_kinds = set(reg.get_verification_semantics("collect_loop_kinds") or ())
-    extremum_kinds = set(reg.get_verification_semantics("extremum_loop_kinds") or ())
+    fold_kinds = reg.get_roles_for_category("fold")
+    collect_kinds = reg.get_roles_for_category("collect")
+    extremum_kinds = reg.get_roles_for_category("extremum")
 
     if declared:
         d_lower = str(declared).lower()
@@ -616,11 +622,11 @@ def _declared_loop_kind(cell: Any) -> Optional[str]:
             return "extremum"
 
     topology = str(getattr(cell, "topology_type", "") or "").lower()
-    if topology in set(reg.get_verification_semantics("collect_loop_topologies") or ()):
+    if topology in collect_kinds:
         return "collect"
-    if topology in set(reg.get_verification_semantics("extremum_loop_topologies") or ()):
+    if topology in extremum_kinds:
         return "extremum"
-    if topology in set(reg.get_verification_semantics("fold_loop_topologies") or ()):
+    if topology in fold_kinds:
         return "fold"
     return None
 
@@ -660,9 +666,18 @@ def _unsanitize_ast_source(expr: str) -> str:
 
 
 def _template_assigns_var(rendered: str, var_name: str) -> bool:
-    """AST check: returns True iff `var_name` is assigned as a top-level target in `rendered`."""
+    """AST/backend check: returns True iff `var_name` is assigned as a target in `rendered`."""
     if not rendered or not var_name:
         return False
+    try:
+        try:
+            from .language_backend import get_active_language_backend
+        except (ImportError, ValueError):
+            from language_backend import get_active_language_backend
+        if var_name in get_active_language_backend().extract_assignment_targets(rendered):
+            return True
+    except Exception:
+        pass
     try:
         parsed = ast.parse(_sanitize_template_for_ast(rendered))
     except SyntaxError:
@@ -715,6 +730,15 @@ def _template_initializes_container(template: str, primary_out_name: Optional[st
     """
     if not template or not template.strip():
         return None
+    try:
+        try:
+            from .language_backend import get_active_language_backend
+        except (ImportError, ValueError):
+            from language_backend import get_active_language_backend
+        if not get_active_language_backend().is_python_ast:
+            return None
+    except Exception:
+        pass
     sanitized = _sanitize_template_for_ast(template)
     try:
         parsed = ast.parse(sanitized)
@@ -725,11 +749,11 @@ def _template_initializes_container(template: str, primary_out_name: Optional[st
     if primary_out_name:
         target_ids.add(f"_nstl_ph_{primary_out_name}")
 
-    constructors = {
-        "set": "set",
-        "dict": "dict", "OrderedDict": "dict", "defaultdict": "dict", "Counter": "dict",
-        "list": "list", "tuple": "tuple", "deque": "deque",
-    }
+    try:
+        from .language_backend import get_active_language_backend
+    except (ImportError, ValueError):
+        from language_backend import get_active_language_backend
+    constructors = get_active_language_backend().container_constructors
     for node in ast.walk(parsed):
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -766,6 +790,16 @@ def _detect_loop_item_var(template: str) -> Optional[str]:
     """
     if not template or not template.strip():
         return None
+    try:
+        try:
+            from .language_backend import get_active_language_backend
+        except (ImportError, ValueError):
+            from language_backend import get_active_language_backend
+        be_loop = get_active_language_backend()
+        if not be_loop.is_python_ast:
+            return be_loop.extract_loop_item_var(template)
+    except Exception:
+        pass
     sanitized = _sanitize_template_for_ast(template)
     try:
         parsed = ast.parse(sanitized)
@@ -837,19 +871,37 @@ def _resolve_direction_is_max(cell: Any, bindings: Dict[str, Any]) -> bool:
                 from .lattice import TypeRegistry
             except (ImportError, ValueError):
                 from lattice import TypeRegistry
-            order_ports = TypeRegistry.get_instance().get_verification_semantics("order_flag_names") or ()
+            reg_ord = TypeRegistry.get_instance()
+            order_ports = reg_ord.get_roles_for_category("direction") | reg_ord.get_roles_for_category("order")
         except Exception:
-            order_ports = ()
+            order_ports = set()
         for k in tuple(order_ports):
             if k in bindings and bindings[k] is not None:
                 raw = bindings[k]
                 break
     if raw is None:
         return True
+    try:
+        from .language_backend import get_active_language_backend
+    except (ImportError, ValueError):
+        from language_backend import get_active_language_backend
+    be_dir = get_active_language_backend()
+    ok_lit, parsed = be_dir.parse_literal(str(raw).strip())
+    if ok_lit and isinstance(parsed, (bool, int, float)):
+        return bool(parsed)
     s = str(raw).strip().strip("'\"").lower()
-    if s in ("false", "0"):
-        return False
-    return True
+    min_vals: Set[str] = set()
+    try:
+        try:
+            from .lattice import TypeRegistry
+        except (ImportError, ValueError):
+            from lattice import TypeRegistry
+        min_vals |= TypeRegistry.get_instance().get_roles_for_category("min_direction")
+    except Exception:
+        pass
+    for v in (getattr(cell, "min_direction_values", None) or (meta.get("min_direction_values") if isinstance(meta, dict) else None) or ()):
+        min_vals.add(str(v).strip().lower())
+    return s not in min_vals
 
 
 def render_cell(
@@ -1007,7 +1059,7 @@ def render_cell(
                 child_in_sig = getattr(p_sig, "signature", None)
                 matched_slot_var = None
                 literal_roles = (
-                    set(reg_syn.get_verification_semantics("literal_roles") or ())
+                    (reg_syn.get_roles_for_category("literal") | reg_syn.get_roles_for_category("config"))
                     if reg_syn is not None else set()
                 )
                 is_literal_port = (
@@ -1128,6 +1180,12 @@ def render_cell(
             )
             child_lines.append(update_block)
         elif is_collect_loop and last_metric is not None:
+            try:
+                from .language_backend import get_active_language_backend
+            except (ImportError, ValueError):
+                from language_backend import get_active_language_backend
+            be_col = get_active_language_backend(reg_syn)
+            tmpl_map = be_col.collection_append_templates
             container_type = init_container
             if container_type is None:
                 out_sig = getattr(cell, "primary_output", None)
@@ -1139,19 +1197,19 @@ def render_cell(
                         base_t = str(t_parsed.base or t_name).strip().lower()
                 except Exception:
                     base_t = t_name.split("[", 1)[0].strip() if "[" in t_name else t_name
-                if reg_syn is not None and (base_t == "set" or reg_syn.is_subtype(base_t, "set")):
-                    container_type = "set"
-                elif reg_syn is not None and (base_t in ("dict", "mapping") or reg_syn.is_subtype(base_t, "dict") or reg_syn.is_subtype(base_t, "mapping")):
-                    container_type = "dict"
-                else:
-                    container_type = "list"
+                if reg_syn is not None and tmpl_map:
+                    for cand_ct in tmpl_map:
+                        if base_t == cand_ct or reg_syn.is_subtype(base_t, cand_ct):
+                            container_type = cand_ct
+                            break
+                if container_type is None:
+                    container_type = next(iter(tmpl_map), "list")
 
-            if container_type == "set":
-                child_lines.append(f"{out_var}.add({last_metric})")
-            elif container_type == "dict":
-                child_lines.append(f"{out_var}[{item_var}] = {last_metric}")
-            else:
-                child_lines.append(f"{out_var}.append({last_metric})")
+            append_stmt = be_col.format_collection_append(
+                container_type, out_var, str(last_metric), key_expr=str(item_var)
+            )
+            if append_stmt:
+                child_lines.append(append_stmt)
         elif is_fold_loop and last_metric is not None:
             meta = getattr(cell, "tree_meta", None) or {}
             reducer = getattr(cell, "reducer", None)
@@ -1163,21 +1221,32 @@ def render_cell(
             elif reducer and str(reducer).isidentifier():
                 child_lines.append(f"{out_var} = {reducer}({out_var}, {last_metric})")
             else:
-                child_lines.append(f"{out_var} = {last_metric} if {out_var} is None else ({out_var} + {last_metric})")
+                null_lit = get_active_language_backend(reg_syn).null_literal
+                child_lines.append(f"{out_var} = {last_metric} if {out_var} is {null_lit} else ({out_var} + {last_metric})")
 
-        slot_rendered[slot_name] = "\n".join(child_lines) if child_lines else "pass"
+        try:
+            from .language_backend import get_active_language_backend
+        except (ImportError, ValueError):
+            from language_backend import get_active_language_backend
+        be_loop_end = get_active_language_backend(reg_syn)
+        slot_rendered[slot_name] = "\n".join(child_lines) if child_lines else be_loop_end.noop_statement
         if last_metric is not None:
             slot_last_out[slot_name] = last_metric
 
     rendered = template
+    try:
+        from .language_backend import get_active_language_backend
+    except (ImportError, ValueError):
+        from language_backend import get_active_language_backend
+    be_rend = get_active_language_backend(reg_syn)
     if is_extremum_loop and not _template_assigns_var(rendered, metric_var):
-        rendered = f"{metric_var} = None\n" + rendered
+        rendered = f"{metric_var} {be_rend.assignment_operator} {be_rend.null_literal}\n" + rendered
     elif is_fold_loop and not _template_assigns_var(rendered, out_var):
         init_val = getattr(cell, "init_val", None)
         if init_val is None and isinstance(getattr(cell, "tree_meta", None), dict):
             init_val = cell.tree_meta.get("init_val") or cell.tree_meta.get("initial_value")
-        init_expr = str(init_val) if init_val is not None else "None"
-        rendered = f"{out_var} = {init_expr}\n" + rendered
+        init_expr = str(init_val) if init_val is not None else be_rend.null_literal
+        rendered = f"{out_var} {be_rend.assignment_operator} {init_expr}\n" + rendered
 
     # Map macro slot names to non-predicate HOF ports when the template uses
     # functional call syntax (e.g. ({body_fn})(_state)) rather than {body}.
@@ -1265,24 +1334,38 @@ def render_cell(
                 )
                 new_lines.append(indented_slot)
                 slot_out_var = slot_last_out.get(slot_name)
-                # Inspect the sanitized AST statement to preserve `return` or assignment LHS
+                # Inspect the sanitized AST statement (when Python AST backend is active)
+                # to preserve `return` or assignment LHS, else delegate to LanguageBackend.
                 stmt_node = None
                 try:
-                    src_probe = _sanitize_template_for_ast(stripped)
-                    if stripped.endswith(":"):
-                        src_probe = src_probe + "\n    pass"
-                    parsed_stmt = ast.parse(src_probe)
-                    stmt_node = parsed_stmt.body[0] if parsed_stmt.body else None
-                except SyntaxError:
-                    stmt_node = None
+                    from .language_backend import get_active_language_backend
+                except (ImportError, ValueError):
+                    from language_backend import get_active_language_backend
+                be_syn = get_active_language_backend()
+                if be_syn.is_python_ast:
+                    try:
+                        src_probe = _sanitize_template_for_ast(stripped)
+                        if be_syn.block_suffix and stripped.endswith(be_syn.block_suffix):
+                            src_probe = src_probe + f"\n    {be_syn.noop_statement}"
+                        parsed_stmt = ast.parse(src_probe)
+                        stmt_node = parsed_stmt.body[0] if parsed_stmt.body else None
+                    except SyntaxError:
+                        stmt_node = None
                 if isinstance(stmt_node, ast.Return):
-                    ret_expr = slot_out_var or bindings.get("output_var") or "None"
-                    new_lines.append(f"{base_indent}return {ret_expr}")
+                    ret_expr = slot_out_var or bindings.get("output_var") or be_syn.null_literal
+                    new_lines.append(f"{base_indent}{be_syn.return_keyword} {ret_expr}")
                 elif isinstance(stmt_node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
                     raw_tgt = stmt_node.targets[0] if isinstance(stmt_node, ast.Assign) else stmt_node.target
                     lhs_target = _unsanitize_ast_source(ast.unparse(raw_tgt)).strip()
                     if lhs_target and slot_out_var and lhs_target != slot_out_var:
                         new_lines.append(f"{base_indent}{lhs_target} = {slot_out_var}")
+                elif stmt_node is None:
+                    lhs_targets = be_syn.extract_assignment_targets(stripped)
+                    if lhs_targets and slot_out_var and lhs_targets[0] != slot_out_var:
+                        term_s = be_syn.statement_terminator
+                        op_s = be_syn.assignment_operator
+                        decl_p = be_syn.declaration_prefixes[0] + " " if be_syn.declaration_prefixes else ""
+                        new_lines.append(f"{base_indent}{decl_p}{lhs_targets[0]} {op_s} {slot_out_var}{term_s}")
                 replaced = True
             else:
                 new_lines.append(line)

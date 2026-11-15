@@ -41,15 +41,7 @@ VALID_PORT_ROLES = {
     "destination", "result", "receiver", "parameter"
 }
 
-COLOR_IMAGE_STATES = {
-    "mode_rgb", "mode_rgba", "mode_bgr", "mode_cmyk", "mode_hsv", "mode_lab", "mode_ycbcr"
-}
-
-GRAY_IMAGE_STATES = {
-    "mode_grayscale", "mode_binary_1bit", "mode_palette", "mode_int32", "mode_float32"
-}
-
-UNIVERSAL_STATES = {"any", "*", "default", "unregistered", ""}
+UNIVERSAL_STATES = {"any", "*", "default", "unregistered", "unbound", ""}
 
 
 def lint_tree_file(path: str) -> List[str]:
@@ -71,21 +63,43 @@ def lint_tree_file(path: str) -> List[str]:
 
     domain = tree.domain
 
-    # 2. Extract registered typestates
+    # 2. Extract registered typestates and type metadata
     registered_states: Set[str] = set()
+    state_props_map: Dict[str, Dict[str, Any]] = {}
     ts_block = data.get("typestates")
     if isinstance(ts_block, dict):
         for s in ts_block.get("states", []):
             if isinstance(s, dict) and "name" in s:
-                registered_states.add(str(s["name"]).strip().lower())
+                sname = str(s["name"]).strip().lower()
+                registered_states.add(sname)
+                if isinstance(s.get("properties"), dict):
+                    state_props_map[sname] = s["properties"]
             elif isinstance(s, str):
                 registered_states.add(s.strip().lower())
     elif isinstance(ts_block, list):
         for s in ts_block:
             if isinstance(s, dict) and "name" in s:
-                registered_states.add(str(s["name"]).strip().lower())
+                sname = str(s["name"]).strip().lower()
+                registered_states.add(sname)
+                if isinstance(s.get("properties"), dict):
+                    state_props_map[sname] = s["properties"]
             elif isinstance(s, str):
                 registered_states.add(s.strip().lower())
+
+    type_kind_map: Dict[str, str] = {}
+    raw_types = data.get("types")
+    if isinstance(raw_types, dict):
+        for tk, tv in raw_types.items():
+            if isinstance(tv, dict) and tv.get("kind"):
+                type_kind_map[str(tk).strip().lower()] = str(tv["kind"]).strip().lower()
+    elif isinstance(raw_types, list):
+        for tv in raw_types:
+            if isinstance(tv, dict) and (tv.get("name") or tv.get("type_name")) and tv.get("kind"):
+                type_kind_map[str(tv.get("name") or tv.get("type_name")).strip().lower()] = str(tv["kind"]).strip().lower()
+
+    path_tokens = {str(t).strip().lower() for t in (tree.path_port_tokens or [])}
+    for tok_list in (tree.carrier_roles or {}).get("source_data", ()):
+        path_tokens.add(str(tok_list).strip().lower())
 
     # 3. Check cells and ports
     for cell in tree.cells:
@@ -120,26 +134,24 @@ def lint_tree_file(path: str) -> List[str]:
                 rank = port.rank
                 tn = str(port.type_name or "").strip()
 
-                if (tn.startswith("List[") or tn in ("list", "sequence")) and rank == 0:
+                if (type_kind_map.get(tn.lower()) == "collection" or tn.startswith("List[") or tn in ("list", "sequence")) and rank == 0:
                     violations.append(f"{p_loc}: collection type '{tn}' cannot have rank 0 (rank 0 denotes scalar)")
 
-                if (tn.startswith("List[") or tn in ("list", "sequence")) and sk == "handle":
+                if (type_kind_map.get(tn.lower()) == "collection" or tn.startswith("List[") or tn in ("list", "sequence")) and sk == "handle":
                     violations.append(f"{p_loc}: collection type '{tn}' cannot have structure_kind 'handle'")
 
-                if tn in ("Axes", "Figure") and sk == "tensor":
-                    violations.append(f"{p_loc}: canvas handle '{tn}' cannot have structure_kind 'tensor'")
+                if type_kind_map.get(tn.lower()) == "visual" and sk == "tensor":
+                    violations.append(f"{p_loc}: visual handle '{tn}' cannot have structure_kind 'tensor'")
 
-                # Pillow RGB/RGBA rank convention
-                if domain == "pillow":
+                # Declarative state expected_rank check (driven cleanly by typestates[].properties.expected_rank)
+                expected_rank = state_props_map.get(st, {}).get("expected_rank")
+                if expected_rank is not None:
                     is_poly = False
                     if isinstance(raw_sc, (dict, ShapeContractSchema)):
                         sc_d = raw_sc.model_dump() if isinstance(raw_sc, ShapeContractSchema) else raw_sc
                         is_poly = bool(sc_d.get("rank_polymorphic"))
-
-                    if st in COLOR_IMAGE_STATES and not is_poly and rank != 3:
-                        violations.append(f"{p_loc}: Pillow color image mode '{port.state}' must have rank 3, got rank {rank}")
-                    elif st in GRAY_IMAGE_STATES and not is_poly and rank != 2:
-                        violations.append(f"{p_loc}: Pillow grayscale image mode '{port.state}' must have rank 2, got rank {rank}")
+                    if not is_poly and rank != expected_rank:
+                        violations.append(f"{p_loc}: state '{port.state}' must have rank {expected_rank}, got rank {rank}")
 
                 # Required non-ingress scalar ports
                 if port_type == "in" and port.required:
@@ -147,8 +159,12 @@ def lint_tree_file(path: str) -> List[str]:
                     is_scalar = (sk == "scalar") or (rank == 0 and at in ("scalar", "primitive", "standard", "logical", "text"))
                     if is_scalar:
                         role = str(port.port_role or port.role or "").strip().lower()
-                        # Exclude S1 ingress source data
-                        if role in ("source_data", "source_identifier") or (stage == 1 and p_name in ("filepath", "file_path", "database_path", "image_path")):
+                        # Exclude S1 ingress source data / path ports
+                        if (
+                            role in ("source_data", "source_identifier")
+                            or at == "path"
+                            or (stage == 1 and (p_name.lower() in path_tokens or tn.lower() in path_tokens or type_kind_map.get(tn.lower()) == "path"))
+                        ):
                             continue
                         if not role:
                             violations.append(f"{p_loc}: required scalar port missing port_role")

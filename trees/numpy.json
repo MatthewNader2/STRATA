@@ -185,7 +185,9 @@
         "carrier_type": "scalar",
         "description": "Serialized contiguous raw byte buffer or native Python list collection",
         "properties": {
-          "format": "buffer"
+          "format": "buffer",
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -208,7 +210,10 @@
         "name": "file_path_str",
         "parent_state": "source_identifier",
         "carrier_type": "str",
-        "description": "Declared by data migration (formerly engine bootstrap state 'file_path_str')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'file_path_str').",
+        "properties": {
+          "is_source_identifier": true
+        }
       },
       {
         "name": "flag",
@@ -336,7 +341,9 @@
         "carrier_type": "scalar",
         "description": "Persisted binary serialized NPY format on local filesystem",
         "properties": {
-          "format": "npy"
+          "format": "npy",
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -345,7 +352,9 @@
         "carrier_type": "scalar",
         "description": "Persisted uncompressed or compressed NPZ archive containing multiple arrays",
         "properties": {
-          "format": "npz"
+          "format": "npz",
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -3347,7 +3356,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 16384,
+          "default_value": 4,
           "description": "Number of rows in output",
           "domain": "numpy",
           "required": true,
@@ -3556,7 +3565,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 16384,
+          "default_value": 4,
           "description": "Dimension of square matrix",
           "domain": "numpy",
           "required": true,
@@ -14818,7 +14827,7 @@
         "persist",
         "disk"
       ],
-      "code_template": "np.save({file_path}, {array})",
+      "code_template": "np.save({file_path}, {array})\n{output_var} = {file_path}",
       "slots": {},
       "bound_slots": {},
       "feedback_state_type": null,
@@ -14970,7 +14979,7 @@
         "archive",
         "npz"
       ],
-      "code_template": "np.savez_compressed({file_path}, data={array})",
+      "code_template": "np.savez_compressed({file_path}, data={array})\n{output_var} = {file_path}",
       "slots": {},
       "bound_slots": {},
       "feedback_state_type": null,
@@ -15266,7 +15275,7 @@
         "write",
         "file"
       ],
-      "code_template": "{array}.tofile({file_path}, sep={sep}, format={format})",
+      "code_template": "{array}.tofile({file_path}, sep={sep}, format={format})\n{output_var} = {file_path}",
       "slots": {
         "sep": "''",
         "format": "'%s'"
@@ -16588,22 +16597,62 @@
       "parent": "ArrayFormat"
     },
     "ndarray": {
-      "parent": "array-like"
+      "parent": "array-like",
+      "kind": "array",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isnan"
+        ]
+      }
     },
     "matrix": {
-      "parent": "array-like"
+      "parent": "array-like",
+      "kind": "array",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isnan"
+        ]
+      }
     },
     "array-like": {
-      "parent": "tensor"
+      "parent": "tensor",
+      "kind": "array",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isnan"
+        ]
+      }
     },
     "tensor": {
-      "parent": "sequence"
+      "parent": "sequence",
+      "kind": "array",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isnan"
+        ]
+      }
     },
     "arrayformat": {
       "parent": "format"
     },
     "buffer": {
-      "parent": "tensor"
+      "parent": "tensor",
+      "kind": "array",
+      "properties": {
+        "is_composite": true,
+        "is_compound_structure": true,
+        "missing_value_methods": [
+          "isnan"
+        ]
+      }
     }
   },
   "mock_fixtures": [
@@ -16635,41 +16684,5 @@
     "npz",
     "txt",
     "csv"
-  ],
-  "role_semantics": {
-    "array_types": [
-      "ndarray",
-      "tensor",
-      "matrix",
-      "array"
-    ],
-    "composite_carrier_roots": [
-      "ndarray",
-      "tensor",
-      "matrix",
-      "array",
-      "array-like",
-      "buffer"
-    ],
-    "tensor_context_tokens": [
-      "array",
-      "tensor",
-      "matrix",
-      "vector",
-      "ndarray",
-      "shape",
-      "axis",
-      "ndim"
-    ],
-    "rank_tokens": [
-      "1d",
-      "2d",
-      "3d",
-      "nd",
-      "ndim",
-      "rank",
-      "shape",
-      "axis"
-    ]
-  }
+  ]
 }

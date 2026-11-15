@@ -295,9 +295,9 @@ class TestRound5Verification(unittest.TestCase):
         set_cell.matched_clause_idx = 2
 
         valid_bindings = [
-            (read_cell, {"filepath_or_buffer": "'input.csv'", "output_var": "var_1"}),
+            (read_cell, {"filepath": "'input.csv'", "output_var": "var_1"}),
             (fft_cell, {"a": "var_1['X']", "output_var": "var_2"}),
-            (set_cell, {"port_0": "var_1", "port_1": "'Z'", "port_2": "var_2", "output_var": "var_3"}),
+            (set_cell, {"df": "var_1", "column": "'Z'", "value": "var_2", "output_var": "var_3"}),
         ]
         res_ok = PreflightLinter.lint(valid_bindings, prompt=prompt)
         mismatches_ok = [v for v in res_ok.structured_violations if v.check_id == "provenance_mismatch"]
@@ -311,16 +311,16 @@ class TestRound5Verification(unittest.TestCase):
         set_cell.matched_clause_idx = 4
 
         bad_bindings = [
-            (read_cell, {"filepath_or_buffer": "'input.csv'", "output_var": "var_1"}),
+            (read_cell, {"filepath": "'input.csv'", "output_var": "var_1"}),
             (fft_cell, {"a": "var_1['X']", "output_var": "var_2"}),
-            (dropna_cell, {"data": "var_1", "output_var": "var_3"}),
-            (describe_cell, {"data": "var_3", "output_var": "var_4"}),
-            (set_cell, {"port_0": "var_3", "port_1": "'W'", "port_2": "var_2", "output_var": "var_5"}),
+            (dropna_cell, {"df": "var_1", "output_var": "var_3"}),
+            (describe_cell, {"df": "var_3", "output_var": "var_4"}),
+            (set_cell, {"df": "var_3", "column": "'W'", "value": "var_2", "output_var": "var_5"}),
         ]
         res_bad = PreflightLinter.lint(bad_bindings, prompt=prompt_long)
         mismatches_bad = [v for v in res_bad.structured_violations if v.check_id == "provenance_mismatch"]
         self.assertGreater(len(mismatches_bad), 0, "Expected provenance_mismatch for cross-clause non-adjacent binding")
-        self.assertEqual(mismatches_bad[0].port_name, "port_2")
+        self.assertEqual(mismatches_bad[0].port_name, "value")
 
     def test_probe_8_coverage_floor_refusal_naming_missing_clause(self):
         """

@@ -12,7 +12,6 @@ Trained self-supervised via contrastive negative sampling over tree edges in <2 
 
 from __future__ import annotations
 import math
-import re
 from typing import Dict, List, Optional, Set, Tuple, Any, Union, Collection
 import numpy as np
 
@@ -33,8 +32,31 @@ def _hash_u64(text: str, salt: int = 0) -> int:
 
 
 def _split_camel_and_punct(text: str) -> List[str]:
-    expanded = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
-    return [t.lower() for t in re.split(r"[^A-Za-z0-9]+", expanded) if t]
+    """Splits identifiers on camelCase/digit/punctuation boundaries without regex."""
+    tokens: List[str] = []
+    buf: List[str] = []
+    n = len(text or "")
+    for i, ch in enumerate(text or ""):
+        if not ch.isalnum():
+            if buf:
+                tokens.append("".join(buf).lower())
+                buf = []
+            continue
+        if buf:
+            prev = buf[-1]
+            if (
+                (prev.islower() and ch.isupper())
+                or (prev.isupper() and ch.isupper() and i + 1 < n and text[i + 1].islower())
+                or (prev.isalpha() and ch.isdigit())
+                or (prev.isdigit() and ch.isalpha())
+            ):
+                tokens.append("".join(buf).lower())
+                buf = [ch]
+                continue
+        buf.append(ch)
+    if buf:
+        tokens.append("".join(buf).lower())
+    return tokens
 
 
 def _extract_structural_features(text: str, is_typestate: bool = True) -> List[Tuple[str, float]]:
@@ -46,10 +68,30 @@ def _extract_structural_features(text: str, is_typestate: bool = True) -> List[T
     feats: List[Tuple[str, float]] = []
 
     if is_typestate:
-        # Canonical format: BaseType[state]{q1,q2} or general phrase
-        state_match = re.search(r"\[([^\]]+)\]", s)
-        qual_match = re.search(r"\{([^}]+)\}", s)
-        base_part = re.sub(r"\[[^\]]*\]|\{[^}]*\}", " ", s).strip()
+        # Canonical format: BaseType[state]{q1,q2} or general phrase (parsed without regex)
+        state_str = ""
+        qual_str = ""
+        base_chars: List[str] = []
+        i = 0
+        n = len(s)
+        while i < n:
+            if s[i] == "[" and not state_str:
+                end = s.find("]", i + 1)
+                if end != -1:
+                    state_str = s[i + 1 : end]
+                    base_chars.append(" ")
+                    i = end + 1
+                    continue
+            if s[i] == "{" and not qual_str:
+                end = s.find("}", i + 1)
+                if end != -1:
+                    qual_str = s[i + 1 : end]
+                    base_chars.append(" ")
+                    i = end + 1
+                    continue
+            base_chars.append(s[i])
+            i += 1
+        base_part = "".join(base_chars).strip()
 
         if base_part:
             if " " not in base_part:
@@ -58,20 +100,20 @@ def _extract_structural_features(text: str, is_typestate: bool = True) -> List[T
             for tok in base_toks:
                 feats.append((f"tok:{tok}", 1.2))
                 if len(tok) >= 3:
-                    for i in range(len(tok) - 2):
-                        feats.append((f"tri:{tok[i:i+3]}", 0.30))
-            for i in range(len(base_toks) - 1):
-                feats.append((f"big:{base_toks[i]}_{base_toks[i+1]}", 0.65))
+                    for j in range(len(tok) - 2):
+                        feats.append((f"tri:{tok[j:j+3]}", 0.30))
+            for j in range(len(base_toks) - 1):
+                feats.append((f"big:{base_toks[j]}_{base_toks[j+1]}", 0.65))
 
-        if state_match:
-            st_raw = state_match.group(1).strip().lower()
+        if state_str:
+            st_raw = state_str.strip().lower()
             feats.append((f"state_raw:{st_raw}", 1.2))
             for st_tok in _split_camel_and_punct(st_raw):
                 feats.append((f"state:{st_tok}", 0.9))
                 feats.append((f"tok:{st_tok}", 0.5))
 
-        if qual_match:
-            for q in qual_match.group(1).split(","):
+        if qual_str:
+            for q in qual_str.split(","):
                 qn = q.strip().lower()
                 if qn:
                     feats.append((f"qual_raw:{qn}", 1.0))
@@ -212,12 +254,7 @@ class TransitionAutoencoder:
         Optimizes ||z_{tau_in} + t_c - z_{tau_out}||_2^2 + margin-contrastive negative sampling.
         """
         if not triples:
-            # Fallback canonical triples if graph is completely empty
-            triples = [
-                ("__start__", "init_op", "data"),
-                ("data", "transform_op", "processed"),
-                ("processed", "sink_op", "__end__"),
-            ]
+            raise ValueError("TransitionAutoencoder.train requires non-empty transition triples.")
 
         # 1. Build index mappings
         type_set = set()
@@ -302,8 +339,20 @@ class TransitionAutoencoder:
     def encode_signature(self, sig: Union[Any, str]) -> np.ndarray:
         """Projects a discrete typestate signature tau into the continuous manifold z_tau in R^d."""
         s = _canonical_typestate_str(sig)
-        if self.is_trained and self.Z is not None and s in self.typestate_to_idx:
-            return self.Z[self.typestate_to_idx[s]].copy()
+        if self.is_trained and self.Z is not None:
+            if s in self.typestate_to_idx:
+                return self.Z[self.typestate_to_idx[s]].copy()
+            carrier_prefix = s.split("[", 1)[0].split("{", 1)[0].strip().lower()
+            if carrier_prefix and carrier_prefix not in ("any", "__any__", "unknown"):
+                matched_rows = [
+                    idx
+                    for k, idx in self.typestate_to_idx.items()
+                    if k.split("[", 1)[0].split("{", 1)[0].strip().lower() == carrier_prefix
+                ]
+                if matched_rows:
+                    avg = self.Z[matched_rows].mean(axis=0).astype(np.float32)
+                    norm = float(np.linalg.norm(avg))
+                    return (avg / norm).astype(np.float32) if norm > 1e-9 else avg
 
         # Deterministic compositional structural/vocabulary projection (zero MD5 RNG)
         return _project_compositional_features(
@@ -313,8 +362,36 @@ class TransitionAutoencoder:
 
     def encode_cell(self, cell_id: str) -> np.ndarray:
         """Projects a cell morphism c into the continuous translation manifold t_c in R^d."""
-        if self.is_trained and self.T is not None and cell_id in self.cell_to_idx:
-            return self.T[self.cell_to_idx[cell_id]].copy()
+        if self.is_trained and self.T is not None:
+            if cell_id in self.cell_to_idx:
+                return self.T[self.cell_to_idx[cell_id]].copy()
+            toks = _split_camel_and_punct(cell_id)
+            base_tok = toks[-1] if toks else ""
+            dom_tok = toks[0] if len(toks) >= 2 else ""
+            matched_rows: List[int] = []
+            if dom_tok and base_tok:
+                matched_rows = [
+                    idx
+                    for k, idx in self.cell_to_idx.items()
+                    if (kt := _split_camel_and_punct(k)) and len(kt) >= 2 and kt[0] == dom_tok and kt[-1] == base_tok
+                ]
+            if not matched_rows and base_tok:
+                matched_rows = [
+                    idx
+                    for k, idx in self.cell_to_idx.items()
+                    if (kt := _split_camel_and_punct(k)) and kt[-1] == base_tok
+                ]
+            if not matched_rows and "::" in cell_id:
+                prefix = cell_id.split("::", 1)[0].lower()
+                matched_rows = [
+                    idx
+                    for k, idx in self.cell_to_idx.items()
+                    if k.lower().startswith(prefix + "::")
+                ]
+            if matched_rows:
+                avg = self.T[matched_rows].mean(axis=0).astype(np.float32)
+                norm = float(np.linalg.norm(avg))
+                return (avg / norm).astype(np.float32) if norm > 1e-9 else avg
 
         # Deterministic compositional identifier/token projection (zero MD5 RNG)
         return _project_compositional_features(

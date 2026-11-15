@@ -109,7 +109,9 @@
         "carrier_type": "Figure",
         "description": "Figure that has been serialized and persisted to disk storage.",
         "properties": {
-          "persisted": true
+          "persisted": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -218,6 +220,13 @@
         "description": "Axes containing violin kernel density representations.",
         "properties": {
           "plot_type": "violin"
+        }
+      },
+      {
+        "name": "figure_closed",
+        "properties": {
+          "is_terminal": true,
+          "is_invalid": true
         }
       }
     ],
@@ -13648,17 +13657,61 @@
   "types": {
     "Figure": {
       "parent": "Canvas",
-      "description": "matplotlib.figure.Figure instance"
+      "description": "matplotlib.figure.Figure instance",
+      "kind": "visual",
+      "properties": {
+        "is_visual": true,
+        "render_hooks": [
+          "canvas",
+          "savefig",
+          "render",
+          "show",
+          "to_image"
+        ]
+      }
     },
     "Axes": {
       "parent": "Canvas",
-      "description": "matplotlib.axes.Axes subplot instance"
+      "description": "matplotlib.axes.Axes subplot instance",
+      "kind": "visual",
+      "properties": {
+        "is_visual": true,
+        "render_hooks": [
+          "canvas",
+          "savefig",
+          "render",
+          "show",
+          "to_image"
+        ]
+      }
     },
     "Canvas": {
-      "parent": "object"
+      "parent": "object",
+      "kind": "visual",
+      "properties": {
+        "is_visual": true,
+        "render_hooks": [
+          "canvas",
+          "savefig",
+          "render",
+          "show",
+          "to_image"
+        ]
+      }
     },
     "Plot": {
-      "parent": "Modality"
+      "parent": "Modality",
+      "kind": "visual",
+      "properties": {
+        "is_visual": true,
+        "render_hooks": [
+          "canvas",
+          "savefig",
+          "render",
+          "show",
+          "to_image"
+        ]
+      }
     },
     "PDF": {
       "parent": "Format"
@@ -13673,22 +13726,6 @@
   "capabilities": {
     "headless_environment": [
       "MPLBACKEND=Agg"
-    ]
-  },
-  "role_semantics": {
-    "render_hooks": [
-      "canvas",
-      "savefig",
-      "render",
-      "show",
-      "to_image"
-    ],
-    "visual_types": [
-      "Figure",
-      "Plot"
-    ],
-    "visual_intent_keys": [
-      "visualization_egress"
     ]
   }
 }

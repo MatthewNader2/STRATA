@@ -4,7 +4,6 @@ Extracts common patterns to eliminate code duplication.
 """
 
 from __future__ import annotations
-import ast
 import json
 import string
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -12,6 +11,10 @@ try:
     from log_config import get_logger
 except ImportError:
     from .log_config import get_logger
+try:
+    from language_backend import get_active_language_backend
+except ImportError:
+    from .language_backend import get_active_language_backend
 
 logger = get_logger('utils')
 
@@ -70,14 +73,12 @@ def safe_substitute_template(template: str, bindings: Dict[str, Any]) -> str:
                         stripped = val.strip()
                         if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in ("'", '"'):
                             unquoted = stripped[1:-1].strip()
-                            # Host-language Python identifier positions: callee, def name, def params, except type,
-                            # or reference to a function/param declared earlier in this same template block.
                             cur_line = "".join(res).rsplit("\n", 1)[-1]
                             cur_lstrip = cur_line.lstrip()
                             is_callee = j + 1 < n and template[j + 1] == "("
-                            is_def_name = cur_lstrip == "def "
-                            is_def_params = cur_lstrip.startswith("def ") and "(" in cur_lstrip and ")" not in cur_lstrip
-                            is_except_type = cur_lstrip == "except "
+                            is_def_name, is_def_params, is_except_type = (
+                                get_active_language_backend().fn_declaration_position(cur_lstrip)
+                            )
                             if is_def_name and unquoted.isidentifier():
                                 val = unquoted
                                 scope_fns.add(unquoted)
@@ -203,23 +204,14 @@ extract_json_object = extract_json_from_llm
 
 
 def validate_code_template(template: str) -> bool:
-    """Validates a code template by substituting placeholders with dummy identifiers.
-    
-    Used by: cli.py, schema.py, synthesis.py
-    Returns True if the template parses as valid Python after placeholder substitution.
+    """Validates a code template via the active core LanguageBackend.
+
+    Used by: cli.py, synthesis.py, node_resolver.py
     """
     if not template or not template.strip():
         return False
-    
-    placeholders = set(extract_template_placeholders(template))
-    test_code = template
-    for ph in placeholders:
-        test_code = test_code.replace(f"{{{ph}}}", f"_ph_{ph}")
-    try:
-        ast.parse(test_code)
-        return True
-    except SyntaxError:
-        return False
+    ok, _ = get_active_language_backend().validate_syntax(template, allow_placeholders=True)
+    return ok
 
 
 def extract_code_from_llm_response(text: str) -> str:

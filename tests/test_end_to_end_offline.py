@@ -33,9 +33,9 @@ from unification import (
 )
 
 BENCHMARK_PROMPT = (
-    'load a csv file named "input.csv", normalize X column, drop null values, '
-    'get the mean of the Y column, and perform FFT and write it to a new column called Z, '
-    'then make a regression model trained on X and Y to predict Z'
+    'load a csv file named "input.csv", normalize "X" column, drop null values, '
+    'get the mean of the "Y" column, and perform FFT and write it to a new column called "Z", '
+    'then make a regression model trained on "X" and "Y" to predict "Z"'
 )
 
 # Fixed paths (cell ids looked up case-insensitively from the lattice).
@@ -181,7 +181,7 @@ class TestQualifierFlattening(unittest.TestCase):
             name="out",
             signature=AlgebraicSignature(
                 type_name="ndarray",
-                state="nd_tensor",
+                state="scaled_features",
                 qualifiers=frozenset({quals}) if not isinstance(quals, str) else quals,
             ),
         )

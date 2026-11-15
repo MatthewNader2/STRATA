@@ -27,7 +27,7 @@ from log_config import get_logger
 
 logger = get_logger("route_methods.m8")
 
-from .base import RouteMethod, is_terminal_sink, _clause_has_egress_intent, is_macro_cell, _fmt_port_sig
+from .base import RouteMethod, is_terminal_sink, _clause_has_egress_intent, is_macro_cell, _fmt_port_sig, is_combinator_cell
 from lattice import Cell, LatticeOrchestrator, TypeRegistry
 from unification import ExecutionContext
 from inference import ModelManager
@@ -120,12 +120,6 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
         **kwargs
     ) -> List[Cell]:
         self._current_prompt = prompt
-        try:
-            from inference import ModelManager
-        except (ImportError, ValueError):
-            from ..inference import ModelManager
-        if not ModelManager.get_instance().can_synthesize():
-            return []
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
@@ -139,10 +133,14 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ] or [tunnel[0]]
+        try:
+            from inference import ModelManager
+        except (ImportError, ValueError):
+            from ..inference import ModelManager
         mm = ModelManager.get_instance()
         has_llm = mm.can_synthesize()
 
@@ -151,7 +149,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []
 
-        if not has_llm:
+        if not has_llm or not ModelManager.get_instance().can_synthesize():
             return _fallback("no LLM loaded in this profile")
 
         shown = self.select_stratified_candidates(prompt, candidates, relevance_map, orchestrator=orch, max_shown=MAX_SHOWN_CANDIDATES)
@@ -345,8 +343,11 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                 logger.debug("[M8] ModelManager generate_text failed: %s", e)
                 chosen_id = None
 
-            reg = TypeRegistry.get_instance()
-            stop_tokens = {str(t).upper() for t in (reg.get_verification_semantics("stopping_tokens") or ())}
+            try:
+                from config import settings as _m8_settings
+            except (ImportError, ValueError):
+                from ..config import settings as _m8_settings
+            stop_tokens = {str(t).upper() for t in (_m8_settings.agent_stopping_tokens or ())}
             if chosen_id and chosen_id.upper() in stop_tokens:
                 if uncovered_indices:
                     chosen_id = None
@@ -463,19 +464,13 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             aud = audit(path, prompt, orch)
             if aud.get("available") and any(iss.get("kind") == "clause_unserved" for iss in aud.get("issues", [])):
                 return _fallback("LLM proposed path has unserved clauses")
-            from unification import UnificationGate, ExecutionContext
-            from preflight import PreflightLinter
-            _gate = UnificationGate(orchestrator=orch)
-            _tctx = ExecutionContext(prompt=prompt)
-            _ur = _gate.unify_pipeline(path, _tctx, extract_llm_slots=False)
-            if _ur.is_bottom():
-                return _fallback("LLM proposed path does not unify (bottom)")
-            _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
-            _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code)
-            if not _lint.is_valid:
-                return _fallback(f"LLM proposed path has pre-flight violations: {_lint.violations[0][:100]}")
-        except Exception:
-            pass
+            _verr = self.verify_planned_path(path, prompt, orch, ctx=ctx)
+            if _verr:
+                return _fallback(_verr)
+        except Exception as _chk_exc:
+            if type(_chk_exc).__name__ in ("UnificationFailure", "UnresolvedPlaceholderError"):
+                return _fallback(f"M8 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
+            logger.debug("[M8] Verification check skipped: %s", _chk_exc)
 
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
         return path[:max_allowed]

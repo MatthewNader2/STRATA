@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 import numpy as np
 
-from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell
+from .base import RouteMethod, _clause_has_egress_intent, is_macro_cell, is_combinator_cell
 
 try:
     from ..lattice import Cell, LatticeOrchestrator, TypeRegistry
@@ -47,10 +47,7 @@ def _get_sink_roles(orchestrator: Optional[LatticeOrchestrator] = None) -> Set[s
     roles: Set[str] = set()
     try:
         reg = TypeRegistry.get_instance()
-        for key in ("sink_roles", "terminal_roles", "egress_roles"):
-            for r in reg.get_verification_semantics(key):
-                if r:
-                    roles.add(str(r).strip().lower())
+        roles |= reg.get_terminal_roles_set() | reg.get_roles_for_category("sink") | reg.get_roles_for_category("terminal_output")
     except Exception as e:
         logger.debug("[M11] TypeRegistry sink_roles lookup error: %s", e)
 
@@ -157,12 +154,7 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (
-                        getattr(c, "is_combinator", False)
-                        or getattr(c, "node_role", "") == "combinator"
-                        or getattr(c, "role", "") == "combinator"
-                        or getattr(c, "node_type", "") == "combinator"
-                    )
+                    and not is_combinator_cell(c)
                 )
             )
         ]
@@ -335,44 +327,12 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
 
         self.tag_cells_with_clause_indices(committed_path, prompt, orchestrator=orch)
 
-        # Monadic unification and Preflight lint check (never delegate to M1)
-        try:
-            try:
-                from unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
-                from preflight import PreflightLinter
-            except (ImportError, ValueError):
-                try:
-                    from ..unification import UnificationGate, ExecutionContext, UNRESOLVED_PORT
-                    from ..preflight import PreflightLinter
-                except (ImportError, ValueError):
-                    UnificationGate = None
-                    ExecutionContext = None
-                    PreflightLinter = None
-                    UNRESOLVED_PORT = None
-
-            if UnificationGate is not None and PreflightLinter is not None:
-                _gate = UnificationGate(orchestrator=orch)
-                _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
-                _ur = _gate.unify_pipeline(committed_path, _tctx, extract_llm_slots=False)
-                has_unresolved = bool(
-                    UNRESOLVED_PORT is not None
-                    and getattr(_ur, "value", None)
-                    and any(v is UNRESOLVED_PORT for _, b in _ur.value for v in b.values())
-                )
-                if _ur.is_bottom() or not getattr(_ur, "value", None) or has_unresolved:
-                    reason = "M11 path does not unify or left unresolved input ports"
-                    self.fallback_reason = reason
-                    self._trace("method_failure", requested=type(self).__name__, reason=reason)
-                    return []
-                _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
-                _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code, orchestrator=orch)
-                if not _lint.is_valid:
-                    reason = f"M11 path failed pre-flight lint: {'; '.join(_lint.violations[:2])}"
-                    self.fallback_reason = reason
-                    self._trace("method_failure", requested=type(self).__name__, reason=reason)
-                    return []
-        except Exception as _chk_exc:
-            logger.debug("[M11] Pre-flight verification check skipped: %s", _chk_exc)
+        _verr = self.verify_planned_path(committed_path, prompt, orch, ctx=ctx)
+        if _verr:
+            reason = f"M11 {_verr}"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         self._trace("m11_plan_complete", cells=[c.cell_id for c in committed_path])
         return committed_path

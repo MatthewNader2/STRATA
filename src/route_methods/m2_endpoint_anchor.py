@@ -7,7 +7,7 @@ Anchors source entry and sink exit morphisms and searches bidirectionally.
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
-from .base import RouteMethod, is_macro_cell
+from .base import RouteMethod, is_macro_cell, is_combinator_cell
 from log_config import get_logger
 
 logger = get_logger("m2_endpoint_anchor")
@@ -58,7 +58,7 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
                 bool(getattr(c, "slots", None))
                 or (
                     not is_macro_cell(c)
-                    and not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator" or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+                    and not is_combinator_cell(c)
                 )
             )
         ]
@@ -120,19 +120,21 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         # 2. Sink anchor: only a cell the FINAL clause actually names (or a format-compatible writer for
         # an explicit destination file). A path-writing sink with no destination literal is never requested.
         sink_pool = [c for c in candidates if self.is_sink_node(c, orch)]
-        requested = self.requested_sink(prompt, sink_pool)   # beats every non-sink cell on some clause
+        requested = self.requested_sink(prompt, candidates)   # beats every non-sink cell on some clause
         if requested is not None:
             eligible_sinks = [requested]
         elif dst_lit is not None:
             eligible_sinks = [c for c in sink_pool if self.file_compat(c, dst_lit) > 0]
         else:
-            # Generalized co-terminal anchor: in memory-only or open pipelines,
-            # terminal cells or evaluators matching the final clause serve as the sink anchor.
+            # Generalized co-terminal anchor: in memory-only or open pipelines (no explicit
+            # destination file literal or requested file-export clause), prefer terminal
+            # evaluators/aggregators or cells matching the final clause, excluding path-writing file sinks.
             terminal_roles = set(TypeRegistry.get_instance().get_terminal_roles_set())
             eligible_sinks = [
                 c for c in candidates
                 if (getattr(c, "node_role", "") in terminal_roles or self.clause_fit(last_clause, c)[0] > 0)
                 and not self.is_ingress_node(c, orch)
+                and not (self.is_sink_node(c, orch) and self._is_path_consumer(c))
             ]
         best_sink: Optional[Cell] = max(
             eligible_sinks,
@@ -361,4 +363,14 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
             candidates_found=len(meeting_candidates),
             path=[c.cell_id for c in best_path],
         )
-        return best_path[:max(32, num_clauses * 4 + 4, max_transforms + 8)]
+        max_len = max(32, num_clauses * 4 + 4, max_transforms + 8)
+        selected = best_path[:max_len]
+        selected = self.insert_optic_commits(selected, trace=False)
+        selected = self.insert_property_bridges(selected, prompt=prompt, ctx=ctx)
+        _verr = self.verify_planned_path(selected, prompt, orch, ctx=ctx)
+        if _verr:
+            reason = f"M2 {_verr}"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
+        return selected

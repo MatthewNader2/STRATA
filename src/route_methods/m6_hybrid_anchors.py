@@ -6,7 +6,7 @@ M6: Flagship Hybrid — Clause Anchors + Endpoint Anchors + Beam Bridging + Pre-
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, Tuple, Any
 
-from .base import RouteMethod, is_macro_cell
+from .base import RouteMethod, is_macro_cell, is_combinator_cell
 from log_config import get_logger
 
 logger = get_logger("route_methods.m6")
@@ -92,8 +92,7 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
         anchor_pool = [
             c for c in candidates
             if bool(getattr(c, "slots", None))
-            or not (getattr(c, "is_combinator", False) or getattr(c, "node_role", "") == "combinator"
-                    or getattr(c, "role", "") == "combinator" or getattr(c, "node_type", "") == "combinator")
+            or not is_combinator_cell(c)
         ]
 
         for idx, cl in enumerate(clauses):
@@ -103,7 +102,7 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             ]
             clause_cells: List[Cell] = []
             if _ev is not None:
-                locked_tau = 0.7
+                locked_tau = 0.25
                 for c, _o in anchors_for_clause(_ev, cl, anchor_pool, relevance_map, on_event=self._trace, clause_idx=idx):
                     conf = max(
                         float(_o.get("name_precision", 0.0)),
@@ -123,18 +122,7 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                             reason="no candidate cell carries identity evidence for this clause")
 
             if len(clause_cells) >= 2:
-                from functools import cmp_to_key
-                def _reach_cmp(a: Cell, b: Cell) -> int:
-                    if a.cell_id == b.cell_id:
-                        return 0
-                    aff_ab = self.calculate_edge_affinity(a, b, orch)
-                    aff_ba = self.calculate_edge_affinity(b, a, orch)
-                    if aff_ab > aff_ba:
-                        return -1
-                    if aff_ba > aff_ab:
-                        return 1
-                    return 0
-                clause_cells = sorted(clause_cells, key=cmp_to_key(_reach_cmp))
+                clause_cells = self.order_clause_cells(clause_cells)
 
             for c in clause_cells:
                 if not clause_anchors or clause_anchors[-1].cell_id != c.cell_id or getattr(clause_anchors[-1], "clause_literals", None) != getattr(c, "clause_literals", None):
@@ -210,7 +198,12 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             if orch and hasattr(orch, "find_shortest_bridge_path"):
                 shortest = orch.find_shortest_bridge_path(src, dst, max_hops=max_hops, candidate_pool=candidates)
                 if shortest:
-                    return shortest
+                    ext = list(base_scope) + list(shortest)
+                    if (
+                        (self.step_unifies(src, shortest[0], prev_path=base_scope) or self.step_unifies_dag(shortest[0], base_scope, ctx=ctx))
+                        and (self.step_unifies(shortest[-1], dst, prev_path=ext) or self.step_unifies_dag(dst, ext, ctx=ctx))
+                    ):
+                        return shortest
             return None
 
         bridged_path: List[Cell] = [waypoints[0]]
@@ -226,6 +219,10 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                     for bm in beam_mids:
                         if getattr(bm, "matched_clause_idx", None) is None:
                             bm.matched_clause_idx = getattr(nxt, "matched_clause_idx", None)
+                        if not getattr(bm, "clause_literals", None):
+                            _nl = getattr(nxt, "clause_literals", None)
+                            if _nl is not None:
+                                bm.clause_literals = list(_nl) if isinstance(_nl, list) else dict(_nl)
                     bridged_path.extend(beam_mids)
                     bridged_path.append(nxt)
                     self._trace("m6_beam_bridged", from_cell=curr.cell_id, to_cell=nxt.cell_id,
@@ -265,21 +262,13 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
             return []
 
-        try:
-            _gate = UnificationGate(orchestrator=orch)
-            _tctx = ctx if ctx is not None else ExecutionContext(prompt=prompt)
-            _ur = _gate.unify_pipeline(bridged_path, _tctx, extract_llm_slots=False)
-            if _ur.is_bottom() or not getattr(_ur, "value", None):
-                self.fallback_reason = "M6 hybrid path failed UnificationGate (bottom)"
-                self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
-                return []
-            _code = _gate.emit_code(_ur.value, _tctx, extract_llm_slots=False)
-            _lint = PreflightLinter.lint(_ur.value, prompt=prompt, code_str=_code, orchestrator=orch)
-            if not _lint.is_valid:
-                self.fallback_reason = f"M6 hybrid path failed PreflightLinter: {'; '.join(_lint.violations[:2])}"
-                self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
-                return []
-        except Exception as _chk_exc:
-            logger.debug("[M6] Verification check exception: %s", _chk_exc)
+        bridged_path = self.insert_optic_commits(bridged_path)
+        bridged_path = self.insert_property_bridges(bridged_path, prompt=prompt, ctx=ctx)
+
+        _verr = self.verify_planned_path(bridged_path, prompt, orch, ctx=ctx)
+        if _verr:
+            self.fallback_reason = f"M6 {_verr}"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         return bridged_path

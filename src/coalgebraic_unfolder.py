@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -32,8 +31,12 @@ logger = logging.getLogger(__name__)
 
 try:
     from .tokenizer import CellTokenizer
+    from .schema import is_combinator_cell as _schema_is_combinator_cell
+    from .lattice import TypeRegistry
 except (ImportError, ValueError):
     from tokenizer import CellTokenizer
+    from schema import is_combinator_cell as _schema_is_combinator_cell
+    from lattice import TypeRegistry
 
 
 def _normalize_goal_key(text: str) -> str:
@@ -58,7 +61,19 @@ def _count_clauses(text: str) -> int:
             return len(clauses)
     except Exception:
         pass
-    parts = [p.strip() for p in re.split(r"[.;\n]+", text) if p.strip()]
+    parts: List[str] = []
+    cur: List[str] = []
+    for ch in text:
+        if ch in ".;\n":
+            seg = "".join(cur).strip()
+            if seg:
+                parts.append(seg)
+            cur.clear()
+        else:
+            cur.append(ch)
+    seg = "".join(cur).strip()
+    if seg:
+        parts.append(seg)
     return max(len(parts), 1)
 
 
@@ -69,16 +84,13 @@ def is_macro_combinator_cell(cell: Any) -> bool:
     """
     if cell is None:
         return False
-    node_type = str(getattr(cell, "node_type", "") or "").lower()
-    node_role = str(getattr(cell, "node_role", "") or "").lower()
     slots = getattr(cell, "slots", None)
     inputs = getattr(cell, "inputs", {}) or {}
-    if node_type == "macro":
-        return True
     if isinstance(slots, dict) and any(str(k) not in inputs for k in slots.keys()):
         return True
-    if node_role == "combinator" and isinstance(slots, dict) and bool(slots):
-        return True
+    if _schema_is_combinator_cell(cell, TypeRegistry.get_instance()):
+        if getattr(cell, "node_type", None) or (isinstance(slots, dict) and bool(slots)):
+            return True
     return False
 
 
@@ -153,18 +165,38 @@ class EpistemicGroundingScorer:
 
     def __init__(self, theta_closed: float = 0.55):
         self.theta_closed = float(theta_closed)
+        self._cell_tok_cache: Dict[Tuple[int, str], Tuple[Set[str], Set[str]]] = {}
+        self._stem_index_cache: Dict[int, Tuple[Set[str], Set[str]]] = {}
 
     @staticmethod
     def _stem_match(tok_a: str, tok_b: str) -> bool:
-        """Purely structural prefix/inflection equivalence without fixed wordlists."""
+        """Purely structural shared-root prefix equivalence without fixed wordlists."""
         if tok_a == tok_b:
             return True
-        if len(tok_a) < 3 or len(tok_b) < 3:
+        if len(tok_a) < 5 or len(tok_b) < 5:
             return False
         shorter, longer = (tok_a, tok_b) if len(tok_a) <= len(tok_b) else (tok_b, tok_a)
-        if longer.startswith(shorter) and (len(longer) - len(shorter)) <= 3:
-            return True
-        return False
+        diff = len(longer) - len(shorter)
+        return longer.startswith(shorter) and 0 < diff <= 3
+
+    def _get_short_stems(self, target_toks: Set[str]) -> Set[str]:
+        tid = id(target_toks)
+        entry = self._stem_index_cache.get(tid)
+        if entry is not None and entry[0] is target_toks:
+            return entry[1]
+        short_stems: Set[str] = set()
+        for tt in target_toks:
+            t_len = len(tt)
+            if t_len < 6:
+                continue
+            for d in (1, 2, 3):
+                s_len = t_len - d
+                if s_len >= 5:
+                    short_stems.add(tt[:s_len])
+        if len(self._stem_index_cache) >= 4096:
+            self._stem_index_cache.clear()
+        self._stem_index_cache[tid] = (target_toks, short_stems)
+        return short_stems
 
     def _fuzzy_intersection_count(self, query_toks: Set[str], target_toks: Set[str]) -> float:
         if not query_toks or not target_toks:
@@ -174,9 +206,20 @@ class EpistemicGroundingScorer:
         rem_q = query_toks - exact
         if not rem_q:
             return score
+        short_stems = self._get_short_stems(target_toks)
         for qt in rem_q:
-            if any(self._stem_match(qt, tt) for tt in target_toks):
+            if len(qt) < 5:
+                continue
+            if qt in short_stems:
                 score += 0.75
+                continue
+            q_len = len(qt)
+            if q_len >= 6:
+                for d in (1, 2, 3):
+                    s_len = q_len - d
+                    if s_len >= 5 and qt[:s_len] in target_toks:
+                        score += 0.75
+                        break
         return score
 
     def score(
@@ -209,10 +252,16 @@ class EpistemicGroundingScorer:
             if getattr(cell, "node_type", "") == "constant":
                 continue
             cid = getattr(cell, "cell_id", "") or ""
-            id_toks = set(getattr(cell, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(cid))
-            for kw in getattr(cell, "keywords", ()) or ():
-                id_toks.update(CellTokenizer.tokenize_identifier(str(kw)))
-            all_toks = set(getattr(cell, "token_set", None) or ()) | id_toks
+            ck = (id(cell), cid)
+            cached_toks = self._cell_tok_cache.get(ck)
+            if cached_toks is None:
+                id_toks = set(getattr(cell, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(cid))
+                for kw in getattr(cell, "keywords", ()) or ():
+                    id_toks.update(CellTokenizer.tokenize_identifier(str(kw)))
+                all_toks = set(getattr(cell, "token_set", None) or ()) | id_toks
+                cached_toks = (id_toks, all_toks)
+                self._cell_tok_cache[ck] = cached_toks
+            id_toks, all_toks = cached_toks
 
             id_hits = self._fuzzy_intersection_count(goal_toks, id_toks)
             all_hits = self._fuzzy_intersection_count(goal_toks, all_toks)
@@ -333,7 +382,7 @@ def extract_lattice_summary(
 
         from lattice import TypeRegistry
         _reg_cu = TypeRegistry.get_instance()
-        _top_st_cu = set(_reg_cu.get_verification_semantics("top_states") or ()) | set(_reg_cu.get_verification_semantics("universal_top_types") or ())
+        _top_st_cu = _reg_cu.get_declared_top_states() | _reg_cu.get_top_types_set()
         if isinstance(inputs, dict):
             for p_name, port in inputs.items():
                 t_name, st, sk = _port_type_and_state(port)
@@ -778,8 +827,10 @@ class CoalgebraicUnfolder:
                 if not text:
                     return None
                 c_key = _normalize_goal_key(text)
-                if not c_key or c_key in ancestors:
+                if not c_key:
                     return None
+                if c_key in ancestors:
+                    return CoalgebraNode(goal=text, kind="atomic", depth=depth)
                 return _recurse(text, depth, ancestors)
 
             if isinstance(item, dict):

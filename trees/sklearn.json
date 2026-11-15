@@ -40,6 +40,96 @@
       "DataFrame",
       "table",
       "tensor"
+    ],
+    "feature": [
+      "feature_input",
+      "features",
+      "feature"
+    ],
+    "target": [
+      "target_input",
+      "target"
+    ],
+    "strict": [
+      "model_input",
+      "estimator",
+      "model",
+      "model_sink"
+    ],
+    "data": [
+      "model_input",
+      "model_sink",
+      "model",
+      "estimator",
+      "feature_input",
+      "features",
+      "target_input",
+      "target"
+    ],
+    "projection": [
+      "feature_input",
+      "target_input",
+      "features",
+      "target"
+    ],
+    "instance_sink": [
+      "model_sink"
+    ],
+    "instance_consumer": [
+      "model_input",
+      "model",
+      "estimator",
+      "receiver"
+    ],
+    "receiver": [
+      "model_input",
+      "model",
+      "estimator",
+      "receiver"
+    ],
+    "estimator": [
+      "estimator",
+      "model",
+      "classifier",
+      "regressor",
+      "clusterer",
+      "transformer"
+    ],
+    "model": [
+      "estimator",
+      "model",
+      "classifier",
+      "regressor",
+      "clusterer",
+      "transformer",
+      "model_input",
+      "model_sink"
+    ],
+    "model_output": [
+      "model_sink"
+    ],
+    "evaluator": [
+      "evaluator"
+    ],
+    "prediction_in": [
+      "prediction_input",
+      "X_test",
+      "X"
+    ],
+    "prediction_out": [
+      "prediction_output",
+      "y_pred"
+    ],
+    "terminal": [
+      "model_sink",
+      "evaluator",
+      "sink",
+      "terminal"
+    ],
+    "terminal_output": [
+      "model_sink",
+      "evaluator",
+      "predicted_values"
     ]
   },
   "typestates": {
@@ -51,7 +141,8 @@
         "carrier_type": "ndarray",
         "description": "Partitional cluster indices assigned to instances.",
         "properties": {
-          "is_cluster_label": true
+          "is_cluster_label": true,
+          "is_prediction": true
         }
       },
       {
@@ -76,14 +167,18 @@
         "carrier_type": "dict",
         "description": "Computed empirical evaluation scores or matrix report.",
         "properties": {
-          "is_evaluation": true
+          "is_evaluation": true,
+          "is_terminal": true
         }
       },
       {
         "name": "file_path",
         "parent_state": "source_identifier",
         "carrier_type": "str",
-        "description": "Declared by data migration (formerly engine bootstrap state 'file_path')."
+        "description": "Declared by data migration (formerly engine bootstrap state 'file_path').",
+        "properties": {
+          "is_source_identifier": true
+        }
       },
       {
         "name": "fit_classifier",
@@ -190,7 +285,8 @@
         "carrier_type": "ndarray",
         "description": "Continuous scalar target value estimations.",
         "properties": {
-          "is_prediction": true
+          "is_prediction": true,
+          "is_terminal": true
         }
       },
       {
@@ -218,7 +314,9 @@
         "carrier_type": "BaseEstimator",
         "description": "Model serialized to non-volatile disk storage.",
         "properties": {
-          "persisted": true
+          "persisted": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -236,7 +334,9 @@
         "carrier_type": "BaseEstimator",
         "description": "Composite multi-stage pipeline serialized to non-volatile storage.",
         "properties": {
-          "persisted": true
+          "persisted": true,
+          "is_terminal": true,
+          "is_materialized": true
         }
       },
       {
@@ -27247,7 +27347,32 @@
   ],
   "types": {
     "Model": {
-      "parent": "Modality"
+      "parent": "Modality",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "Joblib": {
       "parent": "ModelFormat"
@@ -27256,22 +27381,172 @@
       "parent": "ModelFormat"
     },
     "Estimator": {
-      "parent": "model"
+      "parent": "model",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "model": {
-      "parent": "object"
+      "parent": "object",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "Classifier": {
-      "parent": "Estimator"
+      "parent": "Estimator",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "Regressor": {
-      "parent": "Estimator"
+      "parent": "Estimator",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "Transformer": {
-      "parent": "Estimator"
+      "parent": "Estimator",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "Clusterer": {
-      "parent": "Estimator"
+      "parent": "Estimator",
+      "kind": "model",
+      "properties": {
+        "is_stateful_instance": true,
+        "is_composite": true,
+        "state_check_methods": [
+          "is_fitted",
+          "is_ready",
+          "is_converged"
+        ],
+        "state_guard_functions": [
+          "check_is_fitted"
+        ],
+        "stateful_base_classes": [
+          "BaseEstimator",
+          "ClassifierMixin",
+          "RegressorMixin"
+        ],
+        "stateful_consumer_methods": [
+          "predict",
+          "transform"
+        ],
+        "stateful_mutator_methods": [
+          "fit"
+        ]
+      }
     },
     "modelformat": {
       "parent": "format"
@@ -27298,180 +27573,48 @@
     "bool": false,
     "str": "'l2'"
   },
-  "role_semantics": {
-    "feature_roles": [
-      "feature_input",
-      "features",
-      "feature"
-    ],
-    "target_roles": [
-      "target_input",
-      "target"
-    ],
-    "strict_roles": [
-      "model_input",
-      "estimator",
-      "model",
-      "model_sink"
-    ],
-    "dataflow_roles": [
-      "model_input",
-      "model_sink",
-      "model",
-      "estimator",
-      "feature_input",
-      "features",
-      "target_input",
-      "target"
-    ],
-    "projective_roles": [
-      "feature_input",
-      "target_input",
-      "features",
-      "target"
-    ],
-    "mutually_exclusive_roles": [
+  "exclusive_roles": [
+    [
       "regressor",
       "classifier",
       "clusterer"
     ],
-    "mutually_exclusive_role_pairs": [
-      [
-        "feature_input",
-        "target_input"
-      ],
-      [
-        "feature_input",
-        "model_input"
-      ],
-      [
-        "target_input",
-        "model_input"
-      ],
-      [
-        "features",
-        "target"
-      ],
-      [
-        "feature",
-        "target"
-      ],
-      [
-        "prediction_input",
-        "target_input"
-      ],
-      [
-        "prediction_output",
-        "target_input"
-      ],
-      [
-        "prediction_output",
-        "target"
-      ]
+    [
+      "feature_input",
+      "target_input"
     ],
-    "paired_morphism_ranks": {
-      "feature": 2,
-      "target": 1
-    },
-    "instance_sink_roles": [
-      "model_sink"
+    [
+      "feature_input",
+      "model_input"
     ],
-    "stateful_instance_roots": [
-      "model"
+    [
+      "target_input",
+      "model_input"
     ],
-    "instance_consumer_roles": [
-      "model_input",
-      "model",
-      "estimator",
-      "receiver"
+    [
+      "features",
+      "target"
     ],
-    "state_precondition_properties": [
-      "is_fitted"
+    [
+      "feature",
+      "target"
     ],
-    "dependent_terminal_input_roles": {
-      "prediction_input": [
-        "prediction_output"
-      ]
-    },
-    "estimator_roles": [
-      "estimator",
-      "model",
-      "classifier",
-      "regressor",
-      "clusterer",
-      "transformer"
-    ],
-    "model_roles": [
-      "estimator",
-      "model",
-      "classifier",
-      "regressor",
-      "clusterer",
-      "transformer",
-      "model_input",
-      "model_sink"
-    ],
-    "prediction_input_roles": [
+    [
       "prediction_input",
-      "X_test",
-      "X"
+      "target_input"
     ],
-    "prediction_output_roles": [
+    [
       "prediction_output",
-      "y_pred"
+      "target_input"
     ],
-    "prediction_states": [
-      "predicted_labels",
-      "predicted_probabilities",
-      "predicted_values",
-      "cluster_labels"
-    ],
-    "key_binds": [
-      "feature_key",
-      "target_key"
-    ],
-    "terminal_output_roles": [
-      "evaluated_metrics",
+    [
+      "prediction_output",
+      "target"
+    ]
+  ],
+  "dependent_ports": {
+    "prediction_input": [
       "prediction_output"
-    ],
-    "evaluator_roles": [
-      "evaluator",
-      "metric"
-    ],
-    "receiver_roles": [
-      "model_input",
-      "estimator"
-    ],
-    "model_output_roles": [
-      "model_sink",
-      "estimator"
-    ],
-    "terminal_roles": [
-      "metric",
-      "evaluator"
-    ],
-    "estimator_base_classes": [
-      "BaseEstimator",
-      "ClassifierMixin",
-      "RegressorMixin"
-    ],
-    "state_check_methods": [
-      "is_fitted",
-      "is_ready",
-      "is_converged"
-    ],
-    "state_guard_functions": [
-      "check_is_fitted"
-    ],
-    "estimator_mutator_methods": [
-      "fit"
-    ],
-    "estimator_consumer_methods": [
-      "predict",
-      "transform"
-    ],
-    "partition_intent_keys": [
-      "model_fit_split"
     ]
   }
 }

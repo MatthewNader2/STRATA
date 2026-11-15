@@ -43,16 +43,34 @@ _ALIASES: dict = {}
 _ALIASES_REV: dict = {}
 
 
+_MM_CLS = None
+
+
 def _is_profile_zero() -> bool:
+    global _MM_CLS
     try:
-        from .inference import ModelManager
+        from .config import resolve_profile_spec, active_profile_spec
     except (ImportError, ValueError):
+        from config import resolve_profile_spec, active_profile_spec
+    if _MM_CLS is None:
         try:
-            from inference import ModelManager
+            from .inference import ModelManager as _MM
+            _MM_CLS = _MM
+        except (ImportError, ValueError):
+            try:
+                from inference import ModelManager as _MM
+                _MM_CLS = _MM
+            except Exception:
+                _MM_CLS = False
+    if _MM_CLS:
+        try:
+            pname = getattr(_MM_CLS.get_instance(), "current_profile_name", None)
+            if pname is not None:
+                return resolve_profile_spec(pname).pure_symbolic
         except Exception:
-            return False
+            pass
     try:
-        return getattr(ModelManager.get_instance(), "current_profile_name", None) == "0"
+        return active_profile_spec().pure_symbolic
     except Exception:
         return False
 
@@ -192,36 +210,7 @@ class CellTokenizer:
     def tokenize_prompt(cls, prompt: str, remove_stopwords: bool = False) -> Set[str]:
         if not prompt:
             return set()
-        tokens = set()
-        cur = []
-        for ch in prompt.lower():
-            if ch.isalnum() or ch == '_':
-                cur.append(ch)
-            else:
-                if cur:
-                    w = "".join(cur)
-                    if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
-                        tokens.add(w)
-                        if ENABLE_ENGLISH_STEMMING and w.isalpha():
-                            s = normalize_token(w)
-                            if len(s) > 1:
-                                tokens.add(s)
-                    cur = []
-        if cur:
-            w = "".join(cur)
-            if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
-                tokens.add(w)
-                if ENABLE_ENGLISH_STEMMING and w.isalpha():
-                    s = normalize_token(w)
-                    if len(s) > 1:
-                        tokens.add(s)
-        for raw in prompt.split():
-            cw = raw.strip(",;.:!?()[]{}\'\"")
-            if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):
-                tokens.update(cls.tokenize_identifier(cw))
-        if _ALIASES and not _is_profile_zero():  # (apply_fixes_v7)
-            tokens = _expand_aliases(tokens)
-        return tokens
+        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), len(_ALIASES), ENABLE_ENGLISH_STEMMING))
 
     @classmethod
     def tokenize_cell(cls, cell_id: str, keywords: Set[str]) -> Set[str]:
@@ -343,3 +332,42 @@ class CellTokenizer:
             clauses.append(tail)
 
         return clauses if clauses else [text]
+
+
+@functools.lru_cache(maxsize=4096)
+def _tokenize_prompt_cached(
+    prompt: str,
+    profile_zero: bool,
+    aliases_len: int,
+    stemming_enabled: bool,
+) -> Tuple[str, ...]:
+    tokens = set()
+    cur = []
+    for ch in prompt.lower():
+        if ch.isalnum() or ch == '_':
+            cur.append(ch)
+        else:
+            if cur:
+                w = "".join(cur)
+                if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
+                    tokens.add(w)
+                    if stemming_enabled and w.isalpha():
+                        s = normalize_token(w)
+                        if len(s) > 1:
+                            tokens.add(s)
+                cur = []
+    if cur:
+        w = "".join(cur)
+        if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
+            tokens.add(w)
+            if stemming_enabled and w.isalpha():
+                s = normalize_token(w)
+                if len(s) > 1:
+                    tokens.add(s)
+    for raw in prompt.split():
+        cw = raw.strip(",;.:!?()[]{}\'\"")
+        if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):
+            tokens.update(CellTokenizer.tokenize_identifier(cw))
+    if _ALIASES and not profile_zero:  # (apply_fixes_v7)
+        tokens = _expand_aliases(tokens)
+    return tuple(sorted(tokens))

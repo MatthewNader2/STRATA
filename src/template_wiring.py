@@ -71,21 +71,8 @@ def extract_placeholders(template: str) -> List[str]:
 #   3. The structural default "any".
 # Zero hardcoded name dictionaries live in the engine.
 
-_PREFIXES: tuple = ("input_", "in_", "arg_", "param_")
-_SUFFIXES: tuple = ("_input", "_in", "_arg", "_param", "_value", "_val")
-
-
 def _canonicalize_param_name(param_name: str) -> str:
-    name = str(param_name).strip().lower()
-    for pre in _PREFIXES:
-        if name.startswith(pre) and len(name) > len(pre):
-            name = name[len(pre):]
-            break
-    for suf in _SUFFIXES:
-        if name.endswith(suf) and len(name) > len(suf):
-            name = name[: -len(suf)]
-            break
-    return name
+    return str(param_name).strip().lower()
 
 
 def _registry():
@@ -172,8 +159,13 @@ def transform_call_ast_with_flag(code_snippet: str, mod_alias: str, flag_attr: s
         tree = ast.parse(safe_code)
 
         class FlagASTReplacer(ast.NodeTransformer):
+            def __init__(self):
+                super().__init__()
+                self._injected = False
+
             def visit_Call(self, node):
-                self.generic_visit(node)
+                if self._injected:
+                    return self.generic_visit(node)
                 flag_node = ast.Attribute(
                     value=ast.Name(id=mod_alias, ctx=ast.Load()),
                     attr=flag_attr,
@@ -182,12 +174,16 @@ def transform_call_ast_with_flag(code_snippet: str, mod_alias: str, flag_attr: s
                 # Prevent duplicate injection if flag is already present
                 for arg in node.args:
                     if isinstance(arg, ast.Attribute) and arg.attr == flag_attr:
+                        self._injected = True
                         return node
                 for kw in node.keywords:
                     if isinstance(kw.value, ast.Attribute) and kw.value.attr == flag_attr:
+                        self._injected = True
                         return node
 
-                # Safely append flag without overwriting existing arguments or keywords
+                # Only append flag to the target outermost Call node; do not corrupt nested calls
+                self._injected = True
+                self.generic_visit(node)
                 node.args.append(flag_node)
                 return node
 
