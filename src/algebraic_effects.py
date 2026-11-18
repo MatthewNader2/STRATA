@@ -383,8 +383,14 @@ def build_universal_verification_contract(
                     if in_v in accumulated_props:
                         accumulated_props.setdefault(root, {}).update(accumulated_props[in_v])
             elif out_eff and out_eff.partition_index == 0 and carrier_in_name:
+                in_sig_c = (getattr(cell, "inputs", {}) or {}).get(carrier_in_name)
+                in_t_c = str(getattr(getattr(in_sig_c, "signature", in_sig_c), "type_name", "") or "").lower()
+                out_t_c = str(getattr(getattr(out_sig, "signature", out_sig), "type_name", "") or "").lower()
+                same_carrier_family = bool(
+                    in_t_c and out_t_c and (out_t_c == in_t_c or (reg and reg.is_subtype(out_t_c, in_t_c)))
+                )
                 in_v = bindings.get(carrier_in_name)
-                if in_v and isinstance(in_v, str):
+                if same_carrier_family and in_v and isinstance(in_v, str):
                     root = var_to_root.get(in_v, in_v)
                     var_to_root[out_v] = root
                     latest_carrier_lineage[root] = out_v

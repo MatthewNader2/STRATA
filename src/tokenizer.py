@@ -280,7 +280,7 @@ class CellTokenizer:
                 split_positions.add(e)
                 continue
 
-            if ";" in w and not (_is_inside_protected(s) and _is_inside_protected(e - 1)):
+            if (";" in w or w.endswith(":")) and not (_is_inside_protected(s) and _is_inside_protected(e - 1)):
                 split_positions.add(e)
                 continue
 

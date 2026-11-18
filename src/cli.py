@@ -1585,6 +1585,7 @@ class PipelineDebugger:
                     final_code = None
                     path_ids = [cl.cell_id for cl in cells] if cells else []
                     total_dt = (time.perf_counter() - t_total_start) * 1000.0
+                    _lint_fail_sb = {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_res.violations)}", "preflight_lint_violations": lint_res.violations}
                     return {
                         "prompt": prompt_clean,
                         "profile": self.active_profile,
@@ -1592,11 +1593,21 @@ class PipelineDebugger:
                         "latency_ms": total_dt,
                         "sandbox_status": "REFUSED: Pre-flight lint validation failed",
                         "code": None,
+                        "failure": self._build_failure_record(
+                            cells=cells,
+                            internal_error_msg=internal_error_msg,
+                            unify_fail_reason=unify_fail_reason,
+                            refusal_exc=refusal_exc,
+                            refusal_reason=refusal_reason,
+                            sandbox_res=_lint_fail_sb,
+                            final_code=final_code or "",
+                        ),
+                        "lint_error": lint_error_msg,
                         "route_ms": route_dt,
                         "plan_ms": plan_dt,
                         "synth_ms": synth_dt,
                         "sandbox_ms": 0.0,
-                        "sandbox_result": {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_res.violations)}", "preflight_lint_violations": lint_res.violations},
+                        "sandbox_result": _lint_fail_sb,
                         "cells": cells,
                         "tunnel_size": len(tunnel_cells),
                         "relevance_map": relevance_map

@@ -727,11 +727,16 @@ class RouteMethod(ABC):
         if sig is None:
             return False
         sk = str(getattr(sig, "structure_kind", "") or "").lower()
-        if sk == "handle":
+        at = str(
+            getattr(sig, "abstract_type", "")
+            or getattr(getattr(sig, "signature", None), "abstract_type", "")
+            or ""
+        ).lower()
+        if sk == "handle" or at == "handle":
             return True
         pr = str(getattr(sig, "port_role", "") or getattr(sig, "derived_role", "") or "").lower()
         tn = str(getattr(sig, "type_name", "") or "").lower()
-        ck = (sk, pr, tn)
+        ck = (sk, at, pr, tn)
         cached = cls._handle_port_cache.get(ck)
         if cached is not None:
             return cached
@@ -820,10 +825,12 @@ class RouteMethod(ABC):
         Extracts source and destination file literals from prompt and/or ExecutionContext.
         Preserves typed intent across layers without brittle re-scanning.
         """
+        ctx_src: List[str] = []
+        ctx_dest: List[str] = []
         if ctx:
             ctx_src = list(getattr(ctx, "parameters", {}).get("source_uris") or getattr(ctx, "source_files", []) or [])
             ctx_dest = list(getattr(ctx, "parameters", {}).get("dest_uris") or getattr(ctx, "dest_files", []) or [])
-            if ctx_src or ctx_dest:
+            if ctx_src and ctx_dest:
                 return ctx_src, ctx_dest
 
         extracted = ExecutionContext._extract_universal_literals(prompt or "")
@@ -837,7 +844,9 @@ class RouteMethod(ABC):
             if (kind == "file_asset" or (kind == "quoted_str" and ExecutionContext._is_path_string(str(val))))
             and ExecutionContext._asset_direction(prompt or "", pos) == "dest"
         ]
-        return src_lits, dest_lits
+        final_src = ctx_src if ctx_src else [v for v in src_lits if v not in ctx_dest]
+        final_dest = ctx_dest if ctx_dest else [v for v in dest_lits if v not in final_src]
+        return final_src, final_dest
 
     @classmethod
     def segment_prompt_clauses(cls, prompt: str, ctx: Optional[Any] = None) -> List[str]:

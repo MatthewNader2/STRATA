@@ -1,0 +1,565 @@
+{
+  "domain": "aetheris",
+  "version": "1.0.0",
+  "description": "Aetheris photonic phase-array interferometry SDK: optical bench initialization, cavity locking, phase modulator arming, fringe sweep capture, branch-cut residue unwrapping, Zernike wavefront solving, and .ael LUT export.",
+  "supported_formats": [
+    "ael"
+  ],
+  "types": [
+    { "name": "OpticalBench", "parent": "object" },
+    { "name": "LockedCavity", "parent": "object" },
+    { "name": "ModulatorBank", "parent": "object" },
+    { "name": "FringeStack", "parent": "object" },
+    { "name": "PhaseField", "parent": "object" },
+    { "name": "WavefrontModel", "parent": "object" },
+    { "name": "ContrastAudit", "parent": "dict" }
+  ],
+  "typestates": {
+    "domain": "aetheris",
+    "states": [
+      { "name": "rack_id", "parent_state": null, "carrier_type": "str", "description": "Optical bench rack identifier.", "properties": {} },
+      { "name": "wavelength_nm", "parent_state": null, "carrier_type": "float", "description": "Reference laser wavelength in nanometers.", "properties": {} },
+      { "name": "bench_mounted", "parent_state": null, "carrier_type": "OpticalBench", "description": "Mounted active vibration-isolated optical bench.", "properties": {} },
+      { "name": "cavity_mode", "parent_state": null, "carrier_type": "str", "description": "Optical cavity transverse mode label.", "properties": {} },
+      { "name": "power_mw", "parent_state": null, "carrier_type": "float", "description": "Reference laser power in milliwatts.", "properties": {} },
+      { "name": "cavity_locked", "parent_state": null, "carrier_type": "LockedCavity", "description": "Phase-locked reference laser cavity handle.", "properties": {} },
+      { "name": "lane_count", "parent_state": null, "carrier_type": "int", "description": "Active electro-optic modulator channel count.", "properties": {} },
+      { "name": "vpi_volts", "parent_state": null, "carrier_type": "float", "description": "Half-wave voltage Vpi of phase modulator.", "properties": {} },
+      { "name": "modulator_armed", "parent_state": null, "carrier_type": "ModulatorBank", "description": "Armed electro-optic phase modulator bank.", "properties": {} },
+      { "name": "span_pm", "parent_state": null, "carrier_type": "float", "description": "Wavelength sweep span in picometers.", "properties": {} },
+      { "name": "frames", "parent_state": null, "carrier_type": "int", "description": "Interferogram sweep frame count.", "properties": {} },
+      { "name": "fringe_captured", "parent_state": null, "carrier_type": "FringeStack", "description": "Captured raw interferogram fringe stack.", "properties": {} },
+      { "name": "branch_cut", "parent_state": null, "carrier_type": "str", "description": "2D phase-unwrapping branch-cut solver name.", "properties": {} },
+      { "name": "residues_unwrapped", "parent_state": null, "carrier_type": "PhaseField", "description": "Unwrapped continuous optical phase field.", "properties": {} },
+      { "name": "zernike_order", "parent_state": null, "carrier_type": "int", "description": "Maximum Zernike radial polynomial order.", "properties": {} },
+      { "name": "wavefront_solved", "parent_state": null, "carrier_type": "WavefrontModel", "description": "Fitted Zernike wavefront aberration model.", "properties": {} },
+      { "name": "lut_path", "parent_state": null, "carrier_type": "str", "description": "Destination .ael phase LUT path.", "properties": {} },
+      { "name": "lut_exported", "parent_state": null, "carrier_type": "str", "description": "Exported .ael LUT file path.", "properties": {} },
+      { "name": "drift_readout", "parent_state": null, "carrier_type": "float", "description": "Optical bench thermal drift measurement in nm.", "properties": {} },
+      { "name": "contrast_audited", "parent_state": null, "carrier_type": "ContrastAudit", "description": "Michelson visibility and fringe SNR report.", "properties": {} },
+      { "name": "bench_parked", "parent_state": null, "carrier_type": "None", "description": "Safely parked optical bench lifecycle state.", "properties": {} }
+    ],
+    "transitions": [],
+    "initial_state": null,
+    "terminal_states": ["lut_exported", "bench_parked"]
+  },
+  "cells": [
+    {
+      "cell_id": "AETHERIS_MOUNT_OPTICAL_TABLE",
+      "stage": 1,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "source",
+      "topology_type": "sequential",
+      "docstring": "Mounts and levels a vibration-isolated OpticalBench handle at the given rack_id and reference wavelength_nm.",
+      "semantic_tags": ["mount_optical_table", "mount_table", "open_optical_bench", "optical_table", "initialize_bench"],
+      "inputs": {
+        "rack_id": {
+          "type_name": "str",
+          "state": "rack_id",
+          "abstract_type": "scalar",
+          "required": true,
+          "port_role": "config",
+          "description": "Optical bench rack identifier string.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.rack_id",
+          "typestate": "aetheris::rack_id"
+        },
+        "wavelength_nm": {
+          "type_name": "float",
+          "state": "wavelength_nm",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 1550.0,
+          "port_role": "config",
+          "description": "Reference laser wavelength in nanometers.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.wavelength_nm",
+          "typestate": "aetheris::wavelength_nm"
+        }
+      },
+      "outputs": {
+        "bench": {
+          "type_name": "OpticalBench",
+          "state": "bench_mounted",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Mounted OpticalBench handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.bench_mounted",
+          "typestate": "aetheris::bench_mounted"
+        }
+      },
+      "code_template": "{bench} = aetheris.mount_optical_table(rack_id={rack_id}, wavelength_nm={wavelength_nm})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "rack_id",
+      "primary_out": "bench",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_LOCK_REFERENCE_LASER",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Locks a reference laser cavity mode onto a mounted OpticalBench and returns a LockedCavity.",
+      "semantic_tags": ["lock_reference_laser", "lock_cavity", "reference_cavity", "cavity_mode", "lock_laser"],
+      "inputs": {
+        "bench": {
+          "type_name": "OpticalBench",
+          "state": "bench_mounted",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Mounted OpticalBench handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.bench_mounted",
+          "typestate": "aetheris::bench_mounted"
+        },
+        "cavity_mode": {
+          "type_name": "str",
+          "state": "cavity_mode",
+          "abstract_type": "scalar",
+          "required": true,
+          "port_role": "config",
+          "description": "Optical cavity transverse mode label.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.cavity_mode",
+          "typestate": "aetheris::cavity_mode"
+        },
+        "power_mw": {
+          "type_name": "float",
+          "state": "power_mw",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 12.0,
+          "port_role": "config",
+          "description": "Reference laser power in milliwatts.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.power_mw",
+          "typestate": "aetheris::power_mw"
+        }
+      },
+      "outputs": {
+        "cavity": {
+          "type_name": "LockedCavity",
+          "state": "cavity_locked",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Phase-locked LockedCavity handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.cavity_locked",
+          "typestate": "aetheris::cavity_locked"
+        }
+      },
+      "code_template": "{cavity} = aetheris.lock_reference_laser({bench}, cavity_mode={cavity_mode}, power_mw={power_mw})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "bench",
+      "primary_out": "cavity",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_ARM_PHASE_MODULATOR",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Arms the electro-optic phase modulator bank driven by a LockedCavity and returns a ModulatorBank.",
+      "semantic_tags": ["arm_phase_modulator", "arm_modulator", "phase_modulator", "modulator_bank"],
+      "inputs": {
+        "cavity": {
+          "type_name": "LockedCavity",
+          "state": "cavity_locked",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Phase-locked cavity handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.cavity_locked",
+          "typestate": "aetheris::cavity_locked"
+        },
+        "lane_count": {
+          "type_name": "int",
+          "state": "lane_count",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 8,
+          "port_role": "config",
+          "description": "Modulator lane count.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.lane_count",
+          "typestate": "aetheris::lane_count"
+        },
+        "vpi_volts": {
+          "type_name": "float",
+          "state": "vpi_volts",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 3.2,
+          "port_role": "config",
+          "description": "Half-wave Vpi voltage.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.vpi_volts",
+          "typestate": "aetheris::vpi_volts"
+        }
+      },
+      "outputs": {
+        "modulator": {
+          "type_name": "ModulatorBank",
+          "state": "modulator_armed",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Armed ModulatorBank handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.modulator_armed",
+          "typestate": "aetheris::modulator_armed"
+        }
+      },
+      "code_template": "{modulator} = aetheris.arm_phase_modulator({cavity}, lane_count={lane_count}, vpi_volts={vpi_volts})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "cavity",
+      "primary_out": "modulator",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_SWEEP_FRINGE_INTERFEROGRAM",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Sweeps the armed ModulatorBank over span_pm picometers to capture a raw FringeStack interferogram.",
+      "semantic_tags": ["sweep_fringe_interferogram", "capture_fringe_interferogram", "sweep_fringes", "fringe_interferogram"],
+      "inputs": {
+        "modulator": {
+          "type_name": "ModulatorBank",
+          "state": "modulator_armed",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Armed ModulatorBank handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.modulator_armed",
+          "typestate": "aetheris::modulator_armed"
+        },
+        "span_pm": {
+          "type_name": "float",
+          "state": "span_pm",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 40.0,
+          "port_role": "config",
+          "description": "Wavelength sweep span in picometers.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.span_pm",
+          "typestate": "aetheris::span_pm"
+        },
+        "frames": {
+          "type_name": "int",
+          "state": "frames",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 512,
+          "port_role": "config",
+          "description": "Captured frame count.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.frames",
+          "typestate": "aetheris::frames"
+        }
+      },
+      "outputs": {
+        "fringes": {
+          "type_name": "FringeStack",
+          "state": "fringe_captured",
+          "abstract_type": "tensor",
+          "port_role": "data_output",
+          "description": "Captured FringeStack object.",
+          "structure_kind": "tensor",
+          "semantics": "aetheris.fringe_captured",
+          "typestate": "aetheris::fringe_captured"
+        }
+      },
+      "code_template": "{fringes} = aetheris.sweep_fringe_interferogram({modulator}, span_pm={span_pm}, frames={frames})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "modulator",
+      "primary_out": "fringes",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_UNWRAP_PHASE_RESIDUES",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Resolves 2pi phase discontinuities and branch-cut residues in a FringeStack, producing an unwrapped PhaseField.",
+      "semantic_tags": ["unwrap_phase_residues", "unwrap_phase", "branch_cut", "phase_residues"],
+      "inputs": {
+        "fringes": {
+          "type_name": "FringeStack",
+          "state": "fringe_captured",
+          "abstract_type": "tensor",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Captured FringeStack object.",
+          "structure_kind": "tensor",
+          "semantics": "aetheris.fringe_captured",
+          "typestate": "aetheris::fringe_captured"
+        },
+        "branch_cut": {
+          "type_name": "str",
+          "state": "branch_cut",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": "goldstein",
+          "port_role": "config",
+          "description": "Branch-cut unwrapping solver name.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.branch_cut",
+          "typestate": "aetheris::branch_cut"
+        }
+      },
+      "outputs": {
+        "phase": {
+          "type_name": "PhaseField",
+          "state": "residues_unwrapped",
+          "abstract_type": "tensor",
+          "port_role": "data_output",
+          "description": "Unwrapped continuous PhaseField.",
+          "structure_kind": "tensor",
+          "semantics": "aetheris.residues_unwrapped",
+          "typestate": "aetheris::residues_unwrapped"
+        }
+      },
+      "code_template": "{phase} = aetheris.unwrap_phase_residues({fringes}, branch_cut={branch_cut})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "fringes",
+      "primary_out": "phase",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_SOLVE_ZERNIKE_WAVEFRONT",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Fits a Zernike polynomial wavefront aberration model onto an unwrapped PhaseField.",
+      "semantic_tags": ["solve_zernike_wavefront", "fit_zernike", "zernike_wavefront", "solve_wavefront"],
+      "inputs": {
+        "phase": {
+          "type_name": "PhaseField",
+          "state": "residues_unwrapped",
+          "abstract_type": "tensor",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Unwrapped PhaseField produced by unwrap_phase_residues.",
+          "structure_kind": "tensor",
+          "semantics": "aetheris.residues_unwrapped",
+          "typestate": "aetheris::residues_unwrapped"
+        },
+        "order": {
+          "type_name": "int",
+          "state": "zernike_order",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 6,
+          "port_role": "config",
+          "description": "Maximum Zernike radial polynomial order.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.zernike_order",
+          "typestate": "aetheris::zernike_order"
+        }
+      },
+      "outputs": {
+        "model": {
+          "type_name": "WavefrontModel",
+          "state": "wavefront_solved",
+          "abstract_type": "model",
+          "port_role": "data_output",
+          "description": "Fitted WavefrontModel.",
+          "structure_kind": "model",
+          "semantics": "aetheris.wavefront_solved",
+          "typestate": "aetheris::wavefront_solved"
+        }
+      },
+      "code_template": "{model} = aetheris.solve_zernike_wavefront({phase}, order={order})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "phase",
+      "primary_out": "model",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_EXPORT_PHASE_LUT",
+      "stage": 3,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "sink",
+      "topology_type": "terminal",
+      "docstring": "Exports a calibrated WavefrontModel to a binary .ael phase lookup-table file on disk.",
+      "semantic_tags": ["export_phase_lut", "save_phase_lut", "write_ael", "export_lut"],
+      "inputs": {
+        "model": {
+          "type_name": "WavefrontModel",
+          "state": "wavefront_solved",
+          "abstract_type": "model",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Fitted WavefrontModel.",
+          "structure_kind": "model",
+          "semantics": "aetheris.wavefront_solved",
+          "typestate": "aetheris::wavefront_solved"
+        },
+        "out_path": {
+          "type_name": "str",
+          "state": "lut_path",
+          "abstract_type": "path",
+          "required": true,
+          "port_role": "destination",
+          "description": "Destination .ael phase LUT path.",
+          "structure_kind": "path_spec",
+          "semantics": "aetheris.lut_path",
+          "typestate": "aetheris::lut_path"
+        }
+      },
+      "outputs": {
+        "lut_file": {
+          "type_name": "str",
+          "state": "lut_exported",
+          "abstract_type": "path",
+          "port_role": "terminal_output",
+          "description": "Written .ael LUT path.",
+          "structure_kind": "path_spec",
+          "semantics": "aetheris.lut_exported",
+          "typestate": "aetheris::lut_exported"
+        }
+      },
+      "code_template": "{lut_file} = aetheris.export_phase_lut({model}, out_path={out_path})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "model",
+      "primary_out": "lut_file",
+      "effects": ["io_write"],
+      "mutation_type": "sink"
+    },
+    {
+      "cell_id": "AETHERIS_MEASURE_BENCH_DRIFT",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "evaluator",
+      "topology_type": "sequential",
+      "docstring": "Measures instantaneous mechanical thermal drift of a mounted OpticalBench in nanometers.",
+      "semantic_tags": ["measure_bench_drift", "bench_drift", "drift_telemetry"],
+      "inputs": {
+        "bench": {
+          "type_name": "OpticalBench",
+          "state": "bench_mounted",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Mounted OpticalBench handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.bench_mounted",
+          "typestate": "aetheris::bench_mounted"
+        }
+      },
+      "outputs": {
+        "drift_nm": {
+          "type_name": "float",
+          "state": "drift_readout",
+          "abstract_type": "scalar",
+          "port_role": "metric_output",
+          "description": "Thermal drift in nanometers.",
+          "structure_kind": "scalar",
+          "semantics": "aetheris.drift_readout",
+          "typestate": "aetheris::drift_readout"
+        }
+      },
+      "code_template": "{drift_nm} = aetheris.measure_bench_drift({bench})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "bench",
+      "primary_out": "drift_nm",
+      "effects": ["sensor_read"],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_AUDIT_FRINGE_CONTRAST",
+      "stage": 2,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "evaluator",
+      "topology_type": "sequential",
+      "docstring": "Computes Michelson visibility and SNR contrast metrics from a captured FringeStack.",
+      "semantic_tags": ["audit_fringe_contrast", "fringe_contrast", "contrast_audit", "visibility_snr"],
+      "inputs": {
+        "fringes": {
+          "type_name": "FringeStack",
+          "state": "fringe_captured",
+          "abstract_type": "tensor",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Captured FringeStack.",
+          "structure_kind": "tensor",
+          "semantics": "aetheris.fringe_captured",
+          "typestate": "aetheris::fringe_captured"
+        }
+      },
+      "outputs": {
+        "audit": {
+          "type_name": "ContrastAudit",
+          "state": "contrast_audited",
+          "abstract_type": "dict",
+          "port_role": "metric_output",
+          "description": "Fringe contrast diagnostic dict.",
+          "structure_kind": "dict",
+          "semantics": "aetheris.contrast_audited",
+          "typestate": "aetheris::contrast_audited"
+        }
+      },
+      "code_template": "{audit} = aetheris.audit_fringe_contrast({fringes})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "fringes",
+      "primary_out": "audit",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "AETHERIS_PARK_OPTICAL_TABLE",
+      "stage": 3,
+      "domain_name": "aetheris",
+      "node_type": "function",
+      "node_role": "sink",
+      "topology_type": "terminal",
+      "docstring": "Safely parks pneumatic isolators and shuts down a mounted OpticalBench.",
+      "semantic_tags": ["park_optical_table", "park_bench", "shutdown_table"],
+      "inputs": {
+        "bench": {
+          "type_name": "OpticalBench",
+          "state": "bench_mounted",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Mounted OpticalBench handle.",
+          "structure_kind": "handle",
+          "semantics": "aetheris.bench_mounted",
+          "typestate": "aetheris::bench_mounted"
+        }
+      },
+      "outputs": {},
+      "code_template": "aetheris.park_optical_table({bench})",
+      "dependencies": ["import aetheris"],
+      "primary_in": "bench",
+      "primary_out": null,
+      "effects": ["hardware_shutdown"],
+      "mutation_type": "sink"
+    }
+  ]
+}

@@ -917,9 +917,19 @@ class PreflightLinter:
 
                 prod_cell, prod_port = var_producers.get(root_var, (None, None))
                 prod_id = prod_cell.cell_id if prod_cell else "unknown"
+                prod_sig_for_edge = resolved_sig
+                if (
+                    getattr(record, "kind", None) == "variable"
+                    and bound_val == root_var
+                    and prod_cell is not None
+                    and prod_port
+                ):
+                    _declared_out = (getattr(prod_cell, "outputs", {}) or {}).get(prod_port)
+                    if _declared_out is not None:
+                        prod_sig_for_edge = _declared_out
 
                 # 1. Structural Carrier & Shape Compatibility
-                if not _shape_compatible(resolved_sig, in_port_sig):
+                if not _shape_compatible(prod_sig_for_edge, in_port_sig, producer_cell=prod_cell, consumer_cell=cell):
                     res_quals_raw = _get_p_field(resolved_sig, "qualifiers", None) or getattr(getattr(resolved_sig, "signature", None), "qualifiers", ()) or ()
                     in_rej_raw = _get_p_field(in_port_sig, "rejected_qualifiers", None) or getattr(getattr(in_port_sig, "signature", None), "rejected_qualifiers", ()) or ()
 
@@ -1076,9 +1086,13 @@ class PreflightLinter:
                 # Invariant: Stateful handles or object-receiver carrier outputs MUST be consumed downstream
                 # unless this is the final pipeline step. They are NEVER exempt from liveness simply by matching a clause.
                 has_handle_output = False
+                c_ntype = str(getattr(cell, "node_type", "") or "").strip().lower()
                 for out_name, out_sig in getattr(cell, "outputs", {}).items():
                     s_kind = str(getattr(out_sig, "structure_kind", "") or "").lower()
                     p_role = str(getattr(out_sig, "port_role", "") or "").lower()
+                    o_tname = str(getattr(getattr(out_sig, "signature", out_sig), "type_name", "") or "").strip().lower()
+                    if c_ntype in ("macro", "combinator") and p_role == "result" and o_tname == "state":
+                        continue
                     if s_kind == "handle" or cls._is_object_receiver_role(p_role):
                         has_handle_output = True
                         break
@@ -1127,7 +1141,9 @@ class PreflightLinter:
                 _po = getattr(cell, "primary_output", None)
                 _k_in = str(getattr(_pi, "structure_kind", "") or "").lower()
                 _k_out = str(getattr(_po, "structure_kind", "") or "").lower()
-                is_carrier_transform = bool(_k_in and _k_in == _k_out and _k_out not in ("scalar", "handle"))
+                _t_in = str(getattr(_pi, "type_name", "") or "").lower()
+                _t_out = str(getattr(_po, "type_name", "") or "").lower()
+                is_carrier_transform = bool(_k_in and _k_in == _k_out and _t_in == _t_out and _k_out not in ("scalar", "handle"))
                 if (
                     is_terminal
                     or getattr(cell, "is_goal", False)
@@ -1337,6 +1353,7 @@ class PreflightLinter:
                         getattr(p_sig, "is_carrier", False)
                         or p_binds in _cb_set
                         or (p_abstract and reg_4c.is_abstract_carrier(p_abstract))
+                        or (p_tn and reg_4c.is_composite_carrier(p_tn))
                     )
                 )
                 if is_carrier_port:

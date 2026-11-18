@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import ast
 import importlib
+import keyword
 import os
 import textwrap
 from typing import Dict, Any, List, Optional, Set, Tuple, Type
@@ -1001,14 +1002,14 @@ def render_cell(
                 enclosing_known_vars.update(context.active_variables)
         for p_in_name, p_in_sig in cell_inputs.items():
             if p_in_name in bindings and isinstance(bindings[p_in_name], str):
-                b_clean = bindings[p_in_name].strip().strip("'\"")
-                if b_clean.isidentifier():
+                b_clean = bindings[p_in_name].strip()
+                if b_clean.isidentifier() and not keyword.iskeyword(b_clean):
                     in_sig = getattr(p_in_sig, "signature", p_in_sig)
                     slot_typed_vars.append((in_sig, b_clean))
         for v in bindings.values():
             if isinstance(v, str):
-                v_clean = v.strip().strip("'\"")
-                if v_clean.isidentifier():
+                v_clean = v.strip()
+                if v_clean.isidentifier() and not keyword.iskeyword(v_clean):
                     enclosing_known_vars.add(v_clean)
         if item_var and item_var.isidentifier():
             enclosing_known_vars.add(item_var)
@@ -1079,6 +1080,28 @@ def render_cell(
                 elif p_name in enclosing_known_vars:
                     child_bindings[p_name] = p_name
                 else:
+                    try:
+                        try:
+                            from .unification import (
+                                _classify_template_identifier_port,
+                                _normalize_identifier_port_binding,
+                            )
+                        except (ImportError, ValueError):
+                            from unification import (
+                                _classify_template_identifier_port,
+                                _normalize_identifier_port_binding,
+                            )
+                        is_id_port, is_param_port = _classify_template_identifier_port(child, p_name)
+                    except Exception:
+                        is_id_port, is_param_port = False, False
+                        _normalize_identifier_port_binding = None  # type: ignore[assignment]
+
+                    def _maybe_norm_id(val_s: Any) -> Any:
+                        if not is_id_port or _normalize_identifier_port_binding is None:
+                            return val_s
+                        norm_v = _normalize_identifier_port_binding(val_s, is_param_list=is_param_port)
+                        return norm_v if norm_v is not None else ("x" if is_param_port else f"_{p_name}_{child_idx}")
+
                     lit_bound = None
                     if context is not None and hasattr(context, "resolve_literal_for_port"):
                         prev_cl = getattr(context, "current_cell_clause_idx", None)
@@ -1092,7 +1115,7 @@ def render_cell(
                         finally:
                             context.current_cell_clause_idx = prev_cl
                     if lit_bound is not None:
-                        child_bindings[p_name] = lit_bound
+                        child_bindings[p_name] = _maybe_norm_id(lit_bound)
                         continue
                     try:
                         try:
@@ -1103,10 +1126,13 @@ def render_cell(
                     except Exception:
                         synth_io = None
                     if synth_io is not None:
-                        child_bindings[p_name] = synth_io
+                        child_bindings[p_name] = _maybe_norm_id(synth_io)
                         continue
                     if getattr(p_sig, "default_value", None) is not None:
-                        child_bindings[p_name] = _format_default_value(p_sig, reg=reg_syn)
+                        if is_id_port:
+                            child_bindings[p_name] = _maybe_norm_id(getattr(p_sig, "default_value"))
+                        else:
+                            child_bindings[p_name] = _format_default_value(p_sig, reg=reg_syn)
                     else:
                         try:
                             try:
@@ -1115,9 +1141,12 @@ def render_cell(
                                 from unification import _pointed_default
                             eta_v = _pointed_default(p_sig, child)
                             if eta_v is not None:
-                                child_bindings[p_name] = eta_v
+                                child_bindings[p_name] = _maybe_norm_id(eta_v)
+                            elif is_id_port:
+                                child_bindings[p_name] = "x" if is_param_port else f"_{p_name}_{child_idx}"
                         except Exception:
-                            pass
+                            if is_id_port:
+                                child_bindings[p_name] = "x" if is_param_port else f"_{p_name}_{child_idx}"
 
             child_out_var = f"{_unique_var(child, 'out')}_{child_idx}"
             child_bindings["output_var"] = child_out_var
@@ -1168,10 +1197,6 @@ def render_cell(
             )
             child_lines.append(update_block)
         elif is_collect_loop and last_metric is not None:
-            try:
-                from .language_backend import get_active_language_backend
-            except (ImportError, ValueError):
-                from language_backend import get_active_language_backend
             be_col = get_active_language_backend(reg_syn)
             tmpl_map = be_col.collection_append_templates
             container_type = init_container
@@ -1212,20 +1237,12 @@ def render_cell(
                 null_lit = get_active_language_backend(reg_syn).null_literal
                 child_lines.append(f"{out_var} = {last_metric} if {out_var} is {null_lit} else ({out_var} + {last_metric})")
 
-        try:
-            from .language_backend import get_active_language_backend
-        except (ImportError, ValueError):
-            from language_backend import get_active_language_backend
         be_loop_end = get_active_language_backend(reg_syn)
         slot_rendered[slot_name] = "\n".join(child_lines) if child_lines else be_loop_end.noop_statement
         if last_metric is not None:
             slot_last_out[slot_name] = last_metric
 
     rendered = template
-    try:
-        from .language_backend import get_active_language_backend
-    except (ImportError, ValueError):
-        from language_backend import get_active_language_backend
     be_rend = get_active_language_backend(reg_syn)
     if is_extremum_loop and not _template_assigns_var(rendered, metric_var):
         rendered = f"{metric_var} {be_rend.assignment_operator} {be_rend.null_literal}\n" + rendered
@@ -1281,7 +1298,7 @@ def render_cell(
 
     for s_idx, (slot_name, slot_code) in enumerate(slot_rendered.items()):
         placeholder = f"{{{slot_name}}}"
-        if placeholder in rendered:
+        if any(ln.strip() == placeholder for ln in rendered.splitlines()):
             base_indent = "    "
             found_target = None
             for line in rendered.splitlines():
@@ -1325,10 +1342,6 @@ def render_cell(
                 # Inspect the sanitized AST statement (when Python AST backend is active)
                 # to preserve `return` or assignment LHS, else delegate to LanguageBackend.
                 stmt_node = None
-                try:
-                    from .language_backend import get_active_language_backend
-                except (ImportError, ValueError):
-                    from language_backend import get_active_language_backend
                 be_syn = get_active_language_backend()
                 if be_syn.is_python_ast:
                     try:

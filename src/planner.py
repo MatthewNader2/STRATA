@@ -5071,7 +5071,8 @@ class LatticePlanner:
         tunnel: List[Cell],
         relevance_map: Dict[str, float],
         active_sigma: Substitution,
-        prompt: str = ""
+        prompt: str = "",
+        excluded_tokens: Optional[Set[str]] = None,
     ) -> Optional[List[Cell]]:
         """
         Synthesizes a type-verified sub-pipeline for a macro slot.
@@ -5104,12 +5105,12 @@ class LatticePlanner:
 
             pool = [c for c in tunnel if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
             if not pool:
-                pool = [c for c in self.orchestrator.loaded_cells.values() if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
+                return None
 
             # Dynamic clause targeting: the clause(s) that describe the loop are the
             # ones sharing vocabulary with the loop morphism's DECLARED token set.
             # Zero hardcoded connector/loop keyword lists.
-            parent_toks = getattr(parent_cell, "identity_tokens", getattr(parent_cell, "token_set", set()))
+            parent_toks = set(getattr(parent_cell, "identity_tokens", None) or getattr(parent_cell, "token_set", None) or ())
             clauses = _segment_prompt_clauses(prompt)
             if clauses and parent_toks:
                 related = [
@@ -5120,20 +5121,52 @@ class LatticePlanner:
             else:
                 slot_clause = ""
             target_text = slot_clause.strip() or prompt
-            target_tokens = CellTokenizer.tokenize_prompt(target_text) if target_text else set()
-            if not target_tokens:
+            try:
+                from token_evidence import get_evidence
+                _ev_sub = get_evidence(self.orchestrator)
+            except Exception:
+                _ev_sub = None
+            if _ev_sub is not None and target_text:
+                target_tokens = _ev_sub.clause_tokens(target_text)
+            else:
+                target_tokens = CellTokenizer.tokenize_prompt(target_text) if target_text else set()
+            if not target_tokens and _ev_sub is None:
                 target_tokens = CellTokenizer.tokenize_prompt(prompt) if prompt else set()
+            residual_tokens = target_tokens - parent_toks - set(excluded_tokens or ()) if target_tokens else set()
+
+            def _slot_cand_inhabited(cand_obj: Any, slot_u_str: Any) -> bool:
+                """True iff every required input of cand_obj without a default can unify with slot_u_str."""
+                for _pn, _ps in (getattr(cand_obj, "inputs", {}) or {}).items():
+                    if not getattr(_ps, "required", False) or getattr(_ps, "default_value", None) is not None:
+                        continue
+                    _sig_i = getattr(_ps, "signature", _ps)
+                    _ok = False
+                    if slot_u_str is not None:
+                        if unify(slot_u_str, _sig_i, active_sigma) is not None or unify(_sig_i, slot_u_str, active_sigma) is not None:
+                            _ok = True
+                    if not _ok:
+                        return False
+                return True
 
             child_candidates = []
             for cand in pool:
                 if _is_ingress_cell(cand) and getattr(cand, "node_type", "") != "macro":
                     continue
+                cand_id_toks = set(getattr(cand, "identity_tokens", None) or getattr(cand, "token_set", None) or ())
+                ov_toks = residual_tokens & cand_id_toks if residual_tokens else set()
+                tok_ov = len(ov_toks)
+                if tok_ov <= 0:
+                    continue
+                if _ev_sub is not None and tok_ov < 2:
+                    _ov_m = _ev_sub.identity_overlap(residual_tokens, cand)
+                    if _ov_m["name_precision"] < 0.25 or _ov_m["recall"] < 0.50:
+                        continue
+                if not _slot_cand_inhabited(cand, item_type):
+                    continue
                 for p_name, p_sig in cand.inputs.items():
                     u_cand = unify(item_type, p_sig.signature, active_sigma) or unify(p_sig.signature, item_type, active_sigma)
                     if u_cand is not None:
                         rel = relevance_map.get(cand.cell_id, 0.0)
-                        cand_id_toks = getattr(cand, "identity_tokens", cand.token_set)
-                        tok_ov = len(target_tokens & cand_id_toks)
                         bonus_val = float(settings.domain_affinity_bonus)
                         domain_bonus = bonus_val if cand.domain_name and any(c.domain_name == cand.domain_name for c in tunnel) else 0.0
                         score = tok_ov * 1.0 + rel + domain_bonus
@@ -5156,9 +5189,9 @@ class LatticePlanner:
 
             pool = [c for c in tunnel if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
             if not pool:
-                pool = [c for c in self.orchestrator.loaded_cells.values() if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"]
+                return None
 
-            parent_toks = getattr(parent_cell, "identity_tokens", getattr(parent_cell, "token_set", set()))
+            parent_toks = set(getattr(parent_cell, "identity_tokens", None) or getattr(parent_cell, "token_set", None) or ())
             clauses = _segment_prompt_clauses(prompt)
             if clauses and parent_toks:
                 related = [
@@ -5169,13 +5202,47 @@ class LatticePlanner:
             else:
                 slot_clause = ""
             target_text = slot_clause.strip() or prompt
-            target_tokens = CellTokenizer.tokenize_prompt(target_text) if target_text else set()
-            if not target_tokens:
+            try:
+                from token_evidence import get_evidence
+                _ev_sub = get_evidence(self.orchestrator)
+            except Exception:
+                _ev_sub = None
+            if _ev_sub is not None and target_text:
+                target_tokens = _ev_sub.clause_tokens(target_text)
+            else:
+                target_tokens = CellTokenizer.tokenize_prompt(target_text) if target_text else set()
+            if not target_tokens and _ev_sub is None:
                 target_tokens = CellTokenizer.tokenize_prompt(prompt) if prompt else set()
+            residual_tokens = target_tokens - parent_toks - set(excluded_tokens or ()) if target_tokens else set()
+
+            def _slot_cand_inhabited(cand_obj: Any, slot_u_str: Any) -> bool:
+                """True iff every required input of cand_obj without a default can unify with slot_u_str."""
+                for _pn, _ps in (getattr(cand_obj, "inputs", {}) or {}).items():
+                    if not getattr(_ps, "required", False) or getattr(_ps, "default_value", None) is not None:
+                        continue
+                    _sig_i = getattr(_ps, "signature", _ps)
+                    _ok = False
+                    if slot_u_str is not None:
+                        if unify(slot_u_str, _sig_i, active_sigma) is not None or unify(_sig_i, slot_u_str, active_sigma) is not None:
+                            _ok = True
+                    if not _ok:
+                        return False
+                return True
 
             child_candidates = []
             for cand in pool:
                 if _is_ingress_cell(cand) and getattr(cand, "node_type", "") != "macro":
+                    continue
+                cand_id_toks = set(getattr(cand, "identity_tokens", None) or getattr(cand, "token_set", None) or ())
+                ov_toks = residual_tokens & cand_id_toks if residual_tokens else set()
+                tok_ov = len(ov_toks)
+                if tok_ov <= 0:
+                    continue
+                if _ev_sub is not None and tok_ov < 2:
+                    _ov_m = _ev_sub.identity_overlap(residual_tokens, cand)
+                    if _ov_m["name_precision"] < 0.25 or _ov_m["recall"] < 0.50:
+                        continue
+                if not _slot_cand_inhabited(cand, u_concrete):
                     continue
                 cand_sub = active_sigma
                 in_unified = False
@@ -5193,8 +5260,6 @@ class LatticePlanner:
                     or _reg_sl.is_declared_top(u_concrete)
                 ):
                     rel = relevance_map.get(cand.cell_id, 0.0)
-                    cand_id_toks = getattr(cand, "identity_tokens", getattr(cand, "token_set", set()))
-                    tok_ov = len(target_tokens & cand_id_toks)
                     domain_bonus = 0.5 if cand.domain_name and any(c.domain_name == cand.domain_name for c in tunnel) else 0.0
                     score = tok_ov * 1.0 + rel + domain_bonus
                     child_candidates.append((cand, score, cand_sub))
@@ -5217,6 +5282,7 @@ class LatticePlanner:
                 relevance_map,
                 active_sigma,
                 prompt=prompt,
+                excluded_tokens=excluded_tokens,
             )
 
         return None
@@ -5230,17 +5296,13 @@ class LatticePlanner:
         relevance_map: Dict[str, float],
         active_sigma: Substitution,
         prompt: str = "",
+        excluded_tokens: Optional[Set[str]] = None,
     ) -> Optional[List[Cell]]:
         """Selects a distinct, non-ingress, contract-aligned child cell for a macro slot."""
         pool = [
             c for c in tunnel
             if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"
         ]
-        if not pool:
-            pool = [
-                c for c in self.orchestrator.loaded_cells.values()
-                if c.cell_id != parent_cell.cell_id and getattr(c, "node_type", "") != "constant"
-            ]
         if not pool:
             return None
 
@@ -5277,11 +5339,54 @@ class LatticePlanner:
             if (prompt and slot_toks)
             else []
         )
-        target_toks = (
-            CellTokenizer.tokenize_prompt(" ".join(slot_clauses))
-            if slot_clauses
-            else (CellTokenizer.tokenize_prompt(prompt) if prompt else set())
+        target_text_sel = " ".join(slot_clauses) if slot_clauses else prompt
+        try:
+            from token_evidence import get_evidence
+            _ev_sel = get_evidence(self.orchestrator)
+        except Exception:
+            _ev_sel = None
+        if _ev_sel is not None and target_text_sel:
+            target_toks = _ev_sel.clause_tokens(target_text_sel)
+        else:
+            target_toks = CellTokenizer.tokenize_prompt(target_text_sel) if target_text_sel else set()
+        parent_id_toks = set(
+            getattr(parent_cell, "identity_tokens", None)
+            or getattr(parent_cell, "token_set", None)
+            or ()
         )
+        residual_toks = target_toks - parent_id_toks - set(excluded_tokens or ()) if target_toks else set()
+        def _sel_cand_ok(cand_obj: Any) -> bool:
+            c_id = set(getattr(cand_obj, "identity_tokens", None) or getattr(cand_obj, "token_set", None) or ())
+            matched = residual_toks & c_id
+            if not matched:
+                return False
+            if _ev_sel is not None and len(matched) < 2:
+                _ov_sel = _ev_sel.identity_overlap(residual_toks, cand_obj)
+                if _ov_sel["name_precision"] < 0.25 or _ov_sel["recall"] < 0.50:
+                    return False
+            for _pn, _ps in (getattr(cand_obj, "inputs", {}) or {}).items():
+                if not getattr(_ps, "required", False) or getattr(_ps, "default_value", None) is not None:
+                    continue
+                _sig_i = getattr(_ps, "signature", _ps)
+                _in_u = False
+                if u_slot is not None:
+                    if unify(u_slot, _sig_i, active_sigma) is not None or unify(_sig_i, u_slot, active_sigma) is not None:
+                        _in_u = True
+                if not _in_u:
+                    # Also allow unifying with parent's primary/data inputs (e.g. T or State)
+                    for _pp in (getattr(parent_cell, "inputs", {}) or {}).values():
+                        _ps_i = getattr(_pp, "signature", _pp)
+                        if unify(_ps_i, _sig_i, active_sigma) is not None or unify(_sig_i, _ps_i, active_sigma) is not None:
+                            _in_u = True
+                            break
+                if not _in_u:
+                    return False
+            return True
+
+        candidate_pool = [c for c in candidate_pool if _sel_cand_ok(c)]
+        if not candidate_pool:
+            return None
+
         reg = TypeRegistry.get_instance()
         has_concrete_slot_in = bool(
             u_slot and not reg.is_declared_top(u_slot) and not reg.is_type_variable(u_slot)
@@ -5290,8 +5395,8 @@ class LatticePlanner:
         def _slot_score(cand: Cell) -> float:
             sc = float(relevance_map.get(cand.cell_id, 0.0))
             c_id_toks = set(getattr(cand, "identity_tokens", None) or getattr(cand, "token_set", None) or ())
-            if target_toks:
-                sc += 0.35 * len(target_toks & c_id_toks)
+            if residual_toks:
+                sc += 0.35 * len(residual_toks & c_id_toks)
             if slot_toks and (slot_toks & c_id_toks):
                 sc += 0.40 * len(slot_toks & c_id_toks)
             if has_concrete_slot_in:
@@ -5309,25 +5414,38 @@ class LatticePlanner:
     def _bind_chain_slots(self, chain: List[Cell], tunnel: List[Cell],
                           relevance_map: Dict[str, float], sigma: Substitution,
                           prompt: str = "", _depth: int = 0,
-                          visited_macros: Optional[Set[str]] = None) -> List[Cell]:
+                          visited_macros: Optional[Set[str]] = None,
+                          excluded_tokens: Optional[Set[str]] = None) -> List[Cell]:
         """Plans macro slots on private copies of the chain's cells (never on shared lattice cells). Recursively binds nested slots."""
         if _depth >= 3:
             return list(chain)
-        seen = set(visited_macros or ())
+        chain_cids = {getattr(c, "cell_id", "") for c in chain if c is not None}
+        seen = set(visited_macros or ()) | chain_cids
+        eff_excluded_toks: Set[str] = set(excluded_tokens or ())
+        for c_ch in chain:
+            if c_ch is not None:
+                eff_excluded_toks.update(
+                    getattr(c_ch, "identity_tokens", None) or getattr(c_ch, "token_set", None) or ()
+                )
         out: List[Cell] = []
         for cell in chain:
-            if getattr(cell, "slots", None) and cell.cell_id not in seen:
+            if getattr(cell, "slots", None) and cell.cell_id not in set(visited_macros or ()):
                 cell = _private_copy(cell, self.orchestrator)
                 child_tunnel = [c for c in tunnel if c.cell_id != cell.cell_id and c.cell_id not in seen]
                 next_seen = seen | {cell.cell_id}
                 for slot_name, slot_contract in _safe_slots_items(cell):
                     if slot_name not in getattr(cell, "bound_slots", {}):
-                        sub_plan = self.plan_sublattice(cell, slot_name, slot_contract, child_tunnel or tunnel, relevance_map, sigma, prompt)
+                        sub_plan = self.plan_sublattice(
+                            cell, slot_name, slot_contract, child_tunnel,
+                            relevance_map, sigma, prompt,
+                            excluded_tokens=eff_excluded_toks,
+                        )
                         if sub_plan:
                             # Recursively bind nested slots inside sub_plan
                             sub_plan = self._bind_chain_slots(
                                 sub_plan, tunnel, relevance_map, sigma, prompt,
                                 _depth=_depth + 1, visited_macros=next_seen,
+                                excluded_tokens=eff_excluded_toks,
                             )
                             cell.bound_slots[slot_name] = sub_plan
             out.append(cell)

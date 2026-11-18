@@ -1,9 +1,0 @@
-diff a/.gitignore b/.gitignore	(rejected hunks)
-@@ -76,7 +76,6 @@
- apply_fixes.py
- inspect_code.py
- run_phase0_smoke.py
--test.py
- universal_harvester.py
- scripts/mount_drive.py
- scripts/download_icon.py
