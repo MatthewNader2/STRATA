@@ -1120,10 +1120,18 @@ class PreflightLinter:
                 # In graph-theoretic dataflow liveness:
                 # A step is live if its outputs are consumed, OR if it represents a terminal deliverable / sink,
                 # OR if it was explicitly synthesized as the witness to a declared user specification clause.
+                # Serving a clause only excuses an unused result for observations/queries (scalar results such as
+                # a mean). A carrier-preserving transform (non-scalar data in, same kind of data out) whose result
+                # nothing reads is a silent no-op: the requested operation had no effect on the final output.
+                _pi = getattr(cell, "primary_input", None)
+                _po = getattr(cell, "primary_output", None)
+                _k_in = str(getattr(_pi, "structure_kind", "") or "").lower()
+                _k_out = str(getattr(_po, "structure_kind", "") or "").lower()
+                is_carrier_transform = bool(_k_in and _k_in == _k_out and _k_out not in ("scalar", "handle"))
                 if (
                     is_terminal
                     or getattr(cell, "is_goal", False)
-                    or getattr(cell, "matched_clause_idx", None) is not None
+                    or (getattr(cell, "matched_clause_idx", None) is not None and not is_carrier_transform)
                 ):
                     continue
                 dead_v = next(iter(produced_vars))
@@ -1695,6 +1703,17 @@ class PreflightLinter:
                 except (ImportError, ValueError):
                     from token_evidence import audit as _cov_audit
                 _cells_for_cov = [b[0] for b in pipeline_bindings]
+                if orchestrator is None:
+                    try:
+                        from lattice import LatticeOrchestrator as _LO
+                        orchestrator = _LO.get_active_instance()
+                    except Exception:
+                        orchestrator = None
+                if orchestrator is None:
+                    warnings.append(
+                        "coverage audit SKIPPED: no orchestrator available, so unserved/unrequested prompt clauses "
+                        "were NOT checked; do not treat a clean lint as evidence the program does what was asked."
+                    )
                 _cov = _cov_audit(
                     _cells_for_cov,
                     prompt,

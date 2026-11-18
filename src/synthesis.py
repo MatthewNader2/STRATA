@@ -27,6 +27,7 @@ try:
         extract_code_from_llm_response,
         safe_substitute_template,
         extract_template_placeholders,
+        unique_var as _unique_var,
     )
 except (ImportError, ValueError):
     from external_rag import LiveDocFetcher
@@ -43,6 +44,7 @@ except (ImportError, ValueError):
         extract_code_from_llm_response,
         safe_substitute_template,
         extract_template_placeholders,
+        unique_var as _unique_var,
     )
 
 logger = get_logger("synthesis")
@@ -821,20 +823,6 @@ def _detect_loop_item_var(template: str) -> Optional[str]:
                     return target_name[len("_nstl_ph_"):]
                 return target_name
     return None
-
-
-def _unique_var(cell: Any, suffix: str) -> str:
-    """
-    Returns a cell-scoped variable name of the form `_<cell_id>_<suffix>`.
-    Guarantees no collision between nested renders of distinct cells.
-    """
-    cid = (
-        getattr(cell, "cell_id", None)
-        or getattr(cell, "name", None)
-        or "cell"
-    )
-    safe = "".join(c if c.isalnum() else "_" for c in str(cid)) or "cell"
-    return f"_{safe}_{suffix}"
 
 
 def _resolve_item_var(cell: Any, template: str) -> str:

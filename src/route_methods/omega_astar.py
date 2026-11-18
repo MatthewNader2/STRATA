@@ -1951,8 +1951,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     prior_sc += 0.25
                 unlock_credit = 0.0
                 order_cost_penalty = 0.0
+                # Tag the step with the clause its evidence supports best (ties -> earliest clause), not simply
+                # the lowest-numbered clause it weakly overlaps. Otherwise a cell that happens to share a token
+                # with an earlier, already-served clause is filed under that clause, and every clause-scoped
+                # consumer downstream (literal binding, linter coverage) sees the wrong clause.
                 step_cl_idx: Optional[int] = (
-                    min(t[0] for t in eff_new_hits)
+                    min(
+                        eff_new_hits,
+                        key=lambda t: (-clause_cell_strength.get((cand.cell_id, t), 0.0), t[0]),
+                    )[0]
                     if eff_new_hits
                     else (max(0, max_cl_seen) if is_closing_open_setter else None)
                 )
@@ -2550,6 +2557,24 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
 
         chosen_ids = chosen_entry[1] if chosen_entry is not None else None
         chosen_clauses = chosen_entry[2] if chosen_entry is not None else ()
+
+        # Honest coverage accounting. The search silently shrinks its coverage target to the
+        # clauses that have at least one candidate (`coverable_clauses`) and can accept a plan that
+        # covers only half of them. Never let that pass unreported: record exactly which prompt
+        # clauses the returned plan does not serve, and which of those had no candidate at all.
+        if chosen_ids and n_clauses > 0:
+            _served = {c for c in chosen_clauses if c is not None}
+            _coverable_idx = {t[0] for t in coverable_clauses}
+            _uncovered = sorted(set(range(n_clauses)) - _served)
+            if _uncovered:
+                self._trace(
+                    "omega_incomplete_plan",
+                    complete=bool(best_full_complete is not None and chosen_entry is best_full_complete),
+                    n_clauses=n_clauses,
+                    uncovered_clauses=_uncovered,
+                    uncovered_without_candidates=[i for i in _uncovered if i not in _coverable_idx],
+                    uncovered_with_candidates=[i for i in _uncovered if i in _coverable_idx],
+                )
 
         self._trace(
             "omega_astar_search",

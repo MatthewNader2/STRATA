@@ -76,7 +76,6 @@ colab_cli_repo/
 apply_fixes.py
 inspect_code.py
 run_phase0_smoke.py
-test.py
 universal_harvester.py
 scripts/mount_drive.py
 scripts/download_icon.py

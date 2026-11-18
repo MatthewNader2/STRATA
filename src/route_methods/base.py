@@ -906,42 +906,45 @@ class RouteMethod(ABC):
             row = [ev.identity_overlap(ct, cell) if ct else {"f": 0.0, "hit": 0.0, "rank": (0.0, 0.0, 0.0), "tokens": []} for ct in clause_toks]
             table.append(row)
 
-        # Pass 1: Primary evidence winners across all clauses
-        # Greedy highest-rank matching: pair each clause with its strongest lexical-identity cell
-        # (or calibrated semantic winner when lexical hit is absent in non-P0 profiles)
-        # subject to causal monotonicity (prod_clause <= cons_clause along linear pipeline order).
-        candidates = []
-        for j in range(len(clauses)):
+        # Pass 1: Primary evidence winners across all clauses.
+        # Optimal order-preserving one-to-one assignment (weighted non-crossing matching, O(cells x clauses)).
+        # The previous greedy "strongest pair first, skip on order violation" rule was not optimal: one
+        # out-of-order cell with a strong hit (e.g. a redundant bridge near the end of the path) claimed an early
+        # clause first, and the causal-order check then blocked every correct later assignment.
+        n_cells, n_cl = len(path), len(clauses)
+        W = [[0.0] * n_cl for _ in range(n_cells)]
+        for j in range(n_cl):
             sem_map_j = (clause_sem[j] or {}) if clause_sem is not None else {}
             max_sem_j = max(sem_map_j.values(), default=0.0) if sem_map_j else 0.0
-            for i in range(len(path)):
+            for i in range(n_cells):
                 if table[i][j]["hit"] > 0.0:
-                    candidates.append(((1, table[i][j]["rank"]), j, i))
+                    r = table[i][j]["rank"]
+                    W[i][j] = 1.0 + 0.55 * r[0] + 0.30 * r[1] + 0.15 * r[2]
                 elif clause_sem is not None and max_sem_j >= 0.35:
                     sem_sc = float(sem_map_j.get(path[i].cell_id, 0.0) or 0.0)
                     if sem_sc >= 0.35 and sem_sc >= 0.70 * max_sem_j:
-                        candidates.append(((0, (sem_sc, 0.0, sem_sc)), j, i))
-        candidates.sort(key=lambda x: x[0], reverse=True)
-
+                        W[i][j] = min(0.99, sem_sc)
+        F = [[0.0] * (n_cl + 1) for _ in range(n_cells + 1)]
+        for i in range(1, n_cells + 1):
+            for j in range(1, n_cl + 1):
+                best = max(F[i - 1][j], F[i][j - 1])
+                if W[i - 1][j - 1] > 0.0:
+                    best = max(best, F[i - 1][j - 1] + W[i - 1][j - 1])
+                F[i][j] = best
         assigned_clauses = set()
         assigned_cells = set()
-        for rank, j, i in candidates:
-            if j not in assigned_clauses and i not in assigned_cells:
-                violates = False
-                for k in assigned_cells:
-                    k_cl = path[k].matched_clause_idx
-                    if k_cl is not None:
-                        if i < k and j > k_cl:
-                            violates = True
-                            break
-                        if i > k and j < k_cl:
-                            violates = True
-                            break
-                if violates:
-                    continue
-                path[i].matched_clause_idx = j
-                assigned_clauses.add(j)
-                assigned_cells.add(i)
+        i, j = n_cells, n_cl
+        while i > 0 and j > 0:
+            if W[i - 1][j - 1] > 0.0 and abs(F[i][j] - (F[i - 1][j - 1] + W[i - 1][j - 1])) < 1e-12 and F[i][j] > F[i - 1][j] + 1e-12 and F[i][j] > F[i][j - 1] + 1e-12:
+                path[i - 1].matched_clause_idx = j - 1
+                assigned_clauses.add(j - 1)
+                assigned_cells.add(i - 1)
+                i -= 1
+                j -= 1
+            elif F[i][j] == F[i - 1][j]:
+                i -= 1
+            else:
+                j -= 1
 
         # Ensure any remaining unassigned clause gets its best available unassigned cell
         for j in range(len(clauses)):

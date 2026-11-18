@@ -644,6 +644,35 @@ class PipelineDebugger:
         self.route_method = route_method.upper() if route_method else None
         self.llm_feedback = llm_feedback
 
+    @staticmethod
+    def _build_failure_record(*, cells, internal_error_msg, unify_fail_reason, refusal_exc, refusal_reason,
+                              sandbox_res, final_code) -> Optional[Dict[str, Any]]:
+        """
+        Structured, machine-readable account of WHY a run did not succeed (None on success).
+        Reports consume this instead of pattern-matching rendered console text, so the failure class,
+        the unresolved ports and the lint violations are never lost or truncated.
+        """
+        sandbox_res = sandbox_res or {}
+        if internal_error_msg:
+            return {"stage": "engine", "kind": "INTERNAL_ERROR", "detail": internal_error_msg}
+        if not cells:
+            return {"stage": "planning", "kind": "PLANNING_FAILED", "detail": "no compositional path found"}
+        if unify_fail_reason:
+            return {"stage": "unification", "kind": "UNIFICATION_FAILED", "detail": unify_fail_reason}
+        if refusal_exc is not None or refusal_reason:
+            if getattr(refusal_exc, "is_engine_defect", False):
+                return {"stage": "emission", "kind": "EMISSION_DEFECT", "detail": str(refusal_reason)}
+            ports = [f"{cid}.{p}" for cid, p in (getattr(refusal_exc, "ports", None) or [])]
+            return {"stage": "synthesis", "kind": "UNRESOLVED_PORTS", "detail": str(refusal_reason), "unresolved_ports": ports}
+        viol = sandbox_res.get("preflight_lint_violations")
+        if viol:
+            return {"stage": "lint", "kind": "LINT_REJECTED", "detail": f"{len(viol)} violation(s)", "violations": list(viol)}
+        if not final_code:
+            return {"stage": "synthesis", "kind": "NO_CODE", "detail": "no code was emitted"}
+        if not sandbox_res.get("success", False):
+            return {"stage": "sandbox", "kind": "SANDBOX_FAILED", "detail": str(sandbox_res.get("error", ""))[-400:]}
+        return None
+
     def run(
         self,
         prompt: str,
@@ -1177,6 +1206,9 @@ class PipelineDebugger:
         synth_dt = 0.0
         internal_error_msg: Optional[str] = None
         refusal_reason: Optional[str] = None
+        refusal_exc: Optional[BaseException] = None
+        unify_fail_reason: Optional[str] = None
+        lint_error_msg: Optional[str] = None
 
         if cells:
             t_synth_0 = time.perf_counter()
@@ -1219,6 +1251,7 @@ class PipelineDebugger:
                 ))
             elif unify_res.is_bottom():
                 fail_reason = getattr(unify_res, "reason", "Unknown unification failure")
+                unify_fail_reason = str(fail_reason)
                 c.print(Panel(
                     f"[bold red]❌ UNIFICATION FAILED: {fail_reason}[/bold red]\n"
                     f"[yellow]A type constraint or required port could not be satisfied in the Type Monad.[/yellow]",
@@ -1238,6 +1271,7 @@ class PipelineDebugger:
                     logger.warning("Synthesis refused (declared failure): %s", e)
                     final_code = ""
                     refusal_reason = str(e)
+                    refusal_exc = e
                 except Exception as e:
                     logger.error("INTERNAL ERROR in emit_code: %s", e, exc_info=True)
                     internal_error_msg = f"{type(e).__name__}: {e}"
@@ -1356,6 +1390,12 @@ class PipelineDebugger:
                         "code": None,
                         "internal_error": None,
                         "refusal_reason": refusal_reason,
+                        "failure": self._build_failure_record(
+                            cells=cells, internal_error_msg=None, unify_fail_reason=None,
+                            refusal_exc=refusal_exc, refusal_reason=refusal_reason,
+                            sandbox_res={}, final_code="",
+                        ),
+                        "lint_error": None,
                         "route_ms": route_dt,
                         "plan_ms": plan_dt,
                         "synth_ms": synth_dt,
@@ -1373,6 +1413,8 @@ class PipelineDebugger:
                         logger.warning(f"[PREFLIGHT] Linting exception: {lint_err}")
                         lint_res = None
                         lint_valid = True
+                        # The program still runs, but it must not be reported as lint-verified.
+                        lint_error_msg = f"{type(lint_err).__name__}: {lint_err}"
 
                 # Deterministic Bridge Insertion for Pre-Flight Lint Violations
                 if not lint_valid and lint_res and getattr(lint_res, "structured_violations", None) and cells:
@@ -1791,6 +1833,15 @@ class PipelineDebugger:
             logger.debug("[CLI] Failure surface summary skipped: %s", _fs_err)
 
         path_ids = [cl.cell_id for cl in cells] if cells else []
+        failure_rec = self._build_failure_record(
+            cells=cells,
+            internal_error_msg=internal_error_msg,
+            unify_fail_reason=unify_fail_reason,
+            refusal_exc=refusal_exc,
+            refusal_reason=refusal_reason,
+            sandbox_res=sandbox_res,
+            final_code=final_code,
+        )
         sb_status = "PASSED" if sandbox_res.get("success", False) else ("FAILED: " + sandbox_res.get("error", "").splitlines()[-1] if sandbox_res.get("error") else "FAILED")
         return {
             "prompt": prompt_clean,
@@ -1801,6 +1852,8 @@ class PipelineDebugger:
             "code": final_code,
             "internal_error": internal_error_msg,
             "refusal_reason": refusal_reason,
+            "failure": failure_rec,
+            "lint_error": lint_error_msg,
             "route_ms": route_dt,
             "plan_ms": plan_dt,
             "synth_ms": synth_dt,
@@ -2739,7 +2792,13 @@ class NSTLInteractiveShell(cmd.Cmd):
                 "route_ms": res["route_ms"],
                 "synth_ms": res["synth_ms"],
                 "sandbox_ms": res["sandbox_ms"],
-                "sandbox_error": res.get("sandbox_result", {}).get("error", "")
+                "plan_ms": res.get("plan_ms", 0.0),
+                "sandbox_result": res.get("sandbox_result", {}),
+                "sandbox_error": res.get("sandbox_result", {}).get("error", ""),
+                "internal_error": res.get("internal_error"),
+                "refusal_reason": res.get("refusal_reason"),
+                "failure": res.get("failure"),
+                "lint_error": res.get("lint_error"),
             })
             return
 
