@@ -1,0 +1,156 @@
+diff a/src/unification.py b/src/unification.py	(rejected hunks)
+@@ -35,6 +35,7 @@
+         tokenize_alphanumeric,
+         extract_template_placeholders,
+         safe_substitute_template,
++        unique_var as _unique_var,
+     )
+     from errors import (
+         UnificationError,
+@@ -48,6 +49,7 @@
+         tokenize_alphanumeric,
+         extract_template_placeholders,
+         safe_substitute_template,
++        unique_var as _unique_var,
+     )
+     from .errors import (
+         UnificationError,
+@@ -4048,6 +4050,27 @@
+         return inst
+ 
+ 
++def _split_dimension_token(word: str) -> List[Tuple[int, str]]:
++    """
++    Splits dimension notation such as "5x5", "800x600" or "3x3x3" into its numeric parts,
++    returning [(offset_in_word, numeric_text), ...]; returns [] when `word` is not
++    dimension notation. Lexical grammar only (no regex, no port/library knowledge): it lets
++    "kernel size 5x5" bind exactly like "kernel size 5 by 5", because both then yield two
++    adjacent numeric spans that the contiguous-tuple binder already understands.
++    """
++    seps = ("x", "X", "\u00d7")
++    parts: List[Tuple[int, str]] = []
++    start = 0
++    for i, ch in enumerate(word + "x"):
++        if i == len(word) or ch in seps:
++            seg = word[start:i]
++            if not seg or seg.count(".") > 1 or not seg.replace(".", "").isdigit() or seg.startswith(".") or seg.endswith("."):
++                return []
++            parts.append((start, seg))
++            start = i + 1
++    return parts if len(parts) >= 2 else []
++
++
+ class ExecutionContext:
+     """
+     Runtime execution scope holding bound variables and literal arguments.
+@@ -4124,6 +4147,9 @@
+             self.target_literals.add(self.target_key)
+         self.written_keys: Set[str] = set()
+         self.current_cell_clause_idx: Optional[int] = None
++        # Prompt clauses that at least one non-bridge pipeline cell serves (set by unify_pipeline).
++        # None = unknown, in which case the clause-locality rule for REQUIRED numeric ports is not applied.
++        self.pipeline_served_clauses: Optional[Set[int]] = None
+         self.clause_spans: List[Tuple[int, int]] = []
+         if self._prompt:
+             try:
+@@ -4278,6 +4304,7 @@
+         new_ctx.consumed_keys = set(self.consumed_keys)
+         new_ctx.target_literals = set(self.target_literals)
+         new_ctx.current_cell_clause_idx = self.current_cell_clause_idx
++        new_ctx.pipeline_served_clauses = self.pipeline_served_clauses
+         new_ctx.literal_clause_map = dict(self.literal_clause_map)
+         new_ctx.ordered_literals = list(self.ordered_literals)
+         new_ctx.identifier_roles = dict(self.identifier_roles)
+@@ -4558,6 +4585,13 @@
+                     spans.append(LiteralSpan(pos, "file_asset", w, end_pos=pos + len(w)))
+                     continue
+ 
++            # Dimension notation ("5x5", "800x600"): emit each extent as its own numeric span
++            _dim_parts = _split_dimension_token(w)
++            if _dim_parts:
++                for _off, _txt in _dim_parts:
++                    spans.append(LiteralSpan(pos + _off, "numeric", _txt, end_pos=pos + _off + len(_txt)))
++                continue
++
+             # Numeric tokens (including comma-separated integers like "1,000" or "10,000")
+             num_candidate = w.replace(",", "") if ("," in w and all(part.isdigit() for part in w.split(","))) else w
+             try:
+@@ -4567,7 +4601,7 @@
+             except ValueError:
+                 pass
+ 
+-            # No heuristic dimension splitting; numeric tokens are extracted cleanly as units
++            # (dimension notation is handled above; everything else is a single-unit numeric token)
+ 
+         # 3. Predicate / filter comparison expressions (e.g. "value > 100", "score <= 50", "x == 1") without regex
+         for op in (">=", "<=", "==", "!=", ">", "<"):
+@@ -5133,12 +5167,19 @@
+                 in_cur_clause = 1 if (
+                     cell_cl is not None and idx in lit_clause_map and lit_clause_map[idx] == cell_cl
+                 ) else 0
++                _served_cl = getattr(self, "pipeline_served_clauses", None)
+                 if (
+-                    not port_sig.required
+-                    and cell_cl is not None
++                    cell_cl is not None
+                     and num_prompt_clauses > 1
+                     and idx in lit_clause_map
+                     and lit_clause_map[idx] != cell_cl
++                    and (
++                        not port_sig.required
++                        # A required port may only borrow a literal that belongs to a clause NO cell serves
++                        # (an orphan literal). Otherwise it steals a sibling clause's argument, e.g. a blur
++                        # sigma consuming the next clause's edge-detector threshold.
++                        or (_served_cl is not None and lit_clause_map[idx] in _served_cl)
++                    )
+                 ):
+                     continue
+                 if not port_sig.required:
+@@ -7843,6 +7884,12 @@
+ 
+         # Static Pre-Unification Structural Macro Expansion (Phase 4 / T4.1)
+         cells = self.wiring_stage.expand_macros(cells, ctx)
++        ctx.pipeline_served_clauses = {
++            getattr(_c_srv, "matched_clause_idx", None)
++            for _c_srv in cells
++            if not getattr(_c_srv, "_auto_inserted_bridge", False)
++            and getattr(_c_srv, "matched_clause_idx", None) is not None
++        }
+ 
+         # Pre-scan declared optic setter keys introduced later without prior read reference
+         _setter_clause_indices: Set[int] = {
+@@ -11207,7 +11254,8 @@
+         if getattr(active_ctx, "unresolved_ports", None):
+             ports_str = ", ".join(f"{cid}.{p}" for cid, p in active_ctx.unresolved_ports)
+             raise UnresolvedPlaceholderError(
+-                f"Code synthesis refused: pipeline contains unresolved ports: [{ports_str}]"
++                f"Code synthesis refused: pipeline contains unresolved ports: [{ports_str}]",
++                ports=[(str(cid), str(p)) for cid, p in active_ctx.unresolved_ports],
+             )
+ 
+         # Ensure no binding contains an unresolved sentinel
+@@ -12026,13 +12074,20 @@
+ 
+ 
+ class UnresolvedPlaceholderError(UnificationFailure):
+-    """Raised when a placeholder cannot be resolved."""
+-    pass
++    """Raised when a placeholder cannot be resolved. `ports` lists (cell_id, port_name) pairs when known."""
++
++    def __init__(self, message: str = "", ports: Optional[List[Tuple[str, str]]] = None):
++        super().__init__(message)
++        self.ports: List[Tuple[str, str]] = list(ports or [])
+ 
+ 
+ class EmissionLivenessError(UnificationFailure):
+-    """Raised when emitted code references variables that have not been defined or imported."""
+-    pass
++    """
++    Raised when emitted code is not well-formed (undefined names, invalid syntax).
++    This is an ENGINE DEFECT in the emitter, not a theoretical limit of the lattice, so reports must not
++    file it under "architectural"; `is_engine_defect` lets callers classify it honestly.
++    """
++    is_engine_defect = True
+ 
+ 
+ def types_unify(tau_expected: str, tau_actual: str) -> bool:

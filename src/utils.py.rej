@@ -1,0 +1,25 @@
+diff a/src/utils.py b/src/utils.py	(rejected hunks)
+@@ -23,6 +23,23 @@
+ _DELIM_TRANS = str.maketrans({c: " " for c in _PUNCT_EXCEPT_UNDERSCORE})
+ 
+ 
++def unique_var(cell: Any, suffix: str) -> str:
++    """
++    Returns a cell-scoped variable name of the form `_<cell_id>_<suffix>`.
++    Guarantees no collision between nested renders of distinct cells.
++
++    Lives in utils (not synthesis) because both unification and synthesis need it
++    and those two modules import each other lazily.
++    """
++    cid = (
++        getattr(cell, "cell_id", None)
++        or getattr(cell, "name", None)
++        or "cell"
++    )
++    safe = "".join(c if c.isalnum() else "_" for c in str(cid)) or "cell"
++    return f"_{safe}_{suffix}"
++
++
+ def extract_template_placeholders(template: str) -> List[str]:
+     """Extracts valid Python identifier placeholder names from a code template without regex."""
+     if not template or "{" not in template:

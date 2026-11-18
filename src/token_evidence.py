@@ -293,7 +293,15 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
         if not accepted:
             primary_f = o["f"]
             covered |= set(o["tokens"])
+<<<<<<< Updated upstream
             ok, why = True, "primary (best rank: recall, name-precision, F; relevance breaks ties)"
+=======
+            ok, why = True, (
+                "primary (best combined score: identity evidence weighted by retrieval relevance)"
+                if use_rel_weighting
+                else "primary (best rank: recall, name-precision, F)"
+            )
+>>>>>>> Stashed changes
         else:
             residual = ev.identity_overlap(toks - covered, c)
             min_recall = settings.secondary_anchor_min_recall
