@@ -13,7 +13,6 @@ import shutil
 import struct
 import subprocess
 import sys
-import tempfile
 import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -201,10 +200,9 @@ def provision_sandbox_fixtures(workdir: Path) -> None:
 
 
 def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-    """Executes generated Python code headlessly and checks literal grounding."""
+    """Executes generated Python code inside STRATA's headless GEVRSandbox and checks literal grounding."""
     ast_info = check_ast(code)
     if not ast_info["ast_ok"]:
-        # Clean refusal check for clarify-expected tasks
         return {
             "status": "NO_CODE" if not code.strip() else "SANDBOX_FAILED",
             "category": "IMPLEMENTATION",
@@ -215,82 +213,57 @@ def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> 
             "stderr": "",
         }
 
-    with tempfile.TemporaryDirectory(prefix="strata_sb_") as tmp:
-        workdir = Path(tmp)
-        provision_sandbox_fixtures(workdir)
-        script_path = workdir / "generated_solution.py"
-        # Auto-guard unbounded pygame loops if needed only via clean environment headless drivers
-        script_path.write_text(code, encoding="utf-8")
+    provision_sandbox_fixtures(ROOT_DIR)
+    src_str = str(ROOT_DIR / "src")
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    os.environ.setdefault("MPLBACKEND", "Agg")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-        env = os.environ.copy()
-        env["SDL_VIDEODRIVER"] = "dummy"
-        env["SDL_AUDIODRIVER"] = "dummy"
-        env["MPLBACKEND"] = "Agg"
-        env["QT_QPA_PLATFORM"] = "offscreen"
+    from gevr_sandbox import GEVRSandbox
 
-        try:
-            proc = subprocess.run(
-                [sys.executable, str(script_path)],
-                cwd=str(workdir),
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            if proc.returncode != 0:
-                err_tail = (proc.stderr or proc.stdout or f"Exit {proc.returncode}").strip()
-                last_line = err_tail.splitlines()[-1] if err_tail else f"Exit {proc.returncode}"
-                return {
-                    "status": "SANDBOX_FAILED",
-                    "category": "IMPLEMENTATION",
-                    "detail": last_line,
-                    "ast_ok": True,
-                    "missing_literals": verify_literals_consumed(code, task.get("expected_literals") or []),
-                    "stdout": proc.stdout[-1000:],
-                    "stderr": proc.stderr[-1500:],
-                }
-        except subprocess.TimeoutExpired:
-            # Infinite game loop that stays alive until timeout without error in pure pygame code
-            if task.get("id") == "vague_game":
-                return {
-                    "status": "PASSED",
-                    "category": "SUCCESS",
-                    "detail": "Running game loop (timeout cleanly stopped)",
-                    "ast_ok": True,
-                    "missing_literals": [],
-                    "stdout": "",
-                    "stderr": "Timed out inside event loop",
-                }
-            return {
-                "status": "TIMEOUT",
-                "category": "ENVIRONMENT",
-                "detail": f"Timed out after {timeout}s",
-                "ast_ok": True,
-                "missing_literals": verify_literals_consumed(code, task.get("expected_literals") or []),
-                "stdout": "",
-                "stderr": "",
-            }
+    sandbox = GEVRSandbox(default_timeout=timeout, allowed_capabilities=set())
+    sb = sandbox.execute(code, timeout=timeout)
+    err_txt = str(sb.get("error") or sb.get("stderr") or "").strip()
 
-        missing_lits = verify_literals_consumed(code, task.get("expected_literals") or [])
-        if missing_lits:
-            return {
-                "status": "PASSED_UNVERIFIED",
-                "category": "SUSPECT",
-                "detail": f"Missing prompt literals: {missing_lits}",
-                "ast_ok": True,
-                "missing_literals": missing_lits,
-                "stdout": proc.stdout[-1000:],
-                "stderr": proc.stderr[-1000:],
-            }
+    if not sb.get("success", False):
+        if any(k in err_txt for k in ("SecurityPolicyError", "Security violation", "Capability denied")):
+            st, cat = "SECURITY_BLOCKED", "SECURITY"
+        else:
+            st, cat = "SANDBOX_FAILED", "IMPLEMENTATION"
+        last_line = err_txt.splitlines()[-1] if err_txt else "Runtime failure"
         return {
-            "status": "PASSED",
-            "category": "SUCCESS",
-            "detail": "Sandbox exit 0 + all literals verified",
+            "status": st,
+            "category": cat,
+            "detail": last_line[:160],
             "ast_ok": True,
-            "missing_literals": [],
-            "stdout": proc.stdout[-1000:],
-            "stderr": proc.stderr[-1000:],
+            "missing_literals": verify_literals_consumed(code, task.get("expected_literals") or []),
+            "stdout": str(sb.get("stdout") or "")[-1000:],
+            "stderr": err_txt[-1500:],
         }
+
+    missing_lits = verify_literals_consumed(code, task.get("expected_literals") or [])
+    if missing_lits:
+        return {
+            "status": "PASSED_UNVERIFIED",
+            "category": "SUSPECT",
+            "detail": f"Missing prompt literals: {missing_lits}",
+            "ast_ok": True,
+            "missing_literals": missing_lits,
+            "stdout": str(sb.get("stdout") or "")[-1000:],
+            "stderr": err_txt[-1000:],
+        }
+    return {
+        "status": "PASSED",
+        "category": "SUCCESS",
+        "detail": "Live GEVR Sandbox verified + all literals consumed",
+        "ast_ok": True,
+        "missing_literals": [],
+        "stdout": str(sb.get("stdout") or "")[-1000:],
+        "stderr": err_txt[-1000:],
+    }
 
 
 def audit_sdk_code(code: str, task: Dict[str, Any]) -> Dict[str, Any]:

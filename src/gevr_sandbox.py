@@ -769,10 +769,29 @@ def _sandbox_worker_exec(
             }
             exec_globals.update(context)
 
-            # Step 5: Bytecode Execution under captured streams
+            # Step 5: Bytecode Execution under captured streams (handle explicit sys.exit)
             compiled = compile(parsed_ast, filename="<sandbox>", mode="exec")
+            sys_exit_code = 0
             with contextlib.redirect_stdout(captured_stdout), contextlib.redirect_stderr(captured_stderr):
-                exec(compiled, exec_globals)
+                try:
+                    exec(compiled, exec_globals)
+                except SystemExit as sys_exit_exc:
+                    code_val = sys_exit_exc.code
+                    if isinstance(code_val, int):
+                        sys_exit_code = code_val
+                    elif code_val is not None:
+                        sys_exit_code = 1
+                        captured_stderr.write(f"\nSystemExit: {code_val}\n")
+            if sys_exit_code != 0:
+                _send_payload({
+                    "success": False,
+                    "returncode": sys_exit_code,
+                    "stdout": captured_stdout.getvalue(),
+                    "stderr": captured_stderr.getvalue(),
+                    "error": f"SystemExit({sys_exit_code})",
+                    "results": {},
+                })
+                return
 
             raw_results = {
                 k: v for k, v in exec_globals.items()
