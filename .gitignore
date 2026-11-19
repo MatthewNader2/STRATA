@@ -62,6 +62,8 @@ total*.log
 # --- Historical Backups, Patches & One-Time Scripts ---
 # Exclude llama-cpp local binary builds and temporary tools artifacts
 tools/llama-cpp*/
+_local_archive/
+strata_colab_results*.zip
 *.bak*
 *.patch
 *.diff
@@ -92,6 +94,11 @@ src/eval_runner.py
 output_data.csv
 data.csv
 input.csv
+edges.png
+contours.png
+spec_out.png
+metrics.db
+output_1.npy
 *.pptx
 *.apk
 *.exe
