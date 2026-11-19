@@ -616,6 +616,51 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 h_cands.sort(key=lambda item: item[0], reverse=True)
                 for _, h_prod in h_cands[:2]:
                     _add_struct_cell(h_prod)
+            _p_src_lits, _p_dest_lits = self.extract_file_literals(prompt or "", ctx=ctx)
+            if _p_dest_lits:
+                _req_handles = [
+                    (ip, isig) for ip, isig in _p_ins
+                    if getattr(ip, "required", True)
+                    and getattr(ip, "default_value", None) is None
+                    and self.is_handle_port(ip)
+                ]
+                for h_in, h_sig in _req_handles:
+                    _has_file_prod = any(
+                        any(is_path_port(p) for p in (getattr(pc, "inputs", {}) or {}).values())
+                        and any(self.file_compat(pc, df) >= 1 for df in _p_dest_lits)
+                        and any(
+                            getattr(op, "signature", op) is not None
+                            and unify(getattr(op, "signature", op), h_sig) is not None
+                            for op in (getattr(pc, "outputs", {}) or {}).values()
+                        )
+                        for pc in pool
+                    )
+                    if _has_file_prod:
+                        continue
+                    _fh_cands: List[Tuple[Tuple[int, int, int], Any]] = []
+                    for lc in orch_ref.loaded_cells.values():
+                        lcid = getattr(lc, "cell_id", None)
+                        if not lcid or lcid in seen_ids or is_terminal_sink(lc, orch_ref):
+                            continue
+                        lc_outs = list((getattr(lc, "outputs", {}) or {}).values())
+                        if not any(
+                            getattr(op, "signature", op) is not None
+                            and unify(getattr(op, "signature", op), h_sig) is not None
+                            for op in lc_outs
+                        ):
+                            continue
+                        if not any(is_path_port(p) for p in (getattr(lc, "inputs", {}) or {}).values()):
+                            continue
+                        fc = max((self.file_compat(lc, df) for df in _p_dest_lits), default=0)
+                        if fc < 1:
+                            continue
+                        lc_id_toks = set(getattr(lc, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(lcid))
+                        id_ov = len(_p_prompt_toks & lc_id_toks)
+                        all_ov = len(_p_prompt_toks & (set(getattr(lc, "token_set", None) or ()) | lc_id_toks))
+                        _fh_cands.append(((fc, id_ov, all_ov), lc))
+                    _fh_cands.sort(key=lambda item: item[0], reverse=True)
+                    for _, h_prod in _fh_cands[:2]:
+                        _add_struct_cell(h_prod)
 
             # Rule A: Declared carrier/state coercion bridges reachable from pool
             _bridge_pool = list(getattr(orch_ref, "bridge_cells", ()) or ()) + [
@@ -795,6 +840,18 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 for c in pool
             )
         )
+        compat_dest_handle_types: Set[str] = set()
+        if dest_file_literals:
+            for _c_dh in pool:
+                if (
+                    is_ingress_source(_c_dh, self.orchestrator)
+                    and any(is_path_port(p) for p in (getattr(_c_dh, "inputs", {}) or {}).values())
+                    and any(self.file_compat(_c_dh, df) >= 1 for df in dest_file_literals)
+                ):
+                    for _, _osig_dh in _cell_outputs_ports(_c_dh):
+                        _otn_dh = str(getattr(_osig_dh, "type_name", "") or "").strip().lower()
+                        if _otn_dh:
+                            compat_dest_handle_types.add(_otn_dh)
 
         # Build clause coverage sets and lexical priors per candidate cell using
         # both normalized semantic scores and corpus-derived identity evidence.
@@ -961,7 +1018,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cl_toks_all = CellTokenizer.tokenize_prompt(cl_txt)
                 cl_tok_seq = [t.lower() for t in CellTokenizer.tokenize_identifier(cl_txt)] if hasattr(CellTokenizer, "tokenize_identifier") else []
                 cl_words = [w.strip(".,;:\"'()[]{}").lower() for w in cl_txt.split() if w.strip()]
-                def _anchor_pos(anc_pair: Tuple[Cell, Dict[str, Any]]) -> Tuple[int, int, float]:
+                def _anchor_pos(anc_pair: Tuple[Cell, Dict[str, Any]]) -> Tuple[int, int, int, float]:
                     anc_c = anc_pair[0]
                     anc_optic = str(getattr(anc_c, "optic_role", "") or "").strip().lower()
                     matched_raw = {str(m).lower() for m in (anc_pair[1].get("tokens", ()) or ())}
@@ -974,6 +1031,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if not positions and cl_tok_seq:
                         positions = [ti for ti, t in enumerate(cl_tok_seq) if t in core_m]
                     return (
+                        1 if is_sink_map.get(anc_c.cell_id, False) else 0,
                         min(positions) if positions else 10**6,
                         1 if anc_optic == "setter" else 0,
                         -float((anc_pair[1].get("rank") or (0.0,))[0]),
@@ -1579,6 +1637,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             if len(chain_ids) >= max_chain_len:
                 continue
 
+            num_path_sinks_used = sum(
+                1 for cid in chain_ids
+                if is_sink_map[cid] and cand_needs_path_map[cid]
+            )
+            path_sink_budget = max(1, len(dest_file_literals))
+            if (
+                chain_ids
+                and is_sink_map[chain_ids[-1]]
+                and cand_needs_path_map[chain_ids[-1]]
+                and num_path_sinks_used >= path_sink_budget
+            ):
+                continue
+
             # Exact Stage 3 Valid Outgoing Morphisms E_valid(Gamma_t)
             used_set = set(chain_ids)
             cov_cl_set = set(cov_cl)
@@ -2030,6 +2101,24 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     ):
                         continue
                     if (
+                        cand.cell_id == last_cid
+                        and not is_repeatable_optic
+                        and bool(cell_req_ins_map[cand.cell_id])
+                        and (
+                            not cand_new_cl_reuse
+                            or all(
+                                any(
+                                    tc.cell_id != cand.cell_id
+                                    and tc.cell_id not in used_set
+                                    and t_r in (cell_clause_hits.get(tc.cell_id, set()) - cov_cl_set)
+                                    for tc in pool
+                                )
+                                for t_r in cand_new_cl_reuse
+                            )
+                        )
+                    ):
+                        continue
+                    if (
                         n_clauses > 1
                         and is_ingress_map[cand.cell_id]
                         and not is_sink_map[cand.cell_id]
@@ -2052,6 +2141,12 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     is_sink_map[cand.cell_id]
                     and not has_egress
                     and cand_needs_path_map[cand.cell_id]
+                ):
+                    continue
+                if (
+                    is_sink_map[cand.cell_id]
+                    and cand_needs_path_map[cand.cell_id]
+                    and num_path_sinks_used >= path_sink_budget
                 ):
                     continue
 
@@ -2270,8 +2365,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         and len(src_file_literals) > num_sources_used
                         and (not src_file_literals or self.file_compat(cand, src_file_literals[min(num_sources_used, len(src_file_literals) - 1)]) >= 0)
                     )
+                    has_compat_dest_handle_file = bool(
+                        cand_needs_path
+                        and cand_has_handle_out
+                        and cand.cell_id not in used_set
+                        and dest_file_literals
+                        and any(self.file_compat(cand, df) >= 1 for df in dest_file_literals)
+                    )
                     unblocks_downstream = False
-                    if not cand_needs_path and not has_more_files:
+                    if (not cand_needs_path or has_compat_dest_handle_file) and not has_more_files:
                         if _is_comb:
                             unblocks_downstream = bool(eff_new_hits)
                         else:
@@ -2281,12 +2383,16 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                 or str(getattr(cand, "node_role", "") or "").strip().lower() in ("source", "ingress")
                             )
                             unblocks_downstream = (
-                                bool(eff_new_hits)
-                                and (
-                                    not is_stage1_source
-                                    or cand_has_handle_out
-                                    or not cand_has_composite_out
+                                (
+                                    bool(eff_new_hits)
+                                    and (
+                                        not is_stage1_source
+                                        or cand_has_handle_out
+                                        or not cand_has_composite_out
+                                    )
                                 )
+                                if not has_compat_dest_handle_file
+                                else False
                             ) or (
                                 (bool(cand_outs and (cand.cell_id in state_downstream_unblock_cids or cand_unlocks_prereq)))
                                 if state_downstream_unblock_cids is not None
@@ -2325,6 +2431,20 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             )
                     if not has_more_files and not unblocks_downstream:
                         continue
+                    if has_compat_dest_handle_file:
+                        prior_sc += 0.90
+                    elif (
+                        compat_dest_handle_types
+                        and is_ingress_map[cand.cell_id]
+                        and not cand_needs_path
+                        and cand_has_handle_out
+                        and any(
+                            str(getattr(osig_dh, "type_name", "") or "").strip().lower() in compat_dest_handle_types
+                            for _, osig_dh in cell_out_ports_map.get(cand.cell_id, ())
+                        )
+                    ):
+                        prior_sc -= 0.75
+                        order_cost_penalty += 0.50
                     if is_ingress_map[cand.cell_id] and not cand_needs_path and not eff_new_hits:
                         # Disallow zero-hit synthetic generators mid-chain when disconnected from active gamma
                         cand_outs_chk = cell_out_ports_map.get(cand.cell_id, ())
@@ -2409,6 +2529,30 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     ):
                         prior_sc -= 0.90
                         order_cost_penalty += 0.75
+                if chain_ids and is_sink_map[cand.cell_id]:
+                    stage2_gamma_items = [
+                        gs for gs in gamma
+                        if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None
+                        and not is_ingress_map.get(gs[2].cell_id, False)
+                        and not is_sink_map.get(gs[2].cell_id, False)
+                    ]
+                    cand_req_s2 = cell_req_ins_map[cand.cell_id]
+                    if stage2_gamma_items and cand_req_s2:
+                        consumes_stage2 = any(
+                            _unify_cached(
+                                gs[0],
+                                getattr(ip, "signature", ip),
+                                out_port=gs[1],
+                                in_port=ip,
+                                prod_cell=gs[2],
+                                cons_cell=cand,
+                            )
+                            for gs in stage2_gamma_items
+                            for _, ip in cand_req_s2
+                        )
+                        if not consumes_stage2:
+                            prior_sc -= 2.25
+                            order_cost_penalty += 2.00
 
                 # Bridge/optic & multi-hop precondition unlock bonus: reward carriers satisfying
                 # missing inputs of blocked targets (or blocked prerequisite initializers).
@@ -2484,6 +2628,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         prior_sc -= min(1.5, 0.12 * tier)
                         order_cost_penalty += min(2.0, 0.08 * tier)
                 elif not eff_new_hits and best_unlock > 0.0 and not optic_r and not is_sink_map[cand.cell_id]:
+                    req_carrier_names = {pk for pk, _ in cell_req_ins_map[cand.cell_id]}
+                    ungrounded_cfg_cnt = sum(
+                        1
+                        for pk, ip_cfg in (getattr(cand, "inputs", {}) or {}).items()
+                        if pk not in req_carrier_names
+                        and getattr(ip_cfg, "required", True)
+                        and getattr(ip_cfg, "default_value", None) is None
+                        and not is_path_port(ip_cfg)
+                        and _pointed_default(ip_cfg, cand) is None
+                    )
+                    if ungrounded_cfg_cnt > 0:
+                        prior_sc -= 1.80 * ungrounded_cfg_cnt
+                        order_cost_penalty += 1.80 * ungrounded_cfg_cnt
                     # Non-bridge transforms acting purely as structural unlockers pay more than declared bridges
                     prior_sc -= 0.40
                     order_cost_penalty += 0.25
@@ -2528,9 +2685,13 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 ):
                     continue
 
-                # Do not materialize file-path sinks when the prompt declares neither a destination file nor explicit egress hits
-                if is_sink_map[cand.cell_id] and cand_needs_path and not dest_file_literals and not (has_egress and eff_new_hits):
-                    continue
+                # Do not materialize file-path sinks when the prompt declares neither a destination file nor explicit egress hits,
+                # or when every declared destination file rejects this sink's supported formats.
+                if is_sink_map[cand.cell_id] and cand_needs_path:
+                    if not dest_file_literals and not (has_egress and eff_new_hits):
+                        continue
+                    if dest_file_literals and all(self.file_compat(cand, df) < 0 for df in dest_file_literals):
+                        continue
 
                 # Restrict valid frontier to uncovered prompt-relevant cells, optic/property bridges, or unlockers
                 if (
@@ -2789,6 +2950,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
 
         chosen_ids = chosen_entry[1] if chosen_entry is not None else None
         chosen_clauses = chosen_entry[2] if chosen_entry is not None else ()
+
+        if (
+            chosen_ids
+            and not src_file_literals
+            and not dest_file_literals
+            and all(cand_needs_path_map.get(cid, False) for cid in chosen_ids)
+        ):
+            _ch_seen: Set[str] = set()
+            for _cid in chosen_ids:
+                _ch_seen |= (prompt_toks & cell_id_toks_map.get(_cid, set()))
+            if len(_ch_seen) / max(1, len(prompt_toks)) < 0.12:
+                chosen_ids = None
+                chosen_clauses = ()
 
         # Honest coverage accounting. The search silently shrinks its coverage target to the
         # clauses that have at least one candidate (`coverable_clauses`) and can accept a plan that

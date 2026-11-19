@@ -341,6 +341,12 @@ def _tokenize_prompt_cached(
         cw = raw.strip(",;.:!?()[]{}\'\"")
         if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):
             tokens.update(CellTokenizer.tokenize_identifier(cw))
+        if '-' in cw:
+            h_parts = [p.lower() for p in cw.split('-') if p and p.isalnum()]
+            if len(h_parts) >= 2 and all(any(ch.isalpha() for ch in p) for p in h_parts):
+                joined = "".join(h_parts)
+                if len(joined) > 1:
+                    tokens.add(joined)
     if _ALIASES and not profile_zero:  # (apply_fixes_v7)
         tokens = _expand_aliases(tokens)
     return tuple(sorted(tokens))

@@ -5581,11 +5581,13 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [
-            "wav",
-            "mp3",
-            "flac",
-            "ogg",
-            "m4a"
+            "png",
+            "jpg",
+            "jpeg",
+            "svg",
+            "pdf",
+            "bmp",
+            "tiff"
           ],
           "carrier": "File[image_format]",
           "layout": {
@@ -5667,11 +5669,13 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [
-            "wav",
-            "mp3",
-            "flac",
-            "ogg",
-            "m4a"
+            "png",
+            "jpg",
+            "jpeg",
+            "svg",
+            "pdf",
+            "bmp",
+            "tiff"
           ],
           "carrier": "File[image_format]",
           "layout": {
@@ -5724,11 +5728,13 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [
-            "wav",
-            "mp3",
-            "flac",
-            "ogg",
-            "m4a"
+            "png",
+            "jpg",
+            "jpeg",
+            "svg",
+            "pdf",
+            "bmp",
+            "tiff"
           ],
           "carrier": "File[image_format]",
           "layout": {
@@ -5810,11 +5816,13 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [
-            "wav",
-            "mp3",
-            "flac",
-            "ogg",
-            "m4a"
+            "png",
+            "jpg",
+            "jpeg",
+            "svg",
+            "pdf",
+            "bmp",
+            "tiff"
           ],
           "carrier": "File[image_format]",
           "layout": {

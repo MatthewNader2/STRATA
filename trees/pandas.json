@@ -2826,27 +2826,32 @@
         "port_1": {
           "type_name": "Engine",
           "state": "db_connection",
+          "accepted_states": [
+            "open",
+            "in_transaction",
+            "committed"
+          ],
           "qualifiers": [],
           "default_value": null,
           "description": "SQLAlchemy connectable engine or sqlite3 connection.",
           "domain": "pandas",
           "required": true,
-          "abstract_type": "scalar",
+          "abstract_type": "handle",
           "enum_values": null,
           "param_kind": "positional_or_keyword",
           "value_constraints": null,
           "shape_contract": null,
-          "structure_kind": "scalar",
-          "rank": 0,
-          "element_type": "float64",
+          "structure_kind": "handle",
+          "rank": null,
+          "element_type": "opaque",
           "supported_formats": [],
           "port_role": "data_input",
           "role": "data_input",
           "carrier": "Engine",
           "layout": {
-            "rank": 0,
+            "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "opaque",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -15843,8 +15848,14 @@
       ],
       "keywords": [
         "to_sql",
-        "insert",
-        "database"
+        "sql",
+        "sqlite",
+        "database",
+        "table",
+        "dataframe",
+        "save",
+        "write",
+        "insert"
       ],
       "code_template": "{df}.to_sql(name={name}, con={con}, if_exists={if_exists}, index={index})",
       "slots": [
@@ -15939,27 +15950,32 @@
         "port_2": {
           "type_name": "Engine",
           "state": "db_connection",
+          "accepted_states": [
+            "open",
+            "in_transaction",
+            "committed"
+          ],
           "qualifiers": [],
           "default_value": null,
           "description": "SQLAlchemy connectable engine or sqlite3 connection.",
           "domain": "pandas",
           "required": true,
-          "abstract_type": "scalar",
+          "abstract_type": "handle",
           "enum_values": null,
           "param_kind": "keyword_only",
           "value_constraints": null,
           "shape_contract": null,
-          "structure_kind": "scalar",
-          "rank": 0,
-          "element_type": "float64",
+          "structure_kind": "handle",
+          "rank": null,
+          "element_type": "opaque",
           "supported_formats": [],
-          "port_role": "configuration",
-          "role": "configuration",
+          "port_role": "data_input",
+          "role": "data_input",
           "carrier": "Engine",
           "layout": {
-            "rank": 0,
+            "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "opaque",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -18378,6 +18394,10 @@
     }
   ],
   "types": {
+    "Engine": {
+      "parent": "handle",
+      "kind": "handle"
+    },
     "Tabular": {
       "parent": "Modality"
     },

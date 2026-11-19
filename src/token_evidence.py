@@ -930,8 +930,8 @@ def audit_clause_coverage(
             max_sem_j = max(sem_map.values(), default=0.0)
             claimed_any = [i for i in range(len(cells)) if j in claims[i]]
             claimed_sem = max((float(sem_map.get(cells[i].cell_id, 0.0) or 0.0) for i in claimed_any), default=0.0)
-            sem_floor = 0.70 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.35
-            sem_rel = 0.88 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.70
+            sem_floor = (0.70 if lattice_best >= 0.50 else 0.65) if path_best <= 0.0 else 0.35
+            sem_rel = 0.88 if path_best <= 0.0 else 0.70
             # Never override when a compound multi-operation clause left major residual lexical operations unserved
             compound_unserved_gap = (lattice_joint > lattice_best + 0.15) and (path_best < 0.75 * lattice_joint)
             if not compound_unserved_gap and claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:

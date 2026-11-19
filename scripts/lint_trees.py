@@ -274,6 +274,7 @@ def lint_tree_file(path: str) -> List[str]:
                         if (
                             port_obj is not None
                             and not port_obj.required
+                            and port_obj.default_value is None
                             and sig_p.default is inspect.Parameter.empty
                             and sig_p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
                         ):

@@ -780,8 +780,13 @@ def _wire_rejection(cell: Any, p_name: str, port: Any, v_name: str, ctx: Any, re
                 _tgt_lits.update(str(pk).strip().lower() for pk in (getattr(ctx, "_pending_setter_keys", set()) or set()) if str(pk).strip())
                 _req_lits = {cl for cl in _c_lits if cl not in _tgt_lits and not ExecutionContext._is_path_string(cl)}
                 if _req_lits and not (_req_lits & _v_origins):
-                    _act_sig = getattr(ctx.variables[_act_v][0], "signature", ctx.variables[_act_v][0])
-                    if unify(_act_sig, p_actual_sig) is None:
+                    _act_port = ctx.variables[_act_v][0]
+                    _act_sig = getattr(_act_port, "signature", _act_port)
+                    _act_tn = str(getattr(_act_sig, "type_name", "") or "").strip().lower()
+                    _act_sk = str(getattr(_act_port, "structure_kind", "") or "").strip().lower()
+                    _act_abs = str(getattr(_act_port, "abstract_type", "") or getattr(_act_sig, "abstract_type", "") or "").strip().lower()
+                    _act_is_handle = _act_sk == "handle" or _act_abs == "handle" or registry.is_subtype(_act_tn, "handle")
+                    if not _act_is_handle and registry.is_composite_carrier(_act_tn) and unify(_act_sig, p_actual_sig) is None:
                         return ("clause_literal_origin_mismatch", {"v_name": v_name, "port": p_name, "expected": sorted(_req_lits), "var_origins": sorted(_v_origins)})
 
         bindings = cell_bindings if cell_bindings is not None else kwargs.get("bindings")
@@ -5214,12 +5219,56 @@ class ExecutionContext:
                 toks |= {t.lower() for t in CellTokenizer.tokenize_identifier(ps_st)}
             return toks
 
-        def _literal_port_evidence(lit_pos: int) -> Tuple[int, int]:
-            """Returns (own_left_hits, other_port_left_hits) in the local window before lit_pos."""
+        def _literal_port_evidence(lit_pos: int, lit_val: Optional[str] = None) -> Tuple[int, int]:
+            """Returns (own_local_hits, other_port_local_hits) in the Voronoi local window around lit_pos."""
             own_toks = _port_own_tokens(port_sig)
-            left_win = (self.prompt or "")[max(0, lit_pos - 32):lit_pos].lower()
-            left_toks = set(CellTokenizer.tokenize_prompt(left_win))
-            own_hits = len(left_toks & own_toks)
+            p_text = self.prompt or ""
+            lit_len = len(str(lit_val)) if lit_val is not None else 0
+            lit_end = lit_pos + lit_len
+            cl_start_bound, cl_end_bound = 0, len(p_text)
+            for cs_s, cs_e in (getattr(self, "clause_spans", None) or ()):
+                if cs_s <= lit_pos <= cs_e:
+                    cl_start_bound, cl_end_bound = cs_s, cs_e
+                    break
+            prev_num_end: Optional[int] = None
+            next_num_start: Optional[int] = None
+            for _o_pos, _o_kind, _o_val in self.ordered_literals:
+                if _o_kind != "numeric" or not (cl_start_bound <= _o_pos <= cl_end_bound):
+                    continue
+                if _o_pos < lit_pos:
+                    _o_end = _o_pos + len(str(_o_val))
+                    if _o_end <= lit_pos and (prev_num_end is None or _o_end > prev_num_end):
+                        prev_num_end = _o_end
+                elif _o_pos > lit_pos:
+                    if next_num_start is None or _o_pos < next_num_start:
+                        next_num_start = _o_pos
+            if prev_num_end is not None:
+                raw_left = p_text[prev_num_end:lit_pos].lower()
+                left_words = [w for w in raw_left.split() if w]
+                left_win = " ".join(left_words[1:]) if len(left_words) >= 2 else raw_left
+            else:
+                left_win = p_text[max(cl_start_bound, lit_pos - 32):lit_pos].lower()
+            right_win = ""
+            if lit_len > 0 and lit_end < cl_end_bound:
+                raw_right_end = (
+                    next_num_start
+                    if (next_num_start is not None and next_num_start > lit_end)
+                    else min(cl_end_bound, lit_end + 24)
+                )
+                raw_right_full = p_text[lit_end:raw_right_end].lower()
+                cut_at = len(raw_right_full)
+                for _r_i, _r_ch in enumerate(raw_right_full):
+                    if _r_ch in (",", ";", "\n"):
+                        cut_at = _r_i
+                        break
+                right_words = [w for w in raw_right_full[:cut_at].split() if w]
+                if next_num_start is not None and right_words:
+                    right_words = right_words[:-1]
+                right_win = " ".join(right_words[:2])
+            local_toks = set(CellTokenizer.tokenize_prompt(left_win))
+            if right_win:
+                local_toks |= set(CellTokenizer.tokenize_prompt(right_win))
+            own_hits = len(local_toks & own_toks)
             other_hits = 0
             if cell_inputs:
                 for op_name, op_sig in cell_inputs.items():
@@ -5233,8 +5282,8 @@ class ExecutionContext:
                     ):
                         continue
                     op_toks = _port_own_tokens(op_sig)
-                    if op_toks and (left_toks & op_toks) and not (op_toks <= own_toks):
-                        other_hits = max(other_hits, len(left_toks & op_toks))
+                    if op_toks and (local_toks & op_toks) and not (op_toks <= own_toks):
+                        other_hits = max(other_hits, len(local_toks & op_toks))
             return own_hits, other_hits
 
         if is_num:
@@ -5243,11 +5292,16 @@ class ExecutionContext:
                 and registry.is_subtype(t_name, "int")
                 and not registry.is_subtype("float", t_name)
             )
+            _prefers_float = (
+                registry is not None
+                and registry.is_subtype(t_name, "float")
+                and not _int_only
+            )
             lit_clause_map = getattr(self, "literal_clause_map", {}) or {}
             cell_cl = getattr(self, "current_cell_clause_idx", None)
             num_prompt_clauses = len(getattr(self, "clause_spans", ()) or ())
             clauses = CellTokenizer.split_prompt_clauses(self.prompt) if self.prompt else []
-            scored_num_cands: List[Tuple[Tuple[int, int, int, int], int, str]] = []
+            scored_num_cands: List[Tuple[Tuple[int, int, int, int, int], int, str]] = []
             for idx, (lit_pos, kind, val) in enumerate(self.ordered_literals):
                 if idx in self.used_indices or kind != "numeric":
                     continue
@@ -5353,10 +5407,11 @@ class ExecutionContext:
 
                         if not has_discriminative_hit or discriminative_mass < 0.5:
                             continue
-                own_hits, other_hits = _literal_port_evidence(lit_pos) if self.prompt else (0, 0)
+                own_hits, other_hits = _literal_port_evidence(lit_pos, val) if self.prompt else (0, 0)
                 if not port_sig.required and other_hits > own_hits and own_hits == 0:
                     continue
-                scored_num_cands.append(((in_cur_clause, 1 if own_hits > 0 else 0, 0 if other_hits > 0 else 1, -idx), idx, val))
+                _float_spec = 1 if (_prefers_float and "." in str(val)) else 0
+                scored_num_cands.append(((in_cur_clause, 1 if own_hits > 0 else 0, 0 if other_hits > 0 else 1, _float_spec, -idx), idx, val))
             if scored_num_cands:
                 scored_num_cands.sort(key=lambda item: item[0], reverse=True)
                 _, chosen_idx, chosen_val = scored_num_cands[0]
@@ -5411,7 +5466,7 @@ class ExecutionContext:
                     l_cl = lit_clause_map.get(idx)
                     if allowed_clauses is not None and l_cl is not None and l_cl not in allowed_clauses:
                         continue
-                    own_hits, other_hits = _literal_port_evidence(lit_pos) if self.prompt else (0, 0)
+                    own_hits, other_hits = _literal_port_evidence(lit_pos, val) if self.prompt else (0, 0)
                     if other_hits > own_hits and allowed_clauses is not None and cell_cl not in allowed_clauses:
                         continue
                     if other_hits > own_hits and allowed_clauses is None:
@@ -8761,9 +8816,27 @@ class UnificationGate:
             # the prompt's shared literal channels (expressions, paths) first;
             # optional configuration knobs never steal them.
             cell_toks_for_projection = _cell_clause_tokens(cell)
+            _pre_step_slots = (
+                getattr(ctx, "step_llm_slots", {}).get(idx, {})
+                if hasattr(ctx, "step_llm_slots") and isinstance(ctx.step_llm_slots, dict)
+                else {}
+            )
+            _pre_cell_slots = (
+                ctx.llm_slots.get(cell.cell_id, {})
+                if hasattr(ctx, "llm_slots") and isinstance(ctx.llm_slots, dict)
+                else {}
+            )
+            if not isinstance(_pre_step_slots, dict):
+                _pre_step_slots = {}
+            if not isinstance(_pre_cell_slots, dict):
+                _pre_cell_slots = {}
             for p_name, p_sig in sorted(
                 cell.inputs.items(),
-                key=lambda kv: (not kv[1].required, 1 if getattr(kv[1], "complement_of_port", None) else 0),
+                key=lambda kv: (
+                    not kv[1].required,
+                    0 if (kv[0] in _pre_step_slots or kv[0] in _pre_cell_slots) else 1,
+                    1 if getattr(kv[1], "complement_of_port", None) else 0,
+                ),
             ):
                 if p_name in cell_bindings:
                     continue  # Already bound
