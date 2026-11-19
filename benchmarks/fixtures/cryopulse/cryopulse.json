@@ -1,0 +1,593 @@
+{
+  "domain": "cryopulse",
+  "version": "1.0.0",
+  "description": "CryoPulse cryogenic dilution-refrigerator telemetry, SQUID flux sampling, quadrature IQ demodulation, TLS defect noise quenching, pi-pulse schedule compilation, and binary cryo-manifest export morphisms.",
+  "supported_formats": [
+    "cym"
+  ],
+  "types": [
+    { "name": "CryoVessel", "parent": "object" },
+    { "name": "FluxChannel", "parent": "object" },
+    { "name": "SquidTrace", "parent": "object" },
+    { "name": "IQLattice", "parent": "object" },
+    { "name": "PulseProgram", "parent": "object" },
+    { "name": "CryoAudit", "parent": "dict" }
+  ],
+  "typestates": {
+    "domain": "cryopulse",
+    "states": [
+      { "name": "chamber_tag", "parent_state": null, "carrier_type": "str", "description": "Cryostat vessel identifier string.", "properties": {} },
+      { "name": "millikelvin_setpoint", "parent_state": null, "carrier_type": "float", "description": "Mixing-plate temperature setpoint in mK.", "properties": {} },
+      { "name": "vessel_chilled", "parent_state": null, "carrier_type": "CryoVessel", "description": "Initialized dilution-refrigerator vessel handle.", "properties": {} },
+      { "name": "rail_id", "parent_state": null, "carrier_type": "str", "description": "Superconducting flux coil rail identifier.", "properties": {} },
+      { "name": "bias_current_ua", "parent_state": null, "carrier_type": "float", "description": "Flux coil bias current in microamps.", "properties": {} },
+      { "name": "coil_energized", "parent_state": null, "carrier_type": "FluxChannel", "description": "Energized flux bias coil channel.", "properties": {} },
+      { "name": "window_ns", "parent_state": null, "carrier_type": "int", "description": "SQUID integration window in nanoseconds.", "properties": {} },
+      { "name": "shot_count", "parent_state": null, "carrier_type": "int", "description": "Hardware readout averaging shot count.", "properties": {} },
+      { "name": "trace_sampled", "parent_state": null, "carrier_type": "SquidTrace", "description": "Captured raw time-domain SQUID flux trace.", "properties": {} },
+      { "name": "lo_frequency_ghz", "parent_state": null, "carrier_type": "float", "description": "Local oscillator demodulation frequency in GHz.", "properties": {} },
+      { "name": "iq_demodulated", "parent_state": null, "carrier_type": "IQLattice", "description": "Baseband demodulated quadrature IQ lattice.", "properties": {} },
+      { "name": "iq_gain_normalized", "parent_state": "iq_demodulated", "carrier_type": "IQLattice", "description": "Gain-balanced IQ lattice.", "properties": {} },
+      { "name": "damping_coeff", "parent_state": null, "carrier_type": "float", "description": "Two-level-system spectral damping coefficient.", "properties": {} },
+      { "name": "tls_quenched", "parent_state": null, "carrier_type": "IQLattice", "description": "IQ lattice after TLS defect noise suppression.", "properties": {} },
+      { "name": "fidelity_target", "parent_state": null, "carrier_type": "float", "description": "Target single-qubit gate fidelity.", "properties": {} },
+      { "name": "pulse_compiled", "parent_state": null, "carrier_type": "PulseProgram", "description": "Calibrated microwave pi-pulse schedule.", "properties": {} },
+      { "name": "manifest_path", "parent_state": null, "carrier_type": "str", "description": "Destination filesystem path for .cym manifest.", "properties": {} },
+      { "name": "manifest_emitted", "parent_state": null, "carrier_type": "str", "description": "Written cryo-manifest path.", "properties": {} },
+      { "name": "temperature_readout", "parent_state": null, "carrier_type": "float", "description": "Measured mixing-plate temperature in mK.", "properties": {} },
+      { "name": "snr_audited", "parent_state": null, "carrier_type": "CryoAudit", "description": "SQUID readout signal-to-noise audit dict.", "properties": {} },
+      { "name": "vessel_vented", "parent_state": null, "carrier_type": "None", "description": "Vented vessel lifecycle completion.", "properties": {} }
+    ],
+    "transitions": [],
+    "initial_state": null,
+    "terminal_states": ["manifest_emitted", "vessel_vented"]
+  },
+  "cells": [
+    {
+      "cell_id": "CRYOPULSE_OPEN_CRYO_VESSEL",
+      "stage": 1,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "source",
+      "topology_type": "sequential",
+      "docstring": "Initializes and thermalizes a dilution-refrigerator CryoVessel handle to the target millikelvin setpoint.",
+      "semantic_tags": ["open_cryo_vessel", "cryostat", "cryo_vessel", "initialize_vessel", "chill_vessel", "millikelvin"],
+      "inputs": {
+        "chamber_tag": {
+          "type_name": "str",
+          "state": "chamber_tag",
+          "abstract_type": "scalar",
+          "required": true,
+          "port_role": "config",
+          "description": "Unique cryostat vessel chamber identifier string.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.chamber_tag",
+          "typestate": "cryopulse::chamber_tag"
+        },
+        "target_mk": {
+          "type_name": "float",
+          "state": "millikelvin_setpoint",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 15.0,
+          "port_role": "config",
+          "description": "Mixing-plate target temperature in millikelvin.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.millikelvin_setpoint",
+          "typestate": "cryopulse::millikelvin_setpoint"
+        }
+      },
+      "outputs": {
+        "vessel": {
+          "type_name": "CryoVessel",
+          "state": "vessel_chilled",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Initialized dilution-refrigerator CryoVessel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.vessel_chilled",
+          "typestate": "cryopulse::vessel_chilled"
+        }
+      },
+      "code_template": "{vessel} = cryopulse.open_cryo_vessel(chamber_tag={chamber_tag}, target_mk={target_mk})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "chamber_tag",
+      "primary_out": "vessel",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_ENERGIZE_FLUX_COIL",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Energizes a superconducting flux bias coil rail inside an initialized CryoVessel and returns a FluxChannel.",
+      "semantic_tags": ["energize_flux_coil", "flux_coil", "bias_rail", "flux_channel", "energize_coil"],
+      "inputs": {
+        "vessel": {
+          "type_name": "CryoVessel",
+          "state": "vessel_chilled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Initialized chilled CryoVessel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.vessel_chilled",
+          "typestate": "cryopulse::vessel_chilled"
+        },
+        "rail_id": {
+          "type_name": "str",
+          "state": "rail_id",
+          "abstract_type": "scalar",
+          "required": true,
+          "port_role": "config",
+          "description": "Flux bias rail identifier string.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.rail_id",
+          "typestate": "cryopulse::rail_id"
+        },
+        "bias_ua": {
+          "type_name": "float",
+          "state": "bias_current_ua",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 42.0,
+          "port_role": "config",
+          "description": "Flux bias current in microamps.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.bias_current_ua",
+          "typestate": "cryopulse::bias_current_ua"
+        }
+      },
+      "outputs": {
+        "channel": {
+          "type_name": "FluxChannel",
+          "state": "coil_energized",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Energized superconducting FluxChannel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.coil_energized",
+          "typestate": "cryopulse::coil_energized"
+        }
+      },
+      "code_template": "{channel} = cryopulse.energize_flux_coil({vessel}, rail_id={rail_id}, bias_ua={bias_ua})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "vessel",
+      "primary_out": "channel",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_SAMPLE_SQUID_FLUX",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Captures raw time-domain SQUID flux trace samples from an energized FluxChannel.",
+      "semantic_tags": ["sample_squid_flux", "squid_trace", "capture_squid", "flux_sampling", "readout_trace"],
+      "inputs": {
+        "channel": {
+          "type_name": "FluxChannel",
+          "state": "coil_energized",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Energized FluxChannel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.coil_energized",
+          "typestate": "cryopulse::coil_energized"
+        },
+        "window_ns": {
+          "type_name": "int",
+          "state": "window_ns",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 256,
+          "port_role": "config",
+          "description": "Integration window duration in nanoseconds.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.window_ns",
+          "typestate": "cryopulse::window_ns"
+        },
+        "shots": {
+          "type_name": "int",
+          "state": "shot_count",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 1024,
+          "port_role": "config",
+          "description": "Number of hardware readout averaging shots.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.shot_count",
+          "typestate": "cryopulse::shot_count"
+        }
+      },
+      "outputs": {
+        "trace": {
+          "type_name": "SquidTrace",
+          "state": "trace_sampled",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Captured raw SQUID time-domain flux trace.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.trace_sampled",
+          "typestate": "cryopulse::trace_sampled"
+        }
+      },
+      "code_template": "{trace} = cryopulse.sample_squid_flux({channel}, window_ns={window_ns}, shots={shots})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "channel",
+      "primary_out": "trace",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_DEMODULATE_QUADRATURE",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Down-converts a captured SquidTrace at local oscillator frequency lo_ghz into a baseband IQLattice.",
+      "semantic_tags": ["demodulate_quadrature", "iq_demodulation", "downconvert", "quadrature_iq", "iq_lattice"],
+      "inputs": {
+        "trace": {
+          "type_name": "SquidTrace",
+          "state": "trace_sampled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Captured SQUID flux trace.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.trace_sampled",
+          "typestate": "cryopulse::trace_sampled"
+        },
+        "lo_ghz": {
+          "type_name": "float",
+          "state": "lo_frequency_ghz",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 5.82,
+          "port_role": "config",
+          "description": "Local oscillator frequency in GHz.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.lo_frequency_ghz",
+          "typestate": "cryopulse::lo_frequency_ghz"
+        }
+      },
+      "outputs": {
+        "iq_data": {
+          "type_name": "IQLattice",
+          "state": "iq_demodulated",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Demodulated quadrature IQ lattice.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.iq_demodulated",
+          "typestate": "cryopulse::iq_demodulated"
+        }
+      },
+      "code_template": "{iq_data} = cryopulse.demodulate_quadrature({trace}, lo_ghz={lo_ghz})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "trace",
+      "primary_out": "iq_data",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_QUENCH_TLS_DEFECTS",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Suppresses two-level-system (TLS) defect noise spikes in a demodulated IQLattice via spectral damping.",
+      "semantic_tags": ["quench_tls_defects", "tls_suppression", "two_level_system", "suppress_noise", "quench_defects"],
+      "inputs": {
+        "iq_data": {
+          "type_name": "IQLattice",
+          "state": "iq_demodulated",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Demodulated quadrature IQ lattice.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.iq_demodulated",
+          "typestate": "cryopulse::iq_demodulated"
+        },
+        "damping_gamma": {
+          "type_name": "float",
+          "state": "damping_coeff",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 0.14,
+          "port_role": "config",
+          "description": "Spectral notch damping coefficient.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.damping_coeff",
+          "typestate": "cryopulse::damping_coeff"
+        }
+      },
+      "outputs": {
+        "quenched_iq": {
+          "type_name": "IQLattice",
+          "state": "tls_quenched",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "TLS-defect-suppressed IQ lattice.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.tls_quenched",
+          "typestate": "cryopulse::tls_quenched"
+        }
+      },
+      "code_template": "{quenched_iq} = cryopulse.quench_tls_defects({iq_data}, damping_gamma={damping_gamma})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "iq_data",
+      "primary_out": "quenched_iq",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_COMPILE_PI_SCHEDULE",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Compiles a calibrated DRAG pi-pulse PulseProgram schedule from a TLS-quenched IQLattice to meet target gate fidelity.",
+      "semantic_tags": ["compile_pi_schedule", "pi_pulse", "calibrate_pulse", "pulse_schedule", "gate_fidelity"],
+      "inputs": {
+        "iq_data": {
+          "type_name": "IQLattice",
+          "state": "tls_quenched",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "TLS-quenched IQLattice required before pi-pulse calibration.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.tls_quenched",
+          "typestate": "cryopulse::tls_quenched"
+        },
+        "target_fidelity": {
+          "type_name": "float",
+          "state": "fidelity_target",
+          "abstract_type": "scalar",
+          "required": false,
+          "default_value": 0.996,
+          "port_role": "config",
+          "description": "Target single-qubit gate fidelity threshold.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.fidelity_target",
+          "typestate": "cryopulse::fidelity_target"
+        }
+      },
+      "outputs": {
+        "schedule": {
+          "type_name": "PulseProgram",
+          "state": "pulse_compiled",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Compiled pi-pulse gate schedule.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.pulse_compiled",
+          "typestate": "cryopulse::pulse_compiled"
+        }
+      },
+      "code_template": "{schedule} = cryopulse.compile_pi_schedule({iq_data}, target_fidelity={target_fidelity})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "iq_data",
+      "primary_out": "schedule",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_EMIT_CRYO_MANIFEST",
+      "stage": 3,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "sink",
+      "topology_type": "sequential",
+      "docstring": "Serializes a compiled PulseProgram to a signed .cym cryo-manifest file on disk.",
+      "semantic_tags": ["emit_cryo_manifest", "export_manifest", "save_schedule", "write_cym", "cryo_manifest"],
+      "inputs": {
+        "schedule": {
+          "type_name": "PulseProgram",
+          "state": "pulse_compiled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Compiled pi-pulse gate schedule.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.pulse_compiled",
+          "typestate": "cryopulse::pulse_compiled"
+        },
+        "dest_path": {
+          "type_name": "str",
+          "state": "manifest_path",
+          "abstract_type": "path",
+          "required": true,
+          "port_role": "destination",
+          "description": "Destination .cym manifest filesystem path.",
+          "structure_kind": "path_spec",
+          "semantics": "cryopulse.manifest_path",
+          "typestate": "cryopulse::manifest_path"
+        }
+      },
+      "outputs": {
+        "written_path": {
+          "type_name": "str",
+          "state": "manifest_emitted",
+          "abstract_type": "path",
+          "port_role": "data_output",
+          "description": "Filesystem path of the written .cym manifest.",
+          "structure_kind": "path_spec",
+          "semantics": "cryopulse.manifest_emitted",
+          "typestate": "cryopulse::manifest_emitted"
+        }
+      },
+      "code_template": "{written_path} = cryopulse.emit_cryo_manifest({schedule}, dest_path={dest_path})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "schedule",
+      "primary_out": "written_path",
+      "effects": ["io_write"],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_MEASURE_MIXING_PLATE",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Reads the live mixing-plate thermometry temperature in millikelvin from a CryoVessel.",
+      "semantic_tags": ["measure_mixing_plate", "thermometry", "plate_temperature", "read_kelvin"],
+      "inputs": {
+        "vessel": {
+          "type_name": "CryoVessel",
+          "state": "vessel_chilled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Initialized CryoVessel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.vessel_chilled",
+          "typestate": "cryopulse::vessel_chilled"
+        }
+      },
+      "outputs": {
+        "temp_mk": {
+          "type_name": "float",
+          "state": "temperature_readout",
+          "abstract_type": "scalar",
+          "port_role": "data_output",
+          "description": "Measured mixing-plate temperature in mK.",
+          "structure_kind": "scalar",
+          "semantics": "cryopulse.temperature_readout",
+          "typestate": "cryopulse::temperature_readout"
+        }
+      },
+      "code_template": "{temp_mk} = cryopulse.measure_mixing_plate({vessel})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "vessel",
+      "primary_out": "temp_mk",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_AUDIT_SQUID_SNR",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Computes signal-to-noise diagnostic metrics for a captured SquidTrace.",
+      "semantic_tags": ["audit_squid_snr", "snr_diagnostics", "signal_to_noise", "audit_trace"],
+      "inputs": {
+        "trace": {
+          "type_name": "SquidTrace",
+          "state": "trace_sampled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Captured raw SQUID flux trace.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.trace_sampled",
+          "typestate": "cryopulse::trace_sampled"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type_name": "CryoAudit",
+          "state": "snr_audited",
+          "abstract_type": "mapping",
+          "port_role": "data_output",
+          "description": "Diagnostic SNR audit dictionary.",
+          "structure_kind": "mapping",
+          "semantics": "cryopulse.snr_audited",
+          "typestate": "cryopulse::snr_audited"
+        }
+      },
+      "code_template": "{report} = cryopulse.audit_squid_snr({trace})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "trace",
+      "primary_out": "report",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_NORMALIZE_IQ_GAIN",
+      "stage": 2,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "transformer",
+      "topology_type": "sequential",
+      "docstring": "Balances I and Q quadrature mixer gain asymmetry on a demodulated IQLattice.",
+      "semantic_tags": ["normalize_iq_gain", "iq_gain", "mixer_balance", "gain_normalization"],
+      "inputs": {
+        "iq_data": {
+          "type_name": "IQLattice",
+          "state": "iq_demodulated",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Demodulated quadrature IQ lattice.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.iq_demodulated",
+          "typestate": "cryopulse::iq_demodulated"
+        }
+      },
+      "outputs": {
+        "balanced_iq": {
+          "type_name": "IQLattice",
+          "state": "iq_gain_normalized",
+          "abstract_type": "handle",
+          "port_role": "data_output",
+          "description": "Gain-normalized IQ lattice.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.iq_gain_normalized",
+          "typestate": "cryopulse::iq_gain_normalized"
+        }
+      },
+      "code_template": "{balanced_iq} = cryopulse.normalize_iq_gain({iq_data})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "iq_data",
+      "primary_out": "balanced_iq",
+      "effects": [],
+      "mutation_type": "pure"
+    },
+    {
+      "cell_id": "CRYOPULSE_VENT_CRYO_VESSEL",
+      "stage": 3,
+      "domain_name": "cryopulse",
+      "node_type": "function",
+      "node_role": "sink",
+      "topology_type": "sequential",
+      "docstring": "Safely warms and vents an initialized CryoVessel.",
+      "semantic_tags": ["vent_cryo_vessel", "shutdown_cryostat", "warm_vessel", "vent"],
+      "inputs": {
+        "vessel": {
+          "type_name": "CryoVessel",
+          "state": "vessel_chilled",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Initialized chilled CryoVessel handle.",
+          "structure_kind": "handle",
+          "semantics": "cryopulse.vessel_chilled",
+          "typestate": "cryopulse::vessel_chilled"
+        }
+      },
+      "outputs": {},
+      "code_template": "cryopulse.vent_cryo_vessel({vessel})",
+      "dependencies": ["import cryopulse"],
+      "primary_in": "vessel",
+      "primary_out": null,
+      "effects": ["lifecycle_close"],
+      "mutation_type": "pure"
+    }
+  ]
+}

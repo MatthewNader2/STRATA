@@ -78,7 +78,7 @@
     },
     {
       "name": "color",
-      "parent": "object"
+      "parent": "Tuple[int, int, int]"
     },
     {
       "name": "sprite",
@@ -134,6 +134,7 @@
       },
       {
         "name": "color_object",
+        "parent_state": "rgb_color",
         "description": "Pygame Color instance supporting color space math and interpolation."
       },
       {

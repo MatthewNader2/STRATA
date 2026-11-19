@@ -769,10 +769,29 @@ def _sandbox_worker_exec(
             }
             exec_globals.update(context)
 
-            # Step 5: Bytecode Execution under captured streams
+            # Step 5: Bytecode Execution under captured streams (handle explicit sys.exit)
             compiled = compile(parsed_ast, filename="<sandbox>", mode="exec")
+            sys_exit_code = 0
             with contextlib.redirect_stdout(captured_stdout), contextlib.redirect_stderr(captured_stderr):
-                exec(compiled, exec_globals)
+                try:
+                    exec(compiled, exec_globals)
+                except SystemExit as sys_exit_exc:
+                    code_val = sys_exit_exc.code
+                    if isinstance(code_val, int):
+                        sys_exit_code = code_val
+                    elif code_val is not None:
+                        sys_exit_code = 1
+                        captured_stderr.write(f"\nSystemExit: {code_val}\n")
+            if sys_exit_code != 0:
+                _send_payload({
+                    "success": False,
+                    "returncode": sys_exit_code,
+                    "stdout": captured_stdout.getvalue(),
+                    "stderr": captured_stderr.getvalue(),
+                    "error": f"SystemExit({sys_exit_code})",
+                    "results": {},
+                })
+                return
 
             raw_results = {
                 k: v for k, v in exec_globals.items()
@@ -787,6 +806,20 @@ def _sandbox_worker_exec(
 
             extracted_results = {k: _ipc_safe(v) for k, v in raw_results.items()}
 
+            worker_egress: Dict[str, str] = {}
+            for raw_ep in egress_paths or ():
+                ep_s = str(raw_ep or "").strip()
+                if not ep_s:
+                    continue
+                if os.path.exists(ep_s):
+                    worker_egress[ep_s] = "ok" if os.path.getsize(ep_s) > 0 else "empty"
+                else:
+                    orig_ep = ep_s if os.path.isabs(ep_s) else os.path.join(orig_cwd, ep_s)
+                    if os.path.exists(orig_ep):
+                        worker_egress[ep_s] = "ok" if os.path.getsize(orig_ep) > 0 else "empty"
+                    else:
+                        worker_egress[ep_s] = "missing"
+
             _send_payload({
                 "success": True,
                 "returncode": 0,
@@ -794,6 +827,7 @@ def _sandbox_worker_exec(
                 "stderr": captured_stderr.getvalue(),
                 "error": None,
                 "results": extracted_results,
+                "egress": worker_egress,
             })
 
         except SecurityViolationError as sec_err:
@@ -907,8 +941,7 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
             except Exception:
                 is_term_role, is_in_role, dest_states = False, False, set()
             is_sink = (
-                getattr(cell, "is_endable", False)
-                or not getattr(cell, "outputs", None)
+                not getattr(cell, "outputs", None)
                 or is_term_role
                 or any(str(getattr(getattr(p, "signature", p), "state", "")).lower() in dest_states for p in getattr(cell, "inputs", {}).values())
             )
@@ -1067,7 +1100,9 @@ class GEVRSandbox:
                     if v_val is None:
                         violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' evaluated to None.")
                     elif isinstance(v_val, str) and v_val.startswith("<unpicklable:"):
-                        violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' was unpicklable ({v_val}).")
+                        # IPC-unpicklable runtime objects (e.g. local functions, opaque handles)
+                        # are live non-None deliverables; do not reject their presence.
+                        continue
                     else:
                         try:
                             f_val = float(v_val)
@@ -1258,6 +1293,11 @@ class GEVRSandbox:
             path_var_lits: Dict[str, List[str]] = {}
             for node in ast.walk(parsed_ast):
                 if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and isinstance(node.value, ast.Call):
+                    rhs_func = node.value.func
+                    rhs_fn = rhs_func.attr if isinstance(rhs_func, ast.Attribute) else (rhs_func.id if isinstance(rhs_func, ast.Name) else "")
+                    # Skip data loaders (e.g. pd.read_csv('input.csv')) whose output is an in-memory carrier, not a path handle
+                    if rhs_fn and rhs_fn in ingress_callables and "path" not in rhs_fn.lower():
+                        continue
                     c_lits = [a.value.strip() for a in node.value.args if isinstance(a, ast.Constant) and isinstance(a.value, str) and a.value.strip()]
                     c_lits.extend(kw.value.value.strip() for kw in node.value.keywords if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str) and kw.value.value.strip())
                     if c_lits:
@@ -1288,11 +1328,7 @@ class GEVRSandbox:
                         continue
                     func = node.func
                     is_sink_call = False
-                    if isinstance(func, ast.Attribute) and func.attr in sink_callables:
-                        is_sink_call = True
-                    elif isinstance(func, ast.Name) and func.id in sink_callables:
-                        is_sink_call = True
-                    elif isinstance(func, ast.Name) and func.id == "open":
+                    if isinstance(func, ast.Name) and func.id == "open":
                         mode = None
                         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                             mode = str(node.args[1].value)
@@ -1301,6 +1337,10 @@ class GEVRSandbox:
                                 mode = str(kw.value.value)
                         if mode and any(m in mode for m in ("w", "a", "x")):
                             is_sink_call = True
+                    elif isinstance(func, ast.Attribute) and func.attr in sink_callables:
+                        is_sink_call = True
+                    elif isinstance(func, ast.Name) and func.id in sink_callables:
+                        is_sink_call = True
 
                     if is_sink_call:
                         for s_lit in _iter_call_chain_str_args(node, sink_kw_args):
@@ -1314,11 +1354,7 @@ class GEVRSandbox:
                         continue
                     func = node.func
                     is_ingress_call = False
-                    if isinstance(func, ast.Attribute) and func.attr in ingress_callables:
-                        is_ingress_call = True
-                    elif isinstance(func, ast.Name) and func.id in ingress_callables:
-                        is_ingress_call = True
-                    elif isinstance(func, ast.Name) and func.id == "open":
+                    if isinstance(func, ast.Name) and func.id == "open":
                         mode = "r"
                         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                             mode = str(node.args[1].value)
@@ -1327,6 +1363,10 @@ class GEVRSandbox:
                                 mode = str(kw.value.value)
                         if "r" in mode and not any(m in mode for m in ("w", "a", "x")):
                             is_ingress_call = True
+                    elif isinstance(func, ast.Attribute) and func.attr in ingress_callables:
+                        is_ingress_call = True
+                    elif isinstance(func, ast.Name) and func.id in ingress_callables:
+                        is_ingress_call = True
 
                     def _inspect_ingress_str(raw_s: str, flag_missing: bool = True) -> None:
                         s = raw_s.strip()
@@ -1372,7 +1412,7 @@ class GEVRSandbox:
         parent_conn, child_conn = ctx.Pipe(duplex=False)
         headless_env_specs = _get_headless_env_specs()
 
-        smoke_test = bool(kwargs.get("smoke_test", False))
+        smoke_test = bool(kwargs.get("smoke_test", True))
         mem_limit = int(kwargs.get("max_memory_mb", self.max_memory_mb))
         cpu_limit = int(kwargs.get("max_cpu_seconds", max(int(exec_timeout) + 2, self.max_cpu_seconds)))
         allowed_caps = kwargs.get("allowed_capabilities")
@@ -1486,7 +1526,19 @@ class GEVRSandbox:
                 marker in envelope["error"] for marker in self._EXTRINSIC_ERROR_MARKERS
             )
 
-        egress_verification = self._verify_egress_paths(egress_paths)
+        payload_egress = payload.get("egress") or {}
+        if egress_paths:
+            egress_verification = {}
+            for raw_p in egress_paths:
+                p_s = str(raw_p or "").strip()
+                if not p_s:
+                    continue
+                if p_s in payload_egress:
+                    egress_verification[p_s] = payload_egress[p_s]
+                else:
+                    egress_verification.update(self._verify_egress_paths([p_s]))
+        else:
+            egress_verification = {}
         envelope["egress"] = egress_verification
         if egress_verification:
             bad = {p: v for p, v in egress_verification.items() if v != "ok"}

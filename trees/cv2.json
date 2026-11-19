@@ -4707,7 +4707,10 @@
       "inputs": {
         "src": {
           "type_name": "ndarray",
-          "state": "color_bgr",
+          "state": "gray",
+          "accepted_states": [
+            "color_bgr"
+          ],
           "qualifiers": [
             [
               "cv2",
@@ -4724,22 +4727,22 @@
           "value_constraints": null,
           "shape_contract": null,
           "structure_kind": "tensor",
-          "rank": 3,
+          "rank": 2,
           "element_type": "uint8",
           "supported_formats": [],
           "carrier": "ndarray",
           "layout": {
-            "rank": 3,
+            "rank": null,
             "shape": null,
             "dtype": "uint8",
             "memory_order": "any",
-            "rank_polymorphic": false,
+            "rank_polymorphic": true,
             "channel_count": null,
             "channel_axis": null,
             "length": null
           },
-          "semantics": "image.color.bgr",
-          "typestate": "cv2::color_bgr",
+          "semantics": "image.gray",
+          "typestate": "cv2::gray",
           "invariants": [
             "cv2.image"
           ]
@@ -4810,13 +4813,13 @@
           "shape_contract": null,
           "structure_kind": "tensor",
           "rank": 2,
-          "element_type": "float64",
+          "element_type": "uint8",
           "supported_formats": [],
           "carrier": "ndarray",
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -6485,6 +6488,9 @@
         "src": {
           "type_name": "ndarray",
           "state": "gray",
+          "accepted_states": [
+            "blurred"
+          ],
           "qualifiers": [
             [
               "cv2",
@@ -6535,10 +6541,10 @@
           "type_name": "float",
           "state": "maximum_value",
           "qualifiers": [],
-          "default_value": null,
+          "default_value": 255.0,
           "description": "Value to assign to binary high pixels.",
           "domain": "cv2",
-          "required": true,
+          "required": false,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -8264,10 +8270,10 @@
               "RetrievalModes"
             ]
           ],
-          "default_value": null,
+          "default_value": 0,
           "description": "Contour retrieval mode: cv2.RETR_EXTERNAL=0, cv2.RETR_LIST=1, cv2.RETR_CCOMP=2, cv2.RETR_TREE=3.",
           "domain": "cv2",
-          "required": true,
+          "required": false,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -8309,10 +8315,10 @@
               "ContourApproximationModes"
             ]
           ],
-          "default_value": null,
+          "default_value": 2,
           "description": "Contour approximation algorithm: cv2.CHAIN_APPROX_NONE=1, cv2.CHAIN_APPROX_SIMPLE=2.",
           "domain": "cv2",
-          "required": true,
+          "required": false,
           "abstract_type": "scalar",
           "enum_values": [
             1,
@@ -8641,7 +8647,7 @@
       "topology_type": "sequential",
       "node_type": "function",
       "node_role": "transformer",
-      "mutation_type": "in_place",
+      "mutation_type": "pure",
       "is_context_manager": false,
       "verified": true,
       "is_public": true,
@@ -8659,9 +8665,10 @@
         "draw",
         "render",
         "contours",
-        "polygons"
+        "polygons",
+        "visualization"
       ],
-      "code_template": "{output_var} = cv2.drawContours({image}, {contours}, {contour_idx}, {color}, {thickness})",
+      "code_template": "{output_var} = cv2.drawContours({image}.copy(), {contours}, {contour_idx}, {color}, {thickness})",
       "slots": {
         "contour_idx": -1,
         "color": [
@@ -8764,10 +8771,10 @@
           "type_name": "int",
           "state": "index",
           "qualifiers": [],
-          "default_value": null,
+          "default_value": -1,
           "description": "Index of contour to draw (-1 draws all contours).",
           "domain": "cv2",
-          "required": true,
+          "required": false,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -8797,10 +8804,14 @@
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": null,
+          "default_value": [
+            0,
+            255,
+            0
+          ],
           "description": "Drawing color (B, G, R) tuple.",
           "domain": "cv2",
-          "required": true,
+          "required": false,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",

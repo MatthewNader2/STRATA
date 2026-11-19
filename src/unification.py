@@ -10,7 +10,6 @@ Conforms strictly to Section 3.2 of the STRATA paper:
 
 from __future__ import annotations
 import os
-import re
 import ast
 import collections
 import copy
@@ -35,6 +34,7 @@ try:
         tokenize_alphanumeric,
         extract_template_placeholders,
         safe_substitute_template,
+        unique_var as _unique_var,
     )
     from errors import (
         UnificationError,
@@ -48,6 +48,7 @@ except ImportError:
         tokenize_alphanumeric,
         extract_template_placeholders,
         safe_substitute_template,
+        unique_var as _unique_var,
     )
     from .errors import (
         UnificationError,
@@ -726,8 +727,9 @@ def _wire_rejection(cell: Any, p_name: str, port: Any, v_name: str, ctx: Any, re
                 v_t_cfg = str(getattr(v_sig_inner, "type_name", "") or "").strip().lower()
                 is_domain_carrier = bool(
                     t_name
-                    and v_t_cfg == t_name
-                    and (reg is None or not reg.is_builtin_scalar_primitive(t_name))
+                    and v_t_cfg
+                    and (v_t_cfg == t_name or (reg is not None and reg.is_subtype(v_t_cfg, t_name)))
+                    and (reg is None or (not reg.is_builtin_scalar_primitive(t_name) and not reg.is_builtin_scalar_primitive(v_t_cfg)))
                     and (reg is None or not reg.is_declared_top(t_name))
                     and (reg is None or not reg.is_void_type(t_name))
                     and unify(v_sig_inner, p_sig_inner) is not None
@@ -778,8 +780,13 @@ def _wire_rejection(cell: Any, p_name: str, port: Any, v_name: str, ctx: Any, re
                 _tgt_lits.update(str(pk).strip().lower() for pk in (getattr(ctx, "_pending_setter_keys", set()) or set()) if str(pk).strip())
                 _req_lits = {cl for cl in _c_lits if cl not in _tgt_lits and not ExecutionContext._is_path_string(cl)}
                 if _req_lits and not (_req_lits & _v_origins):
-                    _act_sig = getattr(ctx.variables[_act_v][0], "signature", ctx.variables[_act_v][0])
-                    if unify(_act_sig, p_actual_sig) is None:
+                    _act_port = ctx.variables[_act_v][0]
+                    _act_sig = getattr(_act_port, "signature", _act_port)
+                    _act_tn = str(getattr(_act_sig, "type_name", "") or "").strip().lower()
+                    _act_sk = str(getattr(_act_port, "structure_kind", "") or "").strip().lower()
+                    _act_abs = str(getattr(_act_port, "abstract_type", "") or getattr(_act_sig, "abstract_type", "") or "").strip().lower()
+                    _act_is_handle = _act_sk == "handle" or _act_abs == "handle" or registry.is_subtype(_act_tn, "handle")
+                    if not _act_is_handle and registry.is_composite_carrier(_act_tn) and unify(_act_sig, p_actual_sig) is None:
                         return ("clause_literal_origin_mismatch", {"v_name": v_name, "port": p_name, "expected": sorted(_req_lits), "var_origins": sorted(_v_origins)})
 
         bindings = cell_bindings if cell_bindings is not None else kwargs.get("bindings")
@@ -1928,7 +1935,20 @@ def is_edge_valid(
     in_abs = (p_in.abstract_type or (in_sig_o.abstract_type if is_in_alg else "")).lower() if is_in_ps else str(_get_p_field(p_in, "abstract_type", "") or getattr(in_sig_o, "abstract_type", "") or "").lower()
 
     if not reg.are_structure_kinds_compatible(out_sk, in_sk, out_abs, in_abs):
-        return False
+        out_tn_v = str(getattr(out_sig_o, "type_name", "") or "").strip()
+        in_tn_v = str(getattr(in_sig_o, "type_name", "") or "").strip()
+        explicit_handle_subtype = bool(
+            already_unified
+            and out_sk == "handle"
+            and in_sk == "scalar"
+            and out_tn_v
+            and in_tn_v
+            and not reg.is_declared_top(in_tn_v)
+            and not reg.is_type_variable(in_tn_v)
+            and reg.is_subtype(out_tn_v, in_tn_v)
+        )
+        if not explicit_handle_subtype:
+            return False
 
     # 3. Rejected Qualifiers
     out_quals = out_sig_o.qualifiers if is_out_alg else (
@@ -2895,13 +2915,14 @@ def parse_type_term(type_str: str) -> TypeTerm:
 
 @dataclass(frozen=True, slots=True)
 class TypestateTerm(TypeTerm):
-    """Typestate compound term: tau = (type_name, state, qualifiers, abstract_type, accepted_states, parent_state)."""
+    """Typestate compound term: tau = (type_name, state, qualifiers, abstract_type, accepted_states, parent_state, domain)."""
     type_name: str
     state: str = "any"
     qualifiers: Tuple[Tuple[str, ...], ...] = field(default_factory=tuple)
     abstract_type: Optional[str] = None
     accepted_states: Tuple[str, ...] = field(default_factory=tuple)
     parent_state: Optional[str] = None
+    domain: str = ""
 
     @property
     def base(self) -> str:
@@ -2927,9 +2948,14 @@ class TypestateTerm(TypeTerm):
             object.__setattr__(self, "accepted_states", ())
         if self.parent_state:
             object.__setattr__(self, "parent_state", str(self.parent_state).strip().lower())
+        dom_norm = str(self.domain or "").strip().lower()
+        if dom_norm != self.domain:
+            object.__setattr__(self, "domain", dom_norm)
 
     def apply_substitution(self, sigma: 'Substitution', visited: Optional[Tuple[str, ...]] = None) -> 'TypeTerm':
         if not sigma or not sigma.mappings or self.type_name not in sigma.mappings:
+            return self
+        if not TypeRegistry.get_instance().is_type_variable(self.type_name):
             return self
         if visited and self.type_name in visited:
             return self
@@ -2948,6 +2974,7 @@ class TypestateTerm(TypeTerm):
             abstract_type=self.abstract_type,
             accepted_states=self.accepted_states,
             parent_state=self.parent_state,
+            domain=self.domain,
         )
 
     def __repr__(self) -> str:
@@ -3023,7 +3050,11 @@ def occurs_check(
     elif isinstance(term, TypestateTerm):
         if term.type_name == var_name:
             return True
-        if sigma and term.type_name in sigma.mappings:
+        if (
+            sigma
+            and term.type_name in sigma.mappings
+            and TypeRegistry.get_instance().is_type_variable(term.type_name)
+        ):
             new_visited = (visited or ()) + (term.type_name,)
             return occurs_check(var_name, sigma.mappings[term.type_name], sigma, new_visited)
         return False
@@ -3209,8 +3240,9 @@ def unify(
     if isinstance(t2, GenericTypeTerm) and (isinstance(t1, AtomicType) or isinstance(t1, TypestateTerm)):
         registry = TypeRegistry.get_instance()
         source_name = t1.type_name if isinstance(t1, TypestateTerm) else t1.name
-        if registry.is_subtype(source_name, t2.constructor):
-            if all(isinstance(arg, (TypeVariable, TopType)) for arg in t2.args):
+        exact_generic_sub = registry.is_subtype(source_name, str(t2))
+        if exact_generic_sub or registry.is_subtype(source_name, t2.constructor):
+            if exact_generic_sub or all(isinstance(arg, (TypeVariable, TopType)) for arg in t2.args):
                 for arg in t2.args:
                     if isinstance(arg, TypeVariable) and arg.var_name not in sub.mappings:
                         sub.bind(arg.var_name, TOP)
@@ -3253,6 +3285,8 @@ def unify(
             consumer_accepted=t2.accepted_states,
             consumer_parent=t2.parent_state,
             producer_parent=t1.parent_state,
+            producer_domain=t1.domain or None,
+            consumer_domain=t2.domain or None,
         ):
             if is_ground_query:
                 _unify_cache_put(cache_key, None)
@@ -3351,6 +3385,7 @@ def _to_type_term(item: Any) -> TypeTerm:
                     abstract_type=getattr(item, "abstract_type", None),
                     accepted_states=getattr(item, "accepted_states", ()),
                     parent_state=getattr(item, "parent_state", None),
+                    domain=getattr(item, "domain", "") or "",
                 )
         else:
             canonical = registry.canonical_name(t_clean)
@@ -3364,6 +3399,7 @@ def _to_type_term(item: Any) -> TypeTerm:
                     abstract_type=getattr(item, "abstract_type", None),
                     accepted_states=getattr(item, "accepted_states", ()),
                     parent_state=getattr(item, "parent_state", None),
+                    domain=getattr(item, "domain", "") or "",
                 )
         with _TERM_CACHE_LOCK:
             _ALGEBRAIC_SIG_TERM_CACHE[item] = res
@@ -3720,7 +3756,7 @@ def _is_valid_slot_value(val: Any, sig: Optional[PortSignature] = None) -> bool:
     return True
 
 
-_PY_BUILTIN_NAMES: frozenset = frozenset(dir(builtins))
+_PY_BUILTIN_NAMES: Set[str] = set(dir(builtins))
 
 
 def _extract_free_expr_names(node: ast.AST, bound: Optional[Set[str]] = None) -> Set[str]:
@@ -3770,20 +3806,57 @@ def _extract_free_expr_names(node: ast.AST, bound: Optional[Set[str]] = None) ->
 def _classify_template_identifier_port(cell: Any, port_name: str) -> Tuple[bool, bool]:
     """
     Detects from `cell.code_template` whether `{port_name}` sits in a Python declaration
-    identifier or parameter-list position (`def {fn}({args}):` / `class {cls}:` / `lambda {args}:`).
+    identifier, exception type, or parameter-list position
+    (`def {fn}({args}):` / `class {cls}:` / `except {exc}:` / `lambda {args}:`).
     Returns `(is_identifier_port, is_param_list)`.
     """
     tmpl = str(getattr(cell, "code_template", "") or "")
     if not tmpl or not port_name:
         return False, False
-    esc = re.escape(port_name)
-    if re.search(rf"\b(?:def|class)\s+\{{{esc}\}}(?=[\s\(:]|$)", tmpl):
-        return True, False
-    if re.search(rf"\bdef\s+[^\(\n]+\([^\)\n]*\{{{esc}\}}[^\)\n]*\)", tmpl):
-        return True, True
-    if re.search(rf"\blambda\s+[^:\n]*\{{{esc}\}}[^:\n]*:", tmpl):
-        return True, True
+    ph = "{" + port_name + "}"
+    if ph not in tmpl:
+        return False, False
+    for line in tmpl.splitlines():
+        stripped = line.lstrip()
+        for kw in ("def ", "class ", "except "):
+            if stripped.startswith(kw):
+                after = stripped[len(kw):].lstrip()
+                if after.startswith(ph):
+                    rest = after[len(ph):]
+                    if not rest or rest[0] in (" ", "\t", "(", ":", ",", ")"):
+                        return True, False
+        if stripped.startswith("def ") and "(" in stripped:
+            open_p = stripped.find("(")
+            close_p = stripped.find(")", open_p + 1)
+            if close_p != -1 and ph in stripped[open_p + 1 : close_p]:
+                return True, True
+        lam_idx = stripped.find("lambda")
+        if lam_idx != -1 and (lam_idx == 0 or not (stripped[lam_idx - 1].isalnum() or stripped[lam_idx - 1] == "_")):
+            after_lam = stripped[lam_idx + 6 :]
+            if not after_lam or after_lam[0] in (" ", "\t", ":"):
+                colon_idx = after_lam.find(":")
+                if colon_idx != -1 and ph in after_lam[:colon_idx]:
+                    return True, True
     return False, False
+
+
+def _is_macro_block_slot(cell: Any, port_name: str) -> bool:
+    """
+    Returns True only when `{port_name}` is a macro/combinator statement-block slot
+    (i.e. declared in `cell.slots` with a non-empty slot-spec dict or sitting on its
+    own indented line in `cell.code_template`), not scalar parameter defaults in `slots`.
+    """
+    if cell is None or not port_name:
+        return False
+    slots = getattr(cell, "slots", None)
+    if not isinstance(slots, dict) or port_name not in slots:
+        return False
+    slot_spec = slots.get(port_name)
+    if isinstance(slot_spec, dict) and slot_spec:
+        return True
+    tmpl = str(getattr(cell, "code_template", "") or "")
+    ph_slot = "{" + port_name + "}"
+    return any(ln.strip() == ph_slot and len(ln) > len(ln.lstrip()) for ln in tmpl.splitlines())
 
 
 def _normalize_identifier_port_binding(val: Any, is_param_list: bool = False) -> Optional[str]:
@@ -3847,7 +3920,8 @@ def _resolve_bound_slot_for_port(cell: Any, port_name: str, port_sig: Any) -> Op
     ):
         return "lambda *_: None"
     tmpl = str(getattr(cell, "code_template", "") or "")
-    if tmpl and re.search(rf"(?m)^\s+\{{{re.escape(port_name)}\}}\s*$", tmpl):
+    ph_slot = "{" + port_name + "}"
+    if tmpl and any(ln.strip() == ph_slot and len(ln) > len(ln.lstrip()) for ln in tmpl.splitlines()):
         return "lambda *_: None"
     if len(non_empty_slots) == 1:
         return "lambda *_: None"
@@ -4048,6 +4122,27 @@ class LiteralSpan(tuple):
         return inst
 
 
+def _split_dimension_token(word: str) -> List[Tuple[int, str]]:
+    """
+    Splits dimension notation such as "5x5", "800x600" or "3x3x3" into its numeric parts,
+    returning [(offset_in_word, numeric_text), ...]; returns [] when `word` is not
+    dimension notation. Lexical grammar only (no regex, no port/library knowledge): it lets
+    "kernel size 5x5" bind exactly like "kernel size 5 by 5", because both then yield two
+    adjacent numeric spans that the contiguous-tuple binder already understands.
+    """
+    seps = ("x", "X", "\u00d7")
+    parts: List[Tuple[int, str]] = []
+    start = 0
+    for i, ch in enumerate(word + "x"):
+        if i == len(word) or ch in seps:
+            seg = word[start:i]
+            if not seg or seg.count(".") > 1 or not seg.replace(".", "").isdigit() or seg.startswith(".") or seg.endswith("."):
+                return []
+            parts.append((start, seg))
+            start = i + 1
+    return parts if len(parts) >= 2 else []
+
+
 class ExecutionContext:
     """
     Runtime execution scope holding bound variables and literal arguments.
@@ -4124,6 +4219,9 @@ class ExecutionContext:
             self.target_literals.add(self.target_key)
         self.written_keys: Set[str] = set()
         self.current_cell_clause_idx: Optional[int] = None
+        # Prompt clauses that at least one non-bridge pipeline cell serves (set by unify_pipeline).
+        # None = unknown, in which case the clause-locality rule for REQUIRED numeric ports is not applied.
+        self.pipeline_served_clauses: Optional[Set[int]] = None
         self.clause_spans: List[Tuple[int, int]] = []
         if self._prompt:
             try:
@@ -4278,6 +4376,7 @@ class ExecutionContext:
         new_ctx.consumed_keys = set(self.consumed_keys)
         new_ctx.target_literals = set(self.target_literals)
         new_ctx.current_cell_clause_idx = self.current_cell_clause_idx
+        new_ctx.pipeline_served_clauses = self.pipeline_served_clauses
         new_ctx.literal_clause_map = dict(self.literal_clause_map)
         new_ctx.ordered_literals = list(self.ordered_literals)
         new_ctx.identifier_roles = dict(self.identifier_roles)
@@ -4429,7 +4528,7 @@ class ExecutionContext:
         if dests:
             return dests
         reg = TypeRegistry.get_instance()
-        prompt_words = set(str(self.prompt or "").lower().split())
+        prompt_words = CellTokenizer.tokenize_prompt(self.prompt or "")
         has_prompt_egress = bool(prompt_words & set(reg.get_egress_tokens() or ()))
         if not has_prompt_egress:
             return []
@@ -4558,6 +4657,13 @@ class ExecutionContext:
                     spans.append(LiteralSpan(pos, "file_asset", w, end_pos=pos + len(w)))
                     continue
 
+            # Dimension notation ("5x5", "800x600"): emit each extent as its own numeric span
+            _dim_parts = _split_dimension_token(w)
+            if _dim_parts:
+                for _off, _txt in _dim_parts:
+                    spans.append(LiteralSpan(pos + _off, "numeric", _txt, end_pos=pos + _off + len(_txt)))
+                continue
+
             # Numeric tokens (including comma-separated integers like "1,000" or "10,000")
             num_candidate = w.replace(",", "") if ("," in w and all(part.isdigit() for part in w.split(","))) else w
             try:
@@ -4567,7 +4673,7 @@ class ExecutionContext:
             except ValueError:
                 pass
 
-            # No heuristic dimension splitting; numeric tokens are extracted cleanly as units
+            # (dimension notation is handled above; everything else is a single-unit numeric token)
 
         # 3. Predicate / filter comparison expressions (e.g. "value > 100", "score <= 50", "x == 1") without regex
         for op in (">=", "<=", "==", "!=", ">", "<"):
@@ -4901,6 +5007,45 @@ class ExecutionContext:
 
         return None
 
+    def is_llm_slot_grounded(self, slot_val: Any, port_sig: Optional[PortSignature] = None) -> bool:
+        """
+        Verify an LLM-supplied slot value does not silently shadow an unconsumed
+        prompt literal of the same channel in the active clause.
+        """
+        _c_cl = getattr(self, "current_cell_clause_idx", None)
+        _lit_cl_map = getattr(self, "literal_clause_map", None) or {}
+        _num_cl = len(getattr(self, "clause_spans", ()) or ())
+        if _c_cl is None or _num_cl <= 1 or not _lit_cl_map:
+            return True
+        if port_sig is not None:
+            reg = TypeRegistry.get_instance()
+            t_n = (getattr(port_sig, "type_name", None) or "").lower()
+            is_b = reg.is_subtype(t_n, "bool")
+            is_s = reg.is_subtype(t_n, "str") or reg.is_declared_top(t_n)
+            is_n = (reg.is_subtype(t_n, "numeric") and not is_b) or (
+                isinstance(slot_val, (int, float)) and not isinstance(slot_val, bool)
+            )
+            if is_s and not is_n:
+                _kinds: Tuple[str, ...] = ("identifier", "quoted_str")
+            elif is_n and not is_s:
+                _kinds = ("numeric", "int_literal", "float_literal")
+            else:
+                _kinds = ("identifier", "quoted_str", "numeric", "int_literal", "float_literal")
+        else:
+            _kinds = ("identifier", "quoted_str", "numeric", "int_literal", "float_literal")
+        _cl_lits = [
+            (i, str(v).strip().lower())
+            for i, (_, k_lit, v) in enumerate(self.ordered_literals)
+            if _lit_cl_map.get(i) == _c_cl and k_lit in _kinds
+        ]
+        _unconsumed_cl = [lv for i, lv in _cl_lits if i not in self.used_indices]
+        _slot_items = (
+            [str(el).strip().lower() for el in slot_val]
+            if isinstance(slot_val, (list, tuple))
+            else [str(slot_val).strip().lower()]
+        )
+        return not (_cl_lits and _unconsumed_cl and not any(si in {lv for _, lv in _cl_lits} for si in _slot_items))
+
     def resolve_literal_for_port(
         self,
         port_sig: PortSignature,
@@ -4977,34 +5122,15 @@ class ExecutionContext:
             _step_s = self.step_llm_slots.get(_step_idx)
             if isinstance(_step_s, dict) and port_sig.name in _step_s:
                 slot_val = _step_s[port_sig.name]
-                if not (is_scalar and isinstance(slot_val, (list, tuple))):
+                if not (is_scalar and isinstance(slot_val, (list, tuple))) and self.is_llm_slot_grounded(slot_val, port_sig):
                     return _format_literal_value(slot_val, port_sig)
         if hasattr(self, "llm_slots") and isinstance(self.llm_slots, dict):
             _cid = getattr(cell, "cell_id", None) if cell is not None else None
             _cell_s = self.llm_slots.get(_cid) if _cid else None
             if isinstance(_cell_s, dict) and port_sig.name in _cell_s:
                 slot_val = _cell_s[port_sig.name]
-                if not (is_scalar and isinstance(slot_val, (list, tuple))):
-                    _c_cl = getattr(self, "current_cell_clause_idx", None)
-                    _lit_cl_map = getattr(self, "literal_clause_map", None) or {}
-                    _num_cl = len(getattr(self, "clause_spans", ()) or ())
-                    _allow_cell_slot = True
-                    if _c_cl is not None and _num_cl > 1 and _lit_cl_map:
-                        _cl_lits = [
-                            (i, str(v).strip().lower())
-                            for i, (_, k_lit, v) in enumerate(self.ordered_literals)
-                            if _lit_cl_map.get(i) == _c_cl and k_lit in ("identifier", "quoted_str", "numeric", "int_literal", "float_literal")
-                        ]
-                        _unconsumed_cl = [lv for i, lv in _cl_lits if i not in self.used_indices]
-                        _slot_items = (
-                            [str(el).strip().lower() for el in slot_val]
-                            if isinstance(slot_val, (list, tuple))
-                            else [str(slot_val).strip().lower()]
-                        )
-                        if _cl_lits and _unconsumed_cl and not any(si in {lv for _, lv in _cl_lits} for si in _slot_items):
-                            _allow_cell_slot = False
-                    if _allow_cell_slot:
-                        return _format_literal_value(slot_val, port_sig)
+                if not (is_scalar and isinstance(slot_val, (list, tuple))) and self.is_llm_slot_grounded(slot_val, port_sig):
+                    return _format_literal_value(slot_val, port_sig)
 
         # 2. Dynamic Enum / Flag Constant Grounding via Domain Reflection & Vector Similarity
         if (t_name == "enum" or getattr(port_sig, "domain", None)) and self.prompt:
@@ -5093,20 +5219,71 @@ class ExecutionContext:
                 toks |= {t.lower() for t in CellTokenizer.tokenize_identifier(ps_st)}
             return toks
 
-        def _literal_port_evidence(lit_pos: int) -> Tuple[int, int]:
-            """Returns (own_left_hits, other_port_left_hits) in the local window before lit_pos."""
+        def _literal_port_evidence(lit_pos: int, lit_val: Optional[str] = None) -> Tuple[int, int]:
+            """Returns (own_local_hits, other_port_local_hits) in the Voronoi local window around lit_pos."""
             own_toks = _port_own_tokens(port_sig)
-            left_win = (self.prompt or "")[max(0, lit_pos - 32):lit_pos].lower()
-            left_toks = set(CellTokenizer.tokenize_prompt(left_win))
-            own_hits = len(left_toks & own_toks)
+            p_text = self.prompt or ""
+            lit_len = len(str(lit_val)) if lit_val is not None else 0
+            lit_end = lit_pos + lit_len
+            cl_start_bound, cl_end_bound = 0, len(p_text)
+            for cs_s, cs_e in (getattr(self, "clause_spans", None) or ()):
+                if cs_s <= lit_pos <= cs_e:
+                    cl_start_bound, cl_end_bound = cs_s, cs_e
+                    break
+            prev_num_end: Optional[int] = None
+            next_num_start: Optional[int] = None
+            for _o_pos, _o_kind, _o_val in self.ordered_literals:
+                if _o_kind != "numeric" or not (cl_start_bound <= _o_pos <= cl_end_bound):
+                    continue
+                if _o_pos < lit_pos:
+                    _o_end = _o_pos + len(str(_o_val))
+                    if _o_end <= lit_pos and (prev_num_end is None or _o_end > prev_num_end):
+                        prev_num_end = _o_end
+                elif _o_pos > lit_pos:
+                    if next_num_start is None or _o_pos < next_num_start:
+                        next_num_start = _o_pos
+            if prev_num_end is not None:
+                raw_left = p_text[prev_num_end:lit_pos].lower()
+                left_words = [w for w in raw_left.split() if w]
+                left_win = " ".join(left_words[1:]) if len(left_words) >= 2 else raw_left
+            else:
+                left_win = p_text[max(cl_start_bound, lit_pos - 32):lit_pos].lower()
+            right_win = ""
+            if lit_len > 0 and lit_end < cl_end_bound:
+                raw_right_end = (
+                    next_num_start
+                    if (next_num_start is not None and next_num_start > lit_end)
+                    else min(cl_end_bound, lit_end + 24)
+                )
+                raw_right_full = p_text[lit_end:raw_right_end].lower()
+                cut_at = len(raw_right_full)
+                for _r_i, _r_ch in enumerate(raw_right_full):
+                    if _r_ch in (",", ";", "\n"):
+                        cut_at = _r_i
+                        break
+                right_words = [w for w in raw_right_full[:cut_at].split() if w]
+                if next_num_start is not None and right_words:
+                    right_words = right_words[:-1]
+                right_win = " ".join(right_words[:2])
+            local_toks = set(CellTokenizer.tokenize_prompt(left_win))
+            if right_win:
+                local_toks |= set(CellTokenizer.tokenize_prompt(right_win))
+            own_hits = len(local_toks & own_toks)
             other_hits = 0
             if cell_inputs:
                 for op_name, op_sig in cell_inputs.items():
                     if op_name == getattr(port_sig, "name", None):
                         continue
+                    op_tn = str(getattr(getattr(op_sig, "signature", op_sig), "type_name", "") or "").strip().lower()
+                    op_sk = str(getattr(op_sig, "structure_kind", "") or "").strip().lower()
+                    if is_num and (
+                        op_sk == "handle"
+                        or not (registry.is_subtype(op_tn, "numeric") or registry.is_subtype(op_tn, "sequence") or op_tn.startswith("tuple["))
+                    ):
+                        continue
                     op_toks = _port_own_tokens(op_sig)
-                    if op_toks and (left_toks & op_toks) and not (op_toks <= own_toks):
-                        other_hits = max(other_hits, len(left_toks & op_toks))
+                    if op_toks and (local_toks & op_toks) and not (op_toks <= own_toks):
+                        other_hits = max(other_hits, len(local_toks & op_toks))
             return own_hits, other_hits
 
         if is_num:
@@ -5115,11 +5292,16 @@ class ExecutionContext:
                 and registry.is_subtype(t_name, "int")
                 and not registry.is_subtype("float", t_name)
             )
+            _prefers_float = (
+                registry is not None
+                and registry.is_subtype(t_name, "float")
+                and not _int_only
+            )
             lit_clause_map = getattr(self, "literal_clause_map", {}) or {}
             cell_cl = getattr(self, "current_cell_clause_idx", None)
             num_prompt_clauses = len(getattr(self, "clause_spans", ()) or ())
             clauses = CellTokenizer.split_prompt_clauses(self.prompt) if self.prompt else []
-            scored_num_cands: List[Tuple[Tuple[int, int, int, int], int, str]] = []
+            scored_num_cands: List[Tuple[Tuple[int, int, int, int, int], int, str]] = []
             for idx, (lit_pos, kind, val) in enumerate(self.ordered_literals):
                 if idx in self.used_indices or kind != "numeric":
                     continue
@@ -5133,12 +5315,19 @@ class ExecutionContext:
                 in_cur_clause = 1 if (
                     cell_cl is not None and idx in lit_clause_map and lit_clause_map[idx] == cell_cl
                 ) else 0
+                _served_cl = getattr(self, "pipeline_served_clauses", None)
                 if (
-                    not port_sig.required
-                    and cell_cl is not None
+                    cell_cl is not None
                     and num_prompt_clauses > 1
                     and idx in lit_clause_map
                     and lit_clause_map[idx] != cell_cl
+                    and (
+                        not port_sig.required
+                        # A required port may only borrow a literal that belongs to a clause NO cell serves
+                        # (an orphan literal). Otherwise it steals a sibling clause's argument, e.g. a blur
+                        # sigma consuming the next clause's edge-detector threshold.
+                        or (_served_cl is not None and lit_clause_map[idx] in _served_cl)
+                    )
                 ):
                     continue
                 if not port_sig.required:
@@ -5177,6 +5366,10 @@ class ExecutionContext:
                     _desc = str(getattr(port_sig, "description", "") or getattr(port_sig, "doc", "") or "")
                     if _desc:
                         evidence |= {t.lower() for t in CellTokenizer.tokenize_prompt(_desc)}
+                    if in_cur_clause and cell is not None:
+                        _sem_tags = getattr(cell, "semantic_tags", None) or ()
+                        for _st_tag in _sem_tags:
+                            evidence |= {t.lower() for t in CellTokenizer.tokenize_identifier(str(_st_tag))}
 
                     # Only fall back to cell-wide identity tokens if the port itself lacks specific descriptive vocabulary
                     if not evidence and cell_tokens:
@@ -5214,10 +5407,11 @@ class ExecutionContext:
 
                         if not has_discriminative_hit or discriminative_mass < 0.5:
                             continue
-                own_hits, other_hits = _literal_port_evidence(lit_pos) if self.prompt else (0, 0)
+                own_hits, other_hits = _literal_port_evidence(lit_pos, val) if self.prompt else (0, 0)
                 if not port_sig.required and other_hits > own_hits and own_hits == 0:
                     continue
-                scored_num_cands.append(((in_cur_clause, 1 if own_hits > 0 else 0, 0 if other_hits > 0 else 1, -idx), idx, val))
+                _float_spec = 1 if (_prefers_float and "." in str(val)) else 0
+                scored_num_cands.append(((in_cur_clause, 1 if own_hits > 0 else 0, 0 if other_hits > 0 else 1, _float_spec, -idx), idx, val))
             if scored_num_cands:
                 scored_num_cands.sort(key=lambda item: item[0], reverse=True)
                 _, chosen_idx, chosen_val = scored_num_cands[0]
@@ -5272,7 +5466,7 @@ class ExecutionContext:
                     l_cl = lit_clause_map.get(idx)
                     if allowed_clauses is not None and l_cl is not None and l_cl not in allowed_clauses:
                         continue
-                    own_hits, other_hits = _literal_port_evidence(lit_pos) if self.prompt else (0, 0)
+                    own_hits, other_hits = _literal_port_evidence(lit_pos, val) if self.prompt else (0, 0)
                     if other_hits > own_hits and allowed_clauses is not None and cell_cl not in allowed_clauses:
                         continue
                     if other_hits > own_hits and allowed_clauses is None:
@@ -5646,7 +5840,7 @@ class ExecutionContext:
                 roles = self.identifier_roles.get(lit_pos, set())
                 is_var_symbol = (
                     bool(roles & proj_tokens)
-                    or (kind == "quoted_str" and not ExecutionContext._is_path_string(val_str))
+                    or (is_proj_port and kind == "quoted_str" and not ExecutionContext._is_path_string(val_str))
                     or (is_setter_port and bool(roles & (proj_tokens | reg.get_roles_for_category("destination") | reg.get_egress_tokens())))
                 )
                 if is_var_symbol and not is_proj_port:
@@ -7409,7 +7603,7 @@ class UnificationGate:
         for cell, bindings in pipeline_bindings:
             stage = getattr(cell, "stage", None)
             node_role = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
-            is_terminal = getattr(cell, "is_endable", False) or (stage in term_stages) or (node_role in term_roles)
+            is_terminal = (stage in term_stages) or (node_role in term_roles)
             if not is_terminal:
                 for out_p in getattr(cell, "outputs", {}).values():
                     if str(getattr(out_p, "state", "")).lower() in term_states:
@@ -7843,6 +8037,12 @@ class UnificationGate:
 
         # Static Pre-Unification Structural Macro Expansion (Phase 4 / T4.1)
         cells = self.wiring_stage.expand_macros(cells, ctx)
+        ctx.pipeline_served_clauses = {
+            getattr(_c_srv, "matched_clause_idx", None)
+            for _c_srv in cells
+            if not getattr(_c_srv, "_auto_inserted_bridge", False)
+            and getattr(_c_srv, "matched_clause_idx", None) is not None
+        }
 
         # Pre-scan declared optic setter keys introduced later without prior read reference
         _setter_clause_indices: Set[int] = {
@@ -8254,7 +8454,19 @@ class UnificationGate:
                         or (reg is not None and reg.is_subtype(t_name, "scalar"))
                     )
                     if is_scalar:
-                        return False
+                        has_handle_wire = False
+                        for v_sig, _ in ctx.variables.values():
+                            if _is_product(v_sig):
+                                continue
+                            v_sk = str(getattr(v_sig, "structure_kind", "") or "").strip().lower()
+                            v_abs = str(getattr(getattr(v_sig, "signature", v_sig), "abstract_type", "") or getattr(v_sig, "abstract_type", "") or "").strip().lower()
+                            if (v_sk == "handle" or v_abs == "handle") and _shape_compatible(v_sig, p_s, consumer_cell=cell):
+                                if unify(getattr(v_sig, "signature", v_sig), p_s.signature, accumulated_sigma) is not None:
+                                    has_handle_wire = True
+                                    break
+                        if not has_handle_wire:
+                            return False
+                        return True
 
                 data_roles = (
                     reg.get_roles_for_category("data")
@@ -8303,9 +8515,18 @@ class UnificationGate:
                     strict_excl_roles.update(str(g).strip().lower() for g in _grp if str(g).strip())
 
                 candidates = []
+                cfg_roles_m = reg.get_config_roles_set()
 
                 for p_name, p in multi_ports:
                     p_role = getattr(p, "port_role", None) or getattr(p, "derived_role", "standard")
+                    p_str_k = str(getattr(p, "structure_kind", "") or "").strip().lower()
+                    p_c_rank = getattr(p, "canonical_rank", None) if getattr(p, "canonical_rank", None) is not None else getattr(p, "rank", None)
+                    p_t_n = str(getattr(getattr(p, "signature", p), "type_name", "") or getattr(p, "type_name", "") or "").strip().lower()
+                    p_is_scalar = (p_c_rank == 0 or p_str_k == "scalar" or reg.is_subtype(p_t_n, "scalar"))
+                    p_is_cfg_scalar = p_is_scalar and (
+                        str(p_role).strip().lower() in cfg_roles_m
+                        or str(getattr(p, "param_kind", "") or "").strip().lower() in cfg_roles_m
+                    )
                     p_toks = CellTokenizer.tokenize_identifier((p_name or "").lower())
                     p_desc = str(getattr(p, "doc", "") or getattr(p, "description", "") or "")
                     if p_desc:
@@ -8319,6 +8540,11 @@ class UnificationGate:
 
                     for v_name in avail_vars:
                         v_sig, _ = ctx.variables[v_name]
+                        if p_is_cfg_scalar:
+                            v_sk = str(getattr(v_sig, "structure_kind", "") or "").strip().lower()
+                            v_abs = str(getattr(getattr(v_sig, "signature", v_sig), "abstract_type", "") or getattr(v_sig, "abstract_type", "") or "").strip().lower()
+                            if v_sk != "handle" and v_abs != "handle":
+                                continue
                         v_role = getattr(v_sig, "port_role", None) or getattr(v_sig, "derived_role", "standard")
 
                         # Preserve declared callable defaults (e.g. try/except fallback handler)
@@ -8590,9 +8816,27 @@ class UnificationGate:
             # the prompt's shared literal channels (expressions, paths) first;
             # optional configuration knobs never steal them.
             cell_toks_for_projection = _cell_clause_tokens(cell)
+            _pre_step_slots = (
+                getattr(ctx, "step_llm_slots", {}).get(idx, {})
+                if hasattr(ctx, "step_llm_slots") and isinstance(ctx.step_llm_slots, dict)
+                else {}
+            )
+            _pre_cell_slots = (
+                ctx.llm_slots.get(cell.cell_id, {})
+                if hasattr(ctx, "llm_slots") and isinstance(ctx.llm_slots, dict)
+                else {}
+            )
+            if not isinstance(_pre_step_slots, dict):
+                _pre_step_slots = {}
+            if not isinstance(_pre_cell_slots, dict):
+                _pre_cell_slots = {}
             for p_name, p_sig in sorted(
                 cell.inputs.items(),
-                key=lambda kv: (not kv[1].required, 1 if getattr(kv[1], "complement_of_port", None) else 0),
+                key=lambda kv: (
+                    not kv[1].required,
+                    0 if (kv[0] in _pre_step_slots or kv[0] in _pre_cell_slots) else 1,
+                    1 if getattr(kv[1], "complement_of_port", None) else 0,
+                ),
             ):
                 if p_name in cell_bindings:
                     continue  # Already bound
@@ -8699,6 +8943,8 @@ class UnificationGate:
                             if has_name_evidence and has_val_evidence:
                                 llm_slot_val = cand_val
 
+                if llm_slot_val is not None and hasattr(ctx, "is_llm_slot_grounded") and not ctx.is_llm_slot_grounded(llm_slot_val, concrete_sig):
+                    llm_slot_val = None
                 if llm_slot_val is not None and not _is_valid_slot_value(llm_slot_val, concrete_sig):
                     llm_slot_val = None
 
@@ -8745,7 +8991,8 @@ class UnificationGate:
 
                 # Optional parameters with declared default: use prompt literal or omit/default
                 if not p_sig.required and p_sig.default_value is not None:
-                    if llm_slot_val is not None:
+                    is_macro_block_slot = _is_macro_block_slot(cell, p_name)
+                    if not is_macro_block_slot and llm_slot_val is not None:
                         formatted_val = _format_literal_value(llm_slot_val, concrete_sig)
                         _consume_matching_literals(ctx, llm_slot_val)
                         cell_bindings[p_name] = formatted_val
@@ -8761,15 +9008,27 @@ class UnificationGate:
                             for (_hv, _), (_he, _) in _h_excl_map.items():
                                 if _hv == _bv:
                                     _bound_excl.update(str(k) for k in (_he or ()))
-                    resolved_literal = ctx.resolve_literal_for_port(
-                        concrete_sig,
-                        cell_stage=cell.stage,
-                        cell_inputs=cell.inputs,
-                        cell_tokens=getattr(cell, "token_set", set()),
-                        cell=cell,
-                        excluded_keys=_bound_excl or None,
+                    resolved_literal = (
+                        None
+                        if is_macro_block_slot
+                        else ctx.resolve_literal_for_port(
+                            concrete_sig,
+                            cell_stage=cell.stage,
+                            cell_inputs=cell.inputs,
+                            cell_tokens=getattr(cell, "token_set", set()),
+                            cell=cell,
+                            excluded_keys=_bound_excl or None,
+                        )
                     )
                     if resolved_literal is not None:
+                        _is_id_dl, _is_param_dl = _classify_template_identifier_port(cell, p_name)
+                        if _is_id_dl:
+                            _norm_dl = _normalize_identifier_port_binding(resolved_literal, is_param_list=_is_param_dl)
+                            if _norm_dl is not None:
+                                resolved_literal = _norm_dl
+                            else:
+                                _def_norm = _normalize_identifier_port_binding(p_sig.default_value, is_param_list=_is_param_dl)
+                                resolved_literal = _def_norm if _def_norm is not None else _unique_var(cell, p_name)
                         cell_bindings[p_name] = resolved_literal
                         accumulated_sigma.bind(p_name, resolved_literal)
                     elif get_active_language_backend().is_null_literal(str(p_sig.default_value)):
@@ -8778,8 +9037,11 @@ class UnificationGate:
                     else:
                         val = str(p_sig.default_value)
                         c_tname = str(getattr(concrete_sig, "type_name", "") or "").lower()
-                        is_macro_block_slot = isinstance(getattr(cell, "slots", None), dict) and p_name in cell.slots
-                        c_is_str = _is_string_carrier(p_sig, concrete_sig) and not is_macro_block_slot
+                        c_is_str = (
+                            _is_string_carrier(p_sig, concrete_sig)
+                            and not is_macro_block_slot
+                            and not _classify_template_identifier_port(cell, p_name)[0]
+                        )
                         if c_is_str and not (val.startswith(("'", '"')) or get_active_language_backend().is_null_or_bool_literal(val, case_insensitive=False)):
                             val = repr(val)
                         cell_bindings[p_name] = val
@@ -9126,7 +9388,7 @@ class UnificationGate:
                         continue
 
                 # B. Check typestate-driven literal resolution from prompt or LLM slots
-                if not is_formal_step:
+                if not is_formal_step and not _is_macro_block_slot(cell, p_name):
                     if is_id_port and llm_slot_val is not None:
                         norm_id = _normalize_identifier_port_binding(llm_slot_val, is_param_list=is_id_param_list)
                         if norm_id is not None:
@@ -9178,7 +9440,7 @@ class UnificationGate:
                         pass
                     else:
                         c_tname = str(getattr(concrete_sig, "type_name", "") or "").lower()
-                        is_macro_block_slot = (isinstance(getattr(cell, "slots", None), dict) and p_name in cell.slots) or is_id_port
+                        is_macro_block_slot = _is_macro_block_slot(cell, p_name) or is_id_port
                         c_is_str = _is_string_carrier(p_sig, concrete_sig) and not is_macro_block_slot
                         if is_id_port:
                             norm_id = _normalize_identifier_port_binding(val, is_param_list=is_id_param_list)
@@ -9354,6 +9616,45 @@ class UnificationGate:
                     accumulated_sigma.bind(p_name, bound_slot_placeholder)
                     continue
 
+                # E.2 Deterministically resolve structural identifier / combinator identity ports before LLM fallback
+                _is_combinator_cell = is_formal_step or (
+                    str(getattr(cell, "node_role", "") or "").strip().lower() == "combinator"
+                )
+                if p_sig.required:
+                    _is_id_p, _is_param_p = _classify_template_identifier_port(cell, p_name)
+                    if _is_id_p:
+                        if _is_param_p:
+                            cell_bindings[p_name] = "x"
+                        else:
+                            cell_bindings[p_name] = _unique_var(cell, p_name)
+                        accumulated_sigma.bind(p_name, cell_bindings[p_name])
+                        continue
+                    _c_st_l = str(getattr(concrete_sig, "state", "") or "").strip().lower()
+                    _c_tn_l = str(getattr(concrete_sig, "type_name", "") or "").strip().lower()
+                    _p_rl_l = str(getattr(p_sig, "port_role", "") or getattr(p_sig, "role", "") or "").strip().lower()
+                    _c_tpl_s = str(getattr(cell, "code_template", "") or "")
+                    if _c_st_l == "loop_condition" and _c_tn_l == "bool":
+                        cell_bindings[p_name] = "False"
+                        accumulated_sigma.bind(p_name, "False")
+                        continue
+                    if _is_combinator_cell and _c_tn_l == "bool" and getattr(p_sig, "default_value", None) is None:
+                        cell_bindings[p_name] = "True"
+                        accumulated_sigma.bind(p_name, "True")
+                        continue
+                    if (
+                        (registry.is_hof_role(_p_rl_l) or _c_tn_l.startswith("callable"))
+                        and "while " in _c_tpl_s
+                        and "bool]" in _c_tn_l
+                    ):
+                        cell_bindings[p_name] = "lambda s: False"
+                        accumulated_sigma.bind(p_name, "lambda s: False")
+                        continue
+                    if _is_combinator_cell and (registry.is_hof_role(_p_rl_l) or _c_tn_l.startswith("callable")):
+                        id_hof = "lambda *args: args[0] if len(args) == 1 else (args if args else None)"
+                        cell_bindings[p_name] = id_hof
+                        accumulated_sigma.bind(p_name, id_hof)
+                        continue
+
                 # E.1.10 Lazy per-port LLM fallback ONLY if deterministic unification + qualifier bridge + optic lifting all failed
                 if run_pipeline_llm_synth and p_sig.required and p_name not in cell_bindings:
                     try:
@@ -9374,30 +9675,6 @@ class UnificationGate:
 
                 # E.2 Unresolved REQUIRED port: try schema-driven boundary I/O placeholder if permitted, else fail loudly
                 if p_sig.required:
-                    _is_id_p, _is_param_p = _classify_template_identifier_port(cell, p_name)
-                    if _is_id_p:
-                        if _is_param_p:
-                            cell_bindings[p_name] = "x"
-                        else:
-                            cell_bindings[p_name] = _unique_var(cell, p_name)
-                        accumulated_sigma.bind(p_name, cell_bindings[p_name])
-                        continue
-                    _c_st_l = str(getattr(concrete_sig, "state", "") or "").strip().lower()
-                    _c_tn_l = str(getattr(concrete_sig, "type_name", "") or "").strip().lower()
-                    _p_rl_l = str(getattr(p_sig, "port_role", "") or getattr(p_sig, "role", "") or "").strip().lower()
-                    _c_tpl_s = str(getattr(cell, "code_template", "") or "")
-                    if _c_st_l == "loop_condition" and _c_tn_l == "bool":
-                        cell_bindings[p_name] = "False"
-                        accumulated_sigma.bind(p_name, "False")
-                        continue
-                    if (
-                        (registry.is_hof_role(_p_rl_l) or _c_tn_l.startswith("callable"))
-                        and "while " in _c_tpl_s
-                        and "bool]" in _c_tn_l
-                    ):
-                        cell_bindings[p_name] = "lambda s: False"
-                        accumulated_sigma.bind(p_name, "lambda s: False")
-                        continue
                     synth_io = resolve_synthetic_boundary_io(
                         p_sig,
                         concrete_sig=concrete_sig,
@@ -11207,7 +11484,8 @@ class UnificationGate:
         if getattr(active_ctx, "unresolved_ports", None):
             ports_str = ", ".join(f"{cid}.{p}" for cid, p in active_ctx.unresolved_ports)
             raise UnresolvedPlaceholderError(
-                f"Code synthesis refused: pipeline contains unresolved ports: [{ports_str}]"
+                f"Code synthesis refused: pipeline contains unresolved ports: [{ports_str}]",
+                ports=[(str(cid), str(p)) for cid, p in active_ctx.unresolved_ports],
             )
 
         # Ensure no binding contains an unresolved sentinel
@@ -11272,8 +11550,8 @@ class UnificationGate:
                 if active_backend.is_python_ast and tpl:
                     try:
                         sanitized_tpl = tpl
-                        for _ph in set(re.findall(r"\{[A-Za-z_][A-Za-z0-9_]*\}", tpl)):
-                            sanitized_tpl = sanitized_tpl.replace(_ph, f"_nstl_ph_{_ph[1:-1]}")
+                        for _ph in set(extract_template_placeholders(tpl)):
+                            sanitized_tpl = sanitized_tpl.replace("{" + _ph + "}", f"_nstl_ph_{_ph}")
                         _tpl_tree = ast.parse(sanitized_tpl, mode="exec")
                         for _tn in ast.walk(_tpl_tree):
                             if isinstance(_tn, ast.Name) and isinstance(_tn.ctx, ast.Load) and not _tn.id.startswith("_nstl_ph_"):
@@ -12026,13 +12304,20 @@ class UnificationFailure(Exception):
 
 
 class UnresolvedPlaceholderError(UnificationFailure):
-    """Raised when a placeholder cannot be resolved."""
-    pass
+    """Raised when a placeholder cannot be resolved. `ports` lists (cell_id, port_name) pairs when known."""
+
+    def __init__(self, message: str = "", ports: Optional[List[Tuple[str, str]]] = None):
+        super().__init__(message)
+        self.ports: List[Tuple[str, str]] = list(ports or [])
 
 
 class EmissionLivenessError(UnificationFailure):
-    """Raised when emitted code references variables that have not been defined or imported."""
-    pass
+    """
+    Raised when emitted code is not well-formed (undefined names, invalid syntax).
+    This is an ENGINE DEFECT in the emitter, not a theoretical limit of the lattice, so reports must not
+    file it under "architectural"; `is_engine_defect` lets callers classify it honestly.
+    """
+    is_engine_defect = True
 
 
 def types_unify(tau_expected: str, tau_actual: str) -> bool:
@@ -12205,15 +12490,24 @@ def unify_cell_with_scope(
                     score = _wire_rank(p_type, p_state, in_role, out_type, out_state, out_role,
                                        cand_clause, earlier_clause, -idx_c, aligned)
 
+                    s1_unconsumed = 1
+                    if context is not None:
+                        _vpm = getattr(context, "var_port_map", None)
+                        _s1_vn = _vpm.get((id(earlier_cell), out_name)) if isinstance(_vpm, dict) else None
+                        if _s1_vn and _s1_vn in (getattr(context, "consumed_vars", set()) or set()):
+                            s1_unconsumed = 0
                     wire_key = (id(earlier_cell), out_name)
-                    candidates.append(((comp_prio, score), p_name, earlier_cell, out_name, wire_key, s_wire, out_sig.signature))
+                    candidates.append(((comp_prio, s1_unconsumed, score), p_name, earlier_cell, out_name, wire_key, s_wire, out_sig.signature))
 
         # 2. Context variables if available
         if context is not None:
             avail_cell_ids = {id(c) for c in available_cells}
+            _vpm_s2 = getattr(context, "var_port_map", None)
+            _vpm_mapped_vars = {vn for (cid_k, _), vn in _vpm_s2.items() if cid_k in avail_cell_ids} if isinstance(_vpm_s2, dict) else set()
+            _consumed_s2 = getattr(context, "consumed_vars", set()) or set()
             for v_name, (v_sig, _) in context.variables.items():
                 v_cell = getattr(context, "var_sources", {}).get(v_name)
-                if v_cell is not None and id(v_cell) in avail_cell_ids:
+                if v_cell is not None and id(v_cell) in avail_cell_ids and (not _vpm_mapped_vars or v_name in _vpm_mapped_vars):
                     continue
                 _rej = _wire_rejection(cand, p_name, p_sig, v_name, context, TypeRegistry.get_instance())
                 if _rej is not None:
@@ -12231,12 +12525,13 @@ def unify_cell_with_scope(
                     v_clause = getattr(v_cell, "matched_clause_idx", None) if v_cell else None
                     _order = list(context.variables.keys())
                     comp_prio = 0 if getattr(p_sig, "complement_of_port", None) else 1
+                    s2_unconsumed = 0 if v_name in _consumed_s2 else 1
                     score = _wire_rank(p_type, p_state, in_role, v_type, v_state, v_role,
                                        cand_clause, v_clause, _order.index(v_name) - len(_order))
 
                     v_cell = getattr(context, "var_sources", {}).get(v_name)
                     wire_key = v_name
-                    candidates.append(((comp_prio, score), p_name, v_cell, v_name, wire_key, s_wire, v_sig.signature))
+                    candidates.append(((comp_prio, s2_unconsumed, score), p_name, v_cell, v_name, wire_key, s_wire, v_sig.signature))
 
     # Deterministic greedy assignment with disjoint wire tracking (non-complement ports bind first)
     candidates.sort(key=lambda x: x[0], reverse=True)
@@ -12368,10 +12663,13 @@ def unify_cell_with_scope(
             elif (
                 not is_key_or_comp
                 and not is_proj_port
+                and not is_carrier_type
                 and (
                     registry.is_subtype(t_name, "str")
                     or registry.is_subtype(t_name, "int")
                     or registry.is_subtype(t_name, "float")
+                    or registry.is_subtype(t_name, "bool")
+                    or registry.is_subtype(t_name, "logical")
                     or registry.is_subtype(t_name, "scalar")
                 )
             ):
@@ -12425,7 +12723,12 @@ def unify_cell_with_scope(
         if not satisfied:
             return None
 
-    if cand.inputs and bound_count == 0 and getattr(cand, "stage", None) != 1 and getattr(cand, "node_type", "") != "constructor":
+    is_macro_or_comb = (
+        getattr(cand, "node_type", "") in ("constructor", "macro", "combinator")
+        or str(getattr(cand, "node_role", "") or "").strip().lower() in ("macro", "combinator")
+        or bool(getattr(cand, "slots", None))
+    )
+    if cand.inputs and bound_count == 0 and getattr(cand, "stage", None) != 1 and not is_macro_or_comb:
         return None
 
     return sub, port_bindings

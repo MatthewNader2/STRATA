@@ -2422,6 +2422,8 @@ class TypeRegistry:
             return False
 
         if "[" in sub_str or "[" in super_str or "{" in sub_str or "{" in super_str:
+            if self._atomic_is_subtype(sub_str, super_str):
+                return True
             t1 = LatticeType.from_str(sub_str)
             t2 = LatticeType.from_str(super_str)
             return t1.is_subtype_of(t2, self._atomic_is_subtype, is_top_fn=self.is_declared_top)
@@ -3097,7 +3099,7 @@ def _normalize_qualifiers(raw_qualifiers: Any) -> Tuple[Tuple[str, ...], ...]:
 @dataclass(frozen=True, slots=True)
 class AlgebraicSignature:
     """
-    Formal typestate signature: tau = (type_name, state, qualifiers, abstract_type, accepted_states, parent_state).
+    Formal typestate signature: tau = (type_name, state, qualifiers, abstract_type, accepted_states, parent_state, domain).
     Conforms to Section 3.1 of the STRATA paper.
     """
     type_name: str = "any"
@@ -3106,6 +3108,7 @@ class AlgebraicSignature:
     abstract_type: str = ""
     accepted_states: Tuple[str, ...] = field(default_factory=tuple)
     parent_state: Optional[str] = None
+    domain: str = ""
     _hash_val: int = field(default=0, init=False, repr=False, compare=False)
 
     def __post_init__(self):
@@ -3120,6 +3123,9 @@ class AlgebraicSignature:
             object.__setattr__(self, "accepted_states", ())
         if self.parent_state:
             object.__setattr__(self, "parent_state", str(self.parent_state).strip().lower())
+        dom_norm = str(self.domain or "").strip().lower()
+        if dom_norm != self.domain:
+            object.__setattr__(self, "domain", dom_norm)
         if self.qualifiers is not None:
             norm_q = _normalize_qualifiers(self.qualifiers)
             if norm_q != self.qualifiers:
@@ -3129,17 +3135,17 @@ class AlgebraicSignature:
         object.__setattr__(
             self,
             "_hash_val",
-            hash((self.type_name, self.state, self.qualifiers, self.abstract_type, self.accepted_states, self.parent_state)),
+            hash((self.type_name, self.state, self.qualifiers, self.abstract_type, self.accepted_states, self.parent_state, self.domain)),
         )
 
     def __hash__(self) -> int:
         return self._hash_val
 
     @classmethod
-    def from_string(cls, type_name: str, state: str = "any", abstract_type: str = "", accepted_states: Optional[Any] = None, parent_state: Optional[str] = None) -> "AlgebraicSignature":
+    def from_string(cls, type_name: str, state: str = "any", abstract_type: str = "", accepted_states: Optional[Any] = None, parent_state: Optional[str] = None, domain: str = "") -> "AlgebraicSignature":
         acc = tuple(sorted({str(s).strip().lower() for s in (accepted_states or []) if str(s).strip()})) if accepted_states else ()
         p = str(parent_state).strip().lower() if parent_state else None
-        return cls(type_name=type_name, state=state, abstract_type=_clean_abs_carrier(abstract_type), accepted_states=acc, parent_state=p)
+        return cls(type_name=type_name, state=state, abstract_type=_clean_abs_carrier(abstract_type), accepted_states=acc, parent_state=p, domain=domain)
 
     def is_top(self) -> bool:
         return TypeRegistry.get_instance().is_declared_top(self.type_name)
@@ -3199,6 +3205,8 @@ class AlgebraicSignature:
             consumer_accepted=other_sig.accepted_states,
             consumer_parent=other_sig.parent_state,
             producer_parent=self.parent_state,
+            producer_domain=self.domain or None,
+            consumer_domain=other_sig.domain or None,
         ):
             return False
 
@@ -3535,17 +3543,22 @@ class PortSignature:
         self.parent_state = str(raw_parent).strip().lower() if raw_parent else None
         self.owner_cell = kwargs.get("owner_cell", None)
 
+        eff_dom = str(self.domain or "").strip().lower()
+        if not eff_dom and self.typestate and "::" in self.typestate:
+            eff_dom = self.typestate.partition("::")[0].strip().lower()
         if isinstance(signature, AlgebraicSignature):
             acc_combined = self.accepted_states or signature.accepted_states
             p_combined = self.parent_state or signature.parent_state
-            if (self.abstract_type and not signature.abstract_type) or (acc_combined != signature.accepted_states) or (p_combined != signature.parent_state):
+            dom_combined = eff_dom or signature.domain
+            if (self.abstract_type and not signature.abstract_type) or (acc_combined != signature.accepted_states) or (p_combined != signature.parent_state) or (dom_combined != signature.domain):
                 self.signature = AlgebraicSignature(
                     type_name=signature.type_name,
                     state=signature.state,
                     qualifiers=signature.qualifiers,
                     abstract_type=self.abstract_type or signature.abstract_type,
                     accepted_states=acc_combined,
-                    parent_state=p_combined
+                    parent_state=p_combined,
+                    domain=dom_combined,
                 )
             else:
                 self.signature = signature
@@ -3563,7 +3576,8 @@ class PortSignature:
                 qualifiers=sig.qualifiers,
                 abstract_type=self.abstract_type or sig.abstract_type,
                 accepted_states=self.accepted_states or sig.accepted_states,
-                parent_state=self.parent_state or sig.parent_state
+                parent_state=self.parent_state or sig.parent_state,
+                domain=eff_dom or sig.domain,
             )
             if self.signature.abstract_type:
                 self.abstract_type = self.signature.abstract_type
@@ -3575,7 +3589,8 @@ class PortSignature:
                     state=kwargs.get("state", "any"),
                     abstract_type=self.abstract_type,
                     accepted_states=self.accepted_states,
-                    parent_state=self.parent_state
+                    parent_state=self.parent_state,
+                    domain=eff_dom,
                 )
             elif signature != "any":
                 self.name = kwargs.get("name", f"port_{name}")
@@ -3584,7 +3599,8 @@ class PortSignature:
                     state=signature,
                     abstract_type=self.abstract_type,
                     accepted_states=self.accepted_states,
-                    parent_state=self.parent_state
+                    parent_state=self.parent_state,
+                    domain=eff_dom,
                 )
             else:
                 self.signature = AlgebraicSignature(
@@ -3592,14 +3608,16 @@ class PortSignature:
                     state="any",
                     abstract_type=self.abstract_type,
                     accepted_states=self.accepted_states,
-                    parent_state=self.parent_state
+                    parent_state=self.parent_state,
+                    domain=eff_dom,
                 )
         else:
             self.signature = AlgebraicSignature(
                 "any", "any",
                 abstract_type=self.abstract_type,
                 accepted_states=self.accepted_states,
-                parent_state=self.parent_state
+                parent_state=self.parent_state,
+                domain=eff_dom,
             )
 
         self.required = bool(required)
@@ -4160,6 +4178,7 @@ class Cell(ABC):
                 abs_t = _clean_abs_carrier(v.get("abstract_type"))
                 acc_s = tuple(sorted({str(s).strip().lower() for s in (v.get("accepted_states") or []) if str(s).strip()}))
                 p_s = str(v.get("parent_state") or "").strip().lower() or None
+                p_dom_in = str(v.get("domain") or self.domain_name or "").strip().lower()
                 sig = AlgebraicSignature(
                     type_name=v.get("type_name", "any"),
                     state=v.get("state", "any"),
@@ -4167,6 +4186,7 @@ class Cell(ABC):
                     abstract_type=abs_t,
                     accepted_states=acc_s,
                     parent_state=p_s,
+                    domain=p_dom_in,
                 )
                 port_sig = PortSignature(
                     name=k,
@@ -4243,6 +4263,7 @@ class Cell(ABC):
                 abs_t = _clean_abs_carrier(v.get("abstract_type"))
                 acc_s = tuple(sorted({str(s).strip().lower() for s in (v.get("accepted_states") or []) if str(s).strip()}))
                 p_s = str(v.get("parent_state") or "").strip().lower() or None
+                p_dom_in = str(v.get("domain") or self.domain_name or "").strip().lower()
                 sig = AlgebraicSignature(
                     type_name=v.get("type_name", "any"),
                     state=v.get("state", "any"),
@@ -4250,6 +4271,7 @@ class Cell(ABC):
                     abstract_type=abs_t,
                     accepted_states=acc_s,
                     parent_state=p_s,
+                    domain=p_dom_in,
                 )
                 self.outputs[k] = PortSignature(
                     name=k,
@@ -4484,18 +4506,27 @@ class Cell(ABC):
             return set(self.formal_identifiers)
 
         if self._identity_tokens is None:
-            toks = CellTokenizer.tokenize_cell(self.cell_id, self.keywords)
-            # (apply_fixes_v7) RC4 — identity is operation-only; strip namespace.
+            kws = self.keywords if self.keywords else (self.semantic_tags or ())
+            id_toks = CellTokenizer.tokenize_identifier(self.cell_id)
+            kw_toks: Set[str] = set()
+            for kw in kws:
+                kw_toks.update(CellTokenizer.tokenize_identifier(kw))
+            # Strip library/domain namespace from cell_id only when at least 2 atomic
+            # operation tokens remain (e.g. preserve 'pygame' on PYGAME_INIT / PYGAME_QUIT)
+            # and never strip tokens explicitly declared in keywords / semantic_tags.
             if getattr(self, "domain_name", None) and self.domain_name != "generic":
                 dom_toks = CellTokenizer.tokenize_identifier(self.domain_name)
-                toks = toks - dom_toks
+                rem_atomic = {t for t in (id_toks - dom_toks) if "_" not in t}
+                if len(rem_atomic) >= 2:
+                    id_toks = id_toks - dom_toks
+            toks = id_toks | kw_toks
             try:
                 aliases = TypeRegistry.get_instance().get_all_aliases()
             except Exception:
                 aliases = {}
             if aliases:
-                toks = toks - {t for t in toks if t in aliases}
-            # Identity is the OPERATION a cell performs (id + declared keywords).
+                toks = toks - {t for t in toks if t in aliases and t not in kw_toks}
+            # Identity is the OPERATION a cell performs (id + declared keywords/semantic tags).
             # Port/parameter names are deliberately NOT identity: a parameter such
             # as `drop_first` says nothing about what the cell does, and adding
             # its tokens made unrelated prompt words ("drop null values") claim
@@ -6039,6 +6070,55 @@ class LatticeOrchestrator:
             ing_kw_acc: Set[str] = set()
             sup_fmts_lower = {str(f).strip().lower() for f in (reg.get_registered_supported_formats() or ())}
 
+            corpus_docs = [c.docstring for c in all_cells if getattr(c, "docstring", None)]
+            if corpus_docs:
+                reg.derive_function_words(corpus_docs)
+            func_words_lower = {str(w).strip().lower() for w in (reg.get_function_words() or ())}
+
+            all_domain_toks: Set[str] = set()
+            dom_non_sink_toks: Dict[str, Set[str]] = {}
+            dom_port_toks: Dict[str, Set[str]] = {}
+            path_port_toks_global: Set[str] = set()
+            for c_pre in all_cells:
+                pre_dom = str(getattr(c_pre, "domain_name", "") or "").strip().lower()
+                if pre_dom:
+                    all_domain_toks.update(t for t in CellTokenizer.tokenize_identifier(pre_dom) if "_" not in t)
+                pre_in = getattr(c_pre, "inputs", {}) or {}
+                pre_out = getattr(c_pre, "outputs", {}) or {}
+                dp_set = dom_port_toks.setdefault(pre_dom, set())
+                for pp in list(pre_in.values()) + list(pre_out.values()):
+                    for fmt in (getattr(pp, "supported_formats", None) or ()):
+                        sup_fmts_lower.add(str(fmt).strip().lower())
+                    p_desc = str(getattr(pp, "description", "") or "").lower()
+                    for dw in p_desc.split():
+                        dw_cl = dw.strip(".,;:()[]{}'\"")
+                        if dw_cl.startswith(".") and len(dw_cl) > 1 and dw_cl[1:].isalnum():
+                            sup_fmts_lower.add(dw_cl[1:])
+                    p_st_s = str(getattr(getattr(pp, "signature", pp), "state", "") or "").lower()
+                    p_nm_s = str(getattr(pp, "name", "") or "").lower()
+                    p_sub = {
+                        t for s in (p_st_s, p_nm_s) if s
+                        for t in CellTokenizer.tokenize_identifier(s) if "_" not in t
+                    }
+                    dp_set.update(p_sub)
+                    if is_path_port(pp, reg) or str(getattr(pp, "port_role", "") or "").lower() in (
+                        reg.get_roles_for_category("destination") | reg.get_terminal_roles_set()
+                    ):
+                        path_port_toks_global.update(p_sub)
+                pre_is_sink = (
+                    getattr(c_pre, "stage", None) == 3
+                    or reg.is_terminal_role(getattr(c_pre, "node_role", ""))
+                    or reg.is_terminal_role(getattr(c_pre, "mutation_type", ""))
+                )
+                if not pre_is_sink:
+                    ns_set = dom_non_sink_toks.setdefault(pre_dom, set())
+                    for raw_s in (
+                        [c_pre.cell_id]
+                        + [str(k) for k in (getattr(c_pre, "keywords", None) or ())]
+                        + [str(t) for t in (getattr(c_pre, "semantic_tags", None) or ())]
+                    ):
+                        ns_set.update(t for t in CellTokenizer.tokenize_identifier(raw_s) if "_" not in t)
+
             non_data_roles = (
                 reg.get_config_roles_set()
                 | reg.get_roles_for_category("key")
@@ -6110,10 +6190,17 @@ class LatticeOrchestrator:
 
                 is_ing_cell = getattr(c, "stage", None) == 1 or reg.is_ingress_role(getattr(c, "node_role", ""))
                 if is_ing_cell:
-                    for kw in (getattr(c, "keywords", None) or ()):
+                    ing_kws = getattr(c, "keywords", None) or ()
+                    for kw in ing_kws:
                         k_str = str(kw).strip().lower()
                         if k_str and len(k_str) >= 2:
                             ing_kw_acc.add(k_str)
+                    if not ing_kws:
+                        c_dom_ing = str(getattr(c, "domain_name", "") or "").strip().lower()
+                        c_dom_ing_toks = set(CellTokenizer.tokenize_identifier(c_dom_ing)) if c_dom_ing else set()
+                        id_parts = [p for p in str(c.cell_id).lower().split("_") if p and len(p) >= 2 and p not in c_dom_ing_toks]
+                        if id_parts and id_parts[0] not in func_words_lower and id_parts[0] not in all_domain_toks:
+                            ing_kw_acc.add(id_parts[0])
                 is_sink_cell = getattr(c, "stage", None) == 3 or reg.is_terminal_role(getattr(c, "node_role", "")) or reg.is_terminal_role(getattr(c, "mutation_type", ""))
                 for pn_in in c_inputs.keys():
                     pn_low = str(pn_in).strip().lower()
@@ -6130,10 +6217,37 @@ class LatticeOrchestrator:
                     for p in list(c_inputs.values()) + list(c_outputs.values()):
                         for fmt in (getattr(p, "supported_formats", None) or ()):
                             c_fmts.add(str(fmt).strip().lower())
-                    for kw in (getattr(c, "keywords", None) or ()):
+                    c_kws = getattr(c, "keywords", None) or ()
+                    for kw in c_kws:
                         k_str = str(kw).strip().lower()
                         if k_str and len(k_str) >= 2 and k_str not in c_dom_toks and k_str not in c_fmts:
                             egress_tokens_acc.add(k_str)
+                    # When a sink omits explicit keywords, harvest action verbs from cell_id and semantic_tags
+                    # for dataflow-to-destination sinks, excluding domain/port/format/function/non-sink nouns.
+                    has_data_in = any(
+                        not is_path_port(p, reg) and str(getattr(p, "port_role", "") or "").lower() not in (non_data_roles | dest_roles_s)
+                        for p in c_inputs.values()
+                    )
+                    if not c_kws and has_data_in:
+                        c_excl = (
+                            c_dom_toks
+                            | all_domain_toks
+                            | c_fmts
+                            | func_words_lower
+                            | dom_non_sink_toks.get(c_dom, set())
+                            | dom_port_toks.get(c_dom, set())
+                        )
+                        id_parts = [p for p in str(c.cell_id).lower().split("_") if p and len(p) >= 2]
+                        h_idx = 0
+                        while h_idx < len(id_parts) and (id_parts[h_idx] in c_dom_toks or id_parts[h_idx] in all_domain_toks):
+                            h_idx += 1
+                        if h_idx < len(id_parts) and id_parts[h_idx] not in c_excl:
+                            egress_tokens_acc.add(id_parts[h_idx])
+                        tail_target_toks = path_port_toks_global | c_fmts | dom_port_toks.get(c_dom, set())
+                        for tag in (getattr(c, "semantic_tags", None) or ()):
+                            t_parts = [p for p in str(tag).lower().split("_") if p and len(p) >= 2]
+                            if len(t_parts) >= 2 and t_parts[0] not in c_excl and any(tp in tail_target_toks for tp in t_parts[1:]):
+                                egress_tokens_acc.add(t_parts[0])
                 for p in c_outputs.values():
                     role = getattr(p, "port_role", None) or getattr(p, "role", None)
                     p_st = getattr(getattr(p, "signature", p), "state", None)
@@ -6158,6 +6272,10 @@ class LatticeOrchestrator:
                 egress_tokens_acc = {t for t in egress_tokens_acc if t not in param_or_src}
                 if egress_tokens_acc:
                     reg.register_egress_tokens(egress_tokens_acc)
+                reg_types = reg.get_registered_types()
+                fw_cur = getattr(reg, "_function_words", None)
+                if fw_cur:
+                    reg._function_words = tuple(w for w in fw_cur if w not in reg_types)
 
             # Dynamic Advisory Qualifier Harvesting (gated behind allow_advisory_qualifier_waiver
             # so undeclared input qualifiers are enforced strictly by default unless explicitly waived).

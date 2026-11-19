@@ -115,13 +115,36 @@ class TokenEvidence:
             # only preserving compound formal identifiers without keyword/synonym expansion.
             return {t for t in CellTokenizer.tokenize_prompt(clause) if len(t) > 1}
         skip = self._non_evidence()
-        toks = {
-            t for t in CellTokenizer.tokenize_prompt(clause)
-            if len(t) > 2
-            and self.idf(t) > 0.0
-            and (not self._identity_df or self._identity_df.get(t, 0) > 0)
-            and t not in skip
-        }
+        toks: Set[str] = set()
+        for t in CellTokenizer.tokenize_prompt(clause):
+            if len(t) <= 1 or t in skip:
+                continue
+            if self.idf(t) > 0.0 and (not self._identity_df or self._identity_df.get(t, 0) > 0):
+                toks.add(t)
+            elif self._identity_df and len(t) >= 5 and self._identity_df.get(t, 0) == 0:
+                # Corpus-derived morphological projection onto known identity tokens
+                # (handles inflected surface forms such as "scores" -> "score", "events" -> "event").
+                projected = None
+                for k in (1, 2, 3):
+                    cand = t[:-k]
+                    if len(cand) >= 4 and cand not in skip and self._identity_df.get(cand, 0) > 0 and self.idf(cand) > 0.0:
+                        projected = cand
+                        break
+                if projected is None:
+                    pref = t[:-2]
+                    if len(pref) >= 4:
+                        matches = [
+                            cand for cand in self._identity_df
+                            if len(cand) >= 4
+                            and cand not in skip
+                            and cand.startswith(pref)
+                            and abs(len(cand) - len(t)) <= 2
+                            and self.idf(cand) > 0.0
+                        ]
+                        if len(matches) == 1:
+                            projected = matches[0]
+                if projected is not None:
+                    toks.add(projected)
         try:
             from unification import ExecutionContext
             lits = ExecutionContext._extract_universal_literals(clause)
@@ -271,6 +294,31 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
     relevance = relevance or {}
     toks = ev.clause_tokens(clause)
     pool_list = list(pool)
+    clause_low = str(clause or "").lower()
+    clause_raw_toks = {t.lower() for t in CellTokenizer.tokenize_prompt(clause_low)}
+    has_quoted_str = ("'" in clause) or ('"' in clause)
+
+    def _has_uninhabited_required_enum(cell_obj: Any) -> bool:
+        for p in (getattr(cell_obj, "inputs", {}) or {}).values():
+            ev_vals = getattr(p, "enum_values", None)
+            if not ev_vals or not getattr(p, "required", False) or getattr(p, "default_value", None) is not None:
+                continue
+            sem_r = str(getattr(p, "semantic_role", "") or "").strip().lower()
+            t_n = str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower()
+            if sem_r == "path" or t_n in ("path", "file", "filepath"):
+                continue
+            if has_quoted_str:
+                continue
+            ev_low = [str(v).strip().lower() for v in ev_vals if str(v).strip()]
+            if ev_low and not any(v in clause_raw_toks or (len(v) > 2 and v in clause_low) for v in ev_low):
+                return True
+        return False
+
+    if len(pool_list) > 1:
+        inhabited = [c for c in pool_list if not _has_uninhabited_required_enum(c)]
+        if inhabited and any(ev.identity_overlap(toks, c)["hit"] > 0.0 for c in inhabited):
+            pool_list = inhabited
+
     max_rel = max((float(relevance.get(c.cell_id, 0.0) or 0.0) for c in pool_list), default=0.0)
     use_rel_weighting = (not getattr(ev, "_pure_symbolic", False)) and (max_rel > 0.0)
     scored = []
@@ -278,33 +326,62 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
         o = ev.identity_overlap(toks, c)
         if o["hit"] > 0.0:
             rel = float(relevance.get(c.cell_id, 0.0) or 0.0)
-            if use_rel_weighting:
-                rel_norm = min(1.0, max(0.0, rel) / max_rel)
-                lex_scalar = 0.55 * o["recall"] + 0.30 * o["name_precision"] + 0.15 * o["f"]
-                combined_key: Any = (
-                    round(lex_scalar * (0.45 + 0.55 * rel_norm) + 0.15 * rel_norm, 6),
-                    o["rank"],
-                    rel,
-                )
-            else:
-                combined_key = (o["rank"], rel)
+            # Identity evidence decides; retrieval relevance only separates cells whose identity evidence is
+            # equal to two decimals (the documented contract above). The previous multiplicative blend let a
+            # small relevance difference override a clearly better lexical match: with a prompt-global
+            # normaliser, "regression model ... predict" ranked LogisticRegression (relevance 0.313) above
+            # LinearRegression (0.245) although LinearRegression had higher name-precision and F at equal recall.
+            combined_key: Any = (tuple(round(float(x), 2) for x in o["rank"]), rel)
             scored.append((combined_key, rel, c, o))
     scored.sort(key=lambda x: x[0], reverse=True)
     accepted: list = []
     covered: Set[str] = set()
     primary_f = None
+    def _locked_tokens_for(cell_obj: Any, matched_toks: Iterable[str], rec: float = 0.0) -> Set[str]:
+        mt_set = set(matched_toks)
+        if not mt_set:
+            return mt_set
+        id_toks = {t.lower() for t in CellTokenizer.tokenize_identifier(getattr(cell_obj, "cell_id", "") or "")}
+        id_hits = mt_set & id_toks
+        if id_hits:
+            return id_hits
+        if rec >= 0.99:
+            return mt_set
+        morph_hits = {
+            t for t in mt_set
+            if len(t) >= 3 and any(it.startswith(t) or t.startswith(it) for it in id_toks)
+        }
+        return morph_hits | {max(mt_set, key=lambda t: (ev.mass({t}), t))}
+
     for _, rel, c, o in scored:
         if not accepted:
             primary_f = o["f"]
-            covered |= set(o["tokens"])
-            ok, why = True, "primary (best rank: recall, name-precision, F)"
+            covered |= _locked_tokens_for(c, o["tokens"], rec=o["recall"])
+            ok, why = True, "primary (best rank: recall, name-precision, F; relevance breaks ties)"
         else:
             residual = ev.identity_overlap(toks - covered, c)
             min_recall = settings.secondary_anchor_min_recall
             min_f = settings.secondary_anchor_min_f
             f_ratio = settings.secondary_anchor_f_ratio
             min_name_prec = getattr(settings, "secondary_anchor_min_name_precision", 0.20)
-            ok = residual["hit"] > 0.0 and residual["recall"] >= min_recall and residual["name_precision"] >= min_name_prec and (
+            if accepted[0][1]["name_precision"] == 0.0 and getattr(c, "stage", None) == 1 and bool(
+                _cell_carrier_types(c) - _generic_carrier_types(ev)
+            ):
+                min_name_prec = 0.0
+            eff_min_recall = (
+                min(min_recall, accepted[0][1]["recall"] * 0.65)
+                if len(residual["tokens"]) >= 2
+                else (
+                    min(min_recall, accepted[0][1]["recall"] * 0.35)
+                    if (
+                        residual["name_precision"] >= min_name_prec
+                        and primary_f is not None
+                        and residual["f"] >= primary_f * 0.65
+                    )
+                    else min_recall
+                )
+            )
+            ok = residual["hit"] > 0.0 and residual["recall"] >= eff_min_recall and residual["name_precision"] >= min_name_prec and (
                 residual["f"] >= min_f
                 or (primary_f is not None and residual["f"] >= primary_f * f_ratio)
             )
@@ -312,7 +389,8 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
             # so they don't falsely split single-operation clauses.
             if ok and len(residual["tokens"]) < 2:
                 ok = bool(
-                    (primary_f is not None and residual["f"] >= primary_f * 0.70)
+                    (primary_f is not None and residual["f"] >= primary_f * 0.65 and residual["name_precision"] >= min_name_prec)
+                    or (primary_f is not None and residual["f"] >= primary_f * 0.70)
                     or (residual["name_precision"] >= 0.25 and residual["recall"] >= 0.50)
                 )
             if ok and accepted:
@@ -387,11 +465,36 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                 t2 = _non_scalar_in_types(c)
                 share_in = bool(t1 & t2)
 
+                generic_ct = _generic_carrier_types(ev)
+                p_dom = str(getattr(prim_cell, "domain_name", None) or getattr(prim_cell, "domain", "") or "").strip().lower()
+                c_dom = str(getattr(c, "domain_name", None) or getattr(c, "domain", "") or "").strip().lower()
+                f_same_dom = bool(
+                    p_dom
+                    and p_dom == c_dom
+                    and (
+                        (bool(_cell_carrier_types(prim_cell) - generic_ct) and bool(_cell_carrier_types(c) - generic_ct))
+                        or (
+                            clause_idx == 0
+                            and getattr(prim_cell, "stage", None) == 1
+                            and getattr(c, "stage", None) == 1
+                        )
+                    )
+                )
+                prim_is_est = str(getattr(prim_cell, "node_role", "") or "").strip().lower() == "estimator"
+                sec_needs_model = any(
+                    str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "model"
+                    or str(getattr(p, "abstract_type", "") or "").strip().lower() in ("model", "estimator")
+                    for p in (getattr(c, "inputs", {}) or {}).values()
+                )
+                blocked_est_model = prim_is_est and (not f12 and not f21) and sec_needs_model
+
+                c_has_non_generic = bool(_cell_carrier_types(c) - generic_ct)
                 is_ing = (getattr(c, "stage", None) == 1 or getattr(c, "node_role", "") == "ingress") and (
-                    (clause_idx is not None and clause_idx > 0) or (not f12 and not f21)
+                    (clause_idx is not None and clause_idx > 0 and not (f_same_dom and c_has_non_generic and len(residual["tokens"]) >= 2))
+                    or (not f12 and not f21 and not (clause_idx == 0 and f_same_dom))
                 )
 
-                if not (f12 or f21 or f_bridge or share_in) or is_ing:
+                if not (f12 or f21 or f_bridge or share_in or f_same_dom) or blocked_est_model or is_ing:
                     ok = False
                     why = "secondary: no categorical composition with primary anchor %s" % prim_cell.cell_id
                 else:
@@ -403,7 +506,7 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                     residual["hit"], residual["recall"], residual["f"], "accepted" if ok else "rejected"
                 )
             if ok:
-                covered |= set(residual["tokens"])
+                covered |= _locked_tokens_for(c, residual["tokens"])
         if on_event is not None:
             on_event("anchor_candidate", clause_idx=clause_idx, cell=c.cell_id,
                      precision=round(o["precision"], 3), recall=round(o["recall"], 3),
@@ -548,6 +651,63 @@ def _is_prerequisite_for_downstream_server(idx: int, cells: List[Any], claims: L
     return False
 
 
+def _cell_carrier_types(cell: Any) -> Set[str]:
+    """Type names a cell reads or produces (primary ports plus any declared input/output ports)."""
+    names: Set[str] = set()
+    for attr in ("primary_input", "primary_output"):
+        t = getattr(getattr(cell, attr, None), "type_name", None)
+        if t:
+            names.add(str(t).lower())
+    for coll in ("inputs", "outputs"):
+        for port in (getattr(cell, coll, None) or ()):
+            t = getattr(port, "type_name", None)
+            if t:
+                names.add(str(t).lower())
+    return names
+
+
+def _generic_carrier_types(ev: Any) -> Set[str]:
+    """
+    Types so common across the loaded lattice (>= 10% of cells) that sharing one says nothing about whether two
+    operations compose (str, int, float, ...). Derived from the corpus, not hand-listed.
+    """
+    cached = ev.__dict__.get("_generic_carrier_memo")
+    if cached is not None:
+        return cached
+    cells = list(getattr(ev.orch, "loaded_cells", {}).values())
+    freq: Dict[str, int] = {}
+    for c in cells:
+        for t in _cell_carrier_types(c):
+            freq[t] = freq.get(t, 0) + 1
+    thr = max(2, int(0.10 * max(1, len(cells))))
+    generic = {t for t, n in freq.items() if n >= thr}
+    ev.__dict__["_generic_carrier_memo"] = generic
+    return generic
+
+
+def _composable_with(ev: Any, primary: Any, other: Any) -> bool:
+    """
+    True when `other` shares at least one NON-generic carrier type with `primary`, or occupies the same
+    non-generic library domain fiber (e.g. parallel component initializers in the same domain).
+    """
+    generic = _generic_carrier_types(ev)
+    a = _cell_carrier_types(primary) - generic
+    b = _cell_carrier_types(other) - generic
+    if a & b:
+        return True
+    p_dom = str(getattr(primary, "domain_name", None) or getattr(primary, "domain", "") or "").strip().lower()
+    c_dom = str(getattr(other, "domain_name", None) or getattr(other, "domain", "") or "").strip().lower()
+    if p_dom and p_dom == c_dom and a and b:
+        prim_is_est = str(getattr(primary, "node_role", "") or "").strip().lower() == "estimator"
+        sec_needs_model = any(
+            str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "model"
+            or str(getattr(p, "abstract_type", "") or "").strip().lower() in ("model", "estimator")
+            for p in (getattr(other, "inputs", {}) or {}).values()
+        )
+        return not (prim_is_est and sec_needs_model)
+    return False
+
+
 def audit_clause_coverage(
     cells: List[Any],
     prompt: str,
@@ -655,9 +815,11 @@ def audit_clause_coverage(
                           "residual_serves": residual_serves, "touches": touched, "status": status})
 
     # Promote structural property-repair / stateful lifecycle prerequisites that directly enable a downstream server
+    prereq_idx: set = set()
     for i, row in enumerate(cell_rows):
         if row["status"] == "UNREQUESTED" and _is_prerequisite_for_downstream_server(i, cells, claims):
             row["status"] = "connector"
+            prereq_idx.add(i)
         if row["status"] == "UNREQUESTED":
             out["issues"].append({"kind": "unrequested_cell", "cell": row["cell"], "outranked_on": row["touches"],
                                   "winners": {j: cells[winners[j]].cell_id for j in row["touches"] if j in winners}})
@@ -716,15 +878,18 @@ def audit_clause_coverage(
                             r_ov = ev.identity_overlap(rem_toks, lc)
                             if r_ov["hit"] <= 0.0:
                                 continue
+                            if not _composable_with(ev, best_lc_cell, lc):
+                                continue
                             sec_ok = (
                                 r_ov["recall"] >= min_rec
                                 and r_ov["name_precision"] >= min_np
                                 and (r_ov["f"] >= min_f or r_ov["f"] >= best_lc_f * f_ratio)
                             )
                             if sec_ok and len(r_ov["tokens"]) < 2:
+                                full_ov = ev.identity_overlap(toks, lc)
                                 sec_ok = bool(
-                                    r_ov["f"] >= best_lc_f * 0.70
-                                    or (r_ov["name_precision"] >= 0.25 and r_ov["recall"] >= 0.50)
+                                    full_ov["f"] >= best_lc_f * 0.70
+                                    or (full_ov["name_precision"] >= 0.25 and full_ov["recall"] >= 0.30)
                                 )
                             if sec_ok and (best_sec_rank is None or r_ov["rank"] > best_sec_rank):
                                 best_sec_rank = r_ov["rank"]
@@ -744,6 +909,15 @@ def audit_clause_coverage(
         path_tokens: set = set()
         for i in claimed:
             path_tokens |= set(table[i][j]["tokens"])
+        # A lifecycle prerequisite (e.g. the fit step producing the fitted handle that a claimed predict step
+        # consumes) is part of the same clause's explanation: "train a model ... to predict Z" needs both. It
+        # counts toward the clause's joint coverage only when it genuinely touches the clause's tokens and feeds
+        # a cell that serves this clause; an unrelated connector still contributes nothing.
+        for i in prereq_idx:
+            if i in claimed or not table[i][j] or table[i][j]["hit"] <= 0.0:
+                continue
+            if any(j in claims[k] for k in range(i + 1, len(cells))):
+                path_tokens |= set(table[i][j]["tokens"])
         path_best = (ev.mass(path_tokens) / c_mass) if c_mass > 0 else 0.0
         target_recall = max(lattice_best, lattice_joint)
         quality = (max(table[i][j]["recall"] * table[i][j]["name_precision"] for i in claimed) / lattice_best_fit) if (claimed and lattice_best_fit > 0) else 0.0
@@ -756,8 +930,8 @@ def audit_clause_coverage(
             max_sem_j = max(sem_map.values(), default=0.0)
             claimed_any = [i for i in range(len(cells)) if j in claims[i]]
             claimed_sem = max((float(sem_map.get(cells[i].cell_id, 0.0) or 0.0) for i in claimed_any), default=0.0)
-            sem_floor = 0.70 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.35
-            sem_rel = 0.88 if (path_best <= 0.0 and lattice_best >= 0.50) else 0.70
+            sem_floor = (0.70 if lattice_best >= 0.50 else 0.65) if path_best <= 0.0 else 0.35
+            sem_rel = 0.88 if path_best <= 0.0 else 0.70
             # Never override when a compound multi-operation clause left major residual lexical operations unserved
             compound_unserved_gap = (lattice_joint > lattice_best + 0.15) and (path_best < 0.75 * lattice_joint)
             if not compound_unserved_gap and claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:

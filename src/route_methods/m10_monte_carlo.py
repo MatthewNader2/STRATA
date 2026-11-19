@@ -327,7 +327,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
                     unif_factor = 0.05
                 else:
                     code_r = gate_r.emit_code(ur_r.value, ctx_r)
-                    lint_r = PreflightLinter.lint(ur_r.value, prompt=prompt, code_str=code_r)
+                    lint_r = PreflightLinter.lint(ur_r.value, prompt=prompt, code_str=code_r, orchestrator=orch)
                     if not lint_r.is_valid:
                         lint_penalty = 1.0 + float(len(lint_r.violations))
             except Exception:

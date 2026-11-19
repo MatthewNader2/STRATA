@@ -331,13 +331,68 @@ def build_universal_verification_contract(
     var_to_root: Dict[str, str] = {}              # var -> root_var
     var_partition: Dict[str, Tuple[str, int]] = {}  # var -> (split_cell_id, partition_index)
     partition_zero_by_role: Dict[str, str] = {}   # role/type -> var with partition_index == 0
-    accumulated_props: Dict[str, Dict[str, Any]] = {}  # root_var -> {prop: expected_val}
+    var_props: Dict[str, Dict[str, Any]] = {}          # var -> {prop: expected_val}
 
     for cell, bindings in pipeline_bindings:
         eff_map = infer_cell_algebraic_effects(cell)
         stage = getattr(cell, "stage", None)
 
-        # 1. Record declared cell postconditions
+        # 1. Track Linear Carrier Mutation Lineage & Partition Indices before recording postconditions
+        carrier_in_name = _find_carrier_input_port(cell, reg)
+        in_place_targets: Dict[str, str] = {}
+
+        for out_name, out_sig in (getattr(cell, "outputs", {}) or {}).items():
+            out_v = bindings.get(out_name) or bindings.get("output_var")
+            if _is_void_binding(out_v):
+                continue
+
+            out_eff = eff_map.get(f"out:{out_name}")
+            if out_eff and out_eff.mutates_port:
+                in_v = bindings.get(out_eff.mutates_port)
+                if in_v and isinstance(in_v, str):
+                    root = var_to_root.get(in_v, in_v)
+                    var_to_root[out_v] = root
+                    latest_carrier_lineage[root] = out_v
+                    inherited = dict(var_props.get(in_v, {}))
+                    var_props[out_v] = {**inherited, **var_props.get(out_v, {})}
+                    if getattr(cell, "mutation_type", "") == "in_place":
+                        in_place_targets[out_v] = in_v
+                else:
+                    var_props.setdefault(out_v, {})
+            elif out_eff and out_eff.partition_index == 0 and carrier_in_name:
+                in_sig_c = (getattr(cell, "inputs", {}) or {}).get(carrier_in_name)
+                in_t_c = str(getattr(getattr(in_sig_c, "signature", in_sig_c), "type_name", "") or "").lower()
+                out_t_c = str(getattr(getattr(out_sig, "signature", out_sig), "type_name", "") or "").lower()
+                same_carrier_family = bool(
+                    in_t_c and out_t_c and (out_t_c == in_t_c or (reg and reg.is_subtype(out_t_c, in_t_c)))
+                )
+                in_v = bindings.get(carrier_in_name)
+                if same_carrier_family and in_v and isinstance(in_v, str):
+                    root = var_to_root.get(in_v, in_v)
+                    var_to_root[out_v] = root
+                    latest_carrier_lineage[root] = out_v
+                    inherited = dict(var_props.get(in_v, {}))
+                    var_props[out_v] = {**inherited, **var_props.get(out_v, {})}
+                else:
+                    var_to_root.setdefault(out_v, out_v)
+                    latest_carrier_lineage.setdefault(out_v, out_v)
+                    var_props.setdefault(out_v, {})
+            else:
+                var_to_root.setdefault(out_v, out_v)
+                latest_carrier_lineage.setdefault(out_v, out_v)
+                var_props.setdefault(out_v, {})
+
+            if out_eff and out_eff.partition_index is not None:
+                var_partition[out_v] = (cell.cell_id, out_eff.partition_index)
+                if out_eff.partition_index == 0:
+                    role_key = str(getattr(out_sig, "port_role", "") or getattr(out_sig, "type_name", "data")).lower()
+                    partition_zero_by_role[role_key] = out_v
+            elif out_eff and out_eff.mutates_port:
+                mut_in_v = bindings.get(out_eff.mutates_port)
+                if isinstance(mut_in_v, str) and mut_in_v in var_partition:
+                    var_partition[out_v] = var_partition[mut_in_v]
+
+        # 2. Record declared cell postconditions along per-variable causal lineage
         for post in (getattr(cell, "postconditions", []) or []):
             prop = getattr(post, "property", None) or (post.get("property") if isinstance(post, dict) else None)
             op = getattr(post, "operator", "==") if not isinstance(post, dict) else post.get("operator", "==")
@@ -362,50 +417,9 @@ def build_universal_verification_contract(
                 if prop and str(prop).strip().lower() != "state":
                     # "state" is a compile-time typestate tag verified statically in Layer 2/3,
                     # not a runtime Python attribute on carriers like np.ndarray.
-                    root = var_to_root.get(t_var, t_var)
-                    accumulated_props.setdefault(root, {})[str(prop)] = val
-
-        # 2. Track Linear Carrier Mutation Lineage & Partition Indices
-        carrier_in_name = _find_carrier_input_port(cell, reg)
-
-        for out_name, out_sig in (getattr(cell, "outputs", {}) or {}).items():
-            out_v = bindings.get(out_name) or bindings.get("output_var")
-            if _is_void_binding(out_v):
-                continue
-
-            out_eff = eff_map.get(f"out:{out_name}")
-            if out_eff and out_eff.mutates_port:
-                in_v = bindings.get(out_eff.mutates_port)
-                if in_v and isinstance(in_v, str):
-                    root = var_to_root.get(in_v, in_v)
-                    var_to_root[out_v] = root
-                    latest_carrier_lineage[root] = out_v
-                    if in_v in accumulated_props:
-                        accumulated_props.setdefault(root, {}).update(accumulated_props[in_v])
-            elif out_eff and out_eff.partition_index == 0 and carrier_in_name:
-                in_v = bindings.get(carrier_in_name)
-                if in_v and isinstance(in_v, str):
-                    root = var_to_root.get(in_v, in_v)
-                    var_to_root[out_v] = root
-                    latest_carrier_lineage[root] = out_v
-                    if in_v in accumulated_props:
-                        accumulated_props.setdefault(root, {}).update(accumulated_props[in_v])
-                else:
-                    var_to_root.setdefault(out_v, out_v)
-                    latest_carrier_lineage.setdefault(out_v, out_v)
-            else:
-                var_to_root.setdefault(out_v, out_v)
-                latest_carrier_lineage.setdefault(out_v, out_v)
-
-            if out_eff and out_eff.partition_index is not None:
-                var_partition[out_v] = (cell.cell_id, out_eff.partition_index)
-                if out_eff.partition_index == 0:
-                    role_key = str(getattr(out_sig, "port_role", "") or getattr(out_sig, "type_name", "data")).lower()
-                    partition_zero_by_role[role_key] = out_v
-            elif out_eff and out_eff.mutates_port:
-                mut_in_v = bindings.get(out_eff.mutates_port)
-                if isinstance(mut_in_v, str) and mut_in_v in var_partition:
-                    var_partition[out_v] = var_partition[mut_in_v]
+                    var_props.setdefault(t_var, {})[str(prop)] = val
+                    if t_var in in_place_targets:
+                        var_props.setdefault(in_place_targets[t_var], {})[str(prop)] = val
 
         # 3. Universal Co-Initial Partition Verification on Multi-Input Consumers
         bound_split_ports: List[Tuple[str, str, Tuple[str, int]]] = []
@@ -474,7 +488,7 @@ def build_universal_verification_contract(
                     "expected_var": expected_latest,
                     "actual_var": data_var,
                     "output_path": path_var,
-                    "expected_properties": dict(accumulated_props.get(root, {})),
+                    "expected_properties": dict(var_props.get(data_var, {})),
                 })
 
     # 5. Universal In-Memory Observable Deliverable Verification
