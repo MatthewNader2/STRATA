@@ -2774,8 +2774,7 @@
       ],
       "keywords": [
         "read_sql",
-        "sql",
-        "query"
+        "sql"
       ],
       "code_template": "{output_var} = pd.read_sql({sql}, {con})",
       "slots": [
@@ -2794,7 +2793,7 @@
           "type_name": "str",
           "state": "sql_query",
           "qualifiers": [],
-          "default_value": "SELECT * FROM data",
+          "default_value": null,
           "description": "SQL query string or table name.",
           "domain": "pandas",
           "required": true,
@@ -2827,27 +2826,32 @@
         "port_1": {
           "type_name": "Engine",
           "state": "db_connection",
+          "accepted_states": [
+            "open",
+            "in_transaction",
+            "committed"
+          ],
           "qualifiers": [],
           "default_value": null,
           "description": "SQLAlchemy connectable engine or sqlite3 connection.",
           "domain": "pandas",
           "required": true,
-          "abstract_type": "scalar",
+          "abstract_type": "handle",
           "enum_values": null,
           "param_kind": "positional_or_keyword",
           "value_constraints": null,
           "shape_contract": null,
-          "structure_kind": "scalar",
-          "rank": 0,
-          "element_type": "float64",
+          "structure_kind": "handle",
+          "rank": null,
+          "element_type": "opaque",
           "supported_formats": [],
           "port_role": "data_input",
           "role": "data_input",
           "carrier": "Engine",
           "layout": {
-            "rank": 0,
+            "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "opaque",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -3436,7 +3440,7 @@
           "type_name": "List[str]",
           "state": "column_list",
           "qualifiers": [],
-          "default_value": [],
+          "default_value": null,
           "description": "Column labels to consider for NA filtering.",
           "domain": "pandas",
           "required": true,
@@ -3597,7 +3601,7 @@
           "type_name": "float",
           "state": "scalar_fill",
           "qualifiers": [],
-          "default_value": "0.0",
+          "default_value": null,
           "description": "Scalar or dictionary to replace NAs.",
           "domain": "pandas",
           "required": true,
@@ -4366,7 +4370,7 @@
           "type_name": "str",
           "state": "target_val",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Value or pattern to search for.",
           "domain": "pandas",
           "required": true,
@@ -4399,7 +4403,7 @@
           "type_name": "str",
           "state": "replacement_val",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Value to replace any matched items with.",
           "domain": "pandas",
           "required": true,
@@ -4551,7 +4555,7 @@
           "type_name": "Dict[str, str]",
           "state": "dtype_mapping",
           "qualifiers": [],
-          "default_value": {},
+          "default_value": null,
           "description": "Dictionary of column names to dtypes.",
           "domain": "pandas",
           "required": true,
@@ -5244,7 +5248,7 @@
           "type_name": "str",
           "state": "regex_pattern",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Pattern to replace.",
           "domain": "pandas",
           "required": true,
@@ -5277,7 +5281,7 @@
           "type_name": "str",
           "state": "repl_text",
           "qualifiers": [],
-          "default_value": "''",
+          "default_value": null,
           "description": "Replacement string.",
           "domain": "pandas",
           "required": true,
@@ -5469,7 +5473,7 @@
           "type_name": "str",
           "state": "index_column",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column name to become index.",
           "domain": "pandas",
           "required": true,
@@ -5816,7 +5820,7 @@
           "type_name": "str",
           "state": "label_slice",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Label expression, list of labels, or boolean slice.",
           "domain": "pandas",
           "required": true,
@@ -5966,7 +5970,7 @@
           "type_name": "str",
           "state": "integer_slice",
           "qualifiers": [],
-          "default_value": "':, :'",
+          "default_value": null,
           "description": "Slice notation e.g. ':10, 0:2'.",
           "domain": "pandas",
           "required": true,
@@ -6059,7 +6063,6 @@
       ],
       "keywords": [
         "query",
-        "filter",
         "boolean"
       ],
       "code_template": "{output_var} = {df}.query({expr})",
@@ -6118,7 +6121,7 @@
           "type_name": "str",
           "state": "query_string",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Expression to evaluate against column names.",
           "domain": "pandas",
           "required": true,
@@ -6209,8 +6212,7 @@
       ],
       "keywords": [
         "mask",
-        "boolean",
-        "subset"
+        "boolean"
       ],
       "code_template": "{output_var} = {df}[{mask}]",
       "slots": [
@@ -6592,7 +6594,7 @@
           "type_name": "List[str]",
           "state": "column_labels",
           "qualifiers": [],
-          "default_value": [],
+          "default_value": null,
           "description": "Single label or list of labels to drop.",
           "domain": "pandas",
           "required": true,
@@ -6764,7 +6766,7 @@
           "type_name": "Dict[str, str]",
           "state": "column_dict",
           "qualifiers": [],
-          "default_value": {},
+          "default_value": null,
           "description": "Dictionary mapping old column names to new names.",
           "domain": "pandas",
           "required": true,
@@ -6918,7 +6920,7 @@
           "type_name": "str",
           "state": "sort_column",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Name or list of names to sort by.",
           "domain": "pandas",
           "required": true,
@@ -7728,7 +7730,7 @@
           "type_name": "dict",
           "state": "column_assignments",
           "qualifiers": [],
-          "default_value": {},
+          "default_value": null,
           "description": "Keyword arguments where names are column names and values are Series or callables.",
           "domain": "pandas",
           "required": true,
@@ -7881,7 +7883,7 @@
           "type_name": "str",
           "state": "group_column",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column name or list of columns to group by.",
           "domain": "pandas",
           "required": true,
@@ -8058,7 +8060,7 @@
           "type_name": "dict",
           "state": "agg_specification",
           "qualifiers": [],
-          "default_value": {},
+          "default_value": null,
           "description": "Dictionary of column names to function names or lists of functions.",
           "domain": "pandas",
           "required": true,
@@ -8200,7 +8202,7 @@
           "type_name": "str",
           "state": "agg_function_name",
           "qualifiers": [],
-          "default_value": "'mean'",
+          "default_value": null,
           "description": "Function name to transform groups.",
           "domain": "pandas",
           "required": true,
@@ -8343,7 +8345,7 @@
           "type_name": "str",
           "state": "lambda_expr",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Function to apply to each group returning True or False.",
           "domain": "pandas",
           "required": true,
@@ -9127,7 +9129,6 @@
       ],
       "keywords": [
         "pivot_table",
-        "crosstab",
         "reshape"
       ],
       "code_template": "{output_var} = {df}.pivot_table(index={index}, columns={columns}, values={values}, aggfunc={aggfunc})",
@@ -9188,7 +9189,7 @@
           "type_name": "str",
           "state": "row_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to make index keys.",
           "domain": "pandas",
           "required": true,
@@ -9221,7 +9222,7 @@
           "type_name": "str",
           "state": "col_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to make new column headers.",
           "domain": "pandas",
           "required": true,
@@ -9254,7 +9255,7 @@
           "type_name": "str",
           "state": "val_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to aggregate.",
           "domain": "pandas",
           "required": true,
@@ -9381,8 +9382,7 @@
       ],
       "keywords": [
         "pivot",
-        "reshape",
-        "unstack"
+        "reshape"
       ],
       "code_template": "{output_var} = {df}.pivot(index={index}, columns={columns}, values={values})",
       "slots": [
@@ -9440,7 +9440,7 @@
           "type_name": "str",
           "state": "row_index_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to make index.",
           "domain": "pandas",
           "required": true,
@@ -9473,7 +9473,7 @@
           "type_name": "str",
           "state": "col_index_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to make columns.",
           "domain": "pandas",
           "required": true,
@@ -9506,7 +9506,7 @@
           "type_name": "str",
           "state": "val_column_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to populate values.",
           "domain": "pandas",
           "required": true,
@@ -9658,7 +9658,7 @@
           "type_name": "List[str]",
           "state": "id_columns",
           "qualifiers": [],
-          "default_value": [],
+          "default_value": null,
           "description": "Columns to use as identifier variables.",
           "domain": "pandas",
           "required": true,
@@ -10187,7 +10187,7 @@
           "type_name": "str",
           "state": "col_to_explode",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column to unpack.",
           "domain": "pandas",
           "required": true,
@@ -11260,7 +11260,8 @@
           },
           "semantics": "pandas.level_order",
           "typestate": "pandas::level_order",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "port_2": {
           "type_name": "int",
@@ -11414,7 +11415,7 @@
           "type_name": "int",
           "state": "target_level",
           "qualifiers": [],
-          "default_value": "0",
+          "default_value": null,
           "description": "Index level to drop.",
           "domain": "pandas",
           "required": true,
@@ -11597,7 +11598,7 @@
           "type_name": "str",
           "state": "slice_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Label contained in the index.",
           "domain": "pandas",
           "required": true,
@@ -11750,13 +11751,11 @@
         "pandas as pd"
       ],
       "semantic_tags": [
-        "join",
         "merge",
         "relational"
       ],
       "keywords": [
         "merge",
-        "join",
         "inner",
         "outer",
         "left",
@@ -11857,7 +11856,7 @@
           "type_name": "str",
           "state": "join_column",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column or index level names to join on.",
           "domain": "pandas",
           "required": true,
@@ -11982,7 +11981,6 @@
         "pandas as pd"
       ],
       "semantic_tags": [
-        "join",
         "merge",
         "distinct_keys"
       ],
@@ -12085,7 +12083,7 @@
           "type_name": "str",
           "state": "left_key_col",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Left column to join on.",
           "domain": "pandas",
           "required": true,
@@ -12118,7 +12116,7 @@
           "type_name": "str",
           "state": "right_key_col",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Right column to join on.",
           "domain": "pandas",
           "required": true,
@@ -12905,8 +12903,7 @@
       ],
       "semantic_tags": [
         "time_series",
-        "asof",
-        "join"
+        "asof"
       ],
       "keywords": [
         "merge_asof",
@@ -13008,7 +13005,7 @@
           "type_name": "str",
           "state": "time_key",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Field name to join on (must be sorted).",
           "domain": "pandas",
           "required": true,
@@ -13200,7 +13197,7 @@
           "type_name": "int",
           "state": "window_size",
           "qualifiers": [],
-          "default_value": "5",
+          "default_value": null,
           "description": "Size of the moving window.",
           "domain": "pandas",
           "required": true,
@@ -13386,7 +13383,7 @@
           "type_name": "int",
           "state": "window_size",
           "qualifiers": [],
-          "default_value": "5",
+          "default_value": null,
           "description": "Size of moving window.",
           "domain": "pandas",
           "required": true,
@@ -13572,7 +13569,7 @@
           "type_name": "int",
           "state": "window_size",
           "qualifiers": [],
-          "default_value": "5",
+          "default_value": null,
           "description": "Size of moving window.",
           "domain": "pandas",
           "required": true,
@@ -13758,7 +13755,7 @@
           "type_name": "float",
           "state": "decay_span",
           "qualifiers": [],
-          "default_value": "20.0",
+          "default_value": null,
           "description": "Specify decay in terms of span.",
           "domain": "pandas",
           "required": true,
@@ -13945,7 +13942,7 @@
           "type_name": "str",
           "state": "freq_rule",
           "qualifiers": [],
-          "default_value": "'1D'",
+          "default_value": null,
           "description": "The offset string representing target conversion frequency.",
           "domain": "pandas",
           "required": true,
@@ -15851,8 +15848,14 @@
       ],
       "keywords": [
         "to_sql",
-        "insert",
-        "database"
+        "sql",
+        "sqlite",
+        "database",
+        "table",
+        "dataframe",
+        "save",
+        "write",
+        "insert"
       ],
       "code_template": "{df}.to_sql(name={name}, con={con}, if_exists={if_exists}, index={index})",
       "slots": [
@@ -15914,7 +15917,7 @@
           "type_name": "str",
           "state": "table_name",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Name of SQL table.",
           "domain": "pandas",
           "required": true,
@@ -15947,27 +15950,32 @@
         "port_2": {
           "type_name": "Engine",
           "state": "db_connection",
+          "accepted_states": [
+            "open",
+            "in_transaction",
+            "committed"
+          ],
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "SQLAlchemy connectable engine or sqlite3 connection.",
           "domain": "pandas",
           "required": true,
-          "abstract_type": "scalar",
+          "abstract_type": "handle",
           "enum_values": null,
           "param_kind": "keyword_only",
           "value_constraints": null,
           "shape_contract": null,
-          "structure_kind": "scalar",
-          "rank": 0,
-          "element_type": "float64",
+          "structure_kind": "handle",
+          "rank": null,
+          "element_type": "opaque",
           "supported_formats": [],
-          "port_role": "configuration",
-          "role": "configuration",
+          "port_role": "data_input",
+          "role": "data_input",
           "carrier": "Engine",
           "layout": {
-            "rank": 0,
+            "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "opaque",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -16564,7 +16572,8 @@
           },
           "semantics": "pandas.column_projection",
           "typestate": "pandas::column_projection",
-          "invariants": []
+          "invariants": [],
+          "port_role": "column_projection"
         }
       },
       "outputs": {
@@ -17448,7 +17457,6 @@
         "select",
         "column",
         "series",
-        "extract",
         "project"
       ],
       "code_template": "{output_var} = {df}[{column}]",
@@ -17516,7 +17524,7 @@
             "any"
           ],
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column name string to select.",
           "domain": "pandas",
           "required": true,
@@ -17640,7 +17648,6 @@
         "add_column"
       ],
       "keywords": [
-        "assign",
         "set",
         "write",
         "new column",
@@ -17714,7 +17721,7 @@
             "any"
           ],
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Column name string to write.",
           "domain": "pandas",
           "required": true,
@@ -17993,14 +18000,12 @@
       "semantic_tags": [
         "math",
         "arithmetic",
-        "sum",
         "add",
         "series",
         "columns"
       ],
       "keywords": [
         "add",
-        "sum",
         "plus",
         "series",
         "columns",
@@ -18329,7 +18334,7 @@
           "element_type": "string",
           "supported_formats": [],
           "port_role": "column_projection",
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -18389,6 +18394,10 @@
     }
   ],
   "types": {
+    "Engine": {
+      "parent": "handle",
+      "kind": "handle"
+    },
     "Tabular": {
       "parent": "Modality"
     },
@@ -18469,28 +18478,6 @@
       }
     }
   },
-  "mock_fixtures": [
-    {
-      "match_type_tokens": [
-        "dataframe",
-        "table",
-        "frame"
-      ],
-      "match_domain_tokens": [
-        "pandas"
-      ],
-      "template": "try:\n    import pandas as pd\n    {var_name} = pd.DataFrame({'a': [1.0, 2.0, 3.0], 'b': [4, 5, 6], 'target': [0, 1, 0]})\nexcept ImportError:\n    {var_name} = {'a': [1, 2], 'b': [3, 4]}"
-    },
-    {
-      "match_type_tokens": [
-        "series"
-      ],
-      "match_domain_tokens": [
-        "pandas"
-      ],
-      "template": "try:\n    import pandas as pd\n    {var_name} = pd.Series([1.0, 2.0, 3.0])\nexcept ImportError:\n    {var_name} = [1.0, 2.0, 3.0]"
-    }
-  ],
   "supported_formats": [
     "csv",
     "tsv",
@@ -18505,10 +18492,6 @@
   "pointed_defaults": {
     "DataFrame": "pd.DataFrame()",
     "Series": "pd.Series(dtype=float)",
-    "str": "''",
-    "int": 0,
-    "float": 0.0,
-    "bool": false,
     "list": "[]",
     "dict": "{}"
   },

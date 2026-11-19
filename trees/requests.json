@@ -2584,7 +2584,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "X-API-Key",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -4884,7 +4884,7 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": "https://",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -4990,7 +4990,7 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -5018,7 +5018,7 @@
           "element_type": "string",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -5107,7 +5107,7 @@
           "element_type": "bool",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": true,
+          "default_value": null,
           "carrier": "bool",
           "layout": {
             "rank": 0,
@@ -5566,7 +5566,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "GET",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -6691,7 +6691,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "Content-Type",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -6822,7 +6822,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -6902,7 +6902,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 5.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -6930,7 +6930,7 @@
           "element_type": "float64",
           "supported_formats": [],
           "role": "configuration",
-          "default_value": 30.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,

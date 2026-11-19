@@ -22,6 +22,17 @@
     "ndarray_generic",
     "nd_tensor"
   ],
+  "advisory_qualifiers": [
+    "scalar",
+    "vector"
+  ],
+  "exclusive_qualifiers": [
+    [
+      "scalar",
+      "vector",
+      "matrix"
+    ]
+  ],
   "artifact_readers": {
     "array": [
       "numpy.load"
@@ -1823,7 +1834,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Length of the 1D vector",
           "domain": "numpy",
           "required": true,
@@ -1968,7 +1979,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Row dimension count",
           "domain": "numpy",
           "required": true,
@@ -2006,7 +2017,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Column dimension count",
           "domain": "numpy",
           "required": true,
@@ -2289,7 +2300,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Length of vector",
           "domain": "numpy",
           "required": true,
@@ -2433,7 +2444,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Row dimension",
           "domain": "numpy",
           "required": true,
@@ -2471,7 +2482,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Column dimension",
           "domain": "numpy",
           "required": true,
@@ -2786,7 +2797,7 @@
           "type_name": "float",
           "state": "scalar_const",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Scalar value to populate array with",
           "domain": "numpy",
           "required": true,
@@ -2931,7 +2942,7 @@
           "type_name": "float",
           "state": "interval_endpoint",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Start of interval",
           "domain": "numpy",
           "required": true,
@@ -2965,7 +2976,7 @@
           "type_name": "float",
           "state": "interval_endpoint",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "End of interval",
           "domain": "numpy",
           "required": true,
@@ -3143,7 +3154,7 @@
           "type_name": "float",
           "state": "interval_endpoint",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Starting value of sequence",
           "domain": "numpy",
           "required": true,
@@ -3177,7 +3188,7 @@
           "type_name": "float",
           "state": "interval_endpoint",
           "qualifiers": [],
-          "default_value": 1.0,
+          "default_value": null,
           "description": "Final value of sequence",
           "domain": "numpy",
           "required": true,
@@ -3333,12 +3344,10 @@
       ],
       "semantic_tags": [
         "creation",
-        "identity",
         "diagonal"
       ],
       "keywords": [
         "eye",
-        "identity",
         "diagonal"
       ],
       "code_template": "{output_var} = np.eye({n}, M={m}, k={k}, dtype={dtype})",
@@ -3356,7 +3365,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 4,
+          "default_value": null,
           "description": "Number of rows in output",
           "domain": "numpy",
           "required": true,
@@ -3565,7 +3574,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 4,
+          "default_value": null,
           "description": "Dimension of square matrix",
           "domain": "numpy",
           "required": true,
@@ -3995,7 +4004,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": -1,
+          "default_value": null,
           "description": "Target row count (-1 for automatic deduction)",
           "domain": "numpy",
           "required": true,
@@ -4028,7 +4037,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 1,
+          "default_value": null,
           "description": "Target column count (-1 for automatic deduction)",
           "domain": "numpy",
           "required": true,
@@ -4179,9 +4188,7 @@
           "type_name": "Tuple[int, ...]",
           "state": "shape_tuple",
           "qualifiers": [],
-          "default_value": [
-            -1
-          ],
+          "default_value": null,
           "description": "New dimensions tuple",
           "domain": "numpy",
           "required": true,
@@ -4268,12 +4275,10 @@
       ],
       "semantic_tags": [
         "transform",
-        "flatten",
         "vector"
       ],
       "keywords": [
         "ravel",
-        "flatten",
         "1d",
         "vector"
       ],
@@ -4682,8 +4687,7 @@
       ],
       "semantic_tags": [
         "transform",
-        "axes",
-        "permutation"
+        "axes"
       ],
       "keywords": [
         "transpose",
@@ -5018,7 +5022,7 @@
           "type_name": "int",
           "state": "axis_position",
           "qualifiers": [],
-          "default_value": 0,
+          "default_value": null,
           "description": "Position in expanded axes where new axis is placed",
           "domain": "numpy",
           "required": true,
@@ -5700,8 +5704,7 @@
       ],
       "semantic_tags": [
         "conditional",
-        "mask",
-        "select"
+        "mask"
       ],
       "keywords": [
         "where",
@@ -6080,10 +6083,7 @@
           "type_name": "Tuple[int, ...]",
           "state": "shape_tuple",
           "qualifiers": [],
-          "default_value": [
-            1,
-            1
-          ],
+          "default_value": null,
           "description": "Target shape for broadcast",
           "domain": "numpy",
           "required": true,
@@ -6226,10 +6226,7 @@
           "type_name": "tuple",
           "state": "pad_spec",
           "qualifiers": [],
-          "default_value": [
-            1,
-            1
-          ],
+          "default_value": null,
           "description": "Number of values padded to edges of each axis",
           "domain": "numpy",
           "required": true,
@@ -6544,7 +6541,6 @@
       ],
       "keywords": [
         "add",
-        "sum",
         "plus",
         "elementwise"
       ],
@@ -9426,8 +9422,6 @@
       ],
       "keywords": [
         "dot",
-        "inner",
-        "multiply",
         "algebra"
       ],
       "code_template": "{output_var} = np.dot({a}, {b})",
@@ -11264,8 +11258,7 @@
       ],
       "semantic_tags": [
         "linear_algebra",
-        "rank",
-        "svd"
+        "rank"
       ],
       "keywords": [
         "matrix_rank",
@@ -13638,7 +13631,7 @@
           "type_name": "int",
           "state": "bound_scalar",
           "qualifiers": [],
-          "default_value": 0,
+          "default_value": null,
           "description": "Lowest integer to be drawn",
           "domain": "numpy",
           "required": true,
@@ -14336,8 +14329,7 @@
       ],
       "keywords": [
         "argsort",
-        "indices",
-        "rank"
+        "indices"
       ],
       "code_template": "{output_var} = np.argsort({array}, axis={axis}, kind={kind})",
       "slots": {
@@ -16203,7 +16195,7 @@
           "type_name": "float",
           "state": "bound_scalar",
           "qualifiers": [],
-          "default_value": "50.0",
+          "default_value": null,
           "description": "Percentile between 0 and 100",
           "domain": "numpy",
           "required": true,
@@ -16417,7 +16409,7 @@
           "type_name": "int",
           "state": "dim_size",
           "qualifiers": [],
-          "default_value": 0,
+          "default_value": null,
           "description": "Number of columns for 2D reshaping",
           "domain": "numpy",
           "required": true,
@@ -16655,30 +16647,6 @@
       }
     }
   },
-  "mock_fixtures": [
-    {
-      "match_type_tokens": [
-        "embedding",
-        "vector"
-      ],
-      "match_domain_tokens": [
-        "numpy"
-      ],
-      "template": "try:\n    import numpy as np\n    {var_name} = np.ones(64, dtype=np.float32)\nexcept ImportError:\n    {var_name} = [0.1] * 64"
-    },
-    {
-      "match_type_tokens": [
-        "matrix",
-        "ndarray",
-        "tensor",
-        "array"
-      ],
-      "match_domain_tokens": [
-        "numpy"
-      ],
-      "template": "try:\n    import numpy as np\n    {var_name} = np.zeros((4, 4), dtype=np.float32)\nexcept ImportError:\n    {var_name} = [[0.0] * 4] * 4"
-    }
-  ],
   "supported_formats": [
     "npy",
     "npz",

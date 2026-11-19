@@ -62,9 +62,6 @@ RUST_CORE_TREE: Dict[str, Any] = {
     },
     "top_types": ["any", "generic", "*"],
     "top_states": ["any", "*"],
-    "path_port_tokens": ["source_path", "dest_path", "file_path", "path"],
-    "source_port_tokens": ["source_path", "in_path"],
-    "dest_port_tokens": ["dest_path", "out_path"],
     "data_bearing_roles": ["receiver", "carrier", "data_input", "source_data"],
     "carrier_roles": {
         "data": ["receiver", "carrier", "data_carrier", "data_input", "source_data"],

@@ -1840,7 +1840,7 @@
           "type_name": "str",
           "state": "display_window",
           "qualifiers": [],
-          "default_value": "preview",
+          "default_value": null,
           "description": "Identifier title for the host OS window.",
           "domain": "cv2",
           "required": true,
@@ -2065,7 +2065,6 @@
       ],
       "keywords": [
         "destroy",
-        "close",
         "cleanup",
         "windows"
       ],
@@ -2443,16 +2442,14 @@
       "semantic_tags": [
         "color",
         "conversion",
-        "bgr2rgb",
-        "matplotlib"
+        "bgr2rgb"
       ],
       "keywords": [
         "bgr",
         "convert",
         "rgb",
         "bgr2rgb",
-        "swap",
-        "matplotlib"
+        "swap"
       ],
       "code_template": "{output_var} = cv2.cvtColor({src}, cv2.COLOR_BGR2RGB)",
       "slots": {},
@@ -2994,10 +2991,7 @@
           "type_name": "Tuple[int, int]",
           "state": "size_tuple",
           "qualifiers": [],
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "description": "Target spatial dimensions tuple (width, height).",
           "domain": "cv2",
           "required": true,
@@ -3229,15 +3223,13 @@
       "semantic_tags": [
         "geometric",
         "affine",
-        "warp",
-        "transform"
+        "warp"
       ],
       "keywords": [
         "affine",
         "warp",
         "rotation",
-        "translation",
-        "transform"
+        "translation"
       ],
       "code_template": "{output_var} = cv2.warpAffine({src}, {M}, {dsize}, flags={flags}, borderMode={border_mode})",
       "slots": {
@@ -3339,10 +3331,7 @@
           "type_name": "Tuple[int, int]",
           "state": "size_tuple",
           "qualifiers": [],
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "description": "Output canvas dimensions (width, height).",
           "domain": "cv2",
           "required": true,
@@ -3586,13 +3575,14 @@
           },
           "semantics": "cv2.point_2d",
           "typestate": "cv2::point_2d",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "angle": {
           "type_name": "float",
           "state": "degrees",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Rotation angle in degrees counter-clockwise.",
           "domain": "cv2",
           "required": true,
@@ -3626,7 +3616,7 @@
           "type_name": "float",
           "state": "scale",
           "qualifiers": [],
-          "default_value": 1.0,
+          "default_value": null,
           "description": "Isotropic scale factor.",
           "domain": "cv2",
           "required": true,
@@ -3857,10 +3847,7 @@
           "type_name": "Tuple[int, int]",
           "state": "size_tuple",
           "qualifiers": [],
-          "default_value": [
-            100,
-            100
-          ],
+          "default_value": null,
           "description": "Output frame dimensions (width, height).",
           "domain": "cv2",
           "required": true,
@@ -4323,10 +4310,10 @@
           "type_name": "int",
           "state": "flip_flag",
           "qualifiers": [],
-          "default_value": 1,
+          "default_value": null,
           "description": "Axis selector: 0 for vertical (X-axis), 1 for horizontal (Y-axis), -1 for both axes.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -4353,7 +4340,8 @@
           },
           "semantics": "cv2.flip_flag",
           "typestate": "cv2::flip_flag",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4428,7 +4416,6 @@
         "cv2"
       ],
       "semantic_tags": [
-        "filter",
         "blur",
         "gaussian",
         "smoothing"
@@ -4436,7 +4423,6 @@
       "keywords": [
         "gaussian",
         "blur",
-        "filter",
         "smooth",
         "denoise",
         "kernel"
@@ -4503,10 +4489,7 @@
           "type_name": "tuple",
           "state": "kernel_size",
           "qualifiers": [],
-          "default_value": [
-            5,
-            5
-          ],
+          "default_value": null,
           "description": "Gaussian kernel size (width, height). Both must be positive and odd integers.",
           "domain": "cv2",
           "required": true,
@@ -4543,16 +4526,17 @@
           },
           "semantics": "cv2.kernel_size",
           "typestate": "cv2::kernel_size",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "sigma_x": {
           "type_name": "float",
           "state": "sigma",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Gaussian kernel standard deviation in horizontal X direction. 0 means computed from ksize.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -4579,7 +4563,8 @@
           "typestate": "cv2::sigma",
           "invariants": [
             "min=0.0"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "sigma_y": {
           "type_name": "float",
@@ -4699,7 +4684,6 @@
         "cv2"
       ],
       "semantic_tags": [
-        "filter",
         "median",
         "denoise",
         "salt_and_pepper"
@@ -4708,7 +4692,6 @@
         "median",
         "blur",
         "salt and pepper",
-        "filter",
         "nonlinear"
       ],
       "code_template": "{output_var} = cv2.medianBlur({src}, {ksize})",
@@ -4724,7 +4707,10 @@
       "inputs": {
         "src": {
           "type_name": "ndarray",
-          "state": "color_bgr",
+          "state": "gray",
+          "accepted_states": [
+            "color_bgr"
+          ],
           "qualifiers": [
             [
               "cv2",
@@ -4741,22 +4727,22 @@
           "value_constraints": null,
           "shape_contract": null,
           "structure_kind": "tensor",
-          "rank": 3,
+          "rank": 2,
           "element_type": "uint8",
           "supported_formats": [],
           "carrier": "ndarray",
           "layout": {
-            "rank": 3,
+            "rank": null,
             "shape": null,
             "dtype": "uint8",
             "memory_order": "any",
-            "rank_polymorphic": false,
+            "rank_polymorphic": true,
             "channel_count": null,
             "channel_axis": null,
             "length": null
           },
-          "semantics": "image.color.bgr",
-          "typestate": "cv2::color_bgr",
+          "semantics": "image.gray",
+          "typestate": "cv2::gray",
           "invariants": [
             "cv2.image"
           ]
@@ -4765,7 +4751,7 @@
           "type_name": "int",
           "state": "kernel_size",
           "qualifiers": [],
-          "default_value": 5,
+          "default_value": null,
           "description": "Aperture linear size; must be odd and greater than 1.",
           "domain": "cv2",
           "required": true,
@@ -4827,13 +4813,13 @@
           "shape_contract": null,
           "structure_kind": "tensor",
           "rank": 2,
-          "element_type": "float64",
+          "element_type": "uint8",
           "supported_formats": [],
           "carrier": "ndarray",
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -4945,7 +4931,7 @@
           "type_name": "int",
           "state": "diameter",
           "qualifiers": [],
-          "default_value": 9,
+          "default_value": null,
           "description": "Diameter of each pixel neighborhood used during filtering.",
           "domain": "cv2",
           "required": true,
@@ -4983,7 +4969,7 @@
           "type_name": "float",
           "state": "sigma",
           "qualifiers": [],
-          "default_value": 75.0,
+          "default_value": null,
           "description": "Filter sigma in the color space.",
           "domain": "cv2",
           "required": true,
@@ -5021,7 +5007,7 @@
           "type_name": "float",
           "state": "sigma",
           "qualifiers": [],
-          "default_value": 75.0,
+          "default_value": null,
           "description": "Filter sigma in the coordinate space.",
           "domain": "cv2",
           "required": true,
@@ -5184,10 +5170,10 @@
           "type_name": "int",
           "state": "depth",
           "qualifiers": [],
-          "default_value": -1,
+          "default_value": null,
           "description": "Desired depth of destination image (-1 keeps same as src).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             -1,
@@ -5217,7 +5203,8 @@
           },
           "semantics": "cv2.depth",
           "typestate": "cv2::depth",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "kernel": {
           "type_name": "ndarray",
@@ -5336,7 +5323,6 @@
         "cv2"
       ],
       "semantic_tags": [
-        "filter",
         "gradient",
         "derivative",
         "sobel"
@@ -5345,8 +5331,7 @@
         "sobel",
         "derivative",
         "gradient",
-        "edge",
-        "filter"
+        "edge"
       ],
       "code_template": "{output_var} = cv2.Sobel({src}, {ddepth}, {dx}, {dy}, ksize={ksize})",
       "slots": {
@@ -5417,7 +5402,7 @@
               "CV_64F"
             ]
           ],
-          "default_value": 5,
+          "default_value": null,
           "description": "Output image depth (e.g. cv2.CV_64F or cv2.CV_16S).",
           "domain": "cv2",
           "required": true,
@@ -5457,7 +5442,7 @@
           "type_name": "int",
           "state": "order",
           "qualifiers": [],
-          "default_value": 1,
+          "default_value": null,
           "description": "Order of the derivative along X axis.",
           "domain": "cv2",
           "required": true,
@@ -5499,7 +5484,7 @@
           "type_name": "int",
           "state": "order",
           "qualifiers": [],
-          "default_value": 0,
+          "default_value": null,
           "description": "Order of the derivative along Y axis.",
           "domain": "cv2",
           "required": true,
@@ -5663,7 +5648,6 @@
         "cv2"
       ],
       "semantic_tags": [
-        "filter",
         "derivative",
         "laplacian",
         "focus"
@@ -5736,7 +5720,7 @@
           "type_name": "int",
           "state": "depth",
           "qualifiers": [],
-          "default_value": 5,
+          "default_value": null,
           "description": "Desired depth of destination tensor (e.g. cv2.CV_64F).",
           "domain": "cv2",
           "required": true,
@@ -5969,7 +5953,7 @@
           "type_name": "float",
           "state": "threshold",
           "qualifiers": [],
-          "default_value": 100.0,
+          "default_value": null,
           "description": "First threshold for the hysteresis procedure (lower limit).",
           "domain": "cv2",
           "required": true,
@@ -6006,7 +5990,7 @@
           "type_name": "float",
           "state": "threshold",
           "qualifiers": [],
-          "default_value": 200.0,
+          "default_value": null,
           "description": "Second threshold for the hysteresis procedure (upper limit).",
           "domain": "cv2",
           "required": true,
@@ -6278,7 +6262,7 @@
           "type_name": "float",
           "state": "threshold_value",
           "qualifiers": [],
-          "default_value": 127.0,
+          "default_value": null,
           "description": "Threshold value cutoff.",
           "domain": "cv2",
           "required": true,
@@ -6318,7 +6302,7 @@
           "type_name": "float",
           "state": "maximum_value",
           "qualifiers": [],
-          "default_value": 255.0,
+          "default_value": null,
           "description": "Maximum value assigned to pixels exceeding the threshold.",
           "domain": "cv2",
           "required": true,
@@ -6504,6 +6488,9 @@
         "src": {
           "type_name": "ndarray",
           "state": "gray",
+          "accepted_states": [
+            "blurred"
+          ],
           "qualifiers": [
             [
               "cv2",
@@ -6586,7 +6573,8 @@
           "invariants": [
             "max=255.0",
             "min=0.0"
-          ]
+          ],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6790,10 +6778,10 @@
           "type_name": "float",
           "state": "maximum_value",
           "qualifiers": [],
-          "default_value": 255.0,
+          "default_value": null,
           "description": "Non-zero value assigned to satisfying pixels.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -6816,13 +6804,14 @@
           },
           "semantics": "cv2.maximum_value",
           "typestate": "cv2::maximum_value",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "block_size": {
           "type_name": "int",
           "state": "neighborhood_size",
           "qualifiers": [],
-          "default_value": 11,
+          "default_value": null,
           "description": "Size of pixel neighborhood used to calculate threshold; odd number > 1.",
           "domain": "cv2",
           "required": true,
@@ -6867,7 +6856,7 @@
           "type_name": "float",
           "state": "constant",
           "qualifiers": [],
-          "default_value": 2.0,
+          "default_value": null,
           "description": "Constant subtracted from the mean or weighted sum.",
           "domain": "cv2",
           "required": true,
@@ -7202,7 +7191,6 @@
       "keywords": [
         "kernel",
         "structuring element",
-        "rect",
         "ellipse",
         "cross"
       ],
@@ -7230,10 +7218,10 @@
               "MorphShapes"
             ]
           ],
-          "default_value": 0,
+          "default_value": null,
           "description": "Element shape: cv2.MORPH_RECT=0, cv2.MORPH_CROSS=1, cv2.MORPH_ELLIPSE=2.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -7262,16 +7250,14 @@
           "typestate": "cv2::morph_shape",
           "invariants": [
             "cv2.morphshapes"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "ksize": {
           "type_name": "tuple",
           "state": "kernel_size",
           "qualifiers": [],
-          "default_value": [
-            3,
-            3
-          ],
+          "default_value": null,
           "description": "Size of the structuring element kernel (width, height).",
           "domain": "cv2",
           "required": true,
@@ -7308,7 +7294,8 @@
           },
           "semantics": "cv2.kernel_size",
           "typestate": "cv2::kernel_size",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7445,7 +7432,7 @@
           "default_value": null,
           "description": "Structuring element kernel used for erosion.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -7656,7 +7643,7 @@
           "default_value": null,
           "description": "Structuring element kernel used for dilation.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -8316,7 +8303,8 @@
           "typestate": "cv2::retrieval_mode",
           "invariants": [
             "cv2.retrievalmodes"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "method": {
           "type_name": "int",
@@ -8360,7 +8348,8 @@
           "typestate": "cv2::approx_method",
           "invariants": [
             "cv2.contourapproximationmodes"
-          ]
+          ],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8493,8 +8482,7 @@
       "semantic_tags": [
         "contours",
         "sorting",
-        "ranking",
-        "filter"
+        "ranking"
       ],
       "keywords": [
         "largest",
@@ -8659,7 +8647,7 @@
       "topology_type": "sequential",
       "node_type": "function",
       "node_role": "transformer",
-      "mutation_type": "in_place",
+      "mutation_type": "pure",
       "is_context_manager": false,
       "verified": true,
       "is_public": true,
@@ -8677,9 +8665,10 @@
         "draw",
         "render",
         "contours",
-        "polygons"
+        "polygons",
+        "visualization"
       ],
-      "code_template": "{output_var} = cv2.drawContours({image}, {contours}, {contour_idx}, {color}, {thickness})",
+      "code_template": "{output_var} = cv2.drawContours({image}.copy(), {contours}, {contour_idx}, {color}, {thickness})",
       "slots": {
         "contour_idx": -1,
         "color": [
@@ -8808,7 +8797,8 @@
           },
           "semantics": "cv2.index",
           "typestate": "cv2::index",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "type_name": "tuple",
@@ -8855,7 +8845,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -9162,7 +9153,7 @@
           "type_name": "bool",
           "state": "flag",
           "qualifiers": [],
-          "default_value": true,
+          "default_value": null,
           "description": "Flag indicating whether curve is a closed polygon loop.",
           "domain": "cv2",
           "required": true,
@@ -9693,7 +9684,7 @@
           "type_name": "float",
           "state": "epsilon",
           "qualifiers": [],
-          "default_value": 2.0,
+          "default_value": null,
           "description": "Parameter specifying the maximum Hausdorff distance approximation accuracy.",
           "domain": "cv2",
           "required": true,
@@ -9731,7 +9722,7 @@
           "type_name": "bool",
           "state": "flag",
           "qualifiers": [],
-          "default_value": true,
+          "default_value": null,
           "description": "If true, the approximated curve is closed.",
           "domain": "cv2",
           "required": true,
@@ -10548,7 +10539,7 @@
           "type_name": "float",
           "state": "weight",
           "qualifiers": [],
-          "default_value": 0.7,
+          "default_value": null,
           "description": "Weight of the first image array elements.",
           "domain": "cv2",
           "required": true,
@@ -10622,7 +10613,7 @@
           "type_name": "float",
           "state": "weight",
           "qualifiers": [],
-          "default_value": 0.3,
+          "default_value": null,
           "description": "Weight of the second image array elements.",
           "domain": "cv2",
           "required": true,
@@ -10656,7 +10647,7 @@
           "type_name": "float",
           "state": "scalar_bias",
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Scalar added to each sum.",
           "domain": "cv2",
           "required": true,
@@ -11831,9 +11822,7 @@
           "type_name": "List[int]",
           "state": "channel_indices",
           "qualifiers": [],
-          "default_value": [
-            0
-          ],
+          "default_value": null,
           "description": "List of the dims channels used to compute the histogram.",
           "domain": "cv2",
           "required": true,
@@ -11879,7 +11868,7 @@
           "default_value": null,
           "description": "Optional mask array.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -11908,9 +11897,7 @@
           "type_name": "List[int]",
           "state": "bin_counts",
           "qualifiers": [],
-          "default_value": [
-            256
-          ],
+          "default_value": null,
           "description": "Array of histogram bin counts in each dimension.",
           "domain": "cv2",
           "required": true,
@@ -11953,10 +11940,7 @@
           "type_name": "List[float]",
           "state": "bin_ranges",
           "qualifiers": [],
-          "default_value": [
-            0,
-            256
-          ],
+          "default_value": null,
           "description": "Array of the dims boundaries of bin values in each dimension.",
           "domain": "cv2",
           "required": true,
@@ -12279,7 +12263,7 @@
           "default_value": null,
           "description": "Destination array of matching size.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -12889,10 +12873,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "description": "First point coordinates (x1, y1) of the line segment.",
           "domain": "cv2",
           "required": true,
@@ -12936,10 +12917,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            10,
-            10
-          ],
+          "default_value": null,
           "description": "Second point coordinates (x2, y2) of the line segment.",
           "domain": "cv2",
           "required": true,
@@ -12983,14 +12961,10 @@
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            0,
-            255,
-            0
-          ],
+          "default_value": null,
           "description": "Line color tuple (B, G, R).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",
@@ -13024,7 +12998,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -13244,10 +13219,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "description": "Top-left vertex coordinates (x1, y1).",
           "domain": "cv2",
           "required": true,
@@ -13291,10 +13263,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            10,
-            10
-          ],
+          "default_value": null,
           "description": "Opposite bottom-right vertex coordinates (x2, y2).",
           "domain": "cv2",
           "required": true,
@@ -13338,14 +13307,10 @@
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            0,
-            255,
-            0
-          ],
+          "default_value": null,
           "description": "Rectangle stroke color tuple (B, G, R).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",
@@ -13379,7 +13344,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -13594,10 +13560,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            0,
-            0
-          ],
+          "default_value": null,
           "description": "Center of the circle coordinates (x, y).",
           "domain": "cv2",
           "required": true,
@@ -13641,7 +13604,7 @@
           "type_name": "int",
           "state": "radius",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Radius of the circle in pixels.",
           "domain": "cv2",
           "required": true,
@@ -13678,14 +13641,10 @@
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            0,
-            0,
-            255
-          ],
+          "default_value": null,
           "description": "Circle color (B, G, R).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",
@@ -13719,7 +13678,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -13937,7 +13897,7 @@
           "type_name": "str",
           "state": "text_string",
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Text string content to render.",
           "domain": "cv2",
           "required": true,
@@ -13970,10 +13930,7 @@
           "type_name": "tuple",
           "state": "point_2d",
           "qualifiers": [],
-          "default_value": [
-            10,
-            10
-          ],
+          "default_value": null,
           "description": "Bottom-left corner coordinates of text string origin (x, y).",
           "domain": "cv2",
           "required": true,
@@ -14022,10 +13979,10 @@
               "HersheyFonts"
             ]
           ],
-          "default_value": 0,
+          "default_value": null,
           "description": "Font font-face identifier (e.g. cv2.FONT_HERSHEY_SIMPLEX=0).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -14059,16 +14016,17 @@
           "typestate": "cv2::font_type",
           "invariants": [
             "cv2.hersheyfonts"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "font_scale": {
           "type_name": "float",
           "state": "scale",
           "qualifiers": [],
-          "default_value": 1.0,
+          "default_value": null,
           "description": "Font scale factor that is multiplied by font-specific base size.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -14095,20 +14053,17 @@
           "typestate": "cv2::scale",
           "invariants": [
             "min=0.1"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "color": {
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "default_value": null,
           "description": "Text color tuple (B, G, R).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",
@@ -14142,7 +14097,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -14403,10 +14359,10 @@
           "type_name": "bool",
           "state": "flag",
           "qualifiers": [],
-          "default_value": true,
+          "default_value": null,
           "description": "Flag indicating whether drawn polylines are closed polygons.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             true,
@@ -14432,20 +14388,17 @@
           },
           "semantics": "cv2.flag",
           "typestate": "cv2::flag",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "color": {
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            0,
-            255,
-            255
-          ],
+          "default_value": null,
           "description": "Polyline color tuple (B, G, R).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "collection",
           "enum_values": null,
           "param_kind": "standard",
@@ -14479,7 +14432,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "thickness": {
           "type_name": "int",
@@ -14741,11 +14695,7 @@
           "type_name": "tuple",
           "state": "color_scalar",
           "qualifiers": [],
-          "default_value": [
-            255,
-            255,
-            255
-          ],
+          "default_value": null,
           "description": "Fill color scalar or tuple.",
           "domain": "cv2",
           "required": true,
@@ -14771,7 +14721,8 @@
           },
           "semantics": "cv2.color_scalar",
           "typestate": "cv2::color_scalar",
-          "invariants": []
+          "invariants": [],
+          "port_role": "configuration"
         },
         "line_type": {
           "type_name": "int",
@@ -14960,7 +14911,7 @@
           "type_name": "float",
           "state": "distance_res",
           "qualifiers": [],
-          "default_value": 1.0,
+          "default_value": null,
           "description": "Distance resolution of the accumulator in pixels.",
           "domain": "cv2",
           "required": true,
@@ -14998,7 +14949,7 @@
           "type_name": "float",
           "state": "angle_res",
           "qualifiers": [],
-          "default_value": 0.017453292519943295,
+          "default_value": null,
           "description": "Angle resolution of the accumulator in radians (e.g. np.pi/180).",
           "domain": "cv2",
           "required": true,
@@ -15036,7 +14987,7 @@
           "type_name": "int",
           "state": "accumulator_threshold",
           "qualifiers": [],
-          "default_value": 50,
+          "default_value": null,
           "description": "Accumulator threshold parameter; only lines with sufficient votes are returned.",
           "domain": "cv2",
           "required": true,
@@ -15306,7 +15257,7 @@
               "HoughModes"
             ]
           ],
-          "default_value": 3,
+          "default_value": null,
           "description": "Detection method flag (cv2.HOUGH_GRADIENT=3).",
           "domain": "cv2",
           "required": true,
@@ -15345,7 +15296,7 @@
           "type_name": "float",
           "state": "ratio",
           "qualifiers": [],
-          "default_value": 1.2,
+          "default_value": null,
           "description": "Inverse ratio of accumulator resolution to image resolution.",
           "domain": "cv2",
           "required": true,
@@ -15383,7 +15334,7 @@
           "type_name": "float",
           "state": "distance",
           "qualifiers": [],
-          "default_value": 50.0,
+          "default_value": null,
           "description": "Minimum spatial distance between detected circle centers.",
           "domain": "cv2",
           "required": true,
@@ -15713,7 +15664,7 @@
           "type_name": "int",
           "state": "neighborhood_size",
           "qualifiers": [],
-          "default_value": 2,
+          "default_value": null,
           "description": "Neighborhood size for structure tensor integration.",
           "domain": "cv2",
           "required": true,
@@ -15751,7 +15702,7 @@
           "type_name": "int",
           "state": "aperture",
           "qualifiers": [],
-          "default_value": 3,
+          "default_value": null,
           "description": "Aperture parameter for the Sobel operator; odd number.",
           "domain": "cv2",
           "required": true,
@@ -15790,7 +15741,7 @@
           "type_name": "float",
           "state": "free_parameter",
           "qualifiers": [],
-          "default_value": 0.04,
+          "default_value": null,
           "description": "Harris detector free empirical sensitivity parameter.",
           "domain": "cv2",
           "required": true,
@@ -15980,7 +15931,7 @@
           "type_name": "int",
           "state": "count_limit",
           "qualifiers": [],
-          "default_value": 100,
+          "default_value": null,
           "description": "Maximum number of corners to return. Non-positive returns all detected corners.",
           "domain": "cv2",
           "required": true,
@@ -16014,7 +15965,7 @@
           "type_name": "float",
           "state": "threshold_ratio",
           "qualifiers": [],
-          "default_value": 0.01,
+          "default_value": null,
           "description": "Minimal accepted quality level ratio multiplied by best corner response.",
           "domain": "cv2",
           "required": true,
@@ -16054,7 +16005,7 @@
           "type_name": "float",
           "state": "euclidean_dist",
           "qualifiers": [],
-          "default_value": 10.0,
+          "default_value": null,
           "description": "Minimum possible Euclidean distance between returned corners.",
           "domain": "cv2",
           "required": true,
@@ -16572,7 +16523,7 @@
           "default_value": null,
           "description": "Optional 8-bit region mask.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -17036,7 +16987,7 @@
           "default_value": null,
           "description": "Optional 8-bit region mask.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -17679,7 +17630,7 @@
           "default_value": null,
           "description": "Destination canvas image or None to allocate newly.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -18105,7 +18056,7 @@
           "default_value": null,
           "description": "Pre-allocated canvas or None.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "tensor",
           "enum_values": null,
           "param_kind": "standard",
@@ -18271,7 +18222,7 @@
           "type_name": "int",
           "state": "padding",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Pixels to pad at top.",
           "domain": "cv2",
           "required": true,
@@ -18309,7 +18260,7 @@
           "type_name": "int",
           "state": "padding",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Pixels to pad at bottom.",
           "domain": "cv2",
           "required": true,
@@ -18347,7 +18298,7 @@
           "type_name": "int",
           "state": "padding",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Pixels to pad at left.",
           "domain": "cv2",
           "required": true,
@@ -18385,7 +18336,7 @@
           "type_name": "int",
           "state": "padding",
           "qualifiers": [],
-          "default_value": 10,
+          "default_value": null,
           "description": "Pixels to pad at right.",
           "domain": "cv2",
           "required": true,
@@ -18428,7 +18379,7 @@
               "BorderTypes"
             ]
           ],
-          "default_value": 0,
+          "default_value": null,
           "description": "Border extrapolation method (cv2.BORDER_CONSTANT=0, cv2.BORDER_REPLICATE=1, cv2.BORDER_REFLECT=2).",
           "domain": "cv2",
           "required": true,
@@ -19077,10 +19028,10 @@
           "type_name": "float",
           "state": "radius",
           "qualifiers": [],
-          "default_value": 3.0,
+          "default_value": null,
           "description": "Radius of circular neighborhood considered around each repaired point.",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "standard",
@@ -19107,7 +19058,8 @@
           "typestate": "cv2::radius",
           "invariants": [
             "min=0.5"
-          ]
+          ],
+          "port_role": "configuration"
         },
         "flags": {
           "type_name": "int",
@@ -19118,10 +19070,10 @@
               "InpaintingModes"
             ]
           ],
-          "default_value": 1,
+          "default_value": null,
           "description": "Inpainting algorithm flag: cv2.INPAINT_TELEA=1 or cv2.INPAINT_NS=0 (Navier-Stokes).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -19149,7 +19101,8 @@
           "typestate": "cv2::inpaint_flag",
           "invariants": [
             "cv2.inpaintingmodes"
-          ]
+          ],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -19226,7 +19179,6 @@
       "semantic_tags": [
         "denoise",
         "non_local_means",
-        "filter",
         "restoration"
       ],
       "keywords": [
@@ -19551,7 +19503,7 @@
           "type_name": "int",
           "state": "device_index",
           "qualifiers": [],
-          "default_value": 0,
+          "default_value": null,
           "description": "Camera hardware device index integer (e.g. 0) or filesystem path string to video container.",
           "domain": "cv2",
           "required": true,
@@ -19815,7 +19767,6 @@
       ],
       "keywords": [
         "release",
-        "close",
         "cleanup",
         "camera release"
       ],
@@ -19961,7 +19912,7 @@
           "type_name": "int",
           "state": "fourcc_code",
           "qualifiers": [],
-          "default_value": 1196444237,
+          "default_value": null,
           "description": "4-character code of codec (e.g. cv2.VideoWriter_fourcc(*'mp4v')).",
           "domain": "cv2",
           "required": true,
@@ -19995,7 +19946,7 @@
           "type_name": "float",
           "state": "framerate",
           "qualifiers": [],
-          "default_value": 30.0,
+          "default_value": null,
           "description": "Framerate of the encoded stream.",
           "domain": "cv2",
           "required": true,
@@ -20291,7 +20242,6 @@
       "keywords": [
         "release",
         "VideoWriter.release",
-        "close",
         "finalize"
       ],
       "code_template": "{writer}.release()",
@@ -20388,7 +20338,7 @@
           "type_name": "str",
           "state": "extension",
           "qualifiers": [],
-          "default_value": ".jpg",
+          "default_value": null,
           "description": "File format extension determining encoder (e.g. '.jpg', '.png').",
           "domain": "cv2",
           "required": true,
@@ -20637,10 +20587,10 @@
               "ImreadModes"
             ]
           ],
-          "default_value": 1,
+          "default_value": null,
           "description": "Decoding color flags (cv2.IMREAD_COLOR=1, cv2.IMREAD_GRAYSCALE=0).",
           "domain": "cv2",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": [
             0,
@@ -20669,7 +20619,8 @@
           "typestate": "cv2::flag",
           "invariants": [
             "cv2.imreadmodes"
-          ]
+          ],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -20775,40 +20726,6 @@
       "parent": "format"
     }
   },
-  "enum_constant_rules": [
-    {
-      "placeholder_names": [
-        "code",
-        "color_code",
-        "conversion_code"
-      ],
-      "module_attribute_prefix": "COLOR_",
-      "format_flags": {
-        "is_hsv": "HSV",
-        "is_rgb": "RGB",
-        "is_grayscale": "GRAY"
-      },
-      "default_format": "GRAY"
-    }
-  ],
-  "mock_fixtures": [
-    {
-      "match_type_tokens": [
-        "image",
-        "img",
-        "video_frame",
-        "rgb",
-        "bgr",
-        "pixel",
-        "frame"
-      ],
-      "match_domain_tokens": [
-        "cv2",
-        "vision"
-      ],
-      "template": "try:\n    import numpy as np\n    {var_name} = np.zeros((10, 10, 3), dtype=np.uint8)\nexcept ImportError:\n    {var_name} = [[[0] * 3] * 10] * 10"
-    }
-  ],
   "supported_formats": [
     "jpg",
     "jpeg",

@@ -326,6 +326,8 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
                 break
 
         self.tag_cells_with_clause_indices(committed_path, prompt, orchestrator=orch)
+        committed_path = self.insert_optic_commits(committed_path)
+        committed_path = self.insert_property_bridges(committed_path, prompt=prompt, ctx=ctx)
 
         _verr = self.verify_planned_path(committed_path, prompt, orch, ctx=ctx)
         if _verr:

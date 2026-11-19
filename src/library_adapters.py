@@ -86,52 +86,6 @@ def _get_type_registry():
             return None
 
 
-def _get_excluded_module_tokens() -> Set[str]:
-    """Retrieves generic internal/test module tokens from TypeRegistry."""
-    try:
-        reg = _get_type_registry()
-        if reg is not None:
-            return set(reg.get_excluded_module_tokens())
-    except Exception:
-        pass
-    return set()
-
-
-def _get_enum_citation_triggers() -> Set[str]:
-    """Retrieves triggers indicating enum/choice citations in docstrings from TypeRegistry."""
-    try:
-        reg = _get_type_registry()
-        if reg is not None:
-            return set(reg.get_enum_citation_triggers())
-    except Exception:
-        pass
-    return set()
-
-
-def _get_enum_suffixes() -> Tuple[str, ...]:
-    """Retrieves candidate suffixes for enum lookup stripping from TypeRegistry."""
-    try:
-        reg = _get_type_registry()
-        if reg is not None:
-            return tuple(reg.get_enum_suffixes())
-    except Exception:
-        pass
-    return ()
-
-
-def _get_symbol_stopwords() -> Set[str]:
-    """Retrieves common linguistic and docstring noise tokens."""
-    try:
-        reg = _get_type_registry()
-        if reg is not None:
-            sw = reg.get_symbol_stopwords()
-            if sw:
-                return set(sw)
-    except Exception:
-        pass
-    return set()
-
-
 def _is_python_source_module(module: Any) -> bool:
     """True iff the module is backed by real Python source (.py), not a compiled binary."""
     file_path = getattr(module, "__file__", None) or ""
@@ -150,16 +104,13 @@ def _is_compiled_extension_module(module: Any) -> bool:
 
 
 def _is_module_excluded(name: str, package_name: str) -> bool:
-    """Determines whether a module is an internal/test module using domain-agnostic patterns."""
-    excluded_tokens = _get_excluded_module_tokens()
+    """Determines whether a module is an internal/test module using structural checks."""
     parts = name.split(".")
     for p in parts:
         pl = p.lower()
         if pl.startswith("_") and pl != f"_{package_name}":
             return True
-        if pl in excluded_tokens or pl.strip("_") in excluded_tokens:
-            return True
-        if pl.startswith("test_") or pl.endswith("_test"):
+        if pl.startswith("test_") or pl.endswith("_test") or pl in ("tests", "conftest"):
             return True
     return False
 
@@ -262,63 +213,16 @@ class LibraryAdapter(abc.ABC):
         param_name: str = "",
         mod: Any = None,
     ) -> Optional[List[Any]]:
-        """Extracts enum domain choices for a parameter purely from annotations or docstring citations."""
+        """Extracts enum domain choices for a parameter via formal type reflection or explicit enum annotations."""
         choices = extract_enum_domain(anno, doc, param_name)
         if choices:
             return choices
 
         target_mod = mod or self.root_module
-        if doc and param_name and target_mod:
-            p_desc = ""
-            doc_params = extract_docstring_params(doc)
-            if param_name in doc_params:
-                p_desc = doc_params[param_name].get("desc", "")
-            else:
-                for line in doc.splitlines():
-                    if param_name in line:
-                        p_desc = line.strip()
-                        break
-
-            if p_desc:
-                triggers = _get_enum_citation_triggers()
-                stopwords = _get_symbol_stopwords()
-                suffixes = _get_enum_suffixes()
-
-                citations: List[str] = []
-                p_desc_low = p_desc.lower()
-                for trig in triggers:
-                    if trig in p_desc_low:
-                        idx = p_desc_low.find(trig) + len(trig)
-                        after = p_desc[idx:].lstrip(" :#")
-                        toks = tokenize_alphanumeric(after)
-                        if toks:
-                            citations.append(toks[0])
-
-                for enum_ident in citations:
-                    if not enum_ident.isidentifier():
-                        continue
-                    if len(enum_ident) < 2 or keyword.iskeyword(enum_ident.lower()) or enum_ident.lower() in stopwords:
-                        continue
-
-                    enum_obj = getattr(target_mod, enum_ident, None) or getattr(self.root_module, enum_ident, None)
-                    if enum_obj is not None:
-                        if inspect.isclass(enum_obj) and issubclass(enum_obj, enum.Enum):
-                            return [m.name for m in enum_obj]
-                        if inspect.isclass(enum_obj):
-                            constants = [attr for attr in dir(enum_obj) if attr.isupper() and not attr.startswith("_")]
-                            if constants:
-                                return constants
-
-                    clean_name = enum_ident
-                    for suffix in suffixes:
-                        if clean_name.lower().endswith(suffix):
-                            clean_name = clean_name[:-len(suffix)]
-                            break
-                    pfx = f"{clean_name.upper()}_"
-                    matches = [attr for attr in dir(target_mod) if attr.startswith(pfx)]
-                    if matches:
-                        return matches
-
+        if anno is not None and isinstance(anno, str) and target_mod is not None:
+            enum_obj = getattr(target_mod, anno.strip(), None)
+            if enum_obj is not None and inspect.isclass(enum_obj) and issubclass(enum_obj, enum.Enum):
+                return [m.name for m in enum_obj]
         return None
 
     def get_return_ports(
@@ -407,16 +311,6 @@ class LibraryAdapter(abc.ABC):
             except Exception:
                 pass
 
-        try:
-            from lattice import TypeRegistry
-            dest_tokens = TypeRegistry.get_instance().get_dest_port_tokens()
-        except Exception:
-            dest_tokens = set()
-
-        for p in input_names:
-            components = {c for c in tokenize_alphanumeric(str(p).lower()) if c}
-            if components & dest_tokens:
-                return True
         return False
 
     def is_parameterized(
@@ -440,18 +334,16 @@ class LibraryAdapter(abc.ABC):
         if name.startswith("_") or name in ("TYPE_CHECKING",):
             return False
 
-        excluded_tokens = _get_excluded_module_tokens()
         parts = module_name.split(".")
         is_internal_mod = any(
-            p.startswith("_") or p.lower() in excluded_tokens or p.lower().strip("_") in excluded_tokens
-            or p.startswith("test_") or p.endswith("_test")
+            p.startswith("_") or p.startswith("test_") or p.endswith("_test") or p.lower() in ("tests", "conftest")
             for p in parts if p != f"_{parts[0]}"
         )
 
         if is_internal_mod:
             pkg_prefix = ""
             for p in parts:
-                if p.startswith("_") or p.lower() in excluded_tokens or p.lower().strip("_") in excluded_tokens:
+                if p.startswith("_") or p.startswith("test_") or p.endswith("_test") or p.lower() in ("tests", "conftest"):
                     break
                 pkg_prefix = f"{pkg_prefix}.{p}" if pkg_prefix else p
                 p_mod = sys.modules.get(pkg_prefix)

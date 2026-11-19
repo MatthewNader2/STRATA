@@ -18,39 +18,20 @@
   ],
   "carrier_roles": {
     "source_data": [
-      "path",
-      "filepath",
-      "filename",
-      "pathlike",
-      "uri",
-      "url",
-      "file",
-      "source_path",
-      "file_path",
-      "image_path",
-      "dest_path",
-      "savepath",
-      "output_path",
-      "target_path"
+      "source_data"
     ],
     "path": [
       "path",
       "file",
+      "file_path",
+      "dir_path",
       "filepath",
-      "filename",
-      "pathlike",
-      "dest_path",
-      "source_path",
-      "dest_identifier",
-      "source_identifier",
-      "dest",
-      "buf",
-      "fp",
       "uri",
       "url"
     ],
     "path_consumer": [
-      "source_data"
+      "source_data",
+      "destination"
     ],
     "source": [
       "source",
@@ -632,7 +613,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -741,7 +722,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1215,7 +1196,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "file.txt",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1324,7 +1305,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ".txt",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1433,7 +1414,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "file",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3562,7 +3543,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "*",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3663,8 +3644,8 @@
           "type_name": "str",
           "state": "glob_pattern",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": "*",
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Wildcard pattern string e.g. '*.csv'.",
           "structure_kind": "scalar",
@@ -3785,8 +3766,8 @@
           "type_name": "str",
           "state": "glob_pattern",
           "abstract_type": "scalar",
-          "required": false,
-          "default_value": "*",
+          "required": true,
+          "default_value": null,
           "port_role": "configuration",
           "description": "Wildcard pattern string e.g. '*.json'.",
           "structure_kind": "scalar",
@@ -4018,7 +3999,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": ".txt",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -4780,7 +4761,7 @@
           "invariants": []
         }
       },
-      "code_template": "_count = 0\nfor _item_path in {paths}:\n    {body}\n    _count += 1\n{processed_count} = _count",
+      "code_template": "{processed_count} = 0\nfor _item_path in {paths}:\n    {body}\n    {processed_count} += 1",
       "dependencies": [
         "from pathlib import Path"
       ],
@@ -6050,7 +6031,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 420,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -7683,21 +7664,5 @@
   ],
   "supported_formats": [
     "*"
-  ],
-  "path_port_tokens": [
-    "path",
-    "file",
-    "filepath",
-    "filename",
-    "pathlike",
-    "dest_path",
-    "source_path",
-    "dest_identifier",
-    "source_identifier",
-    "dest",
-    "buf",
-    "fp",
-    "uri",
-    "url"
   ]
 }

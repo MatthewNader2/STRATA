@@ -1,0 +1,10 @@
+# Minimal delta dependencies for running STRATA benchmarks in Google Colab (T4 GPU).
+# Avoids downgrading Colab's preinstalled huggingface-hub/transformers/torch/numpy stack.
+faiss-cpu>=1.7,<2
+pydantic-settings>=2.0,<3
+pyflakes>=3.2
+cryptography>=42.0
+pygame>=2.5
+rich>=13.0,<14
+psutil>=5.9,<7
+huggingface-hub>=0.24

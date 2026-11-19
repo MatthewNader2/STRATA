@@ -13,7 +13,7 @@
     },
     {
       "name": "connection",
-      "parent": "handle"
+      "parent": "Engine"
     },
     {
       "name": "cursor",
@@ -560,7 +560,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "DEFERRED",
+          "default_value": null,
           "carrier": "Optional[str]",
           "layout": {
             "rank": 0,
@@ -647,7 +647,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": 5.0,
+          "default_value": null,
           "carrier": "float",
           "layout": {
             "rank": 0,
@@ -856,7 +856,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -883,7 +883,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id INTEGER PRIMARY KEY, value TEXT",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -969,7 +969,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1056,7 +1056,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "idx_data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1083,7 +1083,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1110,7 +1110,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1197,7 +1197,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1224,7 +1224,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "col TEXT",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1278,7 +1278,6 @@
       "docstring": "Queries sqlite_master to introspect all user table names in the database.",
       "semantic_tags": [
         "introspection",
-        "schema",
         "table_names",
         "sqlite_master"
       ],
@@ -1392,7 +1391,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1488,7 +1487,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1",
+          "default_value": null,
           "carrier": "sql_query",
           "layout": {
             "rank": 0,
@@ -1576,7 +1575,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1",
+          "default_value": null,
           "carrier": "sql_query",
           "layout": {
             "rank": 0,
@@ -1689,7 +1688,7 @@
           "rank": 0,
           "element_type": "float64",
           "supported_formats": [],
-          "default_value": "SELECT 1",
+          "default_value": null,
           "carrier": "sql_query",
           "layout": {
             "rank": 0,
@@ -1802,7 +1801,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "BEGIN; COMMIT;",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1889,7 +1888,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -1916,7 +1915,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2029,7 +2028,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2056,7 +2055,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "value = ?",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2083,7 +2082,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id = ?",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2196,7 +2195,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "data",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2223,7 +2222,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "id = ?",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -2474,7 +2473,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 10,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -3008,7 +3007,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "foreign_keys",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3035,7 +3034,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "ON",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3121,7 +3120,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "foreign_keys",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3217,7 +3216,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "custom_fn",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3244,7 +3243,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -3348,7 +3347,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "custom_agg",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3375,7 +3374,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 1,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -3479,7 +3478,7 @@
           "rank": 0,
           "element_type": "string",
           "supported_formats": [],
-          "default_value": "nocase",
+          "default_value": null,
           "carrier": "str",
           "layout": {
             "rank": 0,
@@ -3677,7 +3676,7 @@
           "rank": 0,
           "element_type": "int64",
           "supported_formats": [],
-          "default_value": 100,
+          "default_value": null,
           "carrier": "int",
           "layout": {
             "rank": 0,
@@ -3841,7 +3840,7 @@
           "rank": 0,
           "element_type": "bool",
           "supported_formats": [],
-          "default_value": true,
+          "default_value": null,
           "carrier": "bool",
           "layout": {
             "rank": 0,

@@ -543,10 +543,7 @@ def _get_headless_env_specs() -> List[str]:
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        lang_env = getattr(reg.get_language_spec(), "headless_env", None) or {}
-        specs = [f"{k}={v}" for k, v in lang_env.items()] + list(
-            reg.get_capabilities().get("headless_environment", []) or []
-        )
+        specs = list(reg.get_capabilities().get("headless_environment", []) or [])
     except Exception:
         specs = []
     _HEADLESS_ENV_SPECS_CACHE = specs
@@ -772,10 +769,29 @@ def _sandbox_worker_exec(
             }
             exec_globals.update(context)
 
-            # Step 5: Bytecode Execution under captured streams
+            # Step 5: Bytecode Execution under captured streams (handle explicit sys.exit)
             compiled = compile(parsed_ast, filename="<sandbox>", mode="exec")
+            sys_exit_code = 0
             with contextlib.redirect_stdout(captured_stdout), contextlib.redirect_stderr(captured_stderr):
-                exec(compiled, exec_globals)
+                try:
+                    exec(compiled, exec_globals)
+                except SystemExit as sys_exit_exc:
+                    code_val = sys_exit_exc.code
+                    if isinstance(code_val, int):
+                        sys_exit_code = code_val
+                    elif code_val is not None:
+                        sys_exit_code = 1
+                        captured_stderr.write(f"\nSystemExit: {code_val}\n")
+            if sys_exit_code != 0:
+                _send_payload({
+                    "success": False,
+                    "returncode": sys_exit_code,
+                    "stdout": captured_stdout.getvalue(),
+                    "stderr": captured_stderr.getvalue(),
+                    "error": f"SystemExit({sys_exit_code})",
+                    "results": {},
+                })
+                return
 
             raw_results = {
                 k: v for k, v in exec_globals.items()
@@ -790,6 +806,20 @@ def _sandbox_worker_exec(
 
             extracted_results = {k: _ipc_safe(v) for k, v in raw_results.items()}
 
+            worker_egress: Dict[str, str] = {}
+            for raw_ep in egress_paths or ():
+                ep_s = str(raw_ep or "").strip()
+                if not ep_s:
+                    continue
+                if os.path.exists(ep_s):
+                    worker_egress[ep_s] = "ok" if os.path.getsize(ep_s) > 0 else "empty"
+                else:
+                    orig_ep = ep_s if os.path.isabs(ep_s) else os.path.join(orig_cwd, ep_s)
+                    if os.path.exists(orig_ep):
+                        worker_egress[ep_s] = "ok" if os.path.getsize(orig_ep) > 0 else "empty"
+                    else:
+                        worker_egress[ep_s] = "missing"
+
             _send_payload({
                 "success": True,
                 "returncode": 0,
@@ -797,6 +827,7 @@ def _sandbox_worker_exec(
                 "stderr": captured_stderr.getvalue(),
                 "error": None,
                 "results": extracted_results,
+                "egress": worker_egress,
             })
 
         except SecurityViolationError as sec_err:
@@ -864,7 +895,7 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
         ingress_kw_args: Set[str] = set()
 
         reg = TypeRegistry.get_instance()
-        path_tokens = reg.get_path_port_tokens() if reg else set()
+        path_types = (set(reg.get_types_by_kind("path") or ()) | {"path", "file"}) if reg else {"path", "file"}
 
         for cell in orch.loaded_cells.values():
             c_role = str(getattr(cell, "node_role", "") or "").lower()
@@ -875,7 +906,7 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
 
             path_ports = [
                 p for p in (list(getattr(cell, "inputs", {}).values()) + list(getattr(cell, "outputs", {}).values() if isinstance(getattr(cell, "outputs", {}), dict) else []))
-                if is_path_port(p) or getattr(p, "abstract_type", "") == "path" or getattr(p, "type_name", "") in path_tokens
+                if is_path_port(p) or getattr(p, "abstract_type", "") == "path" or str(getattr(p, "type_name", "") or "").strip().lower() in path_types
             ]
             if not path_ports:
                 continue
@@ -902,16 +933,15 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
                 is_term_role = reg_io.is_terminal_role(c_role)
                 is_in_role = reg_io.is_ingress_role(c_role)
                 dest_states = (
-                    set(reg_io.get_materialization_states() or ())
-                    | set(reg_io.get_terminal_states() or ())
+                    set(reg_io.get_terminal_states() or ())
+                    | reg_io.get_states_by_property("is_materialized", True)
+                    | reg_io.get_states_by_property("is_terminal", True)
                     | reg_io.get_roles_for_category("destination")
-                    | reg_io.get_dest_port_tokens()
                 )
             except Exception:
                 is_term_role, is_in_role, dest_states = False, False, set()
             is_sink = (
-                getattr(cell, "is_endable", False)
-                or not getattr(cell, "outputs", None)
+                not getattr(cell, "outputs", None)
                 or is_term_role
                 or any(str(getattr(getattr(p, "signature", p), "state", "")).lower() in dest_states for p in getattr(cell, "inputs", {}).values())
             )
@@ -921,8 +951,37 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
                 or is_in_role
             )
 
+            chained_receivers: Set[int] = {
+                id(n.func.value)
+                for n in ast.walk(c_ast)
+                if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and isinstance(n.func.value, ast.Call)
+            }
+
+            def _call_has_path_ph(call_node: ast.Call) -> Tuple[bool, Set[str]]:
+                found_ph = False
+                kws: Set[str] = set()
+                cur: Optional[ast.AST] = call_node
+                while isinstance(cur, ast.Call):
+                    for arg in cur.args:
+                        if isinstance(arg, ast.Name) and arg.id.startswith("_nstl_ph_"):
+                            found_ph = True
+                    for kw in cur.keywords:
+                        if kw.arg and any(getattr(p, "name", "") == kw.arg for p in path_ports):
+                            kws.add(kw.arg)
+                            found_ph = True
+                        elif isinstance(kw.value, ast.Name) and kw.value.id.startswith("_nstl_ph_"):
+                            if kw.arg:
+                                kws.add(kw.arg)
+                            found_ph = True
+                    cur = cur.func.value if isinstance(cur.func, ast.Attribute) and isinstance(cur.func.value, ast.Call) else None
+                return found_ph, kws
+
             for c_node in ast.walk(c_ast):
                 if isinstance(c_node, ast.Call):
+                    if id(c_node) in chained_receivers:
+                        continue
                     func = c_node.func
                     fn_name = None
                     if isinstance(func, ast.Attribute):
@@ -933,21 +992,7 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
                     if not fn_name:
                         continue
 
-                    has_path_arg = False
-                    matched_kws: Set[str] = set()
-
-                    for arg in c_node.args:
-                        if isinstance(arg, ast.Name) and arg.id.startswith("_nstl_ph_"):
-                            has_path_arg = True
-                            break
-                    for kw in c_node.keywords:
-                        if kw.arg and any(getattr(p, "name", "") == kw.arg for p in path_ports):
-                            matched_kws.add(kw.arg)
-                            has_path_arg = True
-                        elif isinstance(kw.value, ast.Name) and kw.value.id.startswith("_nstl_ph_"):
-                            if kw.arg:
-                                matched_kws.add(kw.arg)
-                            has_path_arg = True
+                    has_path_arg, matched_kws = _call_has_path_ph(c_node)
 
                     if has_path_arg:
                         if is_sink:
@@ -1055,7 +1100,9 @@ class GEVRSandbox:
                     if v_val is None:
                         violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' evaluated to None.")
                     elif isinstance(v_val, str) and v_val.startswith("<unpicklable:"):
-                        violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' was unpicklable ({v_val}).")
+                        # IPC-unpicklable runtime objects (e.g. local functions, opaque handles)
+                        # are live non-None deliverables; do not reject their presence.
+                        continue
                     else:
                         try:
                             f_val = float(v_val)
@@ -1236,16 +1283,52 @@ class GEVRSandbox:
             # Dynamically derive ingress vs egress callables and path parameters from loaded cells
             sink_callables, sink_kw_args, ingress_callables, ingress_kw_args = _derive_io_call_signatures()
 
+            exec_chained_receivers: Set[int] = {
+                id(n.func.value)
+                for n in ast.walk(parsed_ast)
+                if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and isinstance(n.func.value, ast.Call)
+            }
+            path_var_lits: Dict[str, List[str]] = {}
+            for node in ast.walk(parsed_ast):
+                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and isinstance(node.value, ast.Call):
+                    rhs_func = node.value.func
+                    rhs_fn = rhs_func.attr if isinstance(rhs_func, ast.Attribute) else (rhs_func.id if isinstance(rhs_func, ast.Name) else "")
+                    # Skip data loaders (e.g. pd.read_csv('input.csv')) whose output is an in-memory carrier, not a path handle
+                    if rhs_fn and rhs_fn in ingress_callables and "path" not in rhs_fn.lower():
+                        continue
+                    c_lits = [a.value.strip() for a in node.value.args if isinstance(a, ast.Constant) and isinstance(a.value, str) and a.value.strip()]
+                    c_lits.extend(kw.value.value.strip() for kw in node.value.keywords if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str) and kw.value.value.strip())
+                    if c_lits:
+                        path_var_lits[node.targets[0].id] = c_lits
+
+            def _iter_call_chain_str_args(call_node: ast.Call, kw_filter: Optional[Set[str]]):
+                cur: Optional[ast.AST] = call_node
+                while isinstance(cur, ast.Call):
+                    for arg in cur.args:
+                        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                            yield arg.value.strip()
+                    for kw in cur.keywords:
+                        if (not kw_filter or kw.arg in kw_filter) and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                            yield kw.value.value.strip()
+                    if isinstance(cur.func, ast.Attribute):
+                        if isinstance(cur.func.value, ast.Call):
+                            cur = cur.func.value
+                            continue
+                        if isinstance(cur.func.value, ast.Name) and cur.func.value.id in path_var_lits:
+                            for vs in path_var_lits[cur.func.value.id]:
+                                yield vs
+                    break
+
             # Pass 1: Identify all output/egress paths written in the code
             for node in ast.walk(parsed_ast):
                 if isinstance(node, ast.Call):
+                    if id(node) in exec_chained_receivers:
+                        continue
                     func = node.func
                     is_sink_call = False
-                    if isinstance(func, ast.Attribute) and func.attr in sink_callables:
-                        is_sink_call = True
-                    elif isinstance(func, ast.Name) and func.id in sink_callables:
-                        is_sink_call = True
-                    elif isinstance(func, ast.Name) and func.id == "open":
+                    if isinstance(func, ast.Name) and func.id == "open":
                         mode = None
                         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                             mode = str(node.args[1].value)
@@ -1254,25 +1337,24 @@ class GEVRSandbox:
                                 mode = str(kw.value.value)
                         if mode and any(m in mode for m in ("w", "a", "x")):
                             is_sink_call = True
+                    elif isinstance(func, ast.Attribute) and func.attr in sink_callables:
+                        is_sink_call = True
+                    elif isinstance(func, ast.Name) and func.id in sink_callables:
+                        is_sink_call = True
 
                     if is_sink_call:
-                        for arg in node.args:
-                            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                                egress_set.add(arg.value.strip())
-                        for kw in node.keywords:
-                            if (not sink_kw_args or kw.arg in sink_kw_args) and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                                egress_set.add(kw.value.value.strip())
+                        for s_lit in _iter_call_chain_str_args(node, sink_kw_args):
+                            if s_lit:
+                                egress_set.add(s_lit)
 
             # Pass 2: Check only ingress/loader calls for required input files
             for node in ast.walk(parsed_ast):
                 if isinstance(node, ast.Call):
+                    if id(node) in exec_chained_receivers:
+                        continue
                     func = node.func
                     is_ingress_call = False
-                    if isinstance(func, ast.Attribute) and func.attr in ingress_callables:
-                        is_ingress_call = True
-                    elif isinstance(func, ast.Name) and func.id in ingress_callables:
-                        is_ingress_call = True
-                    elif isinstance(func, ast.Name) and func.id == "open":
+                    if isinstance(func, ast.Name) and func.id == "open":
                         mode = "r"
                         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                             mode = str(node.args[1].value)
@@ -1281,6 +1363,10 @@ class GEVRSandbox:
                                 mode = str(kw.value.value)
                         if "r" in mode and not any(m in mode for m in ("w", "a", "x")):
                             is_ingress_call = True
+                    elif isinstance(func, ast.Attribute) and func.attr in ingress_callables:
+                        is_ingress_call = True
+                    elif isinstance(func, ast.Name) and func.id in ingress_callables:
+                        is_ingress_call = True
 
                     def _inspect_ingress_str(raw_s: str, flag_missing: bool = True) -> None:
                         s = raw_s.strip()
@@ -1296,19 +1382,11 @@ class GEVRSandbox:
                                 missing_inputs.append(s)
 
                     if is_ingress_call:
-                        for arg in node.args:
-                            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                                _inspect_ingress_str(arg.value, flag_missing=True)
-                        for kw in node.keywords:
-                            if (not ingress_kw_args or kw.arg in ingress_kw_args) and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                                _inspect_ingress_str(kw.value.value, flag_missing=True)
+                        for s_lit in _iter_call_chain_str_args(node, ingress_kw_args):
+                            _inspect_ingress_str(s_lit, flag_missing=True)
                     else:
-                        for arg in node.args:
-                            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                                _inspect_ingress_str(arg.value, flag_missing=False)
-                        for kw in node.keywords:
-                            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                                _inspect_ingress_str(kw.value.value, flag_missing=False)
+                        for s_lit in _iter_call_chain_str_args(node, None):
+                            _inspect_ingress_str(s_lit, flag_missing=False)
         except Exception as ast_err:
             logger.debug("[SANDBOX] AST inspection for input files failed: %s", ast_err)
 
@@ -1334,7 +1412,7 @@ class GEVRSandbox:
         parent_conn, child_conn = ctx.Pipe(duplex=False)
         headless_env_specs = _get_headless_env_specs()
 
-        smoke_test = bool(kwargs.get("smoke_test", False))
+        smoke_test = bool(kwargs.get("smoke_test", True))
         mem_limit = int(kwargs.get("max_memory_mb", self.max_memory_mb))
         cpu_limit = int(kwargs.get("max_cpu_seconds", max(int(exec_timeout) + 2, self.max_cpu_seconds)))
         allowed_caps = kwargs.get("allowed_capabilities")
@@ -1448,7 +1526,19 @@ class GEVRSandbox:
                 marker in envelope["error"] for marker in self._EXTRINSIC_ERROR_MARKERS
             )
 
-        egress_verification = self._verify_egress_paths(egress_paths)
+        payload_egress = payload.get("egress") or {}
+        if egress_paths:
+            egress_verification = {}
+            for raw_p in egress_paths:
+                p_s = str(raw_p or "").strip()
+                if not p_s:
+                    continue
+                if p_s in payload_egress:
+                    egress_verification[p_s] = payload_egress[p_s]
+                else:
+                    egress_verification.update(self._verify_egress_paths([p_s]))
+        else:
+            egress_verification = {}
         envelope["egress"] = egress_verification
         if egress_verification:
             bad = {p: v for p, v in egress_verification.items() if v != "ok"}

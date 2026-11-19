@@ -23,6 +23,23 @@ _PUNCT_EXCEPT_UNDERSCORE = "".join(c for c in string.punctuation if c != "_")
 _DELIM_TRANS = str.maketrans({c: " " for c in _PUNCT_EXCEPT_UNDERSCORE})
 
 
+def unique_var(cell: Any, suffix: str) -> str:
+    """
+    Returns a cell-scoped variable name of the form `_<cell_id>_<suffix>`.
+    Guarantees no collision between nested renders of distinct cells.
+
+    Lives in utils (not synthesis) because both unification and synthesis need it
+    and those two modules import each other lazily.
+    """
+    cid = (
+        getattr(cell, "cell_id", None)
+        or getattr(cell, "name", None)
+        or "cell"
+    )
+    safe = "".join(c if c.isalnum() else "_" for c in str(cid)) or "cell"
+    return f"_{safe}_{suffix}"
+
+
 def extract_template_placeholders(template: str) -> List[str]:
     """Extracts valid Python identifier placeholder names from a code template without regex."""
     if not template or "{" not in template:
@@ -265,7 +282,7 @@ def ensure_comprehensive_prompt(prompt: str, candidate_prompt: Optional[str]) ->
         from tokenizer import CellTokenizer
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        stop = set(reg.get_function_words()) | set(reg.get_sentence_connectives())
+        stop = set(reg.get_function_words())
 
         p_toks = CellTokenizer.tokenize_prompt(p_clean)
         c_toks = CellTokenizer.tokenize_prompt(c_clean)

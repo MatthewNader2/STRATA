@@ -174,20 +174,14 @@ def _safe_extract_json(raw_text: str) -> Optional[Dict[str, Any]]:
 
 def _create_mock_input_code(var_name: str, type_name: str, domain_name: str = "", abstract_type: str = "") -> str:
     """
-    Generates a dry-run mock instantiation for a port.
-    Domain knowledge lives in pluggable trees: mock probes are harvested from trees.
-    Fallback synthesizes values by abstract carrier protocol: table, tensor, scalar, text, collection.
+    Generates a dry-run mock instantiation for a port using pure abstract carrier protocols
+    (`scalar`, `text`, `collection`, or minimal structural carrier).
     """
     try:
         from lattice import TypeRegistry
         reg = TypeRegistry.get_instance()
-        probe = reg.find_mock_probe(type_name, domain_name) if reg else None
     except Exception:
         reg = None
-        probe = None
-
-    if probe:
-        return probe.replace("{var_name}", var_name)
 
     t_low = (type_name or "").lower()
     abs_low = (abstract_type or "").lower()

@@ -297,8 +297,8 @@ def resolve_embedding_dimension(model: Any) -> int:
         except Exception:
             pass
 
-    probe = model.encode(["nstl dimension probe"], convert_to_numpy=True)
-    dim = int(probe.shape[-1])
+    vecs = _encode_with_modes(model, ["nstl dimension probe"], mode="document")
+    dim = len(vecs[0]) if vecs and vecs[0] else 0
     if dim > 0:
         return dim
     raise RuntimeError("Could not resolve embedding dimension from loaded model.")
@@ -689,19 +689,50 @@ def _encode_with_modes(
 
 
 def _resolve_embedder_task(emb_path: str) -> Optional[str]:
-    """Reads configured or model-declared default task prompt without name heuristics."""
+    """Reads configured or model-declared default task/adapter metadata without name heuristics."""
     if getattr(settings, "embedder_task", None):
         return str(settings.embedder_task)
-    cfg_st = os.path.join(emb_path, "config_sentence_transformers.json")
-    if os.path.isfile(cfg_st):
+    if not emb_path or not os.path.isdir(emb_path):
+        return None
+
+    declared_tasks: List[str] = []
+    explicit_default: Optional[str] = None
+
+    for cfg_name in ("config.json", "config_sentence_transformers.json"):
+        cfg_file = os.path.join(emb_path, cfg_name)
+        if not os.path.isfile(cfg_file):
+            continue
         try:
-            with open(cfg_st, "r", encoding="utf-8") as fh:
+            with open(cfg_file, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            prompts = data.get("prompts") or {}
-            if isinstance(prompts, dict) and "retrieval" in prompts:
-                return "retrieval"
         except Exception:
-            pass
+            continue
+        if not isinstance(data, dict):
+            continue
+        if not explicit_default:
+            dt = data.get("default_task")
+            if isinstance(dt, str) and dt.strip():
+                explicit_default = dt.strip()
+        for list_key in ("task_names", "lora_adaptors", "adapters"):
+            vals = data.get(list_key)
+            if isinstance(vals, list):
+                for v in vals:
+                    if isinstance(v, str) and v.strip():
+                        declared_tasks.append(v.strip())
+            elif isinstance(vals, dict):
+                for k in vals.keys():
+                    if isinstance(k, str) and k.strip():
+                        declared_tasks.append(k.strip())
+        prompts = data.get("prompts")
+        if isinstance(prompts, dict) and "retrieval" in prompts:
+            declared_tasks.append("retrieval")
+
+    if explicit_default:
+        return explicit_default
+    if "retrieval" in declared_tasks:
+        return "retrieval"
+    if declared_tasks:
+        return declared_tasks[0]
     return None
 
 
@@ -997,7 +1028,8 @@ class BenchmarkProfile_C(InferenceProfile):
         from language_backend import get_active_language_backend
         lang_name = get_active_language_backend().name or "target"
         prompt = (
-            f"Fix the runtime error in this code and return ONLY the corrected code inside ```{lang_name} ```:\n\n"
+            f"Fix the runtime error in this code and return ONLY the complete, standalone corrected code inside ```{lang_name} ```. "
+            "Preserve all required imports and ensure every referenced variable is defined before use:\n\n"
             f"ERROR:\n{traceback_error}\n\nCODE:\n```{lang_name}\n{failing_code}\n```"
         )
         try:
@@ -1074,7 +1106,7 @@ class BenchmarkProfile_C(InferenceProfile):
             "- task: high-level intent.\n"
             "- domain: problem domain.\n"
             "- deliverable: the primary terminal entity, variable, model, or metric requested.\n"
-            "- operations: ordered JSON array of SHORT strings (each a 2-5 word atomic step phrase, e.g. [\"load input.csv\", ...]; NOT objects).\n"
+            "- operations: ordered JSON array of SHORT strings (each a 2-5 word atomic step phrase, e.g. [\"load asset\", \"transform field\"]; NOT objects).\n"
             "- variables: JSON array of distinct column, feature, variable, and parameter strings mentioned verbatim in the prompt.\n"
             "- inputs: JSON array of explicit input file path strings mentioned in the prompt (empty list [] if none).\n"
             "- outputs: JSON array of explicit output destination file path strings mentioned in the prompt (empty list [] if deliverable is in-memory).\n\n"
@@ -1153,6 +1185,27 @@ class BenchmarkProfile_C(InferenceProfile):
                         data["effective_prompt"] = ensure_comprehensive_prompt(prompt, data["effective_prompt"])
                     except Exception:
                         pass
+                # When the prompt is a single unpunctuated compound sentence yet the compiler extracted
+                # multiple atomic operations without losing informative prompt content, emit punctuated clauses.
+                try:
+                    try:
+                        from .tokenizer import CellTokenizer
+                        from .utils import ensure_comprehensive_prompt
+                    except (ImportError, ValueError):
+                        from tokenizer import CellTokenizer
+                        from utils import ensure_comprehensive_prompt
+                    ops_raw = data.get("operations")
+                    if (
+                        isinstance(ops_raw, list)
+                        and len(CellTokenizer.split_prompt_clauses(data["effective_prompt"])) <= 1
+                    ):
+                        clean_ops = [str(op).strip(" .;,\t\n") for op in ops_raw if isinstance(op, str) and str(op).strip()]
+                        if len(clean_ops) >= 2:
+                            ops_joined = "; ".join(clean_ops)
+                            if ensure_comprehensive_prompt(prompt, ops_joined) == ops_joined:
+                                data["effective_prompt"] = ops_joined
+                except Exception:
+                    pass
                 return data
         except Exception as e:
             logger.debug(f"[LLM] Semantic intent compilation fallback: {e}")
@@ -1433,8 +1486,9 @@ class BenchmarkProfile_U(InferenceProfile):
         from language_backend import get_active_language_backend
         lang_name = get_active_language_backend().name or "target"
         prompt = (
-            "Fix the runtime error in this code and return ONLY the corrected code "
-            f"inside ```{lang_name} ```:\n\nERROR:\n{traceback_error}\n\nCODE:\n```{lang_name}\n{failing_code}\n```"
+            f"Fix the runtime error in this code and return ONLY the complete, standalone corrected code inside ```{lang_name} ```. "
+            "Preserve all required imports and ensure every referenced variable is defined before use:\n\n"
+            f"ERROR:\n{traceback_error}\n\nCODE:\n```{lang_name}\n{failing_code}\n```"
         )
         try:
             raw = self.generate_text(prompt, max_tokens=1024)

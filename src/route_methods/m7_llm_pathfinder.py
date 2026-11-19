@@ -286,6 +286,8 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             return _fallback("verified chain shorter than 2 cells")
 
         self.tag_cells_with_clause_indices(chain, prompt)
+        chain = self.insert_optic_commits(chain)
+        chain = self.insert_property_bridges(chain, prompt=prompt, ctx=ctx)
 
         try:
             from token_evidence import audit

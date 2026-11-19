@@ -644,6 +644,35 @@ class PipelineDebugger:
         self.route_method = route_method.upper() if route_method else None
         self.llm_feedback = llm_feedback
 
+    @staticmethod
+    def _build_failure_record(*, cells, internal_error_msg, unify_fail_reason, refusal_exc, refusal_reason,
+                              sandbox_res, final_code) -> Optional[Dict[str, Any]]:
+        """
+        Structured, machine-readable account of WHY a run did not succeed (None on success).
+        Reports consume this instead of pattern-matching rendered console text, so the failure class,
+        the unresolved ports and the lint violations are never lost or truncated.
+        """
+        sandbox_res = sandbox_res or {}
+        if internal_error_msg:
+            return {"stage": "engine", "kind": "INTERNAL_ERROR", "detail": internal_error_msg}
+        if not cells:
+            return {"stage": "planning", "kind": "PLANNING_FAILED", "detail": "no compositional path found"}
+        if unify_fail_reason:
+            return {"stage": "unification", "kind": "UNIFICATION_FAILED", "detail": unify_fail_reason}
+        if refusal_exc is not None or refusal_reason:
+            if getattr(refusal_exc, "is_engine_defect", False):
+                return {"stage": "emission", "kind": "EMISSION_DEFECT", "detail": str(refusal_reason)}
+            ports = [f"{cid}.{p}" for cid, p in (getattr(refusal_exc, "ports", None) or [])]
+            return {"stage": "synthesis", "kind": "UNRESOLVED_PORTS", "detail": str(refusal_reason), "unresolved_ports": ports}
+        viol = sandbox_res.get("preflight_lint_violations")
+        if viol:
+            return {"stage": "lint", "kind": "LINT_REJECTED", "detail": f"{len(viol)} violation(s)", "violations": list(viol)}
+        if not final_code:
+            return {"stage": "synthesis", "kind": "NO_CODE", "detail": "no code was emitted"}
+        if not sandbox_res.get("success", False):
+            return {"stage": "sandbox", "kind": "SANDBOX_FAILED", "detail": str(sandbox_res.get("error", ""))[-400:]}
+        return None
+
     def run(
         self,
         prompt: str,
@@ -1177,6 +1206,9 @@ class PipelineDebugger:
         synth_dt = 0.0
         internal_error_msg: Optional[str] = None
         refusal_reason: Optional[str] = None
+        refusal_exc: Optional[BaseException] = None
+        unify_fail_reason: Optional[str] = None
+        lint_error_msg: Optional[str] = None
 
         if cells:
             t_synth_0 = time.perf_counter()
@@ -1219,6 +1251,7 @@ class PipelineDebugger:
                 ))
             elif unify_res.is_bottom():
                 fail_reason = getattr(unify_res, "reason", "Unknown unification failure")
+                unify_fail_reason = str(fail_reason)
                 c.print(Panel(
                     f"[bold red]❌ UNIFICATION FAILED: {fail_reason}[/bold red]\n"
                     f"[yellow]A type constraint or required port could not be satisfied in the Type Monad.[/yellow]",
@@ -1238,6 +1271,7 @@ class PipelineDebugger:
                     logger.warning("Synthesis refused (declared failure): %s", e)
                     final_code = ""
                     refusal_reason = str(e)
+                    refusal_exc = e
                 except Exception as e:
                     logger.error("INTERNAL ERROR in emit_code: %s", e, exc_info=True)
                     internal_error_msg = f"{type(e).__name__}: {e}"
@@ -1356,6 +1390,12 @@ class PipelineDebugger:
                         "code": None,
                         "internal_error": None,
                         "refusal_reason": refusal_reason,
+                        "failure": self._build_failure_record(
+                            cells=cells, internal_error_msg=None, unify_fail_reason=None,
+                            refusal_exc=refusal_exc, refusal_reason=refusal_reason,
+                            sandbox_res={}, final_code="",
+                        ),
+                        "lint_error": None,
                         "route_ms": route_dt,
                         "plan_ms": plan_dt,
                         "synth_ms": synth_dt,
@@ -1373,6 +1413,8 @@ class PipelineDebugger:
                         logger.warning(f"[PREFLIGHT] Linting exception: {lint_err}")
                         lint_res = None
                         lint_valid = True
+                        # The program still runs, but it must not be reported as lint-verified.
+                        lint_error_msg = f"{type(lint_err).__name__}: {lint_err}"
 
                 # Deterministic Bridge Insertion for Pre-Flight Lint Violations
                 if not lint_valid and lint_res and getattr(lint_res, "structured_violations", None) and cells:
@@ -1543,6 +1585,7 @@ class PipelineDebugger:
                     final_code = None
                     path_ids = [cl.cell_id for cl in cells] if cells else []
                     total_dt = (time.perf_counter() - t_total_start) * 1000.0
+                    _lint_fail_sb = {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_res.violations)}", "preflight_lint_violations": lint_res.violations}
                     return {
                         "prompt": prompt_clean,
                         "profile": self.active_profile,
@@ -1550,11 +1593,21 @@ class PipelineDebugger:
                         "latency_ms": total_dt,
                         "sandbox_status": "REFUSED: Pre-flight lint validation failed",
                         "code": None,
+                        "failure": self._build_failure_record(
+                            cells=cells,
+                            internal_error_msg=internal_error_msg,
+                            unify_fail_reason=unify_fail_reason,
+                            refusal_exc=refusal_exc,
+                            refusal_reason=refusal_reason,
+                            sandbox_res=_lint_fail_sb,
+                            final_code=final_code or "",
+                        ),
+                        "lint_error": lint_error_msg,
                         "route_ms": route_dt,
                         "plan_ms": plan_dt,
                         "synth_ms": synth_dt,
                         "sandbox_ms": 0.0,
-                        "sandbox_result": {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_res.violations)}", "preflight_lint_violations": lint_res.violations},
+                        "sandbox_result": _lint_fail_sb,
                         "cells": cells,
                         "tunnel_size": len(tunnel_cells),
                         "relevance_map": relevance_map
@@ -1705,8 +1758,40 @@ class PipelineDebugger:
 
                     if repaired_code and repaired_code.strip() != failing_code.strip():
                         unknown = _unknown_api_references(repaired_code, failing_code, self.orchestrator.loaded_cells.values())
+                        repair_err: Optional[str] = None
                         if unknown:
-                            c.print(f"  [bold red][x] Repair rejected: references APIs absent from the lattice: {', '.join(sorted(unknown)[:5])}[/bold red]\n")
+                            repair_err = f"references APIs absent from the lattice: {', '.join(sorted(unknown)[:5])}"
+                        else:
+                            from language_backend import get_active_language_backend
+                            if get_active_language_backend().uses_python_ast:
+                                try:
+                                    ast.parse(repaired_code)
+                                except SyntaxError as _syn_err:
+                                    repair_err = f"syntax error in repair: {_syn_err}"
+                                if repair_err is None:
+                                    try:
+                                        from pyflakes.api import check as _pf_check
+                                        from pyflakes.messages import UndefinedName, UndefinedLocal
+                                        _pf_msgs: List[str] = []
+
+                                        class _RepReporter:
+                                            def unexpectedError(self, filename, msg):
+                                                _pf_msgs.append(str(msg))
+
+                                            def syntaxError(self, filename, msg, lineno, offset, text):
+                                                _pf_msgs.append(f"line {lineno}: {msg}")
+
+                                            def flake(self, msg):
+                                                if isinstance(msg, (UndefinedName, UndefinedLocal)):
+                                                    _pf_msgs.append(str(msg))
+
+                                        _pf_check(repaired_code, "<repair>", reporter=_RepReporter())
+                                        if _pf_msgs:
+                                            repair_err = f"scope/undefined error: {_pf_msgs[0]}"
+                                    except Exception:
+                                        pass
+                        if repair_err:
+                            c.print(f"  [bold red][x] Repair rejected ({repair_err})[/bold red]\n")
                         else:
                             c.print(f"  [bold green][✓] Repair accepted. Re-executing in sandbox... ({rep_dt:.1f}ms)[/bold green]")
                             final_code = repaired_code
@@ -1759,6 +1844,15 @@ class PipelineDebugger:
             logger.debug("[CLI] Failure surface summary skipped: %s", _fs_err)
 
         path_ids = [cl.cell_id for cl in cells] if cells else []
+        failure_rec = self._build_failure_record(
+            cells=cells,
+            internal_error_msg=internal_error_msg,
+            unify_fail_reason=unify_fail_reason,
+            refusal_exc=refusal_exc,
+            refusal_reason=refusal_reason,
+            sandbox_res=sandbox_res,
+            final_code=final_code,
+        )
         sb_status = "PASSED" if sandbox_res.get("success", False) else ("FAILED: " + sandbox_res.get("error", "").splitlines()[-1] if sandbox_res.get("error") else "FAILED")
         return {
             "prompt": prompt_clean,
@@ -1769,6 +1863,8 @@ class PipelineDebugger:
             "code": final_code,
             "internal_error": internal_error_msg,
             "refusal_reason": refusal_reason,
+            "failure": failure_rec,
+            "lint_error": lint_error_msg,
             "route_ms": route_dt,
             "plan_ms": plan_dt,
             "synth_ms": synth_dt,
@@ -1888,9 +1984,15 @@ class NSTLInteractiveShell(cmd.Cmd):
             console.print("\n[bold cyan][*] Initializing STRATA Neuro-Symbolic Engine...[/bold cyan]")
         t0 = time.perf_counter()
 
-        trees_dir = settings.trees_dir or Path(db_path).parent
-        ensure_lattice_compiled(trees_dir=str(trees_dir), db_path=db_path)
-        self.orchestrator = LatticeOrchestrator(trees_directory=str(trees_dir), db_path=db_path, auto_load=False)
+        env_trees = os.environ.get("NSTL_TREES_DIR")
+        trees_dir = env_trees or (
+            Path(db_path).parent
+            if db_path and str(Path(db_path).parent) not in ("", ".", "trees")
+            else (settings.trees_dir or Path(db_path).parent)
+        )
+        self.trees_dir = str(trees_dir)
+        ensure_lattice_compiled(trees_dir=self.trees_dir, db_path=db_path)
+        self.orchestrator = LatticeOrchestrator(trees_directory=self.trees_dir, db_path=db_path, auto_load=False)
         if os.path.exists(db_path):
             self.orchestrator.load_from_database(db_path)
         else:
@@ -2057,6 +2159,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             pass
         if p in ("0", "SYMBOLIC", "ZERO", "PURE"):
             self.active_profile = "0"
+            self.last_profile_load_error = None
             os.environ["NSTL_PROFILE"] = "0"
             try:
                 from config import settings
@@ -2118,7 +2221,7 @@ class NSTLInteractiveShell(cmd.Cmd):
 
             if verbose:
                 console.print(f"[*] Indexing FAISS vector space for {len(self.orchestrator.cells):,} nodes...")
-            self.rag = LocalRAG(trees_dir="trees", orchestrator=self.orchestrator)
+            self.rag = LocalRAG(trees_dir=getattr(self, "trees_dir", "trees"), orchestrator=self.orchestrator)
             self.orchestrator.rag = self.rag
             explicit_rr = getattr(self, "_explicit_reranker", None)
             rr_arg = None if explicit_rr is None else bool(explicit_rr)
@@ -2132,6 +2235,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             self.use_reranker = bool(getattr(self.router, "use_reranker", False))
 
             self.active_profile = p
+            self.last_profile_load_error = None
             self._update_prompt()
             dt = (time.perf_counter() - t0) * 1000.0
             if verbose:
@@ -2140,11 +2244,22 @@ class NSTLInteractiveShell(cmd.Cmd):
         except Exception as e:
             console.print(f"[bold red][!] Failed to load Profile {p}: {e}[/bold red]")
             console.print("[yellow][*] Reverting to Profile 0 (Pure Symbolic)...[/yellow]")
+            self.last_profile_load_error = str(e)
             try:
-                ModelManager.get_instance().cleanup()
+                mm = ModelManager.get_instance()
+                mm.cleanup()
+                mm.initialize_profile("0")
             except Exception:
                 pass
             self.active_profile = "0"
+            self.embedder_name = ""
+            self.llm_name = ""
+            os.environ["NSTL_PROFILE"] = "0"
+            try:
+                from config import settings
+                settings.profile = "0"
+            except Exception:
+                pass
             self.rag = None
             self.router = LatticeRouter(
                 self.orchestrator,
@@ -2674,6 +2789,7 @@ class NSTLInteractiveShell(cmd.Cmd):
                 embedder_name=self.embedder_name,
                 llm_name=self.llm_name,
                 console=console,
+                llm_feedback=self.llm_feedback,
                 route_method=query_method
             )
             res = debugger.run(prompt, execute_sandbox=not self.no_exec, timeout=self.timeout)
@@ -2687,7 +2803,13 @@ class NSTLInteractiveShell(cmd.Cmd):
                 "route_ms": res["route_ms"],
                 "synth_ms": res["synth_ms"],
                 "sandbox_ms": res["sandbox_ms"],
-                "sandbox_error": res.get("sandbox_result", {}).get("error", "")
+                "plan_ms": res.get("plan_ms", 0.0),
+                "sandbox_result": res.get("sandbox_result", {}),
+                "sandbox_error": res.get("sandbox_result", {}).get("error", ""),
+                "internal_error": res.get("internal_error"),
+                "refusal_reason": res.get("refusal_reason"),
+                "failure": res.get("failure"),
+                "lint_error": res.get("lint_error"),
             })
             return
 

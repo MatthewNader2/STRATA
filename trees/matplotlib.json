@@ -1104,13 +1104,10 @@
       ],
       "semantic_tags": [
         "init",
-        "subplot",
-        "axes"
+        "subplot"
       ],
       "keywords": [
-        "add_subplot",
-        "grid",
-        "axes"
+        "add_subplot"
       ],
       "code_template": "{ax} = {fig}.add_subplot({nrows}, {ncols}, {index})",
       "slots": [
@@ -1623,7 +1620,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "[0.1, 0.1, 0.8, 0.8]",
+          "default_value": null,
           "description": "Rectangle [left, bottom, width, height] in normalized figure coordinates.",
           "domain": "matplotlib",
           "required": true,
@@ -3492,7 +3489,6 @@
       ],
       "keywords": [
         "violinplot",
-        "kde",
         "density"
       ],
       "code_template": "{ax}.violinplot({dataset}, showmeans={showmeans}, showmedians={showmedians})\n{out_ax} = {ax}",
@@ -8435,7 +8431,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "Annotation callout text.",
           "domain": "matplotlib",
           "required": true,
@@ -8725,7 +8721,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "X data position.",
           "domain": "matplotlib",
           "required": true,
@@ -8761,7 +8757,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": 0.0,
+          "default_value": null,
           "description": "Y data position.",
           "domain": "matplotlib",
           "required": true,
@@ -8797,7 +8793,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "",
+          "default_value": null,
           "description": "String message.",
           "domain": "matplotlib",
           "required": true,
@@ -9029,7 +9025,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "Title",
+          "default_value": null,
           "description": "Title text string.",
           "domain": "matplotlib",
           "required": true,
@@ -9261,7 +9257,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "X",
+          "default_value": null,
           "description": "Horizontal axis label text.",
           "domain": "matplotlib",
           "required": true,
@@ -9493,7 +9489,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "Y",
+          "default_value": null,
           "description": "Vertical axis label text.",
           "domain": "matplotlib",
           "required": true,
@@ -10115,7 +10111,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'log'",
+          "default_value": null,
           "description": "Scale transformation type.",
           "domain": "matplotlib",
           "required": true,
@@ -10274,7 +10270,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'log'",
+          "default_value": null,
           "description": "Scale transformation type.",
           "domain": "matplotlib",
           "required": true,
@@ -11019,8 +11015,7 @@
       ],
       "semantic_tags": [
         "colorbar",
-        "scale",
-        "legend"
+        "scale"
       ],
       "keywords": [
         "colorbar",
@@ -12028,7 +12023,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'seaborn-v0_8-whitegrid'",
+          "default_value": null,
           "description": "Name of built-in matplotlib stylesheet.",
           "domain": "matplotlib",
           "required": true,
@@ -12097,8 +12092,7 @@
       ],
       "keywords": [
         "facecolor",
-        "background",
-        "axes"
+        "background"
       ],
       "code_template": "{ax}.set_facecolor(color={color})\n{out_ax} = {ax}",
       "slots": [
@@ -12149,7 +12143,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'#f8f9fa'",
+          "default_value": null,
           "description": "Background color code or name.",
           "domain": "matplotlib",
           "required": true,
@@ -12303,7 +12297,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'#ffffff'",
+          "default_value": null,
           "description": "Figure perimeter background color.",
           "domain": "matplotlib",
           "required": true,
@@ -12458,7 +12452,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "'top'",
+          "default_value": null,
           "description": "Spine border identifier.",
           "domain": "matplotlib",
           "required": true,
@@ -12501,10 +12495,10 @@
           "qualifiers": [
             "optional"
           ],
-          "default_value": "False",
+          "default_value": null,
           "description": "Spine visibility toggle.",
           "domain": "matplotlib",
-          "required": false,
+          "required": true,
           "abstract_type": "scalar",
           "enum_values": null,
           "param_kind": "keyword_only",
@@ -12529,7 +12523,8 @@
           "typestate": "any",
           "invariants": [
             "optional"
-          ]
+          ],
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -12657,7 +12652,7 @@
           "state": "any",
           "accepted_states": null,
           "qualifiers": [],
-          "default_value": "Title",
+          "default_value": null,
           "description": "Super-title headline text.",
           "domain": "matplotlib",
           "required": true,
@@ -12946,7 +12941,6 @@
         "matplotlib.pyplot as plt"
       ],
       "semantic_tags": [
-        "layout",
         "spacing",
         "margins"
       ],

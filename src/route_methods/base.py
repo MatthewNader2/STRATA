@@ -138,12 +138,25 @@ def is_ingress_source(cell: Any, orch: Optional[Any] = None) -> bool:
         if getattr(cell, "stage", None) == 1:
             return True
     except Exception:
+        reg = None
         ing_roles = set()
+    if getattr(cell, "stage", None) == 3 or is_terminal_sink(cell, orch):
+        return False
     ins = getattr(cell, "inputs", {}) or {}
-    required_data_ins = [
-        p for p in ins.values()
-        if getattr(p, "required", True) and getattr(p, "structure_kind", None) != "scalar"
-    ]
+    param_roles = reg.get_roles_for_category("parameter") if reg is not None else {"parameter", "configuration", "config"}
+    required_data_ins = []
+    for p in ins.values():
+        if not getattr(p, "required", True):
+            continue
+        sk = str(getattr(p, "structure_kind", "") or "").strip().lower()
+        if sk != "scalar":
+            required_data_ins.append(p)
+            continue
+        p_t = str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower()
+        p_role = str(getattr(p, "port_role", "") or getattr(p, "role", "") or "").strip().lower()
+        if reg is not None and not reg.is_config_role(p_role) and p_role not in param_roles:
+            if not reg.is_scalar_primitive(p_t) or reg.is_subtype(p_t, "bytes") or p_t == "bytes":
+                required_data_ins.append(p)
     if not required_data_ins:
         return True
     role = str(getattr(cell, "node_role", "") or getattr(cell, "role", "") or "").lower()
@@ -471,6 +484,8 @@ class RouteMethod(ABC):
         orch = orchestrator or self.orchestrator
         if orch and hasattr(orch, "find_shortest_bridge_path"):
             chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=max_hops, candidate_pool=candidates)
+            if not chain and candidates is not None and getattr(orch, "loaded_cells", None):
+                chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=max_hops, candidate_pool=None)
             if chain:
                 cloned_chain = []
                 for b in chain:
@@ -567,108 +582,119 @@ class RouteMethod(ABC):
 
         from unification import is_edge_valid
 
-        for cand in candidates:
-            if cand.cell_id in (src_cell.cell_id, dst_cell.cell_id):
-                continue
-            if is_ingress_source(cand, orchestrator):
-                continue
-            if getattr(cand, "is_combinator", False) or getattr(cand, "node_role", "") == "combinator" or getattr(cand, "role", "") == "combinator" or getattr(cand, "node_type", "") == "combinator":
-                continue
-            if is_terminal_sink(cand, orchestrator):
-                continue
+        def _scan_candidates(cand_iter: Any) -> Tuple[Optional[Cell], float]:
+            local_best: Optional[Cell] = None
+            local_score = -1.0
+            for cand in cand_iter:
+                if cand.cell_id in (src_cell.cell_id, dst_cell.cell_id):
+                    continue
+                if is_ingress_source(cand, orchestrator):
+                    continue
+                if getattr(cand, "is_combinator", False) or getattr(cand, "node_role", "") == "combinator" or getattr(cand, "role", "") == "combinator" or getattr(cand, "node_type", "") == "combinator":
+                    continue
+                if is_terminal_sink(cand, orchestrator):
+                    continue
 
-            cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
-            cand_tags = {str(t).lower() for t in (getattr(cand, "semantic_tags", None) or [])}
-            # Domain-agnostic Lens Injection: a morphism that writes an assigned value/field
-            # back into a composite carrier (mu : Record x Field -> Record) is an eligible bridge.
-            is_lens_setter = (
-                str(getattr(cand, "optic_role", "") or "").lower() == "setter"
-                or (
-                    any(getattr(p, "binds", None) in assigned_val_binds or getattr(p, "port_role", None) in assigned_val_roles for p in cand.inputs.values())
-                    and any(getattr(p, "binds", None) in carrier_binds or getattr(p, "port_role", None) in df_roles for p in cand.inputs.values())
-                    and any(getattr(p, "structure_kind", None) in compound_sk or getattr(p, "abstract_type", None) in comp_roots for p in cand.outputs.values())
+                cand_role = str(getattr(cand, "node_role", "") or getattr(cand, "role", "") or "").lower()
+                cand_tags = {str(t).lower() for t in (getattr(cand, "semantic_tags", None) or [])}
+                # Domain-agnostic Lens Injection: a morphism that writes an assigned value/field
+                # back into a composite carrier (mu : Record x Field -> Record) is an eligible bridge.
+                is_lens_setter = (
+                    str(getattr(cand, "optic_role", "") or "").lower() == "setter"
+                    or (
+                        any(getattr(p, "binds", None) in assigned_val_binds or getattr(p, "port_role", None) in assigned_val_roles for p in cand.inputs.values())
+                        and any(getattr(p, "binds", None) in carrier_binds or getattr(p, "port_role", None) in df_roles for p in cand.inputs.values())
+                        and any(getattr(p, "structure_kind", None) in compound_sk or getattr(p, "abstract_type", None) in comp_roots for p in cand.outputs.values())
+                    )
                 )
-            )
 
-            is_declared_bridge = (
-                cand_role in br_roles
-                or getattr(cand, "node_type", "") in br_roles
-                or bool(bridge_tokens & cand_tags)
-                or is_lens_setter
-            )
-            resolves_property_mismatch = False
+                is_declared_bridge = (
+                    cand_role in br_roles
+                    or getattr(cand, "node_type", "") in br_roles
+                    or bool(bridge_tokens & cand_tags)
+                    or is_lens_setter
+                )
+                resolves_property_mismatch = False
 
-            # Check if cand resolves a property precondition of dst_cell violated by src_cell / current_scope
-            cand_posts = getattr(cand, "postconditions", None) or []
+                # Check if cand resolves a property precondition of dst_cell violated by src_cell / current_scope
+                cand_posts = getattr(cand, "postconditions", None) or []
 
-            if dst_pres and cand_posts:
-                for dp in dst_pres:
-                    dp_prop = _c_prop(dp, "property")
-                    dp_val = _c_prop(dp, "value")
-                    dp_op = _c_prop(dp, "operator")
-                    if dp_op == "==" and dp_prop is not None:
-                        src_conflict = any(
-                            _c_prop(sp, "property") == dp_prop
-                            and _c_prop(sp, "operator") == "=="
-                            and _c_prop(sp, "value") != dp_val
-                            for sp in src_posts
-                        )
-                        cand_resolves = any(
-                            _c_prop(cp, "property") == dp_prop
-                            and _c_prop(cp, "operator") == "=="
-                            and _c_prop(cp, "value") == dp_val
-                            for cp in cand_posts
-                        )
-                        if src_conflict and cand_resolves:
-                            resolves_property_mismatch = True
-                            break
-
-            resolves_qualifier_mismatch = False
-            if conflict:
-                c_out = getattr(cand, "primary_output", None) or (next(iter(cand.outputs.values())) if getattr(cand, "outputs", None) else None)
-                if c_out is not None:
-                    c_out_quals = set()
-                    raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
-                    for q in raw_co:
-                        if isinstance(q, (tuple, list, set)):
-                            c_out_quals.update(str(x).lower() for x in q)
-                        else:
-                            c_out_quals.add(str(q).lower())
-                    if not (c_out_quals & dst_rejs):
-                        for p_in in cand.inputs.values():
-                            in_acc = set()
-                            raw_acc = getattr(p_in, "accepted_states", None) or getattr(getattr(p_in, "signature", None), "accepted_states", None) or ()
-                            in_st = str(getattr(p_in, "state", "") or getattr(getattr(p_in, "signature", None), "state", "") or "")
-                            for a in raw_acc:
-                                in_acc.update(CellTokenizer.tokenize_identifier(str(a).lower()))
-                            in_acc.update(CellTokenizer.tokenize_identifier(in_st.lower()))
-                            if in_acc & conflict:
-                                resolves_qualifier_mismatch = True
+                if dst_pres and cand_posts:
+                    for dp in dst_pres:
+                        dp_prop = _c_prop(dp, "property")
+                        dp_val = _c_prop(dp, "value")
+                        dp_op = _c_prop(dp, "operator")
+                        if dp_op == "==" and dp_prop is not None:
+                            src_conflict = any(
+                                _c_prop(sp, "property") == dp_prop
+                                and _c_prop(sp, "operator") == "=="
+                                and _c_prop(sp, "value") != dp_val
+                                for sp in src_posts
+                            )
+                            cand_resolves = any(
+                                _c_prop(cp, "property") == dp_prop
+                                and _c_prop(cp, "operator") == "=="
+                                and _c_prop(cp, "value") == dp_val
+                                for cp in cand_posts
+                            )
+                            if src_conflict and cand_resolves:
+                                resolves_property_mismatch = True
                                 break
 
-            if not is_declared_bridge and not resolves_property_mismatch and not resolves_qualifier_mismatch:
-                continue
-            can_src_to_cand = self.step_unifies(src_cell, cand, prev_path=current_scope) or self.step_unifies_dag(cand, current_scope)
-            # A candidate is only a bridge to dst_cell if dst_cell actually consumes an output from cand
-            cand_feeds_dst = any(
-                is_edge_valid(out, inp, cand, dst_cell)
-                for out in cand.outputs.values()
-                for inp in dst_cell.inputs.values()
-            )
-            can_cand_to_dst = cand_feeds_dst and (self.step_unifies(cand, dst_cell, prev_path=current_scope + [cand]) or self.step_unifies_dag(dst_cell, current_scope + [cand]))
-            if can_src_to_cand and can_cand_to_dst:
-                aff1 = self.calculate_edge_affinity(src_cell, cand, orchestrator)
-                aff2 = self.calculate_edge_affinity(cand, dst_cell, orchestrator)
-                score = aff1 + aff2
-                if resolves_property_mismatch:
-                    score += 5.0
-                    req_in = sum(1 for p in cand.inputs.values() if p.required)
-                    opt_in = len(cand.inputs) - req_in
-                    if req_in == 1 and opt_in == 0:
-                        score += 3.0  # Clean unary element-wise transform preserving element count
-                if score > best_score:
-                    best_score = score
-                    best_b = cand
+                resolves_qualifier_mismatch = False
+                if conflict:
+                    c_out = getattr(cand, "primary_output", None) or (next(iter(cand.outputs.values())) if getattr(cand, "outputs", None) else None)
+                    if c_out is not None:
+                        c_out_quals = set()
+                        raw_co = getattr(c_out, "qualifiers", None) or getattr(getattr(c_out, "signature", None), "qualifiers", None) or ()
+                        for q in raw_co:
+                            if isinstance(q, (tuple, list, set)):
+                                c_out_quals.update(str(x).lower() for x in q)
+                            else:
+                                c_out_quals.add(str(q).lower())
+                        if not (c_out_quals & dst_rejs):
+                            for p_in in cand.inputs.values():
+                                in_acc = set()
+                                raw_acc = getattr(p_in, "accepted_states", None) or getattr(getattr(p_in, "signature", None), "accepted_states", None) or ()
+                                in_st = str(getattr(p_in, "state", "") or getattr(getattr(p_in, "signature", None), "state", "") or "")
+                                for a in raw_acc:
+                                    in_acc.update(CellTokenizer.tokenize_identifier(str(a).lower()))
+                                in_acc.update(CellTokenizer.tokenize_identifier(in_st.lower()))
+                                if in_acc & conflict:
+                                    resolves_qualifier_mismatch = True
+                                    break
+
+                if not is_declared_bridge and not resolves_property_mismatch and not resolves_qualifier_mismatch:
+                    continue
+                can_src_to_cand = self.step_unifies(src_cell, cand, prev_path=current_scope) or self.step_unifies_dag(cand, current_scope)
+                # A candidate is only a bridge to dst_cell if dst_cell actually consumes an output from cand
+                cand_feeds_dst = any(
+                    is_edge_valid(out, inp, cand, dst_cell)
+                    for out in cand.outputs.values()
+                    for inp in dst_cell.inputs.values()
+                )
+                can_cand_to_dst = cand_feeds_dst and (self.step_unifies(cand, dst_cell, prev_path=current_scope + [cand]) or self.step_unifies_dag(dst_cell, current_scope + [cand]))
+                if can_src_to_cand and can_cand_to_dst:
+                    aff1 = self.calculate_edge_affinity(src_cell, cand, orchestrator)
+                    aff2 = self.calculate_edge_affinity(cand, dst_cell, orchestrator)
+                    score = aff1 + aff2
+                    if resolves_property_mismatch:
+                        score += 5.0
+                        req_in = sum(1 for p in cand.inputs.values() if p.required)
+                        opt_in = len(cand.inputs) - req_in
+                        if req_in == 1 and opt_in == 0:
+                            score += 3.0  # Clean unary element-wise transform preserving element count
+                    if score > local_score:
+                        local_score = score
+                        local_best = cand
+            return local_best, local_score
+
+        best_b, best_score = _scan_candidates(candidates)
+        if best_b is None and orch is not None and getattr(orch, "loaded_cells", None):
+            seen_ids = {c.cell_id for c in candidates}
+            if len(seen_ids) < len(orch.loaded_cells):
+                remaining = [c for c in orch.loaded_cells.values() if c.cell_id not in seen_ids]
+                best_b, best_score = _scan_candidates(remaining)
 
         if best_b:
             b_inst = best_b.clone() if hasattr(best_b, "clone") else best_b
@@ -679,6 +705,8 @@ class RouteMethod(ABC):
 
         if orch and hasattr(orch, "find_shortest_bridge_path"):
             chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=3, candidate_pool=candidates)
+            if not chain and candidates and getattr(orch, "loaded_cells", None):
+                chain = orch.find_shortest_bridge_path(src_cell, dst_cell, max_hops=3, candidate_pool=None)
             if chain and len(chain) == 1:
                 b = chain[0].clone() if hasattr(chain[0], "clone") else chain[0]
                 if (
@@ -699,11 +727,16 @@ class RouteMethod(ABC):
         if sig is None:
             return False
         sk = str(getattr(sig, "structure_kind", "") or "").lower()
-        if sk == "handle":
+        at = str(
+            getattr(sig, "abstract_type", "")
+            or getattr(getattr(sig, "signature", None), "abstract_type", "")
+            or ""
+        ).lower()
+        if sk == "handle" or at == "handle":
             return True
         pr = str(getattr(sig, "port_role", "") or getattr(sig, "derived_role", "") or "").lower()
         tn = str(getattr(sig, "type_name", "") or "").lower()
-        ck = (sk, pr, tn)
+        ck = (sk, at, pr, tn)
         cached = cls._handle_port_cache.get(ck)
         if cached is not None:
             return cached
@@ -792,10 +825,12 @@ class RouteMethod(ABC):
         Extracts source and destination file literals from prompt and/or ExecutionContext.
         Preserves typed intent across layers without brittle re-scanning.
         """
+        ctx_src: List[str] = []
+        ctx_dest: List[str] = []
         if ctx:
             ctx_src = list(getattr(ctx, "parameters", {}).get("source_uris") or getattr(ctx, "source_files", []) or [])
             ctx_dest = list(getattr(ctx, "parameters", {}).get("dest_uris") or getattr(ctx, "dest_files", []) or [])
-            if ctx_src or ctx_dest:
+            if ctx_src and ctx_dest:
                 return ctx_src, ctx_dest
 
         extracted = ExecutionContext._extract_universal_literals(prompt or "")
@@ -809,7 +844,9 @@ class RouteMethod(ABC):
             if (kind == "file_asset" or (kind == "quoted_str" and ExecutionContext._is_path_string(str(val))))
             and ExecutionContext._asset_direction(prompt or "", pos) == "dest"
         ]
-        return src_lits, dest_lits
+        final_src = ctx_src if ctx_src else [v for v in src_lits if v not in ctx_dest]
+        final_dest = ctx_dest if ctx_dest else [v for v in dest_lits if v not in final_src]
+        return final_src, final_dest
 
     @classmethod
     def segment_prompt_clauses(cls, prompt: str, ctx: Optional[Any] = None) -> List[str]:
@@ -878,42 +915,45 @@ class RouteMethod(ABC):
             row = [ev.identity_overlap(ct, cell) if ct else {"f": 0.0, "hit": 0.0, "rank": (0.0, 0.0, 0.0), "tokens": []} for ct in clause_toks]
             table.append(row)
 
-        # Pass 1: Primary evidence winners across all clauses
-        # Greedy highest-rank matching: pair each clause with its strongest lexical-identity cell
-        # (or calibrated semantic winner when lexical hit is absent in non-P0 profiles)
-        # subject to causal monotonicity (prod_clause <= cons_clause along linear pipeline order).
-        candidates = []
-        for j in range(len(clauses)):
+        # Pass 1: Primary evidence winners across all clauses.
+        # Optimal order-preserving one-to-one assignment (weighted non-crossing matching, O(cells x clauses)).
+        # The previous greedy "strongest pair first, skip on order violation" rule was not optimal: one
+        # out-of-order cell with a strong hit (e.g. a redundant bridge near the end of the path) claimed an early
+        # clause first, and the causal-order check then blocked every correct later assignment.
+        n_cells, n_cl = len(path), len(clauses)
+        W = [[0.0] * n_cl for _ in range(n_cells)]
+        for j in range(n_cl):
             sem_map_j = (clause_sem[j] or {}) if clause_sem is not None else {}
             max_sem_j = max(sem_map_j.values(), default=0.0) if sem_map_j else 0.0
-            for i in range(len(path)):
+            for i in range(n_cells):
                 if table[i][j]["hit"] > 0.0:
-                    candidates.append(((1, table[i][j]["rank"]), j, i))
+                    r = table[i][j]["rank"]
+                    W[i][j] = 1.0 + 0.55 * r[0] + 0.30 * r[1] + 0.15 * r[2]
                 elif clause_sem is not None and max_sem_j >= 0.35:
                     sem_sc = float(sem_map_j.get(path[i].cell_id, 0.0) or 0.0)
                     if sem_sc >= 0.35 and sem_sc >= 0.70 * max_sem_j:
-                        candidates.append(((0, (sem_sc, 0.0, sem_sc)), j, i))
-        candidates.sort(key=lambda x: x[0], reverse=True)
-
+                        W[i][j] = min(0.99, sem_sc)
+        F = [[0.0] * (n_cl + 1) for _ in range(n_cells + 1)]
+        for i in range(1, n_cells + 1):
+            for j in range(1, n_cl + 1):
+                best = max(F[i - 1][j], F[i][j - 1])
+                if W[i - 1][j - 1] > 0.0:
+                    best = max(best, F[i - 1][j - 1] + W[i - 1][j - 1])
+                F[i][j] = best
         assigned_clauses = set()
         assigned_cells = set()
-        for rank, j, i in candidates:
-            if j not in assigned_clauses and i not in assigned_cells:
-                violates = False
-                for k in assigned_cells:
-                    k_cl = path[k].matched_clause_idx
-                    if k_cl is not None:
-                        if i < k and j > k_cl:
-                            violates = True
-                            break
-                        if i > k and j < k_cl:
-                            violates = True
-                            break
-                if violates:
-                    continue
-                path[i].matched_clause_idx = j
-                assigned_clauses.add(j)
-                assigned_cells.add(i)
+        i, j = n_cells, n_cl
+        while i > 0 and j > 0:
+            if W[i - 1][j - 1] > 0.0 and abs(F[i][j] - (F[i - 1][j - 1] + W[i - 1][j - 1])) < 1e-12 and F[i][j] > F[i - 1][j] + 1e-12 and F[i][j] > F[i][j - 1] + 1e-12:
+                path[i - 1].matched_clause_idx = j - 1
+                assigned_clauses.add(j - 1)
+                assigned_cells.add(i - 1)
+                i -= 1
+                j -= 1
+            elif F[i][j] == F[i - 1][j]:
+                i -= 1
+            else:
+                j -= 1
 
         # Ensure any remaining unassigned clause gets its best available unassigned cell
         for j in range(len(clauses)):
@@ -1028,56 +1068,75 @@ class RouteMethod(ABC):
         ctoks = ev.clause_tokens(clauses[idx])
         in_path = {c.cell_id for c in routed_path}
         anchor_in_ports = list(anchor.inputs.values())
-        scored_cands = []
-        for cand in candidates:
-            if cand.cell_id in in_path or cand.cell_id == anchor.cell_id:
-                continue
-            if not any(
-                is_edge_valid(out, inp, cand, anchor)
-                for out in cand.outputs.values()
-                for inp in anchor_in_ports
-            ):
-                continue
-            o = ev.identity_overlap(ctoks, cand)
-            if o["hit"] > 0.0:
-                scored_cands.append((o["rank"], cand))
-        scored_cands.sort(key=lambda t: t[0], reverse=True)
 
-        best, best_rank = None, None
-        for rank, cand in scored_cands:
-            if best_rank is not None and (1, rank) <= best_rank:
-                break
-            direct_cand = (
-                self.step_unifies(routed_path[-1], cand, prev_path=routed_path)
-                or self.step_unifies_dag(cand, routed_path)
-            )
-            if direct_cand and (
-                self.step_unifies(cand, anchor, prev_path=routed_path + [cand])
-                or self.step_unifies_dag(anchor, routed_path + [cand])
-            ):
-                cand_rank = (1, rank)
-            else:
-                if best_rank is not None and best_rank[0] >= 1:
+        def _pick_producer(cand_iter: Any, tok_set: Any, search_pool: Any) -> Optional[Cell]:
+            scored_cands = []
+            for cand in cand_iter:
+                if cand.cell_id in in_path or cand.cell_id == anchor.cell_id:
                     continue
-                # Try bridging routed_path[-1] -> cand (e.g. DataFrame -> ndarray before LinearRegression.fit -> predict)
-                p_bridges = self.find_bridge_chain(
-                    routed_path[-1], cand, candidates, prev_path=routed_path
-                )
-                cand_after_bridge = bool(p_bridges) and (
-                    self.step_unifies(p_bridges[-1], cand, prev_path=list(routed_path) + p_bridges)
-                    or self.step_unifies_dag(cand, list(routed_path) + p_bridges)
-                )
-                if not cand_after_bridge:
-                    continue
-                scope_after = list(routed_path) + p_bridges + [cand]
-                if not (
-                    self.step_unifies(cand, anchor, prev_path=scope_after)
-                    or self.step_unifies_dag(anchor, scope_after)
+                if not any(
+                    is_edge_valid(out, inp, cand, anchor)
+                    for out in cand.outputs.values()
+                    for inp in anchor_in_ports
                 ):
                     continue
-                cand_rank = (0, rank)
-            if best_rank is None or cand_rank > best_rank:
-                best, best_rank = cand, cand_rank
+                o = ev.identity_overlap(tok_set, cand)
+                if o["hit"] > 0.0:
+                    scored_cands.append((o["rank"], cand))
+            scored_cands.sort(key=lambda t: t[0], reverse=True)
+
+            local_best, local_rank = None, None
+            for rank, cand in scored_cands:
+                if local_rank is not None and (1, rank) <= local_rank:
+                    break
+                direct_cand = (
+                    self.step_unifies(routed_path[-1], cand, prev_path=routed_path)
+                    or self.step_unifies_dag(cand, routed_path)
+                )
+                if direct_cand and (
+                    self.step_unifies(cand, anchor, prev_path=routed_path + [cand])
+                    or self.step_unifies_dag(anchor, routed_path + [cand])
+                ):
+                    cand_rank = (1, rank)
+                else:
+                    if local_rank is not None and local_rank[0] >= 1:
+                        continue
+                    # Try bridging routed_path[-1] -> cand (e.g. DataFrame -> ndarray before LinearRegression.fit -> predict)
+                    p_bridges = self.find_bridge_chain(
+                        routed_path[-1], cand, search_pool, prev_path=routed_path
+                    )
+                    cand_after_bridge = bool(p_bridges) and (
+                        self.step_unifies(p_bridges[-1], cand, prev_path=list(routed_path) + p_bridges)
+                        or self.step_unifies_dag(cand, list(routed_path) + p_bridges)
+                    )
+                    if not cand_after_bridge:
+                        continue
+                    scope_after = list(routed_path) + p_bridges + [cand]
+                    if not (
+                        self.step_unifies(cand, anchor, prev_path=scope_after)
+                        or self.step_unifies_dag(anchor, scope_after)
+                    ):
+                        continue
+                    cand_rank = (0, rank)
+                if local_rank is None or cand_rank > local_rank:
+                    local_best, local_rank = cand, cand_rank
+            return local_best
+
+        best = _pick_producer(candidates, ctoks, candidates)
+        if best is None:
+            orch_ref = orch or self.orchestrator
+            if orch_ref is not None and getattr(orch_ref, "loaded_cells", None):
+                cand_ids = {c.cell_id for c in candidates}
+                rem = [c for c in orch_ref.loaded_cells.values() if c.cell_id not in cand_ids]
+                best = _pick_producer(rem, ctoks, candidates)
+                if best is None and clauses:
+                    handle_ins = [p for p in anchor_in_ports if self.is_handle_port(p)]
+                    if handle_ins:
+                        full_toks: Set[str] = set()
+                        for cl in clauses:
+                            full_toks.update(ev.clause_tokens(cl))
+                        all_cells = list(candidates) + rem
+                        best = _pick_producer(all_cells, full_toks, candidates)
         if best is None:
             return None
         inst = best.clone() if hasattr(best, "clone") else best
@@ -1247,8 +1306,10 @@ class RouteMethod(ABC):
                     self._trace(
                         "column_commit_inserted",
                         cell=cloned.cell_id,
+                        commit=cloned.cell_id,
                         after=cur.cell_id,
                         before=nxt.cell_id,
+                        reason="optic setter closes mutated focus back into container carrier",
                     )
         return result
 
@@ -1603,15 +1664,17 @@ class RouteMethod(ABC):
 
     @staticmethod
     def _is_path_consumer(cell: Cell) -> bool:
-        """True if the cell reads/writes a filesystem path (tree-declared roles / abstract types)."""
+        """True if the cell reads/writes a filesystem path (poset types/roles)."""
         try:
             from lattice import TypeRegistry
             reg = TypeRegistry.get_instance()
-            roles = reg.get_path_port_name_tokens() | reg.get_roles_for_category("source") | reg.get_roles_for_category("destination")
-            abstracts = reg.get_types_by_kind("path") | {"path"}
+            roles = reg.get_roles_for_category("path") | reg.get_roles_for_category("source") | reg.get_roles_for_category("destination")
+            abstracts = set(reg.get_types_by_kind("path") or ()) | {"path", "file"}
         except Exception:
-            roles, abstracts = set(), {"path"}
+            roles, abstracts = set(), {"path", "file"}
         for p in cell.inputs.values():
+            if is_path_port(p):
+                return True
             sig = getattr(p, "signature", p)
             if str(getattr(p, "abstract_type", "") or "").lower() in abstracts or str(getattr(sig, "abstract_type", "") or "").lower() in abstracts:
                 return True
@@ -1643,7 +1706,7 @@ class RouteMethod(ABC):
         ]
         reg = TypeRegistry.get_instance()
         fmt_groups = reg.get_format_groups()
-        loc_ctors = reg.get_types_by_kind("path") | reg.get_path_port_name_tokens()
+        loc_ctors = set(reg.get_types_by_kind("path") or ()) | {"path", "file"}
         for p in path_ports:
             tn = str(getattr(p, "type_name", "") or "").strip()
             has_concrete_fmt = False

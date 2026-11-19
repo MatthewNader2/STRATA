@@ -458,6 +458,8 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             return _fallback("verified chain shorter than 2 cells")
 
         self.tag_cells_with_clause_indices(path, prompt, orchestrator=orch)
+        path = self.insert_optic_commits(path)
+        path = self.insert_property_bridges(path, prompt=prompt, ctx=ctx)
 
         try:
             from token_evidence import audit
