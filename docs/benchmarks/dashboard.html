@@ -126,8 +126,8 @@
     <div>
       <h1>STRATA Cross-Model Benchmark Explorer</h1>
       <p class="subtitle">
-        Category-theoretic neuro-symbolic synthesis (<strong>Qwen3.5-0.8B + STRATA Profile O &amp; OMEGA</strong>, no LLM feedback)
-        vs unassisted <strong>0.8B–35B pure LLMs</strong> across <strong>Core 9 (11 tasks)</strong>, <strong>Stress (8 tasks)</strong>, and <strong>Core 8</strong>.
+        Category-theoretic neuro-symbolic synthesis (<strong>Qwen3.5-0.8B + STRATA</strong>)
+        vs unassisted <strong>0.8B–35B pure LLMs</strong> across the <strong>Core Suite (11 tasks)</strong> and <strong>Stress Suite (8 tasks)</strong>.
         Click any task row below to inspect its natural-language prompt, per-model verdicts, and synthesized Python pipeline.
       </p>
     </div>
@@ -138,19 +138,19 @@
 
   <section class="grid-cards">
     <div class="card strata">
-      <div class="kpi-label">STRATA 0.8B Overall Acceptable</div>
+      <div class="kpi-label">STRATA (0.8B) Overall Acceptable</div>
       <div class="kpi-val">18 / 19 (94.7%)</div>
-      <div class="kpi-sub">15/19 (78.9%) strict PASS &middot; 3/3 ambiguity refusals &middot; 1 expected open-domain halt</div>
+      <div class="kpi-sub">15/19 (78.9%) strict verified &middot; 3/3 ambiguity halts &middot; 1 closed-domain boundary</div>
     </div>
     <div class="card strata">
-      <div class="kpi-label">Core 9 &amp; Core 8 Reliability</div>
+      <div class="kpi-label">Core Suite Reliability</div>
       <div class="kpi-val">11 / 11 (100%)</div>
-      <div class="kpi-sub">9/11 strict Core 9 + 2/2 LINT_HALTED &middot; test.py Core 8: 8/8 (100%), 0 defects</div>
+      <div class="kpi-sub">9/11 strict synthesis + 2/2 safe ambiguity halts &middot; 8/8 (100%) on Core 8 with 0 defects</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Round-2 Pre -&gt; Post Fix Gain</div>
-      <div class="kpi-val">+26.3 pp Acc</div>
-      <div class="kpi-sub">Strict: 11/19 (57.9%) -&gt; 15/19 (78.9%) &middot; Stress Strict: 25.0% -&gt; 75.0%</div>
+      <div class="kpi-label">Same-Backbone Gain (0.8B)</div>
+      <div class="kpi-val">+72.7 pp Acc</div>
+      <div class="kpi-sub">Core Suite: 27.3% (Pure 0.8B) &rarr; 100.0% Acceptable / 81.8% Strict with STRATA</div>
     </div>
     <div class="card">
       <div class="kpi-label">Scale &amp; Footprint Advantage</div>
@@ -227,7 +227,7 @@
       </div>
       <div style="margin-top:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <strong>STRATA 0.8B (v7) Output / Code</strong>
+          <strong>STRATA (0.8B) Synthesized Pipeline</strong>
           <button id="copyCodeBtn" type="button" class="small">Copy</button>
         </div>
         <pre id="inspCode" class="codebox"></pre>
