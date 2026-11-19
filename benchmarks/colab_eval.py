@@ -232,7 +232,7 @@ def query_llama_server(
         method="POST",
     )
     t0 = time.perf_counter()
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    with urllib.request.urlopen(req, timeout=600) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     dt_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     msg = (data.get("choices") or [{}])[0].get("message") or {}
@@ -335,54 +335,118 @@ def run_model_via_server(
         )
         gpu_after_init = read_gpu_vram_mb()
 
+        out_path = out_dir / f"results_{model_key}.json"
+
+        def _flush_checkpoint() -> None:
+            out_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "strata_bench_v2",
+                        "arm": "pure",
+                        "model_id": model_key,
+                        "model_display": spec["display"],
+                        "family": spec["family"],
+                        "params_b": spec["params_b"],
+                        "active_params_b": spec["active_params_b"],
+                        "quant": spec["quant"],
+                        "init": {
+                            "download_ms": dl_ms,
+                            "init_ms": init_ms,
+                            "used_ngl": used_ngl,
+                            "mem_before": mem_before,
+                            "gpu_before": gpu_before,
+                            "gpu_after_init": gpu_after_init,
+                        },
+                        "records": records,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
         for idx, task in enumerate(tasks, 1):
             messages = build_task_messages(task)
             cpu0 = read_cpu_times()
             t0 = time.perf_counter()
-            res_llm = query_llama_server(
-                base_url,
-                messages=messages,
-                max_tokens=spec.get("max_tokens", 2560),
-            )
-            code = extract_code_clean(res_llm["raw_reply"])
-            ev = evaluate_task_response(res_llm["raw_reply"], code, task, timeout=45.0)
-            wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-            cpu1 = read_cpu_times()
-            rec = {
-                "arm": "pure",
-                "model_id": model_key,
-                "model_display": spec["display"],
-                "family": spec["family"],
-                "params_b": spec["params_b"],
-                "active_params_b": spec["active_params_b"],
-                "quant": spec["quant"],
-                "task_id": task["id"],
-                "group": task["group"],
-                "kind": task["kind"],
-                "expected": task.get("expected", "synthesize"),
-                "prompt": task["prompt"],
-                "status": ev["status"],
-                "passed": ev["passed"],
-                "acceptable": ev["acceptable"],
-                "detail": ev["detail"],
-                "wall_ms": wall_ms,
-                "llm_calls": 1,
-                "prompt_tokens": res_llm["prompt_tokens"],
-                "completion_tokens": res_llm["completion_tokens"],
-                "total_tokens": res_llm["total_tokens"],
-                "llm_wall_ms": res_llm["wall_ms"],
-                "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
-                "mem_mb": read_proc_mem_mb(),
-                "gpu_mb": read_gpu_vram_mb(),
-                "audit": ev.get("audit"),
-                "code": code,
-                "raw_reply_preview": res_llm["raw_reply"][:1200],
-            }
+            try:
+                res_llm = query_llama_server(
+                    base_url,
+                    messages=messages,
+                    max_tokens=spec.get("max_tokens", 2560),
+                )
+                code = extract_code_clean(res_llm["raw_reply"])
+                ev = evaluate_task_response(res_llm["raw_reply"], code, task, timeout=45.0)
+                wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                cpu1 = read_cpu_times()
+                rec = {
+                    "arm": "pure",
+                    "model_id": model_key,
+                    "model_display": spec["display"],
+                    "family": spec["family"],
+                    "params_b": spec["params_b"],
+                    "active_params_b": spec["active_params_b"],
+                    "quant": spec["quant"],
+                    "task_id": task["id"],
+                    "group": task["group"],
+                    "kind": task["kind"],
+                    "expected": task.get("expected", "synthesize"),
+                    "prompt": task["prompt"],
+                    "status": ev["status"],
+                    "passed": ev["passed"],
+                    "acceptable": ev["acceptable"],
+                    "detail": ev["detail"],
+                    "wall_ms": wall_ms,
+                    "llm_calls": 1,
+                    "prompt_tokens": res_llm["prompt_tokens"],
+                    "completion_tokens": res_llm["completion_tokens"],
+                    "total_tokens": res_llm["total_tokens"],
+                    "llm_wall_ms": res_llm["wall_ms"],
+                    "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
+                    "mem_mb": read_proc_mem_mb(),
+                    "gpu_mb": read_gpu_vram_mb(),
+                    "audit": ev.get("audit"),
+                    "code": code,
+                    "raw_reply_preview": res_llm["raw_reply"][:1200],
+                }
+            except Exception as task_exc:
+                wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                cpu1 = read_cpu_times()
+                rec = {
+                    "arm": "pure",
+                    "model_id": model_key,
+                    "model_display": spec["display"],
+                    "family": spec["family"],
+                    "params_b": spec["params_b"],
+                    "active_params_b": spec["active_params_b"],
+                    "quant": spec["quant"],
+                    "task_id": task["id"],
+                    "group": task["group"],
+                    "kind": task["kind"],
+                    "expected": task.get("expected", "synthesize"),
+                    "prompt": task["prompt"],
+                    "status": "TIMEOUT",
+                    "passed": False,
+                    "acceptable": False,
+                    "detail": f"Request failed: {task_exc}",
+                    "wall_ms": wall_ms,
+                    "llm_calls": 1,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "llm_wall_ms": wall_ms,
+                    "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
+                    "mem_mb": read_proc_mem_mb(),
+                    "gpu_mb": read_gpu_vram_mb(),
+                    "audit": None,
+                    "code": "",
+                    "raw_reply_preview": "",
+                }
             records.append(rec)
+            _flush_checkpoint()
             _log(
-                f"  [{idx:02d}/{len(tasks):02d}] {task['id']:<18} | {ev['status']:<16} "
-                f"| acc={str(ev['acceptable']):<5} | {wall_ms/1000.0:5.1f}s "
-                f"| tok={res_llm['prompt_tokens']}+{res_llm['completion_tokens']}"
+                f"  [{idx:02d}/{len(tasks):02d}] {task['id']:<18} | {rec['status']:<16} "
+                f"| acc={str(rec['acceptable']):<5} | {wall_ms/1000.0:5.1f}s "
+                f"| tok={rec['prompt_tokens']}+{rec['completion_tokens']}"
             )
     finally:
         if proc is not None:
