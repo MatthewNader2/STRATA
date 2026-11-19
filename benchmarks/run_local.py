@@ -18,10 +18,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-if str(ROOT_DIR / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR / "src"))
+for _p in (str(ROOT_DIR / "src"), str(ROOT_DIR)):
+    while _p in sys.path:
+        sys.path.remove(_p)
+sys.path.insert(0, str(ROOT_DIR / "src"))
+sys.path.insert(0, str(ROOT_DIR))
 
 import test as test_mod  # noqa: E402
 from benchmarks.evaluators import (  # noqa: E402

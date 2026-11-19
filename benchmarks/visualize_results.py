@@ -28,7 +28,9 @@ def _normalize_legacy_record(r: Dict[str, Any], top_data: Dict[str, Any]) -> Dic
     meta = KNOWN_METADATA.get(arm, {})
     display = str(r.get("model_display") or top_data.get("model_display") or meta.get("display") or model_id)
     params_b = float(r.get("params_b") or top_data.get("params_b") or meta.get("params_b") or 0.0)
-    if "pure_md" == arm:
+    if arm == "omega":
+        display, model_id, params_b = "STRATA O+OMEGA (0.8B, No-FB)", "omega_no_fb", 0.8
+    elif "pure_md" == arm:
         llm = str((top_data.get("init") or {}).get("resolved_llm") or "")
         if "0.8" in llm:
             display, model_id, params_b = "Pure Qwen3.5-0.8B", "pure_08b", 0.8

@@ -27,10 +27,11 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(line_buffering=True)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-if str(ROOT_DIR / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR / "src"))
+for _p in (str(ROOT_DIR / "src"), str(ROOT_DIR)):
+    while _p in sys.path:
+        sys.path.remove(_p)
+sys.path.insert(0, str(ROOT_DIR / "src"))
+sys.path.insert(0, str(ROOT_DIR))
 
 from benchmarks.evaluators import (  # noqa: E402
     evaluate_task_response,
