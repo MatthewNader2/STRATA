@@ -1,16 +1,10 @@
-# Minimal delta dependencies for running STRATA + GGUF pure-model benchmarks in Google Colab (T4 GPU).
-# Note: Colab pre-installs torch, numpy, pandas, scipy, scikit-learn, matplotlib, opencv-python-headless.
-huggingface-hub>=0.24
+# Minimal delta dependencies for running STRATA benchmarks in Google Colab (T4 GPU).
+# Avoids downgrading Colab's preinstalled huggingface-hub/transformers/torch/numpy stack.
 faiss-cpu>=1.7,<2
-pydantic>=2.0,<3
 pydantic-settings>=2.0,<3
-sentence-transformers>=2.2,<4
 pyflakes>=3.2
 cryptography>=42.0
 pygame>=2.5
-fastapi>=0.100,<1
-uvicorn>=0.20,<1
-psutil>=5.9,<7
-beautifulsoup4>=4.12,<5
 rich>=13.0,<14
-timm>=0.9,<2
+psutil>=5.9,<7
+huggingface-hub>=0.24
