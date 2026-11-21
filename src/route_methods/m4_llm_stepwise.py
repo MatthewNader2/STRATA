@@ -84,8 +84,6 @@ class M4LLMStepwiseRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [
             c for c in tunnel
@@ -97,7 +95,12 @@ class M4LLMStepwiseRouteMethod(RouteMethod):
                     and not is_combinator_cell(c)
                 )
             )
-        ] or [tunnel[0]]
+        ]
+        if not candidates:
+            reason = "no usable candidates"
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         # Rank tunnel pool purely by retrieval relevance (no E_valid type-edge prefiltering)
         ranked_pool = sorted(

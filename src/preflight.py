@@ -22,9 +22,7 @@ domain-specific identifiers.
 
 from __future__ import annotations
 import ast
-import functools
-import importlib.util
-import sys
+import builtins
 from typing import List, Dict, Set, Tuple, Any, Optional
 from dataclasses import dataclass, field
 
@@ -50,6 +48,28 @@ except (ImportError, ValueError):
     )
 
 
+def _extract_expr_root_var(expr: Any) -> Optional[str]:
+    """Extracts the root identifier from a Python variable, attribute, or subscript expression via AST."""
+    if not isinstance(expr, str):
+        return None
+    s = expr.strip()
+    if not s or is_unresolved_value(s):
+        return None
+    if s.startswith("<") and s.endswith(">"):
+        return None
+    if s.isidentifier():
+        return s
+    try:
+        node = ast.parse(s, mode="eval").body
+        while isinstance(node, (ast.Subscript, ast.Attribute)):
+            node = node.value
+        if isinstance(node, ast.Name):
+            return node.id
+    except SyntaxError:
+        pass
+    return None
+
+
 def _contains_word_token(haystack: str, needle: str) -> bool:
     """Return True if *needle* appears in *haystack* delimited by non-identifier chars."""
     if not haystack or not needle:
@@ -73,7 +93,6 @@ def _contains_word_token(haystack: str, needle: str) -> bool:
 @dataclass
 class VariableSchema:
     """Tracks active and invalidated composite component schemas per variable (R5-3)."""
-    known_components: Optional[Set[str]] = None
     removed_components: Set[str] = field(default_factory=set)
     added_components: Set[str] = field(default_factory=set)
     removed_by: Dict[str, str] = field(default_factory=dict)
@@ -96,19 +115,6 @@ class _DynamicDataBearingRoles(collections.abc.Set):
 DATA_BEARING_ROLES = _DynamicDataBearingRoles()
 
 
-class _DynamicConventionalEstimatorVerbs(collections.abc.Set):
-    """Dynamic conventional estimator verbs proxy backed by TypeRegistry."""
-    def __contains__(self, item):
-        return str(item).lower() in TypeRegistry.get_instance().get_estimator_verbs()
-    def __iter__(self):
-        return iter(TypeRegistry.get_instance().get_estimator_verbs())
-    def __len__(self):
-        return len(TypeRegistry.get_instance().get_estimator_verbs())
-
-
-CONVENTIONAL_ESTIMATOR_VERBS = _DynamicConventionalEstimatorVerbs()
-
-
 # ---------------------------------------------------------------------------
 # Unbound-value detection (domain-agnostic)
 # ---------------------------------------------------------------------------
@@ -125,14 +131,6 @@ try:
     _UNRESOLVED_PORT_SENTINEL = str(UNRESOLVED_PORT).strip().lower()
 except Exception:
     _UNRESOLVED_PORT_SENTINEL = ""
-
-
-@functools.lru_cache(maxsize=2048)
-def _cached_find_spec(mod_name: str) -> bool:
-    try:
-        return importlib.util.find_spec(mod_name) is not None
-    except Exception:
-        return False
 
 
 def _is_unbound(value: Any) -> bool:
@@ -195,11 +193,15 @@ class PreflightLintResult:
     violations: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     structured_violations: List[PreflightViolation] = field(default_factory=list)
+    refusal_kind: Optional[str] = None
 
     def raise_if_invalid(self) -> None:
         if not self.is_valid:
             msg = "Pre-flight lint validation failed:\n  - " + "\n  - ".join(self.violations)
             raise PreflightLintError(msg, violations=self.violations, structured_violations=self.structured_violations)
+
+
+PreflightResult = PreflightLintResult
 
 
 # ---------------------------------------------------------------------------
@@ -234,20 +236,6 @@ class PreflightLinter:
                 except Exception:
                     continue
         return roles
-
-    @classmethod
-    def _verb_set(cls, *accessor_names: str) -> Set[str]:
-        """Union of verb sets returned by any available registry accessor."""
-        reg = cls._registry()
-        verbs: Set[str] = set()
-        for name in accessor_names:
-            getter = getattr(reg, name, None)
-            if callable(getter):
-                try:
-                    verbs.update(str(v).lower() for v in getter())
-                except Exception:
-                    continue
-        return verbs
 
     # ------------------------------------------------------------------
     # Structural predicates
@@ -288,8 +276,206 @@ class PreflightLinter:
     def _verify_carrier_extent_epochs(
         cls, pipeline_bindings: List[Tuple[Any, Dict[str, Any]]]
     ) -> List[Dict[str, Any]]:
-        """Universal validation: Carrier extent domains are verified via universal contracts."""
-        return []
+        """
+        Check 10: Per-carrier extent epoch tracking.
+        Tracks causal root carrier + monotone extent-mutation epoch across steps,
+        flagging mismatched-epoch writes in setters and mismatched-epoch co-indexed
+        multi-input consumers (e.g. X pre-dropna + y post-dropna).
+        """
+        _extent_effect_kinds = {
+            "extent_mutation", "extent_altering", "cardinality_change",
+            "row_filter", "row_set_altering", "resampling", "dedup",
+        }
+        _extent_effect_names = {
+            "extent_mutating", "deduplicates", "filters_rows", "drops_rows", "resamples",
+        }
+        _reconcile_roles = {"join", "merge", "concat", "reconcile", "alignment", "align"}
+        _preserve_tokens = {"", "none", "preserve", "preserving", "id", "identity"}
+        reg = cls._registry()
+        if callable(getattr(reg, "get_roles_for_category", None)):
+            receiver_roles = (
+                set(reg.get_roles_for_category("receiver"))
+                | set(reg.get_roles_for_category("data"))
+            )
+        else:
+            receiver_roles = {"receiver", "data_input", "df"}
+        key_roles_10 = reg.get_roles_for_category("key")
+        val_roles_10 = reg.get_roles_for_category("assigned_value")
+        scalar_types_10 = {"int", "float", "bool", "str", "number", "numeric", "scalar"}
+
+        def _root_id(val: Any) -> Optional[str]:
+            if not isinstance(val, str) or _is_unbound(val):
+                return None
+            return _extract_expr_root_var(val)
+
+        def _is_scalar_port_sig(p_sig: Any) -> bool:
+            if p_sig is None:
+                return False
+            sk = str(getattr(p_sig, "structure_kind", "") or "").strip().lower()
+            if sk == "scalar":
+                return True
+            if sk in ("composite", "collection", "handle"):
+                return False
+            rk = getattr(p_sig, "canonical_rank", None)
+            if rk is None:
+                rk = getattr(p_sig, "rank", None)
+            if rk is not None:
+                return rk == 0
+            tn = str(getattr(getattr(p_sig, "signature", p_sig), "type_name", "") or "").strip().lower()
+            return tn in scalar_types_10 or reg.is_subtype(tn, "scalar")
+
+        def _cell_alters_extent(cell_obj: Any) -> bool:
+            for eff in (getattr(cell_obj, "effects", None) or ()):
+                if isinstance(eff, dict):
+                    ek = str(eff.get("effect_kind") or "").strip().lower()
+                    en = str(eff.get("name") or "").strip().lower()
+                elif isinstance(eff, str):
+                    ek = eff.strip().lower()
+                    en = ek
+                else:
+                    ek = str(getattr(eff, "effect_kind", "") or "").strip().lower()
+                    en = str(getattr(eff, "name", "") or "").strip().lower()
+                if ek in _extent_effect_kinds or en in _extent_effect_names:
+                    return True
+            for attr_n in ("row_set_effects", "extent_effect"):
+                raw_ev = getattr(cell_obj, attr_n, None)
+                if raw_ev is not None:
+                    if isinstance(raw_ev, str) and raw_ev.strip().lower() not in _preserve_tokens:
+                        return True
+                    if isinstance(raw_ev, (list, tuple, set, dict)) and bool(raw_ev):
+                        return True
+            return False
+
+        var_root: Dict[str, str] = {}
+        var_epoch: Dict[str, int] = {}
+        issues: List[Dict[str, Any]] = []
+
+        for cell, bindings in pipeline_bindings:
+            if not isinstance(bindings, dict):
+                continue
+            inputs = getattr(cell, "inputs", {}) or {}
+            outputs = getattr(cell, "outputs", {}) or {}
+            out_keys = set(outputs.keys()) | {"output_var"}
+            c_id = getattr(cell, "cell_id", str(cell))
+            c_role = str(getattr(cell, "node_role", "") or "").strip().lower()
+            is_reconciling = c_role in _reconcile_roles
+            optic_r = str(getattr(cell, "optic_role", "") or "").strip().lower()
+
+            # Tracked non-scalar input variables for this step
+            tracked_inputs: List[Tuple[str, str]] = []
+            for p_name, val in bindings.items():
+                if p_name in out_keys:
+                    continue
+                rv = _root_id(val)
+                if rv and rv in var_epoch:
+                    tracked_inputs.append((p_name, rv))
+
+            # Pattern A: Setter writing value into container across mismatched epochs
+            flagged_here = False
+            key_p = next(
+                (n for n, ps in inputs.items() if str(getattr(ps, "binds", "") or cls._port_role(ps)).lower() in key_roles_10 and n in bindings),
+                None,
+            )
+            val_p = next(
+                (n for n, ps in inputs.items() if str(getattr(ps, "binds", "") or cls._port_role(ps)).lower() in val_roles_10 and n in bindings),
+                None,
+            )
+            if (optic_r == "setter" or (key_p and val_p)) and not is_reconciling:
+                cont_p = next(
+                    (
+                        n for n, ps in inputs.items()
+                        if n not in (key_p, val_p)
+                        and (
+                            str(getattr(ps, "binds", "") or "").lower() in receiver_roles
+                            or n == getattr(cell, "container_port", None)
+                            or n == getattr(getattr(cell, "primary_input", None), "name", None)
+                        )
+                        and n in bindings
+                    ),
+                    None,
+                )
+                if val_p is None and cont_p is not None:
+                    val_p = next((n for n in bindings if n not in out_keys and n not in (key_p, cont_p) and _root_id(bindings[n]) in var_epoch), None)
+                if cont_p and val_p:
+                    c_var = _root_id(bindings.get(cont_p))
+                    v_var = _root_id(bindings.get(val_p))
+                    if c_var in var_epoch and v_var in var_epoch and var_root[c_var] == var_root[v_var]:
+                        if var_epoch[c_var] != var_epoch[v_var]:
+                            issues.append({
+                                "cell": c_id,
+                                "value_vars": [v_var],
+                                "value_epoch": var_epoch[v_var],
+                                "table_vars": [c_var],
+                                "table_epoch": var_epoch[c_var],
+                                "root_carrier": var_root[c_var],
+                            })
+                            flagged_here = True
+
+            # Pattern B: Multi-input co-indexed consumer across mismatched epochs on same root carrier
+            if not flagged_here and not is_reconciling and len(tracked_inputs) >= 2:
+                by_root: Dict[str, List[str]] = {}
+                for p_name, rv in tracked_inputs:
+                    p_sig = inputs.get(p_name)
+                    if _is_scalar_port_sig(p_sig):
+                        continue
+                    r_key = var_root[rv]
+                    if rv not in by_root.setdefault(r_key, []):
+                        by_root[r_key].append(rv)
+                for r_key, r_vars in by_root.items():
+                    if len(r_vars) < 2:
+                        continue
+                    epochs_seen = {var_epoch[v] for v in r_vars}
+                    if len(epochs_seen) > 1:
+                        max_ep = max(epochs_seen)
+                        min_ep = min(epochs_seen)
+                        hi_vars = [v for v in r_vars if var_epoch[v] == max_ep]
+                        lo_vars = [v for v in r_vars if var_epoch[v] == min_ep]
+                        issues.append({
+                            "cell": c_id,
+                            "value_vars": hi_vars,
+                            "value_epoch": max_ep,
+                            "table_vars": lo_vars,
+                            "table_epoch": min_ep,
+                            "root_carrier": r_key,
+                        })
+                        break
+
+            # Propagate (root, epoch) to outputs
+            alters = _cell_alters_extent(cell)
+            base_in_v: Optional[str] = None
+            prim_in = getattr(cell, "primary_input", None)
+            if prim_in and prim_in.name in bindings:
+                cand_rv = _root_id(bindings[prim_in.name])
+                if cand_rv and cand_rv in var_epoch:
+                    base_in_v = cand_rv
+            if base_in_v is None:
+                for p_name, rv in tracked_inputs:
+                    if not _is_scalar_port_sig(inputs.get(p_name)):
+                        base_in_v = rv
+                        break
+            if base_in_v is None and tracked_inputs:
+                base_in_v = tracked_inputs[0][1]
+
+            out_vars: List[str] = []
+            for ok_name in out_keys:
+                ov = _root_id(bindings.get(ok_name))
+                if ov and ov not in out_vars:
+                    out_vars.append(ov)
+
+            if base_in_v is not None:
+                b_root = var_root[base_in_v]
+                new_ep = var_epoch[base_in_v] + (1 if alters else 0)
+                if alters and getattr(cell, "mutation_type", "") == "in_place":
+                    var_epoch[base_in_v] = new_ep
+                for ov in out_vars:
+                    var_root[ov] = b_root
+                    var_epoch[ov] = new_ep
+            else:
+                for ov in out_vars:
+                    var_root[ov] = ov
+                    var_epoch[ov] = 1 if alters else 0
+
+        return issues
 
     @classmethod
     def _verify_causal_key_def_use(
@@ -297,14 +483,19 @@ class PreflightLinter:
     ) -> List[Dict[str, Any]]:
         """
         Universal Key-Space Causal Def-Use:
-        Tracks defined_at: Dict[str, int] (step index where a key is first written via key_port + val_port)
-        and step_projected_keys (keys read via projection/subscript at step idx).
-        A key projected from a carrier at step idx must not be defined at a later step defined_at[k] > idx.
+        Tracks defined_at: Dict[Tuple[str, str], int] (per carrier root + lowercase key)
+        and step_projected_keys (all keys read via projection/subscript at step idx,
+        including RHS reads inside setter cells).
+        A key projected from a carrier at step idx must not be defined on that carrier
+        at a later step defined_at[(root, k)] > idx.
         """
-        defined_at: Dict[str, int] = {}
+        defined_at: Dict[Tuple[str, str], int] = {}
+        var_root: Dict[str, str] = {}
         var_key_lineage: Dict[str, Set[str]] = {}
-        step_projected_keys: List[Tuple[int, Any, str, Set[str]]] = []
+        step_projected_keys: List[Tuple[int, Any, str, str, Set[str]]] = []
         key_bind_tags = cls._registry().get_roles_for_category("key")
+        val_bind_tags = cls._registry().get_roles_for_category("assigned_value")
+        recv_bind_tags = cls._registry().get_roles_for_category("receiver") | cls._registry().get_roles_for_category("data")
 
         def _extract_subscript_keys(expr: Any) -> Set[str]:
             found: Set[str] = set()
@@ -323,7 +514,6 @@ class PreflightLinter:
                 except Exception:
                     pass
                 return found
-            # Lexical subscript scan for non-Python targets
             i = 0
             n_expr = len(expr)
             while i < n_expr:
@@ -361,6 +551,8 @@ class PreflightLinter:
             if not isinstance(bindings, dict):
                 continue
             inputs = getattr(cell, "inputs", {}) or {}
+            outputs = getattr(cell, "outputs", {}) or {}
+            out_keys = set(outputs.keys()) | {"output_var"}
             typed_map = getattr(cell, "typed_bindings", {}) or {}
 
             proj_roles = (
@@ -369,16 +561,37 @@ class PreflightLinter:
                 | key_bind_tags
             )
 
-            def _keys_of_port(p_name: str, expr: Any) -> Set[str]:
+            # Determine input carrier root for this step
+            step_carrier_var: Optional[str] = None
+            cont_port_name = getattr(cell, "container_port", None)
+            if cont_port_name and isinstance(bindings.get(cont_port_name), str) and not _is_unbound(bindings.get(cont_port_name)):
+                step_carrier_var = _extract_expr_root_var(bindings[cont_port_name])
+            if not step_carrier_var and getattr(cell, "primary_input", None):
+                pi_n = cell.primary_input.name
+                if isinstance(bindings.get(pi_n), str) and not _is_unbound(bindings.get(pi_n)):
+                    step_carrier_var = _extract_expr_root_var(bindings[pi_n])
+            if not step_carrier_var:
+                for pn, ps in inputs.items():
+                    pv = bindings.get(pn)
+                    if isinstance(pv, str) and not _is_unbound(pv):
+                        rv = _extract_expr_root_var(pv)
+                        if rv and (rv in var_root or str(getattr(ps, "binds", "") or "").lower() in recv_bind_tags):
+                            step_carrier_var = rv
+                            break
+            step_carrier_root = var_root.get(step_carrier_var, step_carrier_var) if step_carrier_var else "_global_"
+
+            def _keys_and_root_of_port(p_name: str, expr: Any) -> Tuple[str, Set[str]]:
                 p_obj = inputs.get(p_name)
                 rec = typed_map.get(p_name) or resolve_typed_binding_record(cell, p_name, expr, p_obj)
                 found: Set[str] = set()
+                read_var: Optional[str] = None
                 if rec and rec.kind == "projection" and rec.projection:
                     k = rec.projection.get("key")
                     if isinstance(k, (list, tuple, set)):
                         found.update(str(x).strip("'\"") for x in k)
                     elif isinstance(k, str):
                         found.add(k.strip("'\""))
+                    read_var = rec.root_var
                 if not found:
                     found.update(_extract_subscript_keys(expr))
                 if not found and p_obj is not None and isinstance(expr, str):
@@ -398,43 +611,86 @@ class PreflightLinter:
                                 pass
                 if not found and isinstance(expr, str) and expr.strip() in var_key_lineage:
                     found.update(var_key_lineage[expr.strip()])
-                return found
+                    read_var = expr.strip()
+                if not read_var and isinstance(expr, str) and not _is_unbound(expr):
+                    cand_rv = _extract_expr_root_var(expr)
+                    if cand_rv and cand_rv in var_root:
+                        read_var = cand_rv
+                r_root = var_root.get(read_var, read_var) if read_var else step_carrier_root
+                return r_root, found
 
-            key_port = next((n for n, p in inputs.items() if getattr(p, "binds", None) in key_bind_tags and n in bindings), None)
-            val_port = next((n for n, p in inputs.items() if getattr(p, "binds", None) == "assigned_value" and n in bindings), None)
+            key_port_decl = getattr(cell, "key_port", None)
+            key_port = next(
+                (
+                    n for n, p in inputs.items()
+                    if n in bindings
+                    and (
+                        getattr(p, "binds", None) in key_bind_tags
+                        or (key_port_decl and n == key_port_decl)
+                        or str(getattr(p, "port_role", "") or "").strip().lower() in key_bind_tags
+                    )
+                ),
+                None,
+            )
+            val_port = next((n for n, p in inputs.items() if getattr(p, "binds", None) in val_bind_tags and n in bindings), None)
+            is_setter = str(getattr(cell, "optic_role", "") or "").strip().lower() == "setter"
+            if is_setter and val_port is None and key_port:
+                cont_n = getattr(cell, "container_port", None) or (cell.primary_input.name if getattr(cell, "primary_input", None) else None)
+                val_port = next((n for n in bindings if n not in out_keys and n not in (key_port, cont_n)), None)
 
-            if key_port and val_port:
+            if key_port and (val_port or is_setter):
                 k_rec = typed_map.get(key_port)
                 written_key = str(k_rec.value_expr if (k_rec and k_rec.value_expr) else bindings[key_port]).strip().strip("'\"")
-                val_lineage = _keys_of_port(val_port, bindings[val_port])
-                if written_key and written_key not in val_lineage:
-                    defined_at.setdefault(written_key, idx)
+                val_lineage: Set[str] = set()
+                if val_port and val_port in bindings:
+                    _, val_lineage = _keys_and_root_of_port(val_port, bindings[val_port])
+                val_lin_low = {str(x).strip().lower() for x in val_lineage}
+                wk_low = written_key.lower()
+                if wk_low and wk_low not in val_lin_low:
+                    defined_at.setdefault((step_carrier_root, wk_low), idx)
 
             out_v = bindings.get("output_var")
             step_read_lineage: Set[str] = set()
             for p_name, expr in bindings.items():
-                if p_name == "output_var" or p_name == key_port:
+                if p_name in out_keys or p_name == key_port:
                     continue
-                p_keys = _keys_of_port(p_name, expr)
+                r_root, p_keys = _keys_and_root_of_port(p_name, expr)
                 if p_keys:
                     step_read_lineage.update(p_keys)
-                    if not (key_port and val_port):
-                        step_projected_keys.append((idx, cell, p_name, p_keys))
-            if isinstance(out_v, str) and out_v.strip() and step_read_lineage:
-                var_key_lineage.setdefault(out_v.strip(), set()).update(step_read_lineage)
+                    step_projected_keys.append((idx, cell, p_name, r_root, p_keys))
+
+            bound_out_names = [
+                str(bindings[ok]).strip()
+                for ok in out_keys
+                if isinstance(bindings.get(ok), str) and str(bindings.get(ok)).strip()
+            ]
+            for ov_str in bound_out_names:
+                ov_clean = _extract_expr_root_var(ov_str) or ov_str
+                if step_carrier_var and step_carrier_var in var_root:
+                    var_root.setdefault(ov_clean, var_root[step_carrier_var])
+                elif step_carrier_var:
+                    var_root.setdefault(step_carrier_var, step_carrier_var)
+                    var_root.setdefault(ov_clean, step_carrier_var)
+                else:
+                    var_root.setdefault(ov_clean, ov_clean)
+                if step_read_lineage:
+                    var_key_lineage.setdefault(ov_clean, set()).update(step_read_lineage)
 
         issues: List[Dict[str, Any]] = []
-        for idx, cell, p_name, keys in step_projected_keys:
+        for idx, cell, p_name, r_root, keys in step_projected_keys:
             for k in keys:
-                if k in defined_at and defined_at[k] > idx:
+                k_low = str(k).strip().lower()
+                def_idx = defined_at.get((r_root, k_low))
+                if def_idx is not None and def_idx > idx:
                     issues.append({
                         "cell": getattr(cell, "cell_id", str(cell)),
                         "port": p_name,
                         "key": k,
                         "column": k,
+                        "root_carrier": r_root,
                         "read_at": idx,
-                        "defined_at": defined_at[k],
-                        "defined_by": getattr(pipeline_bindings[defined_at[k]][0], "cell_id", ""),
+                        "defined_at": def_idx,
+                        "defined_by": getattr(pipeline_bindings[def_idx][0], "cell_id", ""),
                     })
         return issues
 
@@ -480,8 +736,8 @@ class PreflightLinter:
             v = val.strip()
             if v in bound_pipeline_vars:
                 return True
-            root = v.split("[")[0].strip() if "[" in v else v
-            return root in bound_pipeline_vars
+            root = _extract_expr_root_var(v)
+            return bool(root and root in bound_pipeline_vars)
 
         def _add_violation(
             check_id: str,
@@ -523,17 +779,91 @@ class PreflightLinter:
             except Exception:
                 pass
 
+        # Cache parsed Python AST once across Checks 1, 2b, and 4
+        be_lint = get_active_language_backend(cls._registry())
+        parsed_code_tree: Optional[ast.AST] = None
+        code_syntax_error_reported = False
+        if code_str and be_lint.is_python_ast:
+            try:
+                parsed_code_tree = ast.parse(code_str)
+            except SyntaxError as syn_err:
+                _add_violation("syntax_error", f"Synthesized code has syntax error: {syn_err}", details={"error": str(syn_err)})
+                code_syntax_error_reported = True
+
         # -----------------------------------------------------------------
         # Check 1: Universal Literal Consumption
         # -----------------------------------------------------------------
         if extracted_literals:
             bound_values_str: Set[str] = set()
+            bound_num_values: List[float] = []
             for _cell, bindings in pipeline_bindings:
+                if not isinstance(bindings, dict):
+                    continue
                 for _p_name, val in bindings.items():
-                    if val is not None:
-                        str_val = str(val).strip("'\"")
-                        if str_val and str_val not in bound_pipeline_vars:
-                            bound_values_str.add(str_val)
+                    if val is None or _is_unbound(val):
+                        continue
+                    str_val = str(val).strip("'\"")
+                    if str_val and str_val not in bound_pipeline_vars:
+                        bound_values_str.add(str_val)
+                    if not isinstance(val, bool):
+                        try:
+                            bound_num_values.append(float(str_val))
+                        except (TypeError, ValueError):
+                            if be_lint.is_python_ast and isinstance(val, str):
+                                try:
+                                    b_ast = ast.parse(val.strip(), mode="eval").body
+                                    neg_b = {
+                                        id(n.operand) for n in ast.walk(b_ast)
+                                        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.USub)
+                                    }
+                                    for bn in ast.walk(b_ast):
+                                        if isinstance(bn, ast.UnaryOp) and isinstance(bn.op, ast.USub) and isinstance(bn.operand, ast.Constant) and isinstance(bn.operand.value, (int, float)) and not isinstance(bn.operand.value, bool):
+                                            bound_num_values.append(-float(bn.operand.value))
+                                        elif isinstance(bn, ast.Constant) and id(bn) not in neg_b and isinstance(bn.value, (int, float)) and not isinstance(bn.value, bool):
+                                            bound_num_values.append(float(bn.value))
+                                except Exception:
+                                    pass
+
+            ast_str_constants: Set[str] = set()
+            ast_joined_segments: List[str] = []
+            ast_num_values: List[float] = []
+            ast_names: Set[str] = set()
+            ast_kw_args: Set[str] = set()
+            non_py_syntax_ok = True
+            if parsed_code_tree is not None:
+                negated_operand_ids = {
+                    id(n.operand)
+                    for n in ast.walk(parsed_code_tree)
+                    if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.USub)
+                }
+                for node in ast.walk(parsed_code_tree):
+                    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+                        if isinstance(node.operand.value, (int, float)) and not isinstance(node.operand.value, bool):
+                            ast_num_values.append(-float(node.operand.value))
+                    elif isinstance(node, ast.JoinedStr):
+                        js_parts: List[str] = []
+                        for val_node in node.values:
+                            if isinstance(val_node, ast.Constant) and isinstance(val_node.value, str):
+                                seg_low = val_node.value.lower()
+                                if seg_low:
+                                    ast_joined_segments.append(seg_low)
+                                    js_parts.append(seg_low)
+                        if js_parts:
+                            ast_str_constants.add("".join(js_parts))
+                    elif isinstance(node, ast.Constant):
+                        if isinstance(node.value, str):
+                            ast_str_constants.add(node.value.lower())
+                        elif isinstance(node.value, (int, float)) and not isinstance(node.value, bool) and id(node) not in negated_operand_ids:
+                            ast_num_values.append(float(node.value))
+                    elif isinstance(node, ast.Name):
+                        ast_names.add(node.id.lower())
+                    elif isinstance(node, ast.keyword) and node.arg:
+                        ast_kw_args.add(node.arg.lower())
+            elif code_str and not be_lint.is_python_ast:
+                non_py_syntax_ok, non_py_err = be_lint.validate_syntax(code_str)
+                if not non_py_syntax_ok:
+                    _add_violation("syntax_error", f"Synthesized code failed static syntax validation: {non_py_err}")
+                    code_syntax_error_reported = True
 
             seen_consumed_lits: Set[str] = set()
 
@@ -548,49 +878,39 @@ class PreflightLinter:
                 if clean_lit in seen_consumed_lits:
                     continue
                 seen_consumed_lits.add(clean_lit)
+                clean_lower = clean_lit.lower()
 
-                is_consumed = any(
-                    clean_lit == b or _contains_word_token(b, clean_lit)
-                    for b in bound_values_str
-                )
+                is_consumed = False
+                if kind == "numeric":
+                    try:
+                        lit_f = float(clean_lit)
+                        is_consumed = any(bn == lit_f for bn in bound_num_values)
+                        if not is_consumed and parsed_code_tree is not None:
+                            is_consumed = any(an == lit_f for an in ast_num_values)
+                    except (TypeError, ValueError):
+                        is_consumed = clean_lit in bound_values_str
+                else:
+                    is_consumed = any(
+                        clean_lit == b or (kind == "file_asset" and b.lower().endswith("/" + clean_lower))
+                        for b in bound_values_str
+                    )
 
-                if not is_consumed and code_str:
-                    be = get_active_language_backend(cls._registry())
-                    if be.is_python_ast:
-                        try:
-                            tree = ast.parse(code_str)
-                            clean_lower = clean_lit.lower()
-                            for node in ast.walk(tree):
-                                if isinstance(node, ast.Constant):
-                                    val_str = str(node.value).lower()
-                                    if val_str == clean_lower or clean_lower in val_str:
-                                        is_consumed = True
-                                        break
-                                elif isinstance(node, ast.Name):
-                                    if node.id.lower() == clean_lower:
-                                        is_consumed = True
-                                        break
-                                elif isinstance(node, ast.keyword):
-                                    if node.arg and node.arg.lower() == clean_lower:
-                                        is_consumed = True
-                                        break
-                        except SyntaxError:
-                            _add_violation("syntax_error", "Synthesized code failed static AST parsing (SyntaxError).")
-                            is_consumed = False
-                        except Exception:
-                            is_consumed = False
-                    else:
-                        ok_syn, _ = be.validate_syntax(code_str)
-                        if not ok_syn:
-                            _add_violation("syntax_error", "Synthesized code failed static syntax validation.")
-                            is_consumed = False
-                        else:
-                            clean_lower = clean_lit.lower()
-                            is_consumed = (
-                                _contains_word_token(code_str.lower(), clean_lower)
-                                or (kind == "quoted_str" and clean_lower in code_str.lower())
-                                or (kind == "file_asset" and clean_lower in code_str.lower())
+                if not is_consumed and code_str and kind != "numeric":
+                    if parsed_code_tree is not None:
+                        if clean_lower in ast_str_constants or clean_lower in ast_names or clean_lower in ast_kw_args:
+                            is_consumed = True
+                        elif kind == "file_asset":
+                            is_consumed = any(
+                                sc == clean_lower or sc.endswith("/" + clean_lower) or sc.endswith("\\" + clean_lower)
+                                for sc in ast_str_constants
                             )
+                        elif kind == "quoted_str":
+                            is_consumed = any(_contains_word_token(seg, clean_lower) for seg in ast_joined_segments)
+                    elif not be_lint.is_python_ast and non_py_syntax_ok:
+                        is_consumed = (
+                            _contains_word_token(code_str.lower(), clean_lower)
+                            or clean_lower in code_str.lower()
+                        )
 
                 if not is_consumed:
                     msg = (
@@ -659,16 +979,16 @@ class PreflightLinter:
             if prim_in and prim_in.name in bindings:
                 cand_v = bindings[prim_in.name]
                 if isinstance(cand_v, str):
-                    root_cand = cand_v.split("[")[0].strip() if "[" in cand_v else cand_v.strip()
-                    if root_cand in bound_pipeline_vars or root_cand in var_schemas:
+                    root_cand = _extract_expr_root_var(cand_v)
+                    if root_cand and (root_cand in bound_pipeline_vars or root_cand in var_schemas):
                         carrier_in_var = root_cand
             if not carrier_in_var:
                 for p_n, p_sig in c_inputs.items():
                     cand_v = bindings.get(p_n)
                     if not isinstance(cand_v, str):
                         continue
-                    root_cand = cand_v.split("[")[0].strip() if "[" in cand_v else cand_v.strip()
-                    if root_cand not in bound_pipeline_vars and root_cand not in var_schemas:
+                    root_cand = _extract_expr_root_var(cand_v)
+                    if not root_cand or (root_cand not in bound_pipeline_vars and root_cand not in var_schemas):
                         continue
                     p_binds = str(getattr(p_sig, "binds", "") or getattr(p_sig, "port_role", "") or "").lower()
                     p_tn = str(getattr(getattr(p_sig, "signature", p_sig), "type_name", "") or "").lower()
@@ -721,19 +1041,6 @@ class PreflightLinter:
                             variable_name=target_v,
                             details={"column": col, "variable": target_v, "removed_by": remover},
                         )
-                    elif sch.known_components is not None and col not in sch.known_components and col not in sch.added_components:
-                        msg = (
-                            f"Cell '{cell.cell_id}' port '{p_name}' references column '{col}' "
-                            f"which is absent from known components of '{target_v}'."
-                        )
-                        _add_violation(
-                            "column_absent",
-                            msg,
-                            cell_id=cell.cell_id,
-                            port_name=p_name,
-                            variable_name=target_v,
-                            details={"column": col, "variable": target_v, "known_columns": list(sch.known_components)},
-                        )
 
             # 2. Propagate schema to cell's output variable
             out_var: Optional[str] = bindings.get("output_var")
@@ -744,7 +1051,6 @@ class PreflightLinter:
             if isinstance(out_var, str) and out_var.strip():
                 base_sch = var_schemas.get(carrier_in_var) if carrier_in_var else None
                 new_sch = VariableSchema(
-                    known_components=set(base_sch.known_components) if (base_sch and base_sch.known_components is not None) else None,
                     removed_components=set(base_sch.removed_components) if base_sch else set(),
                     added_components=set(base_sch.added_components) if base_sch else set(),
                     removed_by=dict(base_sch.removed_by) if base_sch else {},
@@ -793,8 +1099,9 @@ class PreflightLinter:
                     if inp_name == "output_var":
                         continue
                     if isinstance(inp_val, str) and _is_var(inp_val):
-                        r_v = inp_val.split("[")[0].strip()
-                        origs.update(var_origins.get(r_v, set()))
+                        r_v = _extract_expr_root_var(inp_val)
+                        if r_v:
+                            origs.update(var_origins.get(r_v, set()))
                     elif isinstance(inp_val, str) and not _is_unbound(inp_val):
                         clean_inp = inp_val.strip("'\"")
                         if clean_inp:
@@ -803,31 +1110,25 @@ class PreflightLinter:
 
         # -----------------------------------------------------------------
         # Check 2b: declared dependency names, from the cells' own dependency
-        # declarations (same data the emitter renders into import headers).
+        # declarations (plus builtins & explicit imports in code_str).
+        # Never whitelist arbitrary stdlib/loaded modules via sys.modules or find_spec.
         # -----------------------------------------------------------------
-        declared_dep_names: Set[str] = set()
-        try:
-            from .lattice import TypeRegistry
-            reg_aliases = TypeRegistry.get_instance().get_all_aliases()
-            declared_dep_names.update(reg_aliases.keys())
-            declared_dep_names.update(reg_aliases.values())
-        except Exception:
-            try:
-                from lattice import TypeRegistry
-                reg_aliases = TypeRegistry.get_instance().get_all_aliases()
-                declared_dep_names.update(reg_aliases.keys())
-                declared_dep_names.update(reg_aliases.values())
-            except Exception:
-                pass
-        import sys
-        import importlib.util
-        declared_dep_names.update(sys.builtin_module_names)
-        be_pf = get_active_language_backend(cls._registry())
+        declared_dep_names: Set[str] = set(dir(builtins))
+        be_pf = be_lint
         for cell, _ in pipeline_bindings:
             for dep in (getattr(cell, "dependencies", None) or []) + (getattr(cell, "imports", None) or []):
                 d = str(dep).strip()
                 if d:
                     declared_dep_names.update(be_pf.extract_dependency_namespaces(d))
+        if parsed_code_tree is not None:
+            for imp_node in ast.walk(parsed_code_tree):
+                if isinstance(imp_node, ast.Import):
+                    for al in imp_node.names:
+                        declared_dep_names.add(al.asname or al.name.split(".")[0])
+                elif isinstance(imp_node, ast.ImportFrom):
+                    for al in imp_node.names:
+                        if al.name != "*":
+                            declared_dep_names.add(al.asname or al.name)
 
         # -----------------------------------------------------------------
         # Check 2: No bare None in required data-bearing positions
@@ -899,13 +1200,13 @@ class PreflightLinter:
                 if root_var in cell_output_vars:
                     continue
 
-                # Declared module aliases / imported symbols (R6-9): a binding whose
-                # root is an alias the cells themselves declare ("numpy as np",
-                # "from x import y") is defined by the emission header the emitter
-                # generates from those same declarations — referencing it is not an
-                # undefined variable.
-                if root_var in declared_dep_names or root_var in sys.modules or (root_var.isidentifier() and _cached_find_spec(root_var)):
+                # Declared module aliases / imported symbols: only names explicitly declared
+                # in cell dependencies or imported in synthesized code are permitted.
+                if root_var in declared_dep_names:
                     continue
+
+                if root_var not in var_signatures:
+                    resolved_sig = None
 
                 if resolved_sig is None:
                     msg = (
@@ -1063,16 +1364,28 @@ class PreflightLinter:
             for downstream_cell, down_bindings in pipeline_bindings[i + 1 :]:
                 if not isinstance(down_bindings, dict):
                     continue
+                down_out_keys = set((getattr(downstream_cell, "outputs", {}) or {}).keys()) | {"output_var"}
                 for p_k, down_val in down_bindings.items():
-                    if down_val is None:
+                    if down_val is None or p_k in down_out_keys:
                         continue
                     # Check typed bindings record first
                     d_rec = getattr(downstream_cell, "typed_bindings", {}).get(p_k)
                     if d_rec and d_rec.root_var and d_rec.root_var in produced_vars:
                         is_consumed = True
                         break
-                    # Word-boundary / variable check (avoids 'var_1' matching 'var_10')
-                    down_str = str(down_val)
+                    down_str = str(down_val).strip()
+                    if be_lint.is_python_ast:
+                        try:
+                            expr_ast = ast.parse(down_str, mode="eval")
+                            if any(
+                                isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in produced_vars
+                                for n in ast.walk(expr_ast)
+                            ):
+                                is_consumed = True
+                                break
+                            continue
+                        except SyntaxError:
+                            pass
                     for pv in produced_vars:
                         if pv == down_str or _contains_word_token(down_str, pv):
                             is_consumed = True
@@ -1206,6 +1519,7 @@ class PreflightLinter:
 
         # Track which variables each cell produces and consumes
         cell_producers: Dict[str, Tuple[int, Any]] = {}  # var_name -> (step_idx, cell)
+        cell_first_producer: Dict[str, Tuple[int, Any]] = {}  # var_name -> (first step_idx, cell)
         for i, (cell, bindings) in enumerate(pipeline_bindings):
             if not isinstance(bindings, dict):
                 continue
@@ -1213,27 +1527,52 @@ class PreflightLinter:
                 v = bindings.get(out_name)
                 if isinstance(v, str) and _is_var(v):
                     cell_producers[v] = (i, cell)
+                    if v not in cell_first_producer:
+                        cell_first_producer[v] = (i, cell)
             out_v = bindings.get("output_var")
             if isinstance(out_v, str) and _is_var(out_v):
                 cell_producers[out_v] = (i, cell)
+                if out_v not in cell_first_producer:
+                    cell_first_producer[out_v] = (i, cell)
 
-        # Check for order inversions across dependent cell pairs
+        # Check for DAG causal order violations and clause order inversions across dependent cell pairs
         for j, (cons_cell, cons_bindings) in enumerate(pipeline_bindings):
             if not isinstance(cons_bindings, dict):
                 continue
             cons_clause = getattr(cons_cell, "matched_clause_idx", None)
-            if cons_clause is None:
-                continue
+            out_port_keys = set(getattr(cons_cell, "outputs", {}).keys()) | {"output_var"}
 
             for p_k, down_val in cons_bindings.items():
-                if down_val is None:
+                if down_val is None or p_k in out_port_keys:
                     continue
                 d_rec = getattr(cons_cell, "typed_bindings", {}).get(p_k)
                 root_v = d_rec.root_var if d_rec else None
                 if not root_v and isinstance(down_val, str) and _is_var(down_val):
                     root_v = down_val
 
-                if root_v and root_v in cell_producers:
+                if root_v and root_v in cell_first_producer:
+                    first_prod_idx, first_prod_cell = cell_first_producer[root_v]
+                    if first_prod_idx >= j and first_prod_cell is not cons_cell:
+                        msg = (
+                            f"DAG causal order violation: Cell '{cons_cell.cell_id}' at step {j} "
+                            f"consumes variable '{root_v}' before it is produced by "
+                            f"Cell '{first_prod_cell.cell_id}' at step {first_prod_idx}."
+                        )
+                        _add_violation(
+                            "dag_causal_order_violation",
+                            msg,
+                            cell_id=cons_cell.cell_id,
+                            variable_name=root_v,
+                            details={
+                                "consumer": cons_cell.cell_id,
+                                "consumer_step": j,
+                                "producer": first_prod_cell.cell_id,
+                                "producer_step": first_prod_idx,
+                                "variable": root_v,
+                            },
+                        )
+
+                if root_v and root_v in cell_producers and cons_clause is not None:
                     prod_idx, prod_cell = cell_producers[root_v]
                     prod_clause = getattr(prod_cell, "matched_clause_idx", None)
                     if prod_clause is not None and prod_clause > cons_clause:
@@ -1271,7 +1610,7 @@ class PreflightLinter:
 
             cons_in_v = None
             _df_roles_4b = reg_p.get_roles_for_category("data") | reg_p.get_data_bearing_roles()
-            if cons_is_cleaner:
+            if cons_is_cleaner and cons_clause is not None:
                 for port_name, b_val in cons_bindings.items():
                     if isinstance(b_val, str) and _is_var(b_val):
                         port_sig = getattr(cons_cell, "inputs", {}).get(port_name)
@@ -1280,7 +1619,7 @@ class PreflightLinter:
                         if not port_sig or p_role in _df_roles_4b or reg_p.is_abstract_carrier(p_tn) or reg_p.get_abstract_carrier(p_tn) is not None:
                             cons_in_v = b_val
                             break
-            if cons_in_v:
+            if cons_in_v and cons_clause is not None:
                 for prev_i in range(j):
                     prev_cell, prev_b = pipeline_bindings[prev_i]
                     prev_clause = getattr(prev_cell, "matched_clause_idx", None)
@@ -1366,7 +1705,7 @@ class PreflightLinter:
                     continue
 
                 # Extract root variable if projection
-                root_var = val_expr.split("[")[0].strip() if "[" in val_expr else val_expr.strip()
+                root_var = _extract_expr_root_var(val_expr) or val_expr.strip()
                 prod_cell, _ = var_producers.get(root_var, (None, None))
                 if prod_cell is None:
                     continue
@@ -1385,22 +1724,22 @@ class PreflightLinter:
                 # adjacency/literal rules below.
                 prod_prim_out = getattr(prod_cell, "primary_output", None)
                 prod_prim_var = None
-                if prod_prim_out is not None and prod_cell in [c for c, _ in pipeline_bindings]:
+                if prod_cell in [c for c, _ in pipeline_bindings]:
                     prod_bindings = next((b for c, b in pipeline_bindings if c is prod_cell), None)
                     if prod_bindings is not None:
-                        cand_v = prod_bindings.get(getattr(prod_prim_out, "name", "") or "")
+                        cand_v = (
+                            prod_bindings.get(getattr(prod_prim_out, "name", "") or "") if prod_prim_out is not None else None
+                        ) or prod_bindings.get("output_var")
                         if isinstance(cand_v, str):
-                            prod_prim_var = cand_v.split("[")[0].strip()
-                if prod_prim_var is None:
-                    cons_prim_in = getattr(cell, "primary_input", None)
-                    if cons_prim_in is not None and p_name == getattr(cons_prim_in, "name", None):
-                        # producer var unknown but port is primary: still require the
-                        # producer-side check below via fallback below.
-                        pass
+                            prod_prim_var = _extract_expr_root_var(cand_v)
                 if prod_prim_var is not None and prod_prim_var == root_var:
                     cons_prim_in = getattr(cell, "primary_input", None)
                     if cons_prim_in is not None and p_name == getattr(cons_prim_in, "name", None):
                         continue
+
+                bound_parents = getattr(cell, "bound_parent_ids", None) or ()
+                if getattr(prod_cell, "cell_id", None) in bound_parents or id(prod_cell) in bound_parents:
+                    continue
 
                 # 1. Matching literal in consumer clause
                 var_origs = set(var_origins.get(root_var, set()))
@@ -1468,13 +1807,20 @@ class PreflightLinter:
             for p_n, v_e in bindings_c.items():
                 if p_n in out_keys_c or not isinstance(v_e, str) or not _is_var(v_e):
                     continue
-                all_consumed_vars.add(v_e.split("[")[0].strip())
+                rv_c = _extract_expr_root_var(v_e)
+                if rv_c:
+                    all_consumed_vars.add(rv_c)
 
         reg_4d = cls._registry()
+        _non_terminal_xform_roles = (
+            reg_4d.get_roles_for_category("clean")
+            | reg_4d.get_roles_for_category("transform")
+        )
         sink_roles_4d = (
             reg_4d.get_terminal_roles_set()
             | reg_4d.get_roles_for_category("terminal_output")
             | reg_4d.get_roles_for_category("model_output")
+            | (reg_4d.get_roles_for_category("estimator") - _non_terminal_xform_roles)
         )
         open_focus_chains: Dict[str, Dict[str, Any]] = {}
         for cell_c, bindings_c in pipeline_bindings:
@@ -1486,16 +1832,20 @@ class PreflightLinter:
             for o_k, o_sig in cell_outs_map.items():
                 o_v = bindings_c.get(o_k)
                 if isinstance(o_v, str) and _is_var(o_v):
-                    step_out_vars.append((o_v.split("[")[0].strip(), o_sig))
+                    rv_o = _extract_expr_root_var(o_v) or o_v.strip()
+                    step_out_vars.append((rv_o, o_sig))
             if not step_out_vars and isinstance(bindings_c.get("output_var"), str) and _is_var(bindings_c["output_var"]):
                 prim_o = getattr(cell_c, "primary_output", None)
-                step_out_vars.append((bindings_c["output_var"].split("[")[0].strip(), prim_o))
+                ov_r = _extract_expr_root_var(bindings_c["output_var"]) or bindings_c["output_var"].strip()
+                step_out_vars.append((ov_r, prim_o))
 
             step_in_vars: Set[str] = set()
             for p_n, v_e in bindings_c.items():
                 if p_n in out_keys_c or not isinstance(v_e, str) or not _is_var(v_e):
                     continue
-                step_in_vars.add(v_e.split("[")[0].strip())
+                rv_i = _extract_expr_root_var(v_e)
+                if rv_i:
+                    step_in_vars.add(rv_i)
 
             optic_r_c = str(getattr(cell_c, "optic_role", "") or "").strip().lower()
             if optic_r_c == "getter":
@@ -1505,9 +1855,10 @@ class PreflightLinter:
                 for in_v in step_in_vars:
                     open_focus_chains.pop(in_v, None)
             else:
-                matched_in = next((iv for iv in step_in_vars if iv in open_focus_chains), None)
-                if matched_in is not None:
-                    entry = open_focus_chains.pop(matched_in)
+                matched_ins = [iv for iv in step_in_vars if iv in open_focus_chains]
+                if matched_ins:
+                    entries = [open_focus_chains.pop(iv) for iv in matched_ins]
+                    entry = entries[0]
                     c_nr_4d = str(getattr(cell_c, "node_role", "") or "").strip().lower()
                     _optic_r_4d = reg_4d.get_roles_for_category("optic")
                     is_terminal_or_est = (
@@ -1598,15 +1949,13 @@ class PreflightLinter:
                     _add_violation("object_receiver_literal", msg, cell_id=cell.cell_id, port_name=p_name, details={"port_role": p_role, "bound_val": val_str})
 
         # -----------------------------------------------------------------
-        # Check 4: AST Syntax Validation (if code_str provided)
+        # Check 4: AST Syntax Validation (reuses cached AST parsed before Check 1)
         # -----------------------------------------------------------------
         if code_str:
-            be_4 = get_active_language_backend(cls._registry())
-            if be_4.is_python_ast:
-                try:
-                    tree = ast.parse(code_str)
+            if be_lint.is_python_ast:
+                if parsed_code_tree is not None:
                     pre_cnt = len(violations)
-                    _check_callable_callees(tree, violations)
+                    _check_callable_callees(parsed_code_tree, violations)
                     for v in violations[pre_cnt:]:
                         structured_violations.append(
                             PreflightViolation(
@@ -1615,14 +1964,15 @@ class PreflightLinter:
                                 details={"code": code_str},
                             )
                         )
-                except SyntaxError as e:
-                    msg = f"Synthesized code has syntax error: {e}"
-                    _add_violation("syntax_error", msg, details={"error": str(e)})
-            else:
-                ok_4, err_4 = be_4.validate_syntax(code_str)
+                elif not code_syntax_error_reported:
+                    try:
+                        parsed_code_tree = ast.parse(code_str)
+                    except SyntaxError as e:
+                        _add_violation("syntax_error", f"Synthesized code has syntax error: {e}", details={"error": str(e)})
+            elif not code_syntax_error_reported:
+                ok_4, err_4 = be_lint.validate_syntax(code_str)
                 if not ok_4:
-                    msg = f"Synthesized code has syntax error: {err_4}"
-                    _add_violation("syntax_error", msg, details={"error": str(err_4 or "")})
+                    _add_violation("syntax_error", f"Synthesized code has syntax error: {err_4}", details={"error": str(err_4 or "")})
 
         # -----------------------------------------------------------------
         # Check 10: Extent domain lineage. A value computed on one carrier extent must not be
@@ -1754,7 +2104,24 @@ class PreflightLinter:
                 warnings.append(f"coverage audit unavailable: {type(_cov_err).__name__}: {_cov_err}")
 
         is_valid = len(violations) == 0
-        return PreflightLintResult(is_valid=is_valid, violations=violations, warnings=warnings, structured_violations=structured_violations)
+        refusal_kind: Optional[str] = None
+        if not is_valid:
+            if any(sv.check_id in {"ambiguity", "ambiguous_plan"} for sv in structured_violations):
+                refusal_kind = "AMBIGUITY"
+            elif structured_violations and all(
+                sv.check_id in {"unresolved_port", "unresolved_key_port", "unbound_data_port", "typed_hole"}
+                for sv in structured_violations
+            ):
+                refusal_kind = "TYPED_HOLE"
+            else:
+                refusal_kind = "VIOLATION"
+        return PreflightLintResult(
+            is_valid=is_valid,
+            violations=violations,
+            warnings=warnings,
+            structured_violations=structured_violations,
+            refusal_kind=refusal_kind,
+        )
 
     @staticmethod
     def audit_lattice(orchestrator: Any) -> Optional[Any]:

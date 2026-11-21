@@ -19,6 +19,7 @@ Design rules (research integrity):
 from __future__ import annotations
 
 import ast
+import itertools
 import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -32,6 +33,9 @@ STATUS_CATEGORY: Dict[str, str] = {
     "PASSED_UNVERIFIED": "SUSPECT",
     "LINT_HALTED": "VERIFIER_REJECTED",
     "UNRESOLVED_PORT": "BINDING_UNRESOLVED",
+    "TYPED_HOLE_HALTED": "TYPED_HOLE",
+    "AMBIGUITY_HALTED": "AMBIGUITY",
+    "REFUSED_OK": "REFUSED_OK",
     "PLANNING_FAILED": "PLANNING",
     "UNIFICATION_FAILED": "PLANNING",
     "NO_CODE": "PLANNING",
@@ -39,6 +43,7 @@ STATUS_CATEGORY: Dict[str, str] = {
     "CRASHED": "IMPLEMENTATION",
     "EMISSION_DEFECT": "IMPLEMENTATION",
     "SANDBOX_FAILED": "IMPLEMENTATION",
+    "SEMANTIC_FAILED": "IMPLEMENTATION",
     "FAILED": "IMPLEMENTATION",
     "COMPLETED": "IMPLEMENTATION",
     "SECURITY_BLOCKED": "SECURITY",
@@ -54,13 +59,17 @@ FAILURE_KIND_TO_STATUS: Dict[str, str] = {
     "PLANNING_FAILED": "PLANNING_FAILED",
     "UNIFICATION_FAILED": "UNIFICATION_FAILED",
     "UNRESOLVED_PORTS": "UNRESOLVED_PORT",
+    "TYPED_HOLE": "TYPED_HOLE_HALTED",
+    "AMBIGUITY": "AMBIGUITY_HALTED",
+    "REFUSED_OK": "REFUSED_OK",
     "LINT_REJECTED": "LINT_HALTED",
     "NO_CODE": "NO_CODE",
     "SANDBOX_FAILED": "SANDBOX_FAILED",
+    "SEMANTIC_FAILED": "SEMANTIC_FAILED",
 }
 
-# Categories in which a refusal to synthesize is an acceptable answer to an under-specified prompt.
-REFUSAL_CATEGORIES = ("BINDING_UNRESOLVED", "VERIFIER_REJECTED", "PLANNING")
+# Categories in which an honest, structured refusal to synthesize is an acceptable answer to an under-specified prompt.
+REFUSAL_CATEGORIES = ("BINDING_UNRESOLVED", "TYPED_HOLE", "AMBIGUITY", "REFUSED_OK")
 
 
 def category_of(status: str) -> str:
@@ -146,6 +155,125 @@ def extract_prompt_literals(prompt: str) -> Dict[str, List[Any]]:
     return {"strings": strings, "numbers": numbers}
 
 
+def _const_or_neg_const(node: Optional[ast.AST]) -> Optional[Tuple[Any]]:
+    """Returns a 1-tuple (value,) when node is a literal Constant or -Constant, else None."""
+    if node is None:
+        return None
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float)) and not isinstance(node.value, bool):
+        return (node.value,)
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+        and isinstance(node.operand.value, (int, float))
+        and not isinstance(node.operand.value, bool)
+    ):
+        return (-node.operand.value,)
+    return None
+
+
+def _extract_ast_literals(tree: ast.AST) -> Tuple[List[str], List[float]]:
+    """Collects numeric/string literals from AST Constants, negated constants, and JoinedStr f-strings."""
+    str_consts: List[str] = []
+    num_consts: List[float] = []
+    var_consts: Dict[str, List[Any]] = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            c_tup = _const_or_neg_const(node.value)
+            if c_tup is not None:
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name):
+                        var_consts.setdefault(tgt.id, []).append(c_tup[0])
+        elif isinstance(node, ast.AnnAssign):
+            c_tup = _const_or_neg_const(node.value)
+            if c_tup is not None and isinstance(node.target, ast.Name):
+                var_consts.setdefault(node.target.id, []).append(c_tup[0])
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant):
+            v = node.value
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                num_consts.append(float(v))
+            elif isinstance(v, str):
+                str_consts.append(v)
+        elif (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.Constant)
+            and isinstance(node.operand.value, (int, float))
+            and not isinstance(node.operand.value, bool)
+        ):
+            num_consts.append(-float(node.operand.value))
+        elif isinstance(node, ast.JoinedStr):
+            static_parts: List[str] = []
+            template_parts: List[str] = []
+            render_choices: List[List[str]] = []
+
+            for part in node.values:
+                if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                    static_parts.append(part.value)
+                    template_parts.append(part.value)
+                    render_choices.append([part.value])
+                elif isinstance(part, ast.FormattedValue):
+                    conv_s = {115: "!s", 114: "!r", 97: "!a"}.get(part.conversion, "")
+                    fmt_spec = ""
+                    if isinstance(part.format_spec, ast.JoinedStr) and all(
+                        isinstance(fp, ast.Constant) and isinstance(fp.value, str)
+                        for fp in part.format_spec.values
+                    ):
+                        fmt_spec = "".join(fp.value for fp in part.format_spec.values)
+                    fmt_suffix = f":{fmt_spec}" if fmt_spec else ""
+                    try:
+                        expr_src = ast.unparse(part.value)
+                    except Exception:
+                        expr_src = ""
+                    placeholder = "{" + expr_src + conv_s + fmt_suffix + "}" if expr_src else "{}"
+                    template_parts.append(placeholder)
+
+                    c_vals: Optional[List[Any]] = None
+                    direct_c = _const_or_neg_const(part.value)
+                    if direct_c is not None:
+                        c_vals = [direct_c[0]]
+                    elif isinstance(part.value, ast.Name) and part.value.id in var_consts:
+                        c_vals = list(var_consts[part.value.id])
+
+                    if c_vals:
+                        rendered_opts: List[str] = []
+                        for cv in c_vals:
+                            if part.conversion == 114:
+                                cv_c: Any = repr(cv)
+                            elif part.conversion == 97:
+                                cv_c = ascii(cv)
+                            elif part.conversion == 115:
+                                cv_c = str(cv)
+                            else:
+                                cv_c = cv
+                            try:
+                                rendered_opts.append(format(cv_c, fmt_spec))
+                            except Exception:
+                                rendered_opts.append(str(cv_c))
+                        render_choices.append(rendered_opts)
+                    else:
+                        render_choices.append([placeholder])
+
+            if static_parts:
+                str_consts.append("".join(static_parts))
+            if template_parts:
+                str_consts.append("".join(template_parts))
+            if render_choices:
+                combo_count = 1
+                for opts in render_choices:
+                    combo_count *= max(1, len(opts))
+                if combo_count <= 16:
+                    for combo in itertools.product(*render_choices):
+                        str_consts.append("".join(combo))
+
+    return str_consts, num_consts
+
+
 def literal_consumption(prompt: str, code: str) -> Dict[str, Any]:
     """
     Checks that every stated literal appears as a constant in the emitted program.
@@ -159,17 +287,7 @@ def literal_consumption(prompt: str, code: str) -> Dict[str, Any]:
     except SyntaxError:
         return {"required": required, "found": 0, "missing": ["<code does not parse>"], "checked": False}
 
-    str_consts: List[str] = []
-    num_consts: List[float] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant):
-            v = node.value
-            if isinstance(v, bool):
-                continue
-            if isinstance(v, (int, float)):
-                num_consts.append(float(v))
-            elif isinstance(v, str):
-                str_consts.append(v)
+    str_consts, num_consts = _extract_ast_literals(tree)
     haystack = "\n".join(str_consts)
 
     missing: List[str] = []
@@ -211,6 +329,16 @@ def classify_from_record(record: Dict[str, Any]) -> Optional[Tuple[str, str, Dic
     elif kind == "UNRESOLVED_PORTS":
         ports = failure.get("unresolved_ports") or []
         detail = ("unresolved ports: " + ", ".join(ports)) if ports else str(failure.get("detail", ""))
+    elif kind == "TYPED_HOLE":
+        ports = failure.get("unresolved_ports") or []
+        holes = failure.get("typed_holes") or []
+        detail = str(failure.get("detail", "")).strip() or (
+            ("typed holes: " + ", ".join(str(p) for p in (ports or holes)))
+            if (ports or holes)
+            else "typed hole halt"
+        )
+    elif kind == "AMBIGUITY":
+        detail = str(failure.get("detail", "")).strip() or f"ambiguous candidates ({len(failure.get('candidates') or ())})"
     else:
         detail = str(failure.get("detail", ""))
     return status, detail, dict(failure)
@@ -240,8 +368,9 @@ def outcome_ok(status: str, expected: str) -> bool:
     """
     Did the system do an acceptable thing for this preset?
       expected == "synthesize": only a verified pass counts.
-      expected == "clarify":    a verified pass, OR a refusal that names what is missing (binding / verifier /
-                                planning), counts; an engine defect never does.
+      expected == "clarify":    a verified pass, OR an honest structured refusal naming what is missing/ambiguous
+                                (BINDING_UNRESOLVED, TYPED_HOLE, AMBIGUITY, REFUSED_OK), counts; an engine
+                                defect, generic LINT_HALTED, or empty NO_CODE reply never does.
     """
     if status in SUCCESS_STATUSES:
         return True
@@ -254,7 +383,12 @@ def funnel(results: Sequence[Dict[str, Any]]) -> Dict[str, int]:
     """Monotone funnel: attempted >= emitted_code >= lint_clean >= ran >= verified."""
     attempted = len(results)
     emitted = sum(1 for r in results if r.get("code"))
-    lint_clean = sum(1 for r in results if r.get("code") and r.get("status") not in ("LINT_HALTED", "EMISSION_DEFECT", "NO_CODE"))
+    lint_clean = sum(
+        1 for r in results
+        if r.get("code") and r.get("status") not in (
+            "LINT_HALTED", "TYPED_HOLE_HALTED", "AMBIGUITY_HALTED", "EMISSION_DEFECT", "NO_CODE"
+        )
+    )
     ran = sum(1 for r in results if r.get("status") in RAN_STATUSES)
     verified = sum(1 for r in results if r.get("status") in SUCCESS_STATUSES)
     return {"attempted": attempted, "emitted_code": emitted, "lint_clean": lint_clean, "ran_in_sandbox": ran, "verified": verified}

@@ -4,564 +4,30 @@ Dynamic MicroCell Synthesizer & Deterministic Structural Cell Renderer.
 """
 
 from __future__ import annotations
-import asyncio
 import ast
-import importlib
 import keyword
 import os
-import textwrap
-from typing import Dict, Any, List, Optional, Set, Tuple, Type
+from typing import Dict, Any, List, Optional, Set, Tuple
 from log_config import get_logger
 
 try:
-    from .external_rag import LiveDocFetcher
-    from .inference import ModelManager
     from .language_backend import get_active_language_backend
     from .lattice import TypeRegistry
-    from .security_policy import (
-        NON_OVERRIDABLE_BLOCKED_CALLS,
-        NON_OVERRIDABLE_BLOCKED_OS_OPS,
-    )
     from .utils import (
-        extract_json_from_llm,
-        validate_code_template,
-        extract_code_from_llm_response,
         safe_substitute_template,
         extract_template_placeholders,
         unique_var as _unique_var,
     )
 except (ImportError, ValueError):
-    from external_rag import LiveDocFetcher
-    from inference import ModelManager
     from language_backend import get_active_language_backend
     from lattice import TypeRegistry
-    from security_policy import (
-        NON_OVERRIDABLE_BLOCKED_CALLS,
-        NON_OVERRIDABLE_BLOCKED_OS_OPS,
-    )
     from utils import (
-        extract_json_from_llm,
-        validate_code_template,
-        extract_code_from_llm_response,
         safe_substitute_template,
         extract_template_placeholders,
         unique_var as _unique_var,
     )
 
 logger = get_logger("synthesis")
-
-
-class KernelSynthesisError(RuntimeError):
-    """
-    Raised when inductive state kernel synthesis fails or produces unsafe code.
-    Eliminates silent fake-success zero/empty fallbacks.
-    """
-    pass
-
-
-# --------------------------------------------------------------------------- #
-# AST Capability Permit-List Validator (Track 1.6)
-# --------------------------------------------------------------------------- #
-
-class _PermittedModuleNamespacesDescriptor:
-    def __get__(self, instance: Any, owner: Optional[Type[Any]] = None) -> Set[str]:
-        return ASTCapabilityValidator.get_permitted_module_namespaces()
-
-
-class _ForbiddenSideEffectMethodsDescriptor:
-    def __get__(self, instance: Any, owner: Optional[Type[Any]] = None) -> Set[str]:
-        return ASTCapabilityValidator.get_forbidden_side_effect_methods()
-
-
-class _ForbiddenNamesDescriptor:
-    def __get__(self, instance: Any, owner: Optional[Type[Any]] = None) -> Set[str]:
-        return ASTCapabilityValidator.get_forbidden_names()
-
-
-class _PermittedBuiltinsDescriptor:
-    def __get__(self, instance: Any, owner: Optional[Type[Any]] = None) -> Set[str]:
-        return ASTCapabilityValidator.get_permitted_builtins()
-
-
-class ASTCapabilityValidator(ast.NodeVisitor):
-    """
-    Capability-based AST Permit-List Validator for synthesized kernels.
-    Strictly allows only pure mathematical, algorithmic, collection, and bounded
-    control-flow constructs. Rejects all imports, I/O, reflection builtins
-    (getattr, eval, exec, open, __import__), unwhitelisted modules, and dunder attribute traversal.
-    """
-
-    PERMITTED_BUILTINS = _PermittedBuiltinsDescriptor()
-    PERMITTED_MODULE_NAMESPACES = _PermittedModuleNamespacesDescriptor()
-    FORBIDDEN_NAMES = _ForbiddenNamesDescriptor()
-    FORBIDDEN_SIDE_EFFECT_METHODS = _ForbiddenSideEffectMethodsDescriptor()
-
-    _MOD_NS_CACHE: Dict[Tuple[int, int], Set[str]] = {}
-
-    @classmethod
-    def get_forbidden_side_effect_methods(cls) -> Set[str]:
-        methods: Set[str] = set(NON_OVERRIDABLE_BLOCKED_OS_OPS)
-        try:
-            reg = TypeRegistry.get_instance()
-            methods.update(reg.get_forbidden_side_effects())
-            spec = reg.get_language_spec()
-            if spec is not None:
-                methods.update(getattr(spec, "forbidden_constructs", ()) or ())
-        except Exception:
-            pass
-        return methods
-
-    @classmethod
-    def get_forbidden_names(cls) -> Set[str]:
-        names: Set[str] = set(NON_OVERRIDABLE_BLOCKED_CALLS)
-        try:
-            reg = TypeRegistry.get_instance()
-            spec = reg.get_language_spec()
-            if spec is not None:
-                names.update(getattr(spec, "forbidden_identifiers", ()) or ())
-        except Exception:
-            pass
-        return names
-
-    @classmethod
-    def get_permitted_builtins(cls) -> Set[str]:
-        builtins: Set[str] = set()
-        try:
-            try:
-                from .lattice import TypeRegistry
-            except (ImportError, ValueError):
-                from lattice import TypeRegistry
-            reg = TypeRegistry.get_instance()
-            spec = reg.get_language_spec()
-            if spec is not None:
-                builtins.update(getattr(spec, "permitted_builtins", ()) or ())
-        except Exception:
-            pass
-        return builtins
-
-    @classmethod
-    def get_permitted_module_namespaces(cls) -> Set[str]:
-        namespaces: Set[str] = set()
-        try:
-            try:
-                from .lattice import TypeRegistry, LatticeOrchestrator
-            except (ImportError, ValueError):
-                from lattice import TypeRegistry, LatticeOrchestrator
-
-            reg = TypeRegistry.get_instance()
-            aliases = reg.get_all_aliases()
-            namespaces.update(aliases.keys())
-            namespaces.update(aliases.values())
-
-            orch = LatticeOrchestrator.get_active_instance()
-            if orch:
-                loaded_cells = getattr(orch, "loaded_cells", {}) or {}
-                cache_key = (id(orch), len(loaded_cells))
-                cached = cls._MOD_NS_CACHE.get(cache_key)
-                if cached is not None:
-                    namespaces.update(cached)
-                else:
-                    orch_ns: Set[str] = set()
-                    for cell in loaded_cells.values():
-                        for dep in getattr(cell, "dependencies", []) or []:
-                            dep_s = str(dep).strip()
-                            if not dep_s:
-                                continue
-                            try:
-                                from .language_backend import get_active_language_backend
-                            except (ImportError, ValueError):
-                                from language_backend import get_active_language_backend
-                            be_ns = get_active_language_backend(reg)
-                            orch_ns.update(be_ns.extract_dependency_namespaces(dep_s))
-                    cls._MOD_NS_CACHE[cache_key] = orch_ns
-                    namespaces.update(orch_ns)
-        except Exception:
-            pass
-        return namespaces
-
-    PERMITTED_NODES: Tuple[Type[ast.AST], ...] = (
-        ast.Module,
-        # Statements
-        ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Expr, ast.Pass,
-        ast.If, ast.For, ast.While, ast.Break, ast.Continue,
-        ast.Try, ast.ExceptHandler, ast.Raise, ast.Delete,
-        # Expressions
-        ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.IfExp,
-        ast.Call, ast.Constant, ast.Name, ast.Attribute, ast.Subscript, ast.Slice,
-        ast.List, ast.Tuple, ast.Set, ast.Dict, ast.Starred,
-        ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.comprehension,
-        ast.Lambda, ast.arguments, ast.arg, ast.keyword,
-        ast.JoinedStr, ast.FormattedValue,
-        # Contexts & Operators
-        ast.Load, ast.Store, ast.Del,
-        ast.operator, ast.unaryop, ast.boolop, ast.cmpop,
-    )
-
-    def __init__(self, allowed_vars: Optional[Set[str]] = None) -> None:
-        self.error: Optional[str] = None
-        self.allowed_vars: Set[str] = set(allowed_vars or ())
-        self._valid_roots: Set[str] = set()
-        self._active_forbidden_names: Set[str] = set(self.FORBIDDEN_NAMES)
-        self._active_forbidden_methods: Set[str] = set(self.FORBIDDEN_SIDE_EFFECT_METHODS)
-        self._active_permitted_builtins: Set[str] = set(self.PERMITTED_BUILTINS)
-        self._active_permitted_modules: Set[str] = set(self.PERMITTED_MODULE_NAMESPACES)
-
-    def _collect_local_assigned_names(self, tree: ast.AST) -> Set[str]:
-        assigned: Set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    assigned.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
-            elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
-                if node.target:
-                    assigned.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
-            elif isinstance(node, (ast.For, ast.AsyncFor)):
-                assigned.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
-            elif isinstance(node, ast.comprehension):
-                assigned.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
-            elif isinstance(node, ast.NamedExpr):
-                if isinstance(node.target, ast.Name):
-                    assigned.add(node.target.id)
-            elif isinstance(node, ast.ExceptHandler):
-                if node.name:
-                    assigned.add(node.name)
-        return assigned
-
-    def _find_attribute_root(self, node: ast.AST) -> Optional[str]:
-        curr = node
-        while isinstance(curr, ast.Attribute):
-            curr = curr.value
-        if isinstance(curr, ast.Name):
-            return curr.id
-        return None
-
-    def validate(self, tree: ast.AST, allowed_vars: Optional[Set[str]] = None) -> Tuple[bool, Optional[str]]:
-        self.error = None
-        current_allowed = set(self.allowed_vars)
-        if allowed_vars:
-            current_allowed.update(allowed_vars)
-
-        self._active_forbidden_names = set(self.FORBIDDEN_NAMES)
-        self._active_forbidden_methods = set(self.FORBIDDEN_SIDE_EFFECT_METHODS)
-        self._active_permitted_builtins = set(self.PERMITTED_BUILTINS)
-        self._active_permitted_modules = set(self.PERMITTED_MODULE_NAMESPACES)
-
-        local_assigned = self._collect_local_assigned_names(tree)
-        self._valid_roots = (
-            current_allowed
-            | local_assigned
-            | self._active_permitted_modules
-            | self._active_permitted_builtins
-            | set(get_active_language_backend().method_receiver_names)
-        )
-        self.visit(tree)
-        return (self.error is None, self.error)
-
-    def generic_visit(self, node: ast.AST) -> None:
-        if self.error is not None:
-            return
-        if not isinstance(node, self.PERMITTED_NODES):
-            self.error = f"Disallowed AST construct '{type(node).__name__}' in pure kernel"
-            return
-        super().generic_visit(node)
-
-    def visit_Name(self, node: ast.Name) -> None:
-        if self.error is not None:
-            return
-        if node.id.startswith("__") or node.id.endswith("__") or node.id in self._active_forbidden_names:
-            self.error = f"Forbidden identifier or builtin reference: '{node.id}'"
-            return
-        self.generic_visit(node)
-
-    def visit_Attribute(self, node: ast.Attribute) -> None:
-        if self.error is not None:
-            return
-        if node.attr.startswith("__") or node.attr.endswith("__"):
-            self.error = f"Forbidden dunder attribute access: '.{node.attr}'"
-            return
-        if node.attr in self._active_forbidden_names:
-            self.error = f"Forbidden attribute access: '.{node.attr}'"
-            return
-        root_id = self._find_attribute_root(node)
-        if root_id is not None and root_id not in self._valid_roots:
-            self.error = f"Unauthorized attribute access on untrusted/unpermitted identifier '{root_id}.{node.attr}'"
-            return
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call) -> None:
-        if self.error is not None:
-            return
-        func = node.func
-        if isinstance(func, ast.Name):
-            if func.id not in self._active_permitted_builtins and func.id not in self._valid_roots:
-                self.error = f"Call to non-whitelisted function or builtin: '{func.id}()'"
-                return
-        elif isinstance(func, ast.Attribute):
-            if func.attr.startswith("_") or func.attr in self._active_forbidden_names:
-                self.error = f"Forbidden method call: '.{func.attr}()'"
-                return
-            # Block declared forbidden side-effecting methods even on variables
-            if func.attr in self._active_forbidden_methods:
-                self.error = f"Forbidden side-effecting method call: '.{func.attr}()'"
-                return
-            root_id = self._find_attribute_root(func)
-            if root_id is not None and root_id not in self._valid_roots:
-                self.error = f"Unauthorized method call on untrusted/unpermitted identifier '{root_id}.{func.attr}()'"
-                return
-        else:
-            self.error = f"Disallowed dynamic callable expression '{type(func).__name__}'"
-            return
-        self.generic_visit(node)
-
-
-# --------------------------------------------------------------------------- #
-# Combinator-library detection
-# --------------------------------------------------------------------------- #
-
-def import_stmt_for(qualified_name: str) -> str:
-    """
-    Derives an import statement from a qualified symbol or module name, verified live.
-    Conforms to Section 3.4 of the STRATA paper.
-    """
-    module = qualified_name.rsplit(".", 1)[0] if "." in qualified_name else qualified_name
-    try:
-        importlib.import_module(module)
-    except ImportError:
-        logger.warning("unverifiable import: %s", module)
-    return f"import {module}"
-
-
-def _safe_substitute(template: str, bindings: Dict[str, Any]) -> str:
-    """
-    Placeholder substitution that ONLY touches ``{identifier}`` spans.
-    Uses zero-regex safe_substitute_template.
-    """
-    return safe_substitute_template(template, bindings)
-
-
-# --------------------------------------------------------------------------- #
-# Micro-cell synthesis
-# --------------------------------------------------------------------------- #
-
-class SynthesisEngine:
-    """
-    Synthesizes missing computational primitives on-demand using live documentation lookup.
-    """
-
-    def __init__(self, trees_dir: str = "trees"):
-        self.trees_dir = trees_dir
-
-    def synthesize_micro_cell(
-        self,
-        gap_concept: str,
-        expected_input: Optional[str] = None,
-        expected_output: Optional[str] = None,
-        fetcher: Optional[Any] = None,
-        domain: str = "Python_Core",
-        stage: Optional[int] = 1,
-    ) -> Dict[str, Any]:
-        """
-        Queries official API documentation and uses the LLM to synthesize
-        a verified, type-annotated MicroCell.
-        """
-        logger.info("[SYNTHESIS] Fetching live documentation for: '%s'", gap_concept)
-        fetch_call = getattr(fetcher, "fetch", None)
-        if fetch_call is None:
-            live_docs = ""
-        else:
-            try:
-                live_docs = fetch_call(gap_concept)
-            except TypeError:
-                live_docs = ""
-            if asyncio.iscoroutine(live_docs) or isinstance(live_docs, asyncio.Future):
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = None
-                if loop and loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
-                        live_docs = _pool.submit(asyncio.run, live_docs).result()
-                else:
-                    live_docs = asyncio.run(live_docs)
-            if not isinstance(live_docs, str):
-                live_docs = str(getattr(live_docs, "content", "") or "")
-        live_docs = live_docs or "No live documentation available."
-
-        try:
-            from lattice import TypeRegistry
-        except (ImportError, ValueError):
-            from .lattice import TypeRegistry
-        reg = TypeRegistry.get_instance()
-        top_types = reg.get_top_types_set()
-        empty_types = reg.get_void_types_set() | reg.get_bottom_types_set()
-        path_type_names = set(reg.get_types_by_kind("path") or ()) | {"path", "file"}
-
-        def _is_path_type(t_name: Optional[str]) -> bool:
-            if not t_name:
-                return False
-            clean = str(t_name).strip().lower()
-            base = clean.partition("[")[0].strip() if ("[" in clean and clean.endswith("]")) else clean
-            if clean in path_type_names or base in path_type_names:
-                return True
-            try:
-                for pt in path_type_names:
-                    if reg.is_known_type_name(pt) and (reg.is_subtype(clean, pt) or reg.is_subtype(base, pt)):
-                        return True
-            except Exception:
-                pass
-            return False
-
-        in_str = str(expected_input).strip().lower() if expected_input else ""
-        out_str = str(expected_output).strip().lower() if expected_output else ""
-
-        is_path_in = _is_path_type(in_str)
-        is_path_out = _is_path_type(out_str)
-
-        is_source = (not in_str or in_str in top_types or in_str in empty_types or is_path_in)
-        is_sink = (not out_str or out_str in empty_types or is_path_out)
-
-        if is_source and not is_sink:
-            is_ingress_mode, is_terminal_mode = True, False
-        elif is_sink and not is_source:
-            is_ingress_mode, is_terminal_mode = False, True
-        elif is_source and is_sink:
-            if not in_str or in_str in top_types or in_str in empty_types:
-                is_ingress_mode, is_terminal_mode = True, False
-            else:
-                is_ingress_mode, is_terminal_mode = False, True
-        else:
-            is_ingress_mode, is_terminal_mode = False, False
-
-        in_placeholder = "{input_locator}" if is_path_in else "{input_var}"
-        out_placeholder = "{output_locator}" if is_path_out else "{output_var}"
-
-        if is_ingress_mode:
-            if is_path_in:
-                template_rule = (
-                    "For Source (Initial / Ingress morphism with locator input), `code_template` MUST produce the primary output "
-                    f"assigned to `{{output_var}}` by consuming `{in_placeholder}` "
-                    f"(e.g. `{{output_var}} = <package>.<source_func>({in_placeholder})`)."
-                )
-                input_spec = f'{{"type_name": "{expected_input or "path"}", "state": "source_identifier"}}'
-                sample_template = f"{{output_var}} = <package>.<source_func>({in_placeholder})"
-            else:
-                template_rule = (
-                    "For Source (Initial / Ingress morphism), `code_template` MUST produce the primary output "
-                    "assigned to `{output_var}` (e.g. `{output_var} = <package>.<source_func>()`)."
-                )
-                input_spec = "{}"
-                sample_template = "{output_var} = <package>.<source_func>()"
-        elif is_terminal_mode:
-            if is_path_out:
-                template_rule = (
-                    "For Sink (Terminal / Egress morphism with destination locator), `code_template` MUST consume `{input_var}` and "
-                    f"persist or export it to `{out_placeholder}` (e.g. `{{input_var}}.<sink_func>({out_placeholder})\\n{{output_var}} = {out_placeholder}`)."
-                )
-                input_spec = f'{{"type_name": "{expected_input}", "state": "any"}}'
-                sample_template = f"{{input_var}}.<sink_func>({out_placeholder})\n{{output_var}} = {out_placeholder}"
-            else:
-                template_rule = (
-                    "For Sink (Terminal / Egress morphism), `code_template` MUST consume `{input_var}` and "
-                    "complete the terminal action or lifecycle (e.g. `{output_var} = <package>.<sink_func>({input_var})` or `{input_var}.<sink_func>()`)."
-                )
-                input_spec = f'{{"type_name": "{expected_input}", "state": "any"}}'
-                sample_template = "{output_var} = <package>.<sink_func>({input_var})"
-        else:
-            template_rule = (
-                "For Transformer (Intermediate morphism), `code_template` MUST consume `{input_var}` and "
-                "assign the result to `{output_var}` (e.g. `{output_var} = <func>({input_var})`)."
-            )
-            input_spec = f'{{"type_name": "{expected_input}", "state": "any"}}'
-            sample_template = "{output_var} = <package>.<func>({input_var})"
-
-        sanitized_concept = "".join(
-            c if c.isalnum() or c == "_" else "_" for c in gap_concept
-        ).lower()[:30]
-
-        system_prompt = f"""You are an expert Software Engineer. Synthesize a single verified Python computational node implementing: '{gap_concept}'.
-Output ONLY a valid JSON object matching the schema below. No markdown formatting, no explanations.
-
-Schema:
-{{
-  "cell_id": "micro_synthesized_{sanitized_concept}",
-  "type": "micro",
-  "stage": {stage},
-  "keywords": ["{gap_concept}"],
-  "inputs": {input_spec},
-  "outputs": {{ "type_name": "{expected_output}", "state": "computed" }},
-  "dependencies": ["<import statement>"],
-  "code_template": "{sample_template}"
-}}
-
-Documentation Reference:
-{live_docs[:1500]}
-
-RULES:
-1. {template_rule}
-2. Put all necessary import statements in the `dependencies` array (e.g. ["import package", "from package import module"]).
-3. Ensure the code is strictly non-interactive (do not use input() or sys.stdin).
-4. Never hardcode external asset paths or destinations — always use {in_placeholder} or {out_placeholder} placeholders when loading or persisting external assets."""
-
-        full_prompt = f"{system_prompt}\n\nTask: {gap_concept}"
-        result_text = ModelManager.get_instance().generate_text(full_prompt, max_tokens=1024)
-
-        cell_dict = extract_json_from_llm(result_text)
-        if cell_dict is None:
-            logger.error("[SYNTHESIS ERROR] Failed to extract JSON from model output")
-            raise ValueError(f"Model failed to generate valid JSON for {gap_concept}")
-
-        template = extract_code_from_llm_response(cell_dict.get("code_template", ""))
-        cell_dict["code_template"] = template
-        if not validate_code_template(template):
-            logger.error("[SYNTHESIS ERROR] Synthesized template failed AST validation")
-            raise ValueError(f"Synthesized template for {gap_concept} failed AST parse check.")
-
-        return cell_dict
-
-
-def synthesize_and_register(
-    engine: SynthesisEngine,
-    gap_concept: str,
-    expected_input: str,
-    expected_output: str,
-    fetcher: LiveDocFetcher,
-    registry: Any,
-    domain: str = "Python_Core",
-    stage: Optional[int] = None,
-) -> Optional[Any]:
-    """
-    Pipeline-facing entrypoint that synthesizes a micro-cell and registers it
-    into a TypeRegistry / cell repository.
-    """
-    try:
-        cell_dict = engine.synthesize_micro_cell(
-            gap_concept=gap_concept,
-            expected_input=expected_input,
-            expected_output=expected_output,
-            fetcher=fetcher,
-            domain=domain,
-            stage=stage,
-        )
-    except Exception as exc:
-        logger.error("[SYNTHESIS] registration failed for '%s': %s", gap_concept, exc)
-        return None
-
-    if registry is None:
-        return cell_dict
-
-    register_fn = getattr(registry, "register_cell", None)
-    if callable(register_fn):
-        try:
-            register_fn(cell_dict)
-            logger.info("[SYNTHESIS] registered synthesized cell '%s'", cell_dict.get("cell_id"))
-            return cell_dict
-        except Exception as exc:
-            logger.error("[SYNTHESIS] registry.register_cell failed: %s", exc)
-            return cell_dict
-
-    logger.warning("[SYNTHESIS] no register_cell method on registry; returning raw dict")
-    return cell_dict
 
 
 # --------------------------------------------------------------------------- #
@@ -971,7 +437,7 @@ def render_cell(
         if not child_nodes:
             # Every macro slot must be grounded in verified lattice / control-flow cells;
             # raw unconstrained LLM code generation is never invoked here.
-            slot_rendered[slot_name] = "pass"
+            slot_rendered[slot_name] = get_active_language_backend(reg_syn).noop_statement
             continue
 
         if isinstance(child_nodes, str):
@@ -1024,10 +490,7 @@ def render_cell(
                     child_sig = getattr(p_sig, "signature", None)
                     if child_sig is not None:
                         try:
-                            if (
-                                unify(item_type, child_sig, Substitution()) is not None
-                                or unify(child_sig, item_type, Substitution()) is not None
-                            ):
+                            if unify(item_type, child_sig, Substitution()) is not None:
                                 child_bindings[p_name] = item_var
                                 bound = True
                         except Exception as e:
@@ -1040,9 +503,6 @@ def render_cell(
                     if rec and rec.value_expr:
                         child_bindings[p_name] = rec.value_expr
                         continue
-                if p_name in bindings:
-                    child_bindings[p_name] = bindings[p_name]
-                    continue
                 # Match compatible upstream output variable inside slot by type/carrier
                 p_role = str(getattr(p_sig, "port_role", "") or "").lower()
                 child_in_sig = getattr(p_sig, "signature", None)
@@ -1067,17 +527,40 @@ def render_cell(
                     if not is_prim_or_top:
                         for prev_sig, prev_var in reversed(slot_typed_vars):
                             try:
-                                if (
-                                    unify(prev_sig, child_in_sig, Substitution()) is not None
-                                    or unify(child_in_sig, prev_sig, Substitution()) is not None
-                                ):
+                                if unify(prev_sig, child_in_sig, Substitution()) is not None:
                                     matched_slot_var = prev_var
                                     break
                             except Exception:
                                 continue
+                enclosing_var_types: Dict[str, Any] = {}
+                for _ev_sig, _ev_name in slot_typed_vars:
+                    if _ev_name and _ev_name not in enclosing_var_types:
+                        enclosing_var_types[_ev_name] = _ev_sig
+                if item_var and item_type is not None:
+                    enclosing_var_types.setdefault(item_var, item_type)
+
+                def _enclosing_name_compatible(cand_key: str, cand_val: Any) -> bool:
+                    if child_in_sig is None:
+                        return True
+                    c_tn = str(getattr(child_in_sig, "type_name", "") or "").strip().lower()
+                    if not c_tn or (reg_syn is not None and (reg_syn.is_declared_top(c_tn) or reg_syn.is_type_variable(c_tn))):
+                        return True
+                    val_s = str(cand_val).strip() if isinstance(cand_val, str) else ""
+                    enc_sig = enclosing_var_types.get(val_s) or enclosing_var_types.get(cand_key)
+                    if enc_sig is None and cand_key in cell_inputs:
+                        enc_sig = getattr(cell_inputs[cand_key], "signature", cell_inputs[cand_key])
+                    if enc_sig is None:
+                        return True
+                    try:
+                        return unify(enc_sig, child_in_sig, Substitution()) is not None
+                    except Exception:
+                        return True
+
                 if matched_slot_var is not None:
                     child_bindings[p_name] = matched_slot_var
-                elif p_name in enclosing_known_vars:
+                elif p_name in bindings and _enclosing_name_compatible(p_name, bindings[p_name]):
+                    child_bindings[p_name] = bindings[p_name]
+                elif p_name in enclosing_known_vars and _enclosing_name_compatible(p_name, p_name):
                     child_bindings[p_name] = p_name
                 else:
                     try:
@@ -1244,8 +727,14 @@ def render_cell(
 
     rendered = template
     be_rend = get_active_language_backend(reg_syn)
-    if is_extremum_loop and not _template_assigns_var(rendered, metric_var):
-        rendered = f"{metric_var} {be_rend.assignment_operator} {be_rend.null_literal}\n" + rendered
+    if is_extremum_loop:
+        init_prefix: List[str] = []
+        if not _template_assigns_var(rendered, metric_var):
+            init_prefix.append(f"{metric_var} {be_rend.assignment_operator} {be_rend.null_literal}")
+        if not _template_assigns_var(rendered, out_var):
+            init_prefix.append(f"{out_var} {be_rend.assignment_operator} {be_rend.null_literal}")
+        if init_prefix:
+            rendered = "\n".join(init_prefix) + "\n" + rendered
     elif is_fold_loop and not _template_assigns_var(rendered, out_var):
         init_val = getattr(cell, "init_val", None)
         if init_val is None and isinstance(getattr(cell, "tree_meta", None), dict):
@@ -1400,10 +889,5 @@ def render_cell(
 
 
 __all__ = [
-    "KernelSynthesisError",
-    "ASTCapabilityValidator",
-    "SynthesisEngine",
-    "synthesize_and_register",
     "render_cell",
-    "import_stmt_for",
 ]

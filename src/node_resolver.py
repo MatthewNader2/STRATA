@@ -213,7 +213,7 @@ def _generate_mock_code_probe(
     Constructs domain-appropriate mock variables across diverse modalities.
     Zero regular expressions.
     """
-    lines = ["import sys, os"]
+    lines = []
     for dep in dependencies or []:
         if dep and str(dep).isidentifier():
             lines.append(f"try:\n    import {dep}\nexcept ImportError:\n    pass")
@@ -390,13 +390,12 @@ class DynamicNodeResolver:
         domain = str(cell_data.get("domain_name") or target_domain)
         dependencies = cell_data.get("dependencies") or []
 
-        # AST Validation: verify code_template contains syntactically valid Python
-        if code_template:
-            if not validate_code_template(code_template):
-                logger.warning(
-                    f"[Resolver] Synthesized code_template for '{cell_id}' failed AST validation."
-                )
-                return None
+        # AST Validation: reject empty templates and verify code_template is valid Python
+        if not code_template or not code_template.strip() or not validate_code_template(code_template):
+            logger.warning(
+                f"[Resolver] Synthesized code_template for '{cell_id}' is empty or failed AST validation."
+            )
+            return None
 
         # GEVR Sandbox Dry-Run Verification Gate with 1-turn repair
         dry_run_verified = False

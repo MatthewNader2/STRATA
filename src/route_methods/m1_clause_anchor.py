@@ -46,12 +46,12 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not is_macro_cell(c)]
         if not candidates:
-            return [tunnel[0]]
+            self.fallback_reason = "no usable candidates"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
         anchors: List[Cell] = []
@@ -254,7 +254,9 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                     anchors.append(c)
 
         if not anchors:
-            return [candidates[0]]
+            self.fallback_reason = "no clause anchors matched prompt"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         # 2. Bridge gaps between consecutive anchors
         routed_path: List[Cell] = [anchors[0]]
@@ -280,18 +282,21 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
                 routed_path.append(next_anchor)
                 connected = True
             else:
-                producer = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
+                producer, p_bridges = self._find_type_producer(next_anchor, routed_path, candidates, clauses, orch)
                 if producer is not None:
                     self._trace("producer_inserted", cell=producer.cell_id, for_anchor=next_anchor.cell_id,
                                 clause_idx=getattr(next_anchor, "matched_clause_idx", None),
                                 reason="anchor input type unmet by scope; producer has same-clause identity evidence and unifies from scope")
-                    if not self.step_unifies(curr_cell, producer, prev_path=routed_path):
+                    if not p_bridges and not (
+                        self.step_unifies(curr_cell, producer, prev_path=routed_path)
+                        or self.step_unifies_dag(producer, routed_path, ctx=ctx)
+                    ):
                         p_bridges = self.find_bridge_chain(curr_cell, producer, candidates, prev_path=routed_path)
-                        if p_bridges:
-                            for pb in p_bridges:
-                                pb.matched_clause_idx = getattr(producer, "matched_clause_idx", None)
-                                pb.clause_literals = getattr(producer, "clause_literals", [])
-                            routed_path.extend(p_bridges)
+                    if p_bridges:
+                        for pb in p_bridges:
+                            pb.matched_clause_idx = getattr(producer, "matched_clause_idx", None)
+                            pb.clause_literals = getattr(producer, "clause_literals", [])
+                        routed_path.extend(p_bridges)
                     routed_path.extend([producer, next_anchor])
                     connected = True
                 else:
@@ -418,4 +423,10 @@ class M1ClauseAnchorRouteMethod(RouteMethod):
         routed_path = self.insert_optic_commits(routed_path, trace=True)
         routed_path = self.insert_property_bridges(routed_path, prompt=prompt, ctx=ctx)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
-        return routed_path[:max_allowed]
+        routed_path = routed_path[:max_allowed]
+        _verr = self.verify_planned_path(routed_path, prompt, orch, ctx=ctx)
+        if _verr:
+            self.fallback_reason = f"M1 {_verr}"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
+        return routed_path

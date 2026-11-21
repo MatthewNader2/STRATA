@@ -2263,7 +2263,18 @@
       ],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "layout",
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 10.0,
+        "lossy": true,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "CV2_CVT_COLOR_GRAY2BGR",
@@ -2423,7 +2434,18 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "layout",
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "CV2_CVT_COLOR_BGR2RGB",
@@ -2584,7 +2606,17 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "CV2_CVT_COLOR_BGR2HSV",
@@ -2746,7 +2778,17 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "CV2_CVT_COLOR_BGR2LAB",
@@ -2906,7 +2948,17 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "CV2_RESIZE",
@@ -3204,7 +3256,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "src"
+      }
     },
     {
       "cell_id": "CV2_WARP_AFFINE",
@@ -4399,7 +4458,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "src"
+      }
     },
     {
       "cell_id": "CV2_GAUSSIAN_BLUR",
@@ -4630,7 +4696,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -4667,7 +4733,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "src"
+      }
     },
     {
       "cell_id": "CV2_MEDIAN_BLUR",
@@ -4847,7 +4920,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "src"
+      }
     },
     {
       "cell_id": "CV2_BILATERAL_FILTER",
@@ -5069,7 +5149,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -5088,7 +5168,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "src",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "src"
+      }
     },
     {
       "cell_id": "CV2_FILTER2D",
@@ -6361,7 +6448,7 @@
           "layout": {
             "rank": 0,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -6599,7 +6686,7 @@
           "layout": {
             "rank": 0,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7412,7 +7499,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7531,7 +7618,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7623,7 +7710,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7742,7 +7829,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7834,7 +7921,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7950,7 +8037,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8033,7 +8120,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8149,7 +8236,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "uint8",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,

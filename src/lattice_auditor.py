@@ -59,6 +59,10 @@ class LatticeAuditor:
         total_cells = len(cells)
         adj = getattr(self.orchestrator, "_adjacency", {})
         rev_adj = getattr(self.orchestrator, "_reverse_adjacency", {})
+        if cells and not adj and hasattr(self.orchestrator, "build_topology"):
+            self.orchestrator.build_topology()
+            adj = getattr(self.orchestrator, "_adjacency", {})
+            rev_adj = getattr(self.orchestrator, "_reverse_adjacency", {})
 
         stage_counts: Dict[int, int] = defaultdict(int)
         domain_counts: Dict[str, int] = defaultdict(int)
@@ -90,11 +94,16 @@ class LatticeAuditor:
         visited.update(entry_nodes)
 
         cross_tree_edges = 0
+        resolved_out_deg: Dict[str, int] = {}
+        resolved_in_deg: Dict[str, int] = defaultdict(int)
 
-        for u_id, neighbors in adj.items():
+        for u_id in list(cells.keys()):
+            neighbors = adj.get(u_id, ()) if hasattr(adj, "get") else ()
+            resolved_out_deg[u_id] = len(neighbors)
             u_cell = cells.get(u_id)
             u_dom = getattr(u_cell, "domain_name", "") if u_cell else ""
             for v_id in neighbors:
+                resolved_in_deg[v_id] += 1
                 v_cell = cells.get(v_id)
                 v_dom = getattr(v_cell, "domain_name", "") if v_cell else ""
                 if u_dom and v_dom and u_dom != v_dom:
@@ -116,8 +125,8 @@ class LatticeAuditor:
             if cid in constants:
                 continue
 
-            in_deg = len(rev_adj.get(cid, ()))
-            out_deg = len(adj.get(cid, ()))
+            in_deg = max(resolved_in_deg.get(cid, 0), len(rev_adj.get(cid, ())))
+            out_deg = max(resolved_out_deg.get(cid, 0), len(adj.get(cid, ())))
             st = getattr(cell, "stage", 2) or 2
 
             # Completely disconnected

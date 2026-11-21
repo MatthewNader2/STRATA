@@ -134,6 +134,7 @@ PROFILE_SPECS: Dict[str, ProfileSpec] = {
         uses_ir_compiler=True,
         uses_coalgebraic_unfolder=True,
         uses_constrained_choice_scorer=True,
+        quick_shortcut="7",
     ),
 }
 
@@ -245,7 +246,7 @@ class NSTLSettings(BaseSettings):
     )
     use_ir_compiler: bool = False
     strict_io: bool = Field(
-        default=False,
+        default=True,
         description="When True, refuse pipelines with unbound required path ports instead of emitting typed input_n.ext / output_n.ext boundary placeholders.",
     )
     require_coverage_floor: bool = True

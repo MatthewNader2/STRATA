@@ -144,8 +144,6 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
 
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [
             c for c in tunnel
@@ -159,7 +157,9 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
             )
         ]
         if not candidates:
-            return [tunnel[0]]
+            self.fallback_reason = "no usable candidates"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         # Experimental Lab Priors: ZCA Whitening + SAE Sparse Coding + Absorbing Markov Chain
         self.pathfinder.ensure_corpus_whitening(candidates)
@@ -193,9 +193,9 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
         w_total = (w_cl + w_goal + w_struct) or 1.0
         momentum = weights.get("state_momentum", 0.7)
 
-        # 1. Continuous Latent Goal and Clause Representations (fails loudly if model unavailable)
-        goal_vec = self.pathfinder.extractor.encode(prompt)
-        clause_vecs = self.pathfinder.extractor.encode_batch(clauses)
+        # 1. Continuous Latent Goal and Clause Representations (aligned with ZCA / early-exit cell space)
+        goal_vec = self.pathfinder.encode_query(prompt)
+        clause_vecs = self.pathfinder.encode_queries(clauses)
         current_vec = np.zeros_like(goal_vec)
 
         src_file_literals, dest_file_literals = self.extract_file_literals(prompt or "", ctx=ctx)
@@ -220,11 +220,28 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
 
         committed_path: List[Cell] = [best_entry]
         visited_ids: Set[str] = {best_entry.cell_id}
-        current_vec = self.pathfinder.get_cell_vector(best_entry)
+        entry_vec = self.pathfinder.get_cell_vector(best_entry)
+        visited_vecs: List[np.ndarray] = [entry_vec]
+        current_vec = entry_vec
 
         _ev = self._evidence()
         prompt_tokens = _ev.clause_tokens(prompt) if _ev is not None else CellTokenizer.tokenize_prompt(prompt)
+        clause_token_sets = [
+            (_ev.clause_tokens(cl) if _ev is not None else CellTokenizer.tokenize_prompt(cl))
+            for cl in clauses
+        ]
         covered_tokens: Set[str] = set(getattr(best_entry, "identity_tokens", best_entry.token_set) & prompt_tokens)
+
+        def _mark_covered_clauses(cell: Cell, covered_set: Set[int]) -> None:
+            c_toks = getattr(cell, "identity_tokens", cell.token_set)
+            for ci, cl_toks in enumerate(clause_token_sets):
+                if cl_toks and (c_toks & cl_toks):
+                    covered_set.add(ci)
+
+        covered_clause_indices: Set[int] = set()
+        _mark_covered_clauses(best_entry, covered_clause_indices)
+        if not covered_clause_indices and clauses:
+            covered_clause_indices.add(0)
 
         num_clauses = len(clauses)
         max_steps = min(20, max(num_clauses + 6, max_transforms + 4))
@@ -232,17 +249,23 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
         stratified_cands = self.select_stratified_candidates(prompt, candidates, relevance_map, orchestrator=orch)
         non_bridge_pool = stratified_cands if stratified_cands else candidates
 
-        # 3. Continuous Latent Geodesic Path Progression (without M1 anchor/exact_target overrides)
+        # 3. Continuous Latent Geodesic Path Progression with Subspace-Orthogonal Residual Pursuit
         for step in range(max_steps):
             curr = committed_path[-1]
 
             if _is_sink_node(curr, orch) and len(committed_path) > 1:
-                if step >= max(1, num_clauses - 1) or not (prompt_tokens - covered_tokens):
+                if len(covered_clause_indices) >= num_clauses or not (prompt_tokens - covered_tokens):
                     break
 
-            target_cl_idx = min(step + 1, num_clauses - 1)
+            target_cl_idx = next(
+                (i for i in range(num_clauses) if i not in covered_clause_indices),
+                num_clauses - 1,
+            )
             target_cl = clauses[target_cl_idx] if target_cl_idx < num_clauses else prompt
-            remaining_clauses = max(0, (num_clauses - 1) - target_cl_idx)
+            remaining_clauses = max(
+                0,
+                sum(1 for i in range(num_clauses) if i not in covered_clause_indices and i != target_cl_idx),
+            )
             target_is_egress = _clause_has_egress_intent(target_cl) or (
                 self.requested_sink(target_cl, non_bridge_pool) is not None
             )
@@ -260,13 +283,14 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
             if not valid_next:
                 break
 
-            target_cl_vec = clause_vecs[target_cl_idx] if target_cl_idx < len(clause_vecs) else goal_vec
+            residual_vec = self.pathfinder.compute_orthogonal_residual(goal_vec, visited_vecs)
+            target_cl_vec = clause_vecs[target_cl_idx] if target_cl_idx < len(clause_vecs) else residual_vec
             _requested_sink = self.requested_sink(prompt, candidates)
 
             def _score_cand(cand: Cell) -> Tuple[Any, ...]:
                 c_vec = self.pathfinder.get_cell_vector(cand)
                 latent_goal_h = self.pathfinder.compute_latent_heuristic(
-                    current_vec, c_vec, goal_vec, weights=weights
+                    current_vec, c_vec, residual_vec, weights=weights
                 )
                 latent_cl_h = self.pathfinder.compute_latent_heuristic(
                     current_vec, c_vec, target_cl_vec, weights=weights
@@ -314,12 +338,14 @@ class M11LatentCognitiveRouteMethod(RouteMethod):
             committed_path.append(best_next)
             visited_ids.add(best_next.cell_id)
             covered_tokens.update(getattr(best_next, "identity_tokens", best_next.token_set) & prompt_tokens)
+            _mark_covered_clauses(best_next, covered_clause_indices)
 
             # Update running latent state vector on the unit hypersphere
             next_vec = self.pathfinder.get_cell_vector(best_next)
+            visited_vecs.append(next_vec)
             current_vec = self.pathfinder.update_state_vector(current_vec, next_vec, momentum=momentum)
 
-            if (prompt_tokens - covered_tokens) == set() and len(committed_path) >= num_clauses:
+            if (prompt_tokens - covered_tokens) == set() and len(covered_clause_indices) >= num_clauses:
                 break
 
             if (prompt_tokens - covered_tokens) == set() and _is_sink_node(best_next, orch):

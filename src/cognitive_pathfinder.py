@@ -65,7 +65,7 @@ class LatentVectorExtractor:
 
     def __init__(self, model_name: Optional[str] = None):
         self._lock = threading.RLock()
-        self._cache: Dict[str, np.ndarray] = {}
+        self._cache: Dict[Tuple[str, str], np.ndarray] = {}
         self._model = None
         self._backend: str = "unavailable"
         self._dim: int = 0
@@ -279,7 +279,7 @@ class LatentVectorExtractor:
                 f"Refusing to generate pseudo-random noise embeddings."
             )
 
-    def encode(self, text: str) -> np.ndarray:
+    def encode(self, text: str, mode: str = "document") -> np.ndarray:
         """
         Encodes text to a unit-normalized latent vector on the hypersphere S^{d-1}.
         Raises ModelUnavailableError if no neural model is loaded.
@@ -288,16 +288,17 @@ class LatentVectorExtractor:
         if not text or not text.strip():
             return np.zeros(self._dim, dtype=np.float32)
 
+        cache_key = (mode, text)
         with self._lock:
-            if text in self._cache:
-                return self._cache[text]
+            if cache_key in self._cache:
+                return self._cache[cache_key]
 
             if self._backend == "sentence_transformers" and self._model is not None:
                 try:
                     from .inference import _encode_with_modes
                 except (ImportError, ValueError):
                     from inference import _encode_with_modes
-                vecs = _encode_with_modes(self._model, [text], mode="document")
+                vecs = _encode_with_modes(self._model, [text], mode=mode)
                 raw_vec = np.array(vecs[0], dtype=np.float32) if vecs else np.zeros(self._dim, dtype=np.float32)
                 norm = float(np.linalg.norm(raw_vec))
                 norm_vec = raw_vec / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
@@ -310,7 +311,7 @@ class LatentVectorExtractor:
                 norm_vec = pooled / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
 
             elif self._backend == "profile_embedder" and self._model is not None:
-                vecs = self._model.get_embeddings([text], mode="document")
+                vecs = self._model.get_embeddings([text], mode=mode)
                 raw = np.array(vecs[0], dtype=np.float32) if vecs else np.zeros(self._dim, dtype=np.float32)
                 norm = float(np.linalg.norm(raw))
                 norm_vec = raw / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
@@ -318,10 +319,10 @@ class LatentVectorExtractor:
             else:
                 raise ModelUnavailableError("Neural embedding backend is not initialized.")
 
-            self._cache[text] = norm_vec
+            self._cache[cache_key] = norm_vec
             return norm_vec
 
-    def encode_batch(self, texts: List[str]) -> List[np.ndarray]:
+    def encode_batch(self, texts: List[str], mode: str = "document") -> List[np.ndarray]:
         """
         Encodes a batch of texts to unit-normalized latent vectors.
         Raises ModelUnavailableError if no neural model is loaded.
@@ -338,8 +339,8 @@ class LatentVectorExtractor:
             for i, t in enumerate(texts):
                 if not t or not t.strip():
                     results[i] = np.zeros(self._dim, dtype=np.float32)
-                elif t in self._cache:
-                    results[i] = self._cache[t]
+                elif (mode, t) in self._cache:
+                    results[i] = self._cache[(mode, t)]
                 else:
                     uncached_indices.append(i)
                     uncached_texts.append(t)
@@ -350,24 +351,24 @@ class LatentVectorExtractor:
                         from .inference import _encode_with_modes
                     except (ImportError, ValueError):
                         from inference import _encode_with_modes
-                    vecs = _encode_with_modes(self._model, uncached_texts, mode="document")
+                    vecs = _encode_with_modes(self._model, uncached_texts, mode=mode)
                     for idx, vec in zip(uncached_indices, vecs):
                         raw_vec = np.array(vec, dtype=np.float32)
                         norm = float(np.linalg.norm(raw_vec))
                         norm_vec = raw_vec / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
-                        self._cache[texts[idx]] = norm_vec
+                        self._cache[(mode, texts[idx])] = norm_vec
                         results[idx] = norm_vec
                 elif self._backend == "profile_embedder" and self._model is not None:
-                    vecs = self._model.get_embeddings(uncached_texts, mode="document")
+                    vecs = self._model.get_embeddings(uncached_texts, mode=mode)
                     for idx, vec in zip(uncached_indices, vecs):
                         raw_vec = np.array(vec, dtype=np.float32)
                         norm = float(np.linalg.norm(raw_vec))
                         norm_vec = raw_vec / (norm + 1e-9) if norm > 0 else np.zeros(self._dim, dtype=np.float32)
-                        self._cache[texts[idx]] = norm_vec
+                        self._cache[(mode, texts[idx])] = norm_vec
                         results[idx] = norm_vec
                 else:
                     for idx in uncached_indices:
-                        results[idx] = self.encode(texts[idx])
+                        results[idx] = self.encode(texts[idx], mode=mode)
 
         return [r if r is not None else np.zeros(self._dim, dtype=np.float32) for r in results]
 
@@ -411,11 +412,58 @@ class CognitivePathfinder:
         )
         return f"{cid} {keywords} {summary} {doc} in:{in_types} out:{out_types} {code}".strip()
 
-    def encode_text(self, text: str) -> np.ndarray:
+    def encode_text(self, text: str, mode: str = "document") -> np.ndarray:
         """Encodes text using Early-Exit + ZCA Whitening when enabled in ACTIVE_EXPERIMENTS."""
         if self.exp_cfg.early_exit_layer is not None or self.exp_cfg.use_zca_whitening:
-            return self.probe.encode_early_exit(text, layer_idx=self.exp_cfg.early_exit_layer)
-        return self.extractor.encode(text)
+            return self.probe.encode_early_exit(
+                text, layer_idx=self.exp_cfg.early_exit_layer, mode=mode
+            )
+        return self.extractor.encode(text, mode=mode)
+
+    def encode_query(self, text: str) -> np.ndarray:
+        """Encodes a prompt/clause query into the same Early-Exit + ZCA space as cells."""
+        return self.encode_text(text, mode="query")
+
+    def encode_queries(self, texts: List[str]) -> List[np.ndarray]:
+        """Batch-encodes prompt/clause queries in the aligned latent/whitened space."""
+        if not texts:
+            return []
+        if self.exp_cfg.early_exit_layer is not None or self.exp_cfg.use_zca_whitening:
+            return [self.encode_query(t) for t in texts]
+        return self.extractor.encode_batch(texts, mode="query")
+
+    def compute_orthogonal_residual(
+        self,
+        goal_vec: np.ndarray,
+        visited_vecs: List[np.ndarray],
+    ) -> np.ndarray:
+        """
+        Orthonormalizes `visited_vecs` via Modified Gram-Schmidt and subtracts
+        the visited subspace projection from `goal_vec` so its residual norm
+        monotonically shrinks as covered concepts accumulate.
+        """
+        g = np.asarray(goal_vec, dtype=np.float64)
+        g_norm = float(np.linalg.norm(g))
+        if g_norm < 1e-9 or not visited_vecs:
+            return g.astype(np.float32)
+
+        basis: List[np.ndarray] = []
+        residual = g.copy()
+        for v in visited_vecs:
+            w = np.asarray(v, dtype=np.float64).copy()
+            for q in basis:
+                w = w - float(np.dot(w, q)) * q
+            w_norm = float(np.linalg.norm(w))
+            if w_norm <= 1e-7:
+                continue
+            q = w / w_norm
+            basis.append(q)
+            residual = residual - float(np.dot(residual, q)) * q
+
+        res_norm = float(np.linalg.norm(residual))
+        if res_norm <= 1e-7:
+            return np.zeros_like(g, dtype=np.float32)
+        return residual.astype(np.float32)
 
     def ensure_corpus_whitening(self, cells: List[Any]) -> None:
         """Fits ZCA whitening matrix over the active candidate cell embeddings."""
@@ -444,7 +492,7 @@ class CognitivePathfinder:
         if not self.exp_cfg.use_sparse_coding or not candidates:
             return {}
         self.ensure_corpus_whitening(candidates)
-        p_vec = self.encode_text(prompt)
+        p_vec = self.encode_query(prompt)
         c_ids = [getattr(c, "cell_id", "") for c in candidates]
         D_mat = np.array([self.get_cell_vector(c) for c in candidates], dtype=np.float32)
         return self.sae.decompose_prompt_embedding(

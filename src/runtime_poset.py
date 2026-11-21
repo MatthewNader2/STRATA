@@ -15,6 +15,7 @@ All domain-specific vocabulary and semantics live in domain trees (trees/*.json)
 from __future__ import annotations
 import builtins
 import collections.abc
+import contextlib
 import inspect
 import numbers
 import os
@@ -75,6 +76,12 @@ def reflect_mro_edges(cls: Type[Any], registry: Any) -> None:
     """
     if not inspect.isclass(cls):
         return
+    reflected = getattr(registry, "_reflected_python_classes", None)
+    if isinstance(reflected, set):
+        cid = id(cls)
+        if cid in reflected:
+            return
+        reflected.add(cid)
     cls_name = cls.__name__.lower()
     try:
         mro = inspect.getmro(cls)
@@ -116,37 +123,41 @@ def bootstrap_python_runtime_poset(registry: Any) -> None:
     Bootstraps Python host runtime type edges (`builtins`, `collections.abc`,
     `numbers`, `os.PathLike`, and loaded modules) strictly when active runtime is Python.
     """
-    registry.register_type("object", None)
-    registry.register_product_constructor(tuple.__name__)
+    batch_ctx = registry.batch_mutations() if hasattr(registry, "batch_mutations") else contextlib.nullcontext()
+    with batch_ctx:
+        registry.register_type("object", None)
+        registry.register_product_constructor(tuple.__name__)
 
-    # 2. Lowest-level runtime ABC roots
-    for _, proto_name in _RUNTIME_ABC_ROOTS:
-        registry.register_type(proto_name, "object")
-    for abc_cls_a, proto_a in _RUNTIME_ABC_ROOTS:
-        for abc_cls_b, proto_b in _RUNTIME_ABC_ROOTS:
-            if abc_cls_a is bool and abc_cls_b is numbers.Number:
-                continue
-            if abc_cls_a is not abc_cls_b and issubclass(abc_cls_a, abc_cls_b):
-                registry.register_type(proto_a, proto_b)
-
-    # 3. Introspect all Python built-in classes via live MRO
-    for obj in builtins.__dict__.values():
-        if inspect.isclass(obj):
-            reflect_mro_edges(obj, registry)
-
-    # 4. Introspect already-imported root packages in sys.modules
-    for mod_name, mod in list(sys.modules.items()):
-        if not mod or "." in mod_name or mod_name.startswith("_"):
-            continue
-        try:
-            for attr_name in dir(mod):
-                if attr_name.startswith("_"):
+        # 2. Lowest-level runtime ABC roots
+        for _, proto_name in _RUNTIME_ABC_ROOTS:
+            registry.register_type(proto_name, "object")
+        for abc_cls_a, proto_a in _RUNTIME_ABC_ROOTS:
+            for abc_cls_b, proto_b in _RUNTIME_ABC_ROOTS:
+                if abc_cls_a is bool and abc_cls_b is numbers.Number:
                     continue
-                obj = getattr(mod, attr_name, None)
+                if abc_cls_a is not abc_cls_b and issubclass(abc_cls_a, abc_cls_b):
+                    registry.register_type(proto_a, proto_b)
+
+        # 3. Introspect all Python built-in classes via live MRO
+        for obj in builtins.__dict__.values():
+            if inspect.isclass(obj):
+                reflect_mro_edges(obj, registry)
+
+        # 4. Introspect already-loaded classes in sys.modules without invoking lazy __getattr__/__dir__
+        for mod_name, mod in list(sys.modules.items()):
+            if not mod or "." in mod_name or mod_name.startswith("_"):
+                continue
+            try:
+                ns = object.__getattribute__(mod, "__dict__")
+            except AttributeError:
+                continue
+            if not isinstance(ns, dict):
+                continue
+            for attr_name, obj in list(ns.items()):
+                if not isinstance(attr_name, str) or attr_name.startswith("_"):
+                    continue
                 if inspect.isclass(obj):
                     reflect_mro_edges(obj, registry)
-        except Exception:
-            continue
 
 
 def bootstrap_runtime_poset(registry: Any) -> None:

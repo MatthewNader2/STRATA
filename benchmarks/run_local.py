@@ -34,6 +34,7 @@ from benchmarks.evaluators import (  # noqa: E402
     read_proc_mem_mb,
 )
 from benchmarks.suites import SDK_SPECS, get_suite_tasks  # noqa: E402
+from eval_metrics import outcome_ok  # noqa: E402
 
 
 class LlamaTelemetry:
@@ -261,7 +262,7 @@ def main() -> None:
                     "expected": exp,
                     "status": st,
                     "passed": st == "PASSED",
-                    "acceptable": (st == "PASSED") or (exp == "clarify" and st == "LINT_HALTED"),
+                    "acceptable": outcome_ok(st, exp),
                     "detail": res.get("detail", ""),
                 }
             wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)

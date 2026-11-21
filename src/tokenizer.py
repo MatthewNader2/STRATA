@@ -29,6 +29,7 @@ def normalize_token(token: str) -> str:
 # expands them in both directions.
 _ALIASES: dict = {}
 _ALIASES_REV: dict = {}
+_ALIASES_KEY: Tuple[Tuple[str, str], ...] = ()
 
 
 _MM_CLS = None
@@ -64,7 +65,7 @@ def _is_profile_zero() -> bool:
 
 
 def register_aliases(mapping: dict) -> None:
-    global _ALIASES, _ALIASES_REV
+    global _ALIASES, _ALIASES_REV, _ALIASES_KEY
     clean = {
         str(k).strip().lower(): str(v).strip().lower()
         for k, v in (mapping or {}).items()
@@ -73,12 +74,17 @@ def register_aliases(mapping: dict) -> None:
     if clean == _ALIASES:
         return
     _ALIASES = clean
+    _ALIASES_KEY = tuple(sorted(_ALIASES.items()))
     rev: dict = {}
     for k, v in _ALIASES.items():
         rev.setdefault(v, set()).add(k)
     _ALIASES_REV = rev
     try:
         _tokenize_identifier_cached.cache_clear()
+    except Exception:
+        pass
+    try:
+        _tokenize_prompt_cached.cache_clear()
     except Exception:
         pass
 
@@ -106,7 +112,7 @@ def _tokenize_identifier_cached(identifier: str, expand_aliases: bool = True) ->
 
     def _emit(chunk):
         t = "".join(chunk).lower().strip()
-        if len(t) > 1:
+        if len(t) > 1 or (len(t) == 1 and t.isalpha()):
             tokens.add(t)
 
     seg, chunk = [], []
@@ -142,7 +148,7 @@ def _tokenize_identifier_cached(identifier: str, expand_aliases: bool = True) ->
         _emit(chunk)
 
     full = "".join(c for c in clean if c.isalnum() or c in ("_", "-")).lower().strip()
-    if len(full) > 1:
+    if len(full) > 1 or (len(full) == 1 and full.isalpha()):
         tokens.add(full)
 
     if expand_aliases and _ALIASES:  # (apply_fixes_v7)
@@ -192,7 +198,7 @@ class CellTokenizer:
     def tokenize_prompt(cls, prompt: str) -> Set[str]:
         if not prompt:
             return set()
-        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), len(_ALIASES)))
+        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), _ALIASES_KEY))
 
     @classmethod
     def tokenize_cell(cls, cell_id: str, keywords: Set[str]) -> Set[str]:
@@ -266,6 +272,7 @@ class CellTokenizer:
 
         # 3. Detect clause boundaries strictly on universal punctuation
         split_positions = set()
+        hard_break_word_idxs: Set[int] = set()
         # Structural newlines outside quotes/brackets are universal clause boundaries
         for idx, ch in enumerate(text):
             if ch == '\n' and not _is_inside_protected(idx):
@@ -278,24 +285,80 @@ class CellTokenizer:
             if "->" in w or "➔" in w:
                 split_positions.add(s)
                 split_positions.add(e)
+                hard_break_word_idxs.add(idx)
                 continue
 
             if (";" in w or w.endswith(":")) and not (_is_inside_protected(s) and _is_inside_protected(e - 1)):
                 split_positions.add(e)
+                hard_break_word_idxs.add(idx)
                 continue
 
             if "\n" in w:
                 split_positions.add(e)
+                hard_break_word_idxs.add(idx)
                 continue
 
             if w.endswith(".") and idx + 1 < len(raw_words) and not (_is_inside_protected(s) and _is_inside_protected(e - 1)):
                 if not (clean and clean.replace(".", "").isdigit()):
                     split_positions.add(e)
+                    hard_break_word_idxs.add(idx)
                     continue
 
-            if w.endswith(",") and idx + 1 < len(raw_words) and not (_is_inside_protected(s) and _is_inside_protected(e - 1)):
-                split_positions.add(e)
-                continue
+        # 3b. Evaluate unprotected trailing commas within each hard sentence span so
+        # series / Oxford lists ("a, b, and c", "a, b, c", "X, y") stay in one clause
+        # while genuine multi-clause commas still split cleanly.
+        def _clean_seg_words(word_slice: List[Tuple[int, int, str]]) -> Tuple[bool, int]:
+            cleaned: List[str] = []
+            for _, _, tok in word_slice:
+                cw = tok.strip(",;.:!?()[]{}\'\"")
+                if cw and cw not in ("->", "➔"):
+                    cleaned.append(cw)
+            starts_coord = len(cleaned) >= 2 and cleaned[0].lower() in ("and", "or", "&")
+            core_count = (len(cleaned) - 1) if starts_coord else len(cleaned)
+            return starts_coord, core_count
+
+        span_start = 0
+        n_words = len(raw_words)
+        while span_start < n_words:
+            span_end = span_start
+            while span_end < n_words and span_end not in hard_break_word_idxs:
+                # Also break if a bare newline lies between raw_words[span_end] and raw_words[span_end+1]
+                if span_end + 1 < n_words:
+                    gap = text[raw_words[span_end][1]:raw_words[span_end + 1][0]]
+                    if "\n" in gap and any(
+                        text[raw_words[span_end][1] + gi] == "\n"
+                        and not _is_inside_protected(raw_words[span_end][1] + gi)
+                        for gi in range(len(gap))
+                    ):
+                        break
+                span_end += 1
+            seg_end = min(span_end + 1, n_words) if span_end < n_words else n_words
+
+            comma_cuts: List[int] = []
+            for wi in range(span_start, seg_end - 1):
+                ws, we, ww = raw_words[wi]
+                if ww.endswith(",") and not (_is_inside_protected(ws) and _is_inside_protected(we - 1)):
+                    comma_cuts.append(wi)
+
+            if comma_cuts:
+                slices: List[List[Tuple[int, int, str]]] = []
+                prev_wi = span_start
+                for ci in comma_cuts:
+                    slices.append(raw_words[prev_wi:ci + 1])
+                    prev_wi = ci + 1
+                slices.append(raw_words[prev_wi:seg_end])
+
+                for k, ci in enumerate(comma_cuts):
+                    _, left_core = _clean_seg_words(slices[k])
+                    right_coord, right_core = _clean_seg_words(slices[k + 1])
+                    is_series = (
+                        (not right_coord and right_core == 1)
+                        or (right_coord and right_core == 1 and left_core == 1)
+                    )
+                    if not is_series:
+                        split_positions.add(raw_words[ci][1])
+
+            span_start = seg_end
 
         if not split_positions:
             return [text]
@@ -320,7 +383,7 @@ class CellTokenizer:
 def _tokenize_prompt_cached(
     prompt: str,
     profile_zero: bool,
-    aliases_len: int,
+    aliases_key: Tuple[Tuple[str, str], ...],
 ) -> Tuple[str, ...]:
     tokens = set()
     cur = []
@@ -330,12 +393,12 @@ def _tokenize_prompt_cached(
         else:
             if cur:
                 w = "".join(cur)
-                if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
+                if (len(w) > 1 and (w[0].isalpha() or w[0] == '_')) or (len(w) == 1 and w.isalpha()):
                     tokens.add(w)
                 cur = []
     if cur:
         w = "".join(cur)
-        if len(w) > 1 and (w[0].isalpha() or w[0] == '_'):
+        if (len(w) > 1 and (w[0].isalpha() or w[0] == '_')) or (len(w) == 1 and w.isalpha()):
             tokens.add(w)
     for raw in prompt.split():
         cw = raw.strip(",;.:!?()[]{}\'\"")

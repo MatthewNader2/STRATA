@@ -8,7 +8,6 @@ CEGIS self-repair.
 
 from __future__ import annotations
 
-import abc
 import ast
 import builtins
 import contextlib
@@ -84,56 +83,8 @@ class _SecurityASTVisitor(_UnifiedSecurityASTVisitor):
 
 
 # ============================================================================
-# Pluggable Postconditions & State Protocols (Domain-Agnostic)
+# Pluggable Postconditions (Domain-Agnostic)
 # ============================================================================
-
-class StateProtocolRegistry:
-    """Registry determining object readiness or fittedness via pluggable predicates."""
-
-    def __init__(self) -> None:
-        self._predicates: List[Callable[[Any], bool]] = []
-        self._register_default_predicates()
-
-    def register(self, predicate: Callable[[Any], bool]) -> None:
-        self._predicates.append(predicate)
-
-    def is_fitted_or_ready(self, target: Any) -> bool:
-        for pred in self._predicates:
-            try:
-                if pred(target):
-                    return True
-            except Exception as exc:
-                logger.debug("[SANDBOX] State predicate check skipped: %s", exc)
-                continue
-        return False
-
-    def _register_default_predicates(self) -> None:
-        def _callable_check(obj: Any) -> bool:
-            try:
-                from lattice import TypeRegistry
-                state_methods = TypeRegistry.get_instance().get_type_property_values("state_check_methods")
-            except Exception:
-                state_methods = set()
-            for attr in state_methods:
-                method = getattr(obj, attr, None)
-                if callable(method):
-                    return bool(method())
-            return False
-
-        def _attribute_convention_check(obj: Any) -> bool:
-            if hasattr(obj, "fit") and hasattr(obj, "get_params"):
-                return any(
-                    k.endswith("_") and not k.startswith("__")
-                    for k in getattr(obj, "__dict__", {})
-                )
-            if hasattr(obj, "__dict__"):
-                public_state = [k for k in obj.__dict__.keys() if not k.startswith("_")]
-                return len(public_state) > 0
-            return True
-
-        self.register(_callable_check)
-        self.register(_attribute_convention_check)
-
 
 class PostconditionRegistry:
     """Domain-agnostic registry for evaluating postcondition constraints."""
@@ -243,102 +194,6 @@ class PostconditionRegistry:
 
 
 # ============================================================================
-# Pluggable Terminal Intent Verifiers (Domain-Agnostic)
-# ============================================================================
-
-@dataclass
-class IntentVerificationResult:
-    valid: bool
-    reason: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
-
-
-class BaseIntentVerifier(abc.ABC):
-    @abc.abstractmethod
-    def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
-        pass
-
-
-class TerminalIntentRegistry:
-    """Decoupled registry of verifiers validating terminal computation intent."""
-
-    def __init__(self) -> None:
-        self._verifiers: Dict[str, BaseIntentVerifier] = {}
-        self._register_default_verifiers()
-
-    def register(self, intent_type: str, verifier: BaseIntentVerifier) -> None:
-        self._verifiers[intent_type] = verifier
-
-    def verify(self, intent_type: str, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
-        verifier = self._verifiers.get(intent_type)
-        if not verifier:
-            is_valid = output is not None
-            return IntentVerificationResult(
-                valid=is_valid,
-                reason="Default fallback: output is non-None" if is_valid else "Output is None",
-            )
-        return verifier.verify(output, context)
-
-    def _register_default_verifiers(self) -> None:
-        class PartitionIntentVerifier(BaseIntentVerifier):
-            def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
-                if not isinstance(output, (tuple, list)):
-                    return IntentVerificationResult(valid=False, reason="Split intent must produce a collection")
-                expected_min = context.get("min_partitions", 2)
-                if len(output) < expected_min:
-                    return IntentVerificationResult(
-                        valid=False,
-                        reason=f"Expected at least {expected_min} partitions, received {len(output)}",
-                    )
-                return IntentVerificationResult(valid=True, reason="Valid partition structure")
-
-        class StructuredDataVerifier(BaseIntentVerifier):
-            def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
-                if output is None:
-                    return IntentVerificationResult(valid=False, reason="Target structured output is None")
-                has_len = hasattr(output, "__len__")
-                has_shape = hasattr(output, "shape")
-                if not (has_len or has_shape):
-                    return IntentVerificationResult(valid=False, reason="Output lacks dimension or sequence protocol")
-                return IntentVerificationResult(valid=True, reason="Structured carrier contract verified")
-
-        class VisualArtifactVerifier(BaseIntentVerifier):
-            def verify(self, output: Any, context: Dict[str, Any]) -> IntentVerificationResult:
-                if output is None:
-                    return IntentVerificationResult(valid=False, reason="Artifact output is None")
-                try:
-                    from lattice import TypeRegistry
-                    reg = TypeRegistry.get_instance()
-                    render_hooks = reg.get_type_property_values("render_hooks")
-                    visual_types = reg.get_types_by_kind("visual") | reg.get_types_with_property("is_visual", True)
-                except Exception:
-                    render_hooks, visual_types = set(), set()
-                has_render_hook = any(hasattr(output, attr) for attr in render_hooks)
-                if has_render_hook or type(output).__name__.lower() in visual_types:
-                    return IntentVerificationResult(valid=True, reason="Visual artifact verified")
-                return IntentVerificationResult(valid=False, reason="Object lacks visual artifact rendering protocol")
-
-        try:
-            try:
-                from .lattice import TypeRegistry
-            except ImportError:
-                from lattice import TypeRegistry
-            reg = TypeRegistry.get_instance()
-            partition_keys = reg.get_roles_for_category("partition")
-            carrier_keys = reg.get_composite_carrier_roots()
-            visual_keys = reg.get_types_by_kind("visual") | reg.get_types_with_property("is_visual", True)
-        except Exception:
-            partition_keys, carrier_keys, visual_keys = {"partition"}, set(), {"visual"}
-
-        for key in partition_keys:
-            self.register(key, PartitionIntentVerifier())
-        for key in carrier_keys:
-            self.register(key, StructuredDataVerifier())
-        for key in visual_keys:
-            self.register(key, VisualArtifactVerifier())
-
-
-# ============================================================================
 # Hardened Worker Execution Layer (Track 5: RLIMIT, Network & FS Confinement)
 # ============================================================================
 
@@ -369,11 +224,11 @@ def _enforce_posix_resource_limits(max_memory_mb: int = 16384, max_cpu_seconds: 
         env_mem = os.environ.get("NSTL_SANDBOX_MAX_MEMORY_MB")
         if env_mem:
             try:
-                max_memory_mb = max(int(env_mem), max_memory_mb)
+                max_memory_mb = int(env_mem)
             except ValueError:
                 pass
         mem_bytes = int(max_memory_mb) * 1024 * 1024
-        as_bytes = max(32768, int(max_memory_mb)) * 1024 * 1024
+        as_bytes = int(max_memory_mb) * 1024 * 1024
         if hasattr(_resource, "RLIMIT_AS"):
             _, hard_as = _resource.getrlimit(_resource.RLIMIT_AS)
             target_as = as_bytes if hard_as == _resource.RLIM_INFINITY else min(as_bytes, hard_as)
@@ -456,15 +311,39 @@ def _create_confined_open(
     return _confined_open
 
 
+_SAFE_OS_PATH_ATTRS: Tuple[str, ...] = (
+    "join", "split", "splitext", "basename", "dirname", "normpath",
+    "abspath", "relpath", "realpath", "exists", "isfile", "isdir",
+    "getsize", "commonpath", "commonprefix", "expanduser", "isabs",
+    "sep", "altsep", "extsep", "pathsep", "curdir", "pardir", "devnull",
+)
+
+
+def _create_sanitized_os_path():
+    """Wrap standard `os.path` exposing only safe path utilities (no `.os` module escape)."""
+    import os as _real_os
+    _real_path = _real_os.path
+
+    class _SanitizedOSPath:
+        def __getattr__(self, name: str) -> Any:
+            if name not in _SAFE_OS_PATH_ATTRS:
+                raise SecurityViolationError(
+                    f"Access to restricted attribute 'os.path.{name}' is prohibited in sandbox."
+                )
+            return getattr(_real_path, name)
+
+    return _SanitizedOSPath()
+
+
 def _create_sanitized_os():
     """Wrap standard `os` to disable shell execution and destructive file operations."""
     import os as _real_os
 
     class _SanitizedOS:
-        path = _real_os.path
+        path = _create_sanitized_os_path()
 
         def __getattr__(self, name: str) -> Any:
-            if name in _SP_BLOCKED_OS_OPS:
+            if name in _SP_BLOCKED_OS_OPS or name in {"sys", "builtins", "__dict__"}:
                 raise SecurityViolationError(f"Operating system operation 'os.{name}' is prohibited in sandbox.")
             return getattr(_real_os, name)
 
@@ -482,10 +361,20 @@ def _create_restricted_import(sec_policy: Optional[Any] = None):
         elif root_module in _BLOCKED_MODULES:
             raise SecurityViolationError(f"Import of restricted module '{root_module}' is blocked.")
 
+        if name == "os.path" or name.startswith("os.path."):
+            for item in fromlist or ():
+                if item == "*" or item not in _SAFE_OS_PATH_ATTRS:
+                    raise SecurityViolationError(
+                        f"Importing '{item}' from '{name}' is prohibited in sandbox."
+                    )
+            return _create_sanitized_os_path() if fromlist else _create_sanitized_os()
+
         if root_module == "os":
-            import os as _real_os
-            if name == "os.path" and fromlist:
-                return _real_os.path
+            for item in fromlist or ():
+                if item == "*" or item in _SP_BLOCKED_OS_OPS or item in {"sys", "builtins"}:
+                    raise SecurityViolationError(
+                        f"Importing '{item}' from 'os' is prohibited in sandbox."
+                    )
             return _create_sanitized_os()
 
         real_import = builtins.__import__
@@ -608,6 +497,8 @@ def _sandbox_worker_exec(
     allowed_capabilities: Optional[List[str]] = None,
     ingress_paths: Optional[List[str]] = None,
     headless_env_specs: Optional[List[str]] = None,
+    capture_egress: bool = False,
+    max_egress_bytes: int = 4 * 1024 * 1024,
 ) -> None:
     """
     Subprocess worker executing sandboxed code in strict process, resource,
@@ -661,6 +552,7 @@ def _sandbox_worker_exec(
                     "error": str(payload_dict.get("error", "")),
                     "results": {},
                     "egress": payload_dict.get("egress", {}),
+                    "egress_bytes": payload_dict.get("egress_bytes", {}),
                 }
                 if hasattr(result_conn, "send"):
                     result_conn.send(safe_payload)
@@ -676,6 +568,10 @@ def _sandbox_worker_exec(
                 pass
 
     orig_cwd = os.getcwd()
+    import _io as _c_io
+    orig_builtins_open = None
+    orig_io_open = None
+    orig_cio_open = None
 
     with tempfile.TemporaryDirectory(prefix="nstl_sandbox_") as ephemeral_dir:
         try:
@@ -703,14 +599,19 @@ def _sandbox_worker_exec(
 
             # Step 3: Configure Ephemeral Filesystem Confinement (Track 5.2)
             ephemeral_resolved = str(Path(ephemeral_dir).resolve())
+            ephemeral_root_p = Path(ephemeral_resolved)
             cwd_resolved = str(Path(orig_cwd).resolve())
-            allowed_write_roots = {ephemeral_resolved, str(Path(tempfile.gettempdir()).resolve())}
+            allowed_write_roots = {ephemeral_resolved}
             allowed_write_files: Set[str] = set()
             for ep in egress_paths or []:
                 if ep and str(ep).strip():
-                    ep_path = Path(orig_cwd) / str(ep).strip() if not Path(str(ep)).is_absolute() else Path(str(ep))
-                    allowed_write_files.add(str(ep_path.resolve()))
-                    allowed_write_roots.add(str(ep_path.resolve().parent))
+                    ep_s = str(ep).strip()
+                    ep_cand = (ephemeral_root_p / ep_s).resolve() if not Path(ep_s).is_absolute() else Path(ep_s).resolve()
+                    if not ep_cand.is_relative_to(ephemeral_root_p):
+                        raise SecurityViolationError(
+                            f"Egress path '{ep_s}' escapes ephemeral sandbox directory and is prohibited."
+                        )
+                    allowed_write_files.add(str(ep_cand))
 
             allowed_read_roots = {
                 cwd_resolved,
@@ -736,7 +637,6 @@ def _sandbox_worker_exec(
             # Stage verified relative ingress files (read-only copies) into ephemeral_dir
             # so relative paths like 'input.csv' resolve inside the confined working dir
             # without allowing writes back to the workspace copies.
-            ephemeral_root_p = Path(ephemeral_resolved)
             for rel_in in ingress_paths or ():
                 rel_str = str(rel_in or "").strip()
                 if not rel_str or os.path.isabs(rel_str):
@@ -749,18 +649,26 @@ def _sandbox_worker_exec(
                 shutil.copy2(str(src_p), str(dst_p))
             os.chdir(ephemeral_dir)
 
-            # Step 4: Construct Sanitized Execution Environment
+            # Step 4: Construct Sanitized Execution Environment & Confine ALL Open Entrypoints
+            confined_open = _create_confined_open(
+                allowed_read_roots=allowed_read_roots,
+                allowed_write_roots=allowed_write_roots,
+                allowed_write_files=allowed_write_files,
+            )
+            orig_builtins_open = builtins.open
+            orig_io_open = _io.open
+            orig_cio_open = _c_io.open
+            builtins.open = confined_open
+            _io.open = confined_open
+            _c_io.open = confined_open
+
             safe_builtins: Dict[str, Any] = {}
             for k, v in builtins.__dict__.items():
                 if k not in _SecurityASTVisitor.FORBIDDEN_CALLS:
                     safe_builtins[k] = v
 
             safe_builtins["__import__"] = _create_restricted_import(sec_policy)
-            safe_builtins["open"] = _create_confined_open(
-                allowed_read_roots=allowed_read_roots,
-                allowed_write_roots=allowed_write_roots,
-                allowed_write_files=allowed_write_files,
-            )
+            safe_builtins["open"] = confined_open
 
             exec_globals: Dict[str, Any] = {
                 "__builtins__": safe_builtins,
@@ -789,6 +697,7 @@ def _sandbox_worker_exec(
                     "stdout": captured_stdout.getvalue(),
                     "stderr": captured_stderr.getvalue(),
                     "error": f"SystemExit({sys_exit_code})",
+                    "error_kind": "runtime",
                     "results": {},
                 })
                 return
@@ -807,18 +716,24 @@ def _sandbox_worker_exec(
             extracted_results = {k: _ipc_safe(v) for k, v in raw_results.items()}
 
             worker_egress: Dict[str, str] = {}
+            worker_egress_bytes: Dict[str, bytes] = {}
             for raw_ep in egress_paths or ():
                 ep_s = str(raw_ep or "").strip()
                 if not ep_s:
                     continue
-                if os.path.exists(ep_s):
-                    worker_egress[ep_s] = "ok" if os.path.getsize(ep_s) > 0 else "empty"
+                ep_cand = (ephemeral_root_p / ep_s).resolve() if not Path(ep_s).is_absolute() else Path(ep_s).resolve()
+                if not ep_cand.is_relative_to(ephemeral_root_p):
+                    worker_egress[ep_s] = "outside_sandbox"
+                elif ep_cand.exists():
+                    sz = ep_cand.stat().st_size
+                    worker_egress[ep_s] = "ok" if sz > 0 else "empty"
+                    if capture_egress and ep_cand.is_file() and 0 < sz <= max_egress_bytes:
+                        try:
+                            worker_egress_bytes[ep_s] = ep_cand.read_bytes()
+                        except Exception as read_err:
+                            logger.debug("[SANDBOX] Egress capture skipped for %s: %s", ep_s, read_err)
                 else:
-                    orig_ep = ep_s if os.path.isabs(ep_s) else os.path.join(orig_cwd, ep_s)
-                    if os.path.exists(orig_ep):
-                        worker_egress[ep_s] = "ok" if os.path.getsize(orig_ep) > 0 else "empty"
-                    else:
-                        worker_egress[ep_s] = "missing"
+                    worker_egress[ep_s] = "missing"
 
             _send_payload({
                 "success": True,
@@ -826,8 +741,10 @@ def _sandbox_worker_exec(
                 "stdout": captured_stdout.getvalue(),
                 "stderr": captured_stderr.getvalue(),
                 "error": None,
+                "error_kind": None,
                 "results": extracted_results,
                 "egress": worker_egress,
+                "egress_bytes": worker_egress_bytes,
             })
 
         except SecurityViolationError as sec_err:
@@ -837,6 +754,7 @@ def _sandbox_worker_exec(
                 "stdout": captured_stdout.getvalue(),
                 "stderr": captured_stderr.getvalue(),
                 "error": f"SecurityViolation: {str(sec_err)}",
+                "error_kind": "security",
                 "results": {},
             })
         except MemoryError as mem_err:
@@ -846,6 +764,7 @@ def _sandbox_worker_exec(
                 "stdout": captured_stdout.getvalue(),
                 "stderr": captured_stderr.getvalue(),
                 "error": f"MemoryError: Sandbox exceeded RLIMIT_AS ({max_memory_mb} MB): {mem_err}",
+                "error_kind": "memory",
                 "results": {},
             })
         except Exception as exc:
@@ -856,9 +775,16 @@ def _sandbox_worker_exec(
                 "stdout": captured_stdout.getvalue(),
                 "stderr": captured_stderr.getvalue(),
                 "error": f"{type(exc).__name__}: {str(exc)}\n{formatted_exc}",
+                "error_kind": "runtime",
                 "results": {},
             })
         finally:
+            if orig_builtins_open is not None:
+                builtins.open = orig_builtins_open
+            if orig_io_open is not None:
+                _io.open = orig_io_open
+            if orig_cio_open is not None:
+                _c_io.open = orig_cio_open
             try:
                 os.chdir(orig_cwd)
             except Exception:
@@ -915,7 +841,8 @@ def _derive_io_call_signatures() -> Tuple[Set[str], Set[str], Set[str], Set[str]
                 from .language_backend import get_active_language_backend
             except (ImportError, ValueError):
                 from language_backend import get_active_language_backend
-            if not get_active_language_backend().is_python_ast:
+            _be_io = get_active_language_backend()
+            if getattr(_be_io, "spec", None) is not None and not _be_io.is_python_ast:
                 continue
 
             # Replace {ph} with _nstl_ph_ph so ast.parse succeeds on code templates without regex
@@ -1030,8 +957,6 @@ class GEVRSandbox:
         max_memory_mb: Optional[int] = None,
         max_cpu_seconds: Optional[int] = None,
         postcondition_registry: Optional[PostconditionRegistry] = None,
-        intent_registry: Optional[TerminalIntentRegistry] = None,
-        state_registry: Optional[StateProtocolRegistry] = None,
         allowed_capabilities: Optional[Set[str]] = None,
     ):
         self.default_timeout = float(
@@ -1051,8 +976,6 @@ class GEVRSandbox:
             else (settings.sandbox_max_cpu_seconds if settings else 30)
         )
         self.postconditions = postcondition_registry or PostconditionRegistry()
-        self.intents = intent_registry or TerminalIntentRegistry()
-        self.state_protocols = state_registry or StateProtocolRegistry()
         self.allowed_capabilities = set(allowed_capabilities or set())
         warmup_sandbox_async()
 
@@ -1071,8 +994,8 @@ class GEVRSandbox:
                 verification[path] = "ok"
         return verification
 
-    @staticmethod
     def _evaluate_verification_spec(
+        self,
         verification_spec: Any,
         results: Dict[str, Any],
     ) -> List[str]:
@@ -1080,11 +1003,84 @@ class GEVRSandbox:
         if verification_spec is None:
             return violations
 
-        checks: List[Dict[str, Any]] = []
+        post_reg = getattr(self, "postconditions", None) or PostconditionRegistry()
+
+        def _eval_prop_op(prop_name: str, target_val: Any, op: str, expected_val: Any) -> bool:
+            op_s = str(op or "==").strip()
+            if op_s in ("==", "is"):
+                return bool(post_reg.evaluate(prop_name, target_val, expected_val))
+            if op_s in ("!=", "is not"):
+                return not bool(post_reg.evaluate(prop_name, target_val, expected_val))
+            # Resolve attribute or dict field for inequality / membership ops
+            if hasattr(target_val, prop_name):
+                attr_v = getattr(target_val, prop_name)
+                actual = attr_v() if callable(attr_v) else attr_v
+            elif isinstance(target_val, dict) and prop_name in target_val:
+                actual = target_val[prop_name]
+            else:
+                actual = target_val
+            if op_s == "<":
+                return bool(actual < expected_val)
+            if op_s == "<=":
+                return bool(actual <= expected_val)
+            if op_s == ">":
+                return bool(actual > expected_val)
+            if op_s == ">=":
+                return bool(actual >= expected_val)
+            if op_s == "in":
+                return bool(actual in expected_val)
+            if op_s == "not in":
+                return bool(actual not in expected_val)
+            raise ValueError(f"Unsupported verification operator: {op_s}")
+
+        def _values_equal(v1: Any, v2: Any) -> bool:
+            if v1 is v2:
+                return True
+            if hasattr(v1, "equals") and callable(v1.equals):
+                return bool(v1.equals(v2))
+            if type(v1).__name__ == "ndarray" or type(v2).__name__ == "ndarray":
+                import numpy as _np
+                return bool(_np.array_equal(v1, v2))
+            cmp_res = (v1 == v2)
+            if hasattr(cmp_res, "all") and callable(cmp_res.all):
+                return bool(cmp_res.all())
+            return bool(cmp_res)
+
         if isinstance(verification_spec, dict):
+            cell_checks = list(verification_spec.get("cell_checks") or [])
             checks = list(verification_spec.get("terminal_checks") or [])
         else:
+            cell_checks = list(getattr(verification_spec, "cell_checks", None) or [])
             checks = list(getattr(verification_spec, "terminal_checks", None) or [])
+
+        for ccheck in cell_checks:
+            if not isinstance(ccheck, dict):
+                continue
+            prop = ccheck.get("property") or ccheck.get("postcondition")
+            if prop and str(prop).strip().lower() == "state":
+                continue
+            target_var = ccheck.get("target_var") or ccheck.get("var")
+            cid = ccheck.get("cell_id", "unknown_cell")
+            if not target_var or str(target_var) not in results:
+                violations.append(
+                    f"Cell check for '{cid}' missing target variable '{target_var}' in sandbox results."
+                )
+                continue
+            if prop:
+                expected = ccheck.get("value") if "value" in ccheck else ccheck.get("expected")
+                op = ccheck.get("operator", "==")
+                try:
+                    ok = _eval_prop_op(str(prop), results[str(target_var)], op, expected)
+                except Exception as eval_err:
+                    ok = False
+                    violations.append(
+                        f"Cell check '{prop} {op} {expected}' on '{target_var}' ({cid}) failed evaluation: {eval_err}"
+                    )
+                    continue
+                if not ok:
+                    violations.append(
+                        f"Cell check '{prop} {op} {expected}' on '{target_var}' ({cid}) was not satisfied."
+                    )
 
         for check in checks:
             if not isinstance(check, dict):
@@ -1100,8 +1096,6 @@ class GEVRSandbox:
                     if v_val is None:
                         violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' evaluated to None.")
                     elif isinstance(v_val, str) and v_val.startswith("<unpicklable:"):
-                        # IPC-unpicklable runtime objects (e.g. local functions, opaque handles)
-                        # are live non-None deliverables; do not reject their presence.
                         continue
                     else:
                         try:
@@ -1128,12 +1122,15 @@ class GEVRSandbox:
                             prop = getattr(post, "property", None) or (post.get("property") if isinstance(post, dict) else None)
                             if prop:
                                 exp = getattr(post, "value", None) if not isinstance(post, dict) else post.get("value")
+                                op = getattr(post, "operator", "==") if not isinstance(post, dict) else post.get("operator", "==")
                                 try:
-                                    ok = PostconditionRegistry().evaluate(prop, v_val, exp)
+                                    ok = _eval_prop_op(str(prop), v_val, op, exp)
                                     if not ok:
                                         violations.append(f"Postcondition '{prop}' on deliverable '{v_name}' ({cid}) was not satisfied.")
                                 except Exception as eval_err:
-                                    logger.debug("[SANDBOX] deliverable postcondition eval failed: %s", eval_err)
+                                    violations.append(
+                                        f"Postcondition '{prop}' on deliverable '{v_name}' ({cid}) failed evaluation: {eval_err}"
+                                    )
                 continue
 
             if check.get("type") == "algebraic_partition_coherence":
@@ -1151,35 +1148,40 @@ class GEVRSandbox:
             expected_var = check.get("expected_var")
             actual_var = check.get("actual_var")
             if expected_var and actual_var:
-                expected_val = results.get(str(expected_var))
-                actual_val = results.get(str(actual_var))
-                if expected_val is not None and actual_val is not None:
-                    identical = expected_val is actual_val
-                    if not identical:
-                        try:
-                            if hasattr(expected_val, "equals") and callable(expected_val.equals):
-                                identical = bool(expected_val.equals(actual_val))
-                            else:
-                                cmp_res = (expected_val == actual_val)
-                                if hasattr(cmp_res, "all") and callable(cmp_res.all):
-                                    identical = bool(cmp_res.all())
-                                else:
-                                    identical = bool(cmp_res)
-                        except Exception:
-                            identical = False
-                    if not identical:
-                        violations.append(
-                            f"Terminal check '{check.get('type', 'unknown')}' failed: "
-                            f"'{actual_var}' does not carry the value declared for '{expected_var}'."
-                        )
+                if str(expected_var) not in results or str(actual_var) not in results:
+                    violations.append(
+                        f"Terminal check '{check.get('type', 'unknown')}' missing expected/actual variable "
+                        f"('{expected_var}', '{actual_var}') in sandbox results."
+                    )
+                    continue
+                expected_val = results[str(expected_var)]
+                actual_val = results[str(actual_var)]
+                if expected_val is None or actual_val is None:
+                    violations.append(
+                        f"Terminal check '{check.get('type', 'unknown')}' evaluated None for "
+                        f"'{expected_var}' or '{actual_var}'."
+                    )
+                    continue
+                try:
+                    identical = _values_equal(expected_val, actual_val)
+                except Exception:
+                    identical = False
+                if not identical:
+                    violations.append(
+                        f"Terminal check '{check.get('type', 'unknown')}' failed: "
+                        f"'{actual_var}' does not carry the value declared for '{expected_var}'."
+                    )
                 exp_props = check.get("expected_properties")
-                if exp_props and actual_val is not None:
+                if exp_props:
                     for prop_name, prop_val in exp_props.items():
                         try:
-                            ok = PostconditionRegistry().evaluate(prop_name, actual_val, prop_val)
+                            ok = bool(post_reg.evaluate(prop_name, actual_val, prop_val))
                         except Exception as eval_err:
-                            logger.debug("[SANDBOX] property '%s' evaluation failed: %s", prop_name, eval_err)
                             ok = False
+                            violations.append(
+                                f"Property '{prop_name}' on result '{actual_var}' failed evaluation: {eval_err}"
+                            )
+                            continue
                         if not ok:
                             violations.append(
                                 f"Property '{prop_name}' on result '{actual_var}' was not satisfied."
@@ -1188,13 +1190,22 @@ class GEVRSandbox:
 
             prop = check.get("property") or check.get("postcondition")
             target_var = check.get("target_var") or check.get("var")
-            if prop and target_var and target_var in results:
-                expected = check.get("expected")
+            if prop and target_var:
+                if str(target_var) not in results:
+                    violations.append(
+                        f"Postcondition '{prop}' missing target variable '{target_var}' in sandbox results."
+                    )
+                    continue
+                expected = check.get("expected") if "expected" in check else check.get("value")
+                op = check.get("operator", "==")
                 try:
-                    ok = PostconditionRegistry().evaluate(prop, results[target_var], expected)
+                    ok = _eval_prop_op(str(prop), results[str(target_var)], op, expected)
                 except Exception as eval_err:
-                    logger.debug("[SANDBOX] postcondition '%s' evaluation failed: %s", prop, eval_err)
                     ok = False
+                    violations.append(
+                        f"Postcondition '{prop}' on result '{target_var}' failed evaluation: {eval_err}"
+                    )
+                    continue
                 if not ok:
                     violations.append(
                         f"Postcondition '{prop}' on result '{target_var}' was not satisfied."
@@ -1225,7 +1236,7 @@ class GEVRSandbox:
             except (ImportError, ValueError):
                 from language_backend import get_active_language_backend
             be_sb = get_active_language_backend()
-            if not be_sb.is_python_ast:
+            if getattr(be_sb, "spec", None) is not None and not be_sb.is_python_ast:
                 ok_sb, err_sb = be_sb.validate_syntax(code)
                 if not ok_sb:
                     return {
@@ -1236,6 +1247,7 @@ class GEVRSandbox:
                         "stdout": "",
                         "stderr": str(err_sb or "Syntax validation failed"),
                         "error": str(err_sb or "Syntax validation failed"),
+                        "error_kind": "syntax",
                         "extrinsic": False,
                     }
                 return {
@@ -1246,6 +1258,7 @@ class GEVRSandbox:
                     "stdout": "",
                     "stderr": "",
                     "error": f"SKIPPED: non-Python runtime '{be_sb.runtime}' sandbox execution not configured",
+                    "error_kind": None,
                     "extrinsic": False,
                 }
         except Exception:
@@ -1269,13 +1282,24 @@ class GEVRSandbox:
             for node in ast.walk(parsed_ast):
                 if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
                     produced_vars.add(node.id)
+            def _ast_root_ident(expr_str: str) -> str:
+                try:
+                    node = ast.parse(expr_str.strip(), mode="eval").body
+                    while isinstance(node, (ast.Subscript, ast.Attribute)):
+                        node = node.value
+                    if isinstance(node, ast.Name):
+                        return node.id
+                except Exception:
+                    pass
+                return expr_str.strip()
+
             for b in kwargs.get("pipeline_bindings") or []:
                 if isinstance(b, dict):
                     c_role = str(b.get("role", "") or b.get("node_role", "")).lower()
                     c_stage = b.get("stage")
                     if (_reg_sb is not None and _reg_sb.is_terminal_role(c_role)) or (c_stage is not None and c_stage >= 3):
                         for v in b.values():
-                            if isinstance(v, str) and v.split("[", 1)[0].strip() not in produced_vars:
+                            if isinstance(v, str) and _ast_root_ident(v) not in produced_vars:
                                 cln = v.strip("'\"")
                                 if "." in cln:
                                     egress_set.add(cln)
@@ -1321,7 +1345,9 @@ class GEVRSandbox:
                                 yield vs
                     break
 
-            # Pass 1: Identify all output/egress paths written in the code
+            # Pass 1: Track paths written by lattice-declared sink calls or open(..., "w"/"a"/"x")
+            # (NEVER promote untrusted code-scraped paths into caller-trusted egress_set)
+            code_written_paths: Set[str] = set()
             for node in ast.walk(parsed_ast):
                 if isinstance(node, ast.Call):
                     if id(node) in exec_chained_receivers:
@@ -1343,9 +1369,14 @@ class GEVRSandbox:
                         is_sink_call = True
 
                     if is_sink_call:
-                        for s_lit in _iter_call_chain_str_args(node, sink_kw_args):
-                            if s_lit:
-                                egress_set.add(s_lit)
+                        if isinstance(func, ast.Name) and func.id == "open":
+                            f_arg = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "file"), None)
+                            if isinstance(f_arg, ast.Constant) and isinstance(f_arg.value, str) and f_arg.value.strip():
+                                code_written_paths.add(f_arg.value.strip())
+                        else:
+                            for s_lit in _iter_call_chain_str_args(node, sink_kw_args or None):
+                                if s_lit:
+                                    code_written_paths.add(s_lit)
 
             # Pass 2: Check only ingress/loader calls for required input files
             for node in ast.walk(parsed_ast):
@@ -1353,8 +1384,9 @@ class GEVRSandbox:
                     if id(node) in exec_chained_receivers:
                         continue
                     func = node.func
+                    is_open_call = isinstance(func, ast.Name) and func.id == "open"
                     is_ingress_call = False
-                    if isinstance(func, ast.Name) and func.id == "open":
+                    if is_open_call:
                         mode = "r"
                         if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
                             mode = str(node.args[1].value)
@@ -1370,18 +1402,30 @@ class GEVRSandbox:
 
                     def _inspect_ingress_str(raw_s: str, flag_missing: bool = True) -> None:
                         s = raw_s.strip()
-                        if s in egress_set:
+                        if (
+                            not s
+                            or s in egress_set
+                            or s in code_written_paths
+                            or ".." in s
+                            or os.path.isabs(s)
+                            or "://" in s
+                        ):
                             return
-                        _, raw_ext = os.path.splitext(s)
+                        stem_part, raw_ext = os.path.splitext(s)
                         clean_ext = raw_ext.lstrip(".").lower()
-                        if clean_ext and clean_ext.isalnum() and len(clean_ext) <= 6:
+                        if stem_part and not stem_part.endswith("/") and clean_ext and clean_ext.isalnum() and not clean_ext.isdigit() and len(clean_ext) <= 6:
                             if os.path.isfile(s) or os.path.isfile(os.path.abspath(s)):
                                 if s not in staged_inputs:
                                     staged_inputs.append(s)
                             elif flag_missing and s not in missing_inputs:
                                 missing_inputs.append(s)
 
-                    if is_ingress_call:
+                    if is_open_call:
+                        if is_ingress_call:
+                            f_arg = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "file"), None)
+                            if isinstance(f_arg, ast.Constant) and isinstance(f_arg.value, str):
+                                _inspect_ingress_str(f_arg.value, flag_missing=True)
+                    elif is_ingress_call:
                         for s_lit in _iter_call_chain_str_args(node, ingress_kw_args):
                             _inspect_ingress_str(s_lit, flag_missing=True)
                     else:
@@ -1401,9 +1445,11 @@ class GEVRSandbox:
                 "stdout": "",
                 "stderr": "",
                 "error": f"SKIPPED: input '{missing_file}' not provided",
+                "error_kind": None,
                 "extrinsic": False,
                 "results": {},
                 "egress": {},
+                "egress_bytes": {},
             }
 
         exec_timeout = timeout if timeout is not None else self.default_timeout
@@ -1412,7 +1458,8 @@ class GEVRSandbox:
         parent_conn, child_conn = ctx.Pipe(duplex=False)
         headless_env_specs = _get_headless_env_specs()
 
-        smoke_test = bool(kwargs.get("smoke_test", True))
+        smoke_test = bool(kwargs.get("smoke_test", False))
+        capture_egress = bool(kwargs.get("capture_egress", False))
         mem_limit = int(kwargs.get("max_memory_mb", self.max_memory_mb))
         cpu_limit = int(kwargs.get("max_cpu_seconds", max(int(exec_timeout) + 2, self.max_cpu_seconds)))
         allowed_caps = kwargs.get("allowed_capabilities")
@@ -1439,6 +1486,7 @@ class GEVRSandbox:
                 allowed_caps,
                 staged_inputs,
                 headless_env_specs,
+                capture_egress,
             ),
             daemon=True,
         )
@@ -1499,18 +1547,22 @@ class GEVRSandbox:
             "stdout": "",
             "stderr": "",
             "error": "",
+            "error_kind": None,
             "extrinsic": False,
             "results": {},
             "egress": {},
+            "egress_bytes": {},
         }
 
         if timed_out:
             envelope["error"] = f"Execution timed out after {exec_timeout} seconds."
+            envelope["error_kind"] = "timeout"
             envelope["returncode"] = worker.exitcode if worker.exitcode is not None else 1
             return envelope
 
         if payload is None:
             envelope["error"] = "Execution worker terminated abruptly without returning a result."
+            envelope["error_kind"] = "runtime"
             envelope["extrinsic"] = True
             return envelope
 
@@ -1519,7 +1571,9 @@ class GEVRSandbox:
         envelope["stdout"] = str(payload.get("stdout", "") or "")
         envelope["stderr"] = str(payload.get("stderr", "") or "")
         envelope["error"] = str(payload.get("error", "") or "")
+        envelope["error_kind"] = payload.get("error_kind") or (None if envelope["success"] else "runtime")
         envelope["results"] = dict(payload.get("results", {}) or {})
+        envelope["egress_bytes"] = dict(payload.get("egress_bytes") or {})
 
         if envelope["error"]:
             envelope["extrinsic"] = any(
@@ -1544,6 +1598,8 @@ class GEVRSandbox:
             bad = {p: v for p, v in egress_verification.items() if v != "ok"}
             if bad:
                 envelope["success"] = False
+                if envelope["error_kind"] is None:
+                    envelope["error_kind"] = "egress"
                 detail = "; ".join(f"{p}: {v}" for p, v in sorted(bad.items()))
                 envelope["error"] = (
                     (envelope["error"] + "\n" if envelope["error"] else "")
@@ -1554,40 +1610,11 @@ class GEVRSandbox:
         spec_violations = self._evaluate_verification_spec(verification_spec, envelope["results"])
         if spec_violations:
             envelope["success"] = False
+            if envelope["error_kind"] is None:
+                envelope["error_kind"] = "contract"
             envelope["error"] = (
                 (envelope["error"] + "\n" if envelope["error"] else "")
                 + "Verification contract violated: " + " | ".join(spec_violations)
             )
 
         return envelope
-
-    def execute_with_cegis(
-        self,
-        code: str,
-        task_description: str,
-        state_inputs: Dict[str, str],
-        state_outputs: Dict[str, str],
-        context: Optional[Dict[str, Any]] = None,
-        timeout: Optional[float] = None,
-        max_cegis_rounds: int = 3,
-        kernel_generator: Optional[Any] = None,
-        **kwargs,
-    ) -> Tuple[str, Dict[str, Any]]:
-        """
-        Executes `code` in the isolated sandbox and returns `(code, sandbox_envelope)`
-        without unconstrained inductive kernel rewriting.
-        """
-        res = self.execute(code, context=context, timeout=timeout, **kwargs)
-        res["cegis_rounds"] = 0
-        return code, res
-
-    def verify_postcondition(self, property_name: str, target: Any, expected: Any) -> bool:
-        return self.postconditions.evaluate(property_name, target, expected)
-
-    def verify_intent(
-        self, intent_type: str, output: Any, context: Optional[Dict[str, Any]] = None
-    ) -> IntentVerificationResult:
-        return self.intents.verify(intent_type, output, context or {})
-
-    def is_fitted(self, estimator: Any) -> bool:
-        return self.state_protocols.is_fitted_or_ready(estimator)

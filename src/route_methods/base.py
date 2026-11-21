@@ -196,6 +196,7 @@ class RouteMethod(ABC):
         self.orchestrator = orchestrator
         self.kwargs = kwargs
         self.trace_events: List[Dict[str, Any]] = []
+        self._current_prompt: str = ""
 
     def is_ingress_node(self, cell: Any, orch: Optional[Any] = None) -> bool:
         return is_ingress_source(cell, orch or self.orchestrator)
@@ -1062,14 +1063,16 @@ class RouteMethod(ABC):
             except Exception:
                 idx = len(clauses) - 1
         if ev is None or idx is None or not clauses or not routed_path:
-            return None
+            return None, []
         if idx >= len(clauses):
             idx = len(clauses) - 1
         ctoks = ev.clause_tokens(clauses[idx])
         in_path = {c.cell_id for c in routed_path}
         anchor_in_ports = list(anchor.inputs.values())
 
-        def _pick_producer(cand_iter: Any, tok_set: Any, search_pool: Any) -> Optional[Cell]:
+        def _pick_producer(
+            cand_iter: Any, tok_set: Any, search_pool: Any
+        ) -> Tuple[Optional[Cell], List[Cell]]:
             scored_cands = []
             for cand in cand_iter:
                 if cand.cell_id in in_path or cand.cell_id == anchor.cell_id:
@@ -1085,7 +1088,7 @@ class RouteMethod(ABC):
                     scored_cands.append((o["rank"], cand))
             scored_cands.sort(key=lambda t: t[0], reverse=True)
 
-            local_best, local_rank = None, None
+            local_best, local_rank, local_bridges = None, None, []
             for rank, cand in scored_cands:
                 if local_rank is not None and (1, rank) <= local_rank:
                     break
@@ -1097,7 +1100,7 @@ class RouteMethod(ABC):
                     self.step_unifies(cand, anchor, prev_path=routed_path + [cand])
                     or self.step_unifies_dag(anchor, routed_path + [cand])
                 ):
-                    cand_rank = (1, rank)
+                    cand_rank, cand_bridges = (1, rank), []
                 else:
                     if local_rank is not None and local_rank[0] >= 1:
                         continue
@@ -1117,18 +1120,18 @@ class RouteMethod(ABC):
                         or self.step_unifies_dag(anchor, scope_after)
                     ):
                         continue
-                    cand_rank = (0, rank)
+                    cand_rank, cand_bridges = (0, rank), list(p_bridges)
                 if local_rank is None or cand_rank > local_rank:
-                    local_best, local_rank = cand, cand_rank
-            return local_best
+                    local_best, local_rank, local_bridges = cand, cand_rank, cand_bridges
+            return local_best, local_bridges
 
-        best = _pick_producer(candidates, ctoks, candidates)
+        best, best_bridges = _pick_producer(candidates, ctoks, candidates)
         if best is None:
             orch_ref = orch or self.orchestrator
             if orch_ref is not None and getattr(orch_ref, "loaded_cells", None):
                 cand_ids = {c.cell_id for c in candidates}
                 rem = [c for c in orch_ref.loaded_cells.values() if c.cell_id not in cand_ids]
-                best = _pick_producer(rem, ctoks, candidates)
+                best, best_bridges = _pick_producer(rem, ctoks, candidates)
                 if best is None and clauses:
                     handle_ins = [p for p in anchor_in_ports if self.is_handle_port(p)]
                     if handle_ins:
@@ -1136,15 +1139,21 @@ class RouteMethod(ABC):
                         for cl in clauses:
                             full_toks.update(ev.clause_tokens(cl))
                         all_cells = list(candidates) + rem
-                        best = _pick_producer(all_cells, full_toks, candidates)
+                        best, best_bridges = _pick_producer(all_cells, full_toks, candidates)
         if best is None:
-            return None
+            return None, []
         inst = best.clone() if hasattr(best, "clone") else best
         inst.matched_clause_idx = idx
         _al = getattr(anchor, "clause_literals", None)
         inst.clause_literals = list(_al) if isinstance(_al, list) else dict(_al or {})
         setattr(inst, "_is_prerequisite_producer", True)
-        return inst
+        cloned_bridges: List[Cell] = []
+        for pb in best_bridges:
+            pb_inst = pb.clone() if hasattr(pb, "clone") else pb
+            pb_inst.matched_clause_idx = idx
+            pb_inst.clause_literals = list(_al) if isinstance(_al, list) else dict(_al or {})
+            cloned_bridges.append(pb_inst)
+        return inst, cloned_bridges
 
     @staticmethod
     def order_clause_cells(clause_cells: List[Cell]) -> List[Cell]:
@@ -1832,16 +1841,23 @@ class RouteMethod(ABC):
                 primary_domains.add(p_dom)
 
         for primary_c in primary_cells:
+            if selected_cells:
+                try:
+                    prod, prod_bridges = self._find_type_producer(
+                        primary_c, selected_cells, filtered_cands, clauses, orch
+                    )
+                    for pb in prod_bridges:
+                        if pb.cell_id not in selected_ids and len(selected_cells) < max_shown:
+                            selected_cells.append(pb)
+                            selected_ids.add(pb.cell_id)
+                    if prod is not None and prod.cell_id not in selected_ids and len(selected_cells) < max_shown:
+                        selected_cells.append(prod)
+                        selected_ids.add(prod.cell_id)
+                except Exception:
+                    pass
             if primary_c.cell_id not in selected_ids and len(selected_cells) < max_shown:
                 selected_cells.append(primary_c)
                 selected_ids.add(primary_c.cell_id)
-            try:
-                prod = self._find_type_producer(primary_c, selected_cells, filtered_cands, clauses, orch)
-                if prod is not None and prod.cell_id not in selected_ids and len(selected_cells) < max_shown:
-                    selected_cells.append(prod)
-                    selected_ids.add(prod.cell_id)
-            except Exception:
-                pass
 
         # Secondary matching candidates in the primary workflow domains
         if len(selected_cells) < max_shown and ev is not None:

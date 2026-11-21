@@ -37,14 +37,6 @@ try:
 except ImportError:
     from ..utils import extract_json_object, tokenize_alphanumeric
 
-try:
-    from node_resolver import DynamicNodeResolver
-except (ImportError, ValueError):
-    try:
-        from ..node_resolver import DynamicNodeResolver
-    except (ImportError, ValueError):
-        DynamicNodeResolver = None
-
 MAX_SHOWN_CANDIDATES = 35
 MAX_TRANSITIONS_SHOWN = 15
 
@@ -123,8 +115,11 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
+
+        def _fallback(reason):
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         candidates = [
             c for c in tunnel
@@ -136,18 +131,15 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                     and not is_combinator_cell(c)
                 )
             )
-        ] or [tunnel[0]]
+        ]
+        if not candidates:
+            return _fallback("no usable candidates")
         try:
             from inference import ModelManager
         except (ImportError, ValueError):
             from ..inference import ModelManager
         mm = ModelManager.get_instance()
         has_llm = mm.can_synthesize()
-
-        def _fallback(reason):
-            self.fallback_reason = reason
-            self._trace("method_failure", requested=type(self).__name__, reason=reason)
-            return []
 
         if not has_llm or not ModelManager.get_instance().can_synthesize():
             return _fallback("no LLM loaded in this profile")
@@ -183,6 +175,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                 entry_candidates.sort(key=_entry_compat_score, reverse=True)
 
         entry_cand_map = {c.cell_id.lower(): c for c in entry_candidates}
+        all_cand_map = {c.cell_id.lower(): c for c in candidates}
         entry_cell = None
         try:
             entry_lines = "\n".join(f"- {_format_cell_signature(c)}" for c in entry_candidates[:8])
@@ -192,25 +185,13 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             )
             node_id = _parse_next_node(raw)
             if node_id:
-                entry_cell = entry_cand_map.get(node_id.lower())
-                if entry_cell is None:
-                    try:
-                        from node_resolver import DynamicNodeResolver
-                        resolved = DynamicNodeResolver.resolve_node(
-                            raw_id=node_id,
-                            prompt=prompt,
-                            orchestrator=orch,
-                            rag=kwargs.get("rag"),
-                        )
-                        if resolved and resolved.cell_id.lower() in entry_cand_map and getattr(resolved, "verified", True):
-                            entry_cell = resolved
-                    except Exception:
-                        entry_cell = None
-        except Exception:
-            entry_cell = None
+                key = node_id.strip().lower()
+                entry_cell = entry_cand_map.get(key) or all_cand_map.get(key)
+        except Exception as _llm_err:
+            return _fallback(f"LLM entry selection raised {type(_llm_err).__name__}: {_llm_err}")
 
-        if entry_cell is None and entry_candidates:
-            entry_cell = entry_candidates[0]
+        if entry_cell is None:
+            return _fallback("LLM selected no valid entry cell")
 
         _ev = self._evidence()
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
@@ -341,7 +322,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                 logger.debug("[M8] curr=%s target_cl=%s LLM=%s", curr.cell_id, target_cl_idx, chosen_id)
             except Exception as e:
                 logger.debug("[M8] ModelManager generate_text failed: %s", e)
-                chosen_id = None
+                return _fallback(f"LLM step selection raised {type(e).__name__}: {e}")
 
             try:
                 from config import settings as _m8_settings
@@ -350,17 +331,20 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             stop_tokens = {str(t).upper() for t in (_m8_settings.agent_stopping_tokens or ())}
             if chosen_id and chosen_id.upper() in stop_tokens:
                 if uncovered_indices:
-                    chosen_id = None
-                else:
-                    break
+                    return _fallback(
+                        f"LLM stopped early ({chosen_id}) with uncovered prompt clauses {sorted(uncovered_indices)}"
+                    )
+                break
 
             matched_trans = trans_by_id.get(chosen_id.lower()) if chosen_id else None
             if matched_trans is None and chosen_id:
                 cand_cell = next((c for c in candidates if c.cell_id.lower() == chosen_id.lower()), None)
                 if cand_cell:
                     if is_terminal_sink(cand_cell, orch) and uncovered_indices:
-                        chosen_id = None
-                    elif cand_cell.cell_id not in visited_ids:
+                        return _fallback(
+                            f"LLM chose terminal sink {cand_cell.cell_id} with uncovered prompt clauses"
+                        )
+                    if cand_cell.cell_id not in visited_ids:
                         if self.step_unifies(curr, cand_cell, prev_path=path):
                             matched_trans = (cand_cell, None, "DIRECT")
                         elif self.step_unifies_dag(cand_cell, path, ctx=ctx):
@@ -370,38 +354,12 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                             if brg and brg.cell_id not in visited_ids:
                                 matched_trans = (cand_cell, brg, f"BRIDGED via {brg.cell_id}")
 
-                if matched_trans is None and chosen_id:
-                    try:
-                        from node_resolver import DynamicNodeResolver
-                        res_cell = DynamicNodeResolver.resolve_node(
-                            raw_id=chosen_id,
-                            prompt=prompt,
-                            orchestrator=orch,
-                            rag=kwargs.get("rag"),
-                        )
-                        if res_cell is not None and res_cell.cell_id not in visited_ids and getattr(res_cell, "verified", True):
-                            if self.step_unifies(curr, res_cell, prev_path=path):
-                                matched_trans = (res_cell, None, "DYNAMIC_DIRECT")
-                            elif self.step_unifies_dag(res_cell, path, ctx=ctx):
-                                matched_trans = (res_cell, None, "DYNAMIC_DAG_FRONTIER")
-                            else:
-                                brg = self.find_bridge(curr, res_cell, candidates, orch)
-                                if brg and brg.cell_id not in visited_ids:
-                                    matched_trans = (res_cell, brg, f"DYNAMIC_BRIDGED via {brg.cell_id}")
-                    except Exception:
-                        pass
-
             if matched_trans is None:
-                # If current node is a sink or stage 3 and all clauses covered, complete
-                if is_terminal_sink(curr, orch) and not uncovered_indices:
-                    break
-                # Default to top scored transition that is not visited
-                for tr in active_transitions:
-                    if tr[0].cell_id not in visited_ids:
-                        matched_trans = tr
-                        break
-                if matched_trans is None:
-                    break
+                return _fallback(
+                    f"LLM step choice '{chosen_id}' did not match a valid transition from {curr.cell_id}"
+                    if chosen_id
+                    else f"LLM proposed empty step from {curr.cell_id}"
+                )
 
             target_cell, bridge_cell, _ = matched_trans
             if target_cell.cell_id in visited_ids:
@@ -438,20 +396,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
                                 anc_ok = True
                                 break
                         if not anc_ok:
-                            try:
-                                from node_resolver import DynamicNodeResolver
-                                dyn_brg = DynamicNodeResolver.synthesize_adapter(c_prev, nxt, orch, rag=kwargs.get("rag"))
-                                if dyn_brg is not None:
-                                    can_c_prev = self.step_unifies(c_prev, dyn_brg, prev_path=verified) or self.step_unifies_dag(dyn_brg, verified, ctx=ctx)
-                                    can_dyn_nxt = self.step_unifies(dyn_brg, nxt, prev_path=verified + [dyn_brg]) or self.step_unifies_dag(nxt, verified + [dyn_brg], ctx=ctx)
-                                    if can_c_prev and can_dyn_nxt:
-                                        verified.extend([dyn_brg, nxt])
-                                    else:
-                                        return _fallback(f"synthesized adapter between {c_prev.cell_id} and {nxt.cell_id} does not unify")
-                                else:
-                                    return _fallback(f"could not synthesize adapter between {c_prev.cell_id} and {nxt.cell_id}")
-                            except Exception as _brg_err:
-                                return _fallback(f"adapter synthesis raised {type(_brg_err).__name__}: {_brg_err}")
+                            return _fallback(f"M8 step '{nxt.cell_id}' could not be bridged from '{c_prev.cell_id}'")
             path = verified
 
         if len(path) < 2:
@@ -470,9 +415,7 @@ class M8LLMStepwisePathfinderRouteMethod(RouteMethod):
             if _verr:
                 return _fallback(_verr)
         except Exception as _chk_exc:
-            if type(_chk_exc).__name__ in ("UnificationFailure", "UnresolvedPlaceholderError"):
-                return _fallback(f"M8 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
-            logger.debug("[M8] Verification check skipped: %s", _chk_exc)
+            return _fallback(f"M8 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
 
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)
         return path[:max_allowed]

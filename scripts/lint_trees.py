@@ -12,6 +12,7 @@ Continuous Integration (CI) linter for STRATA domain trees:
 Returns exit code 0 on success, or 1 on any schema violation.
 """
 
+import argparse
 import ast
 import glob
 import importlib
@@ -237,16 +238,28 @@ def lint_tree_file(path: str) -> List[str]:
         cid = cell.cell_id
         stage = cell.stage
 
-        # 3a. Atomic code_template check for core/library trees (no inline def, <= 2 statements)
+        # 3a. Atomic code_template check (no inline import; non-exempt domains also disallow inline def, >2 statements, walrus, and call tuple-packing)
         code = (cell.code_template or "").strip()
-        if code and domain not in STATEMENT_LIMIT_EXEMPT_DOMAINS:
+        if code:
             san = re.sub(r"\{([a-zA-Z0-9_]+)\}", r"_P_\1_", code)
             try:
                 c_ast = ast.parse(san)
-                if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(c_ast)):
-                    violations.append(f"[{rel_path}] {cid}: core/library cell code_template defines inline 'def'")
-                if len(c_ast.body) > 2:
-                    violations.append(f"[{rel_path}] {cid}: core/library cell code_template has {len(c_ast.body)} statements (max 2)")
+                if any(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(c_ast)):
+                    violations.append(f"[{rel_path}] {cid}: cell code_template contains inline import (declare imports in 'dependencies')")
+                if domain not in STATEMENT_LIMIT_EXEMPT_DOMAINS:
+                    if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(c_ast)):
+                        violations.append(f"[{rel_path}] {cid}: core/library cell code_template defines inline 'def'")
+                    if len(c_ast.body) > 2:
+                        violations.append(f"[{rel_path}] {cid}: core/library cell code_template has {len(c_ast.body)} statements (max 2)")
+                    if any(isinstance(n, ast.NamedExpr) for n in ast.walk(c_ast)):
+                        violations.append(f"[{rel_path}] {cid}: core/library cell code_template uses walrus operator ':=' (linter dodging)")
+                    if any(
+                        isinstance(n, ast.Subscript)
+                        and isinstance(n.value, ast.Tuple)
+                        and any(isinstance(sub, ast.Call) for sub in ast.walk(n.value))
+                        for n in ast.walk(c_ast)
+                    ):
+                        violations.append(f"[{rel_path}] {cid}: core/library cell code_template packs calls into subscripted tuple (linter dodging)")
             except SyntaxError:
                 pass
 
@@ -350,7 +363,17 @@ def lint_tree_file(path: str) -> List[str]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="STRATA Domain Tree CI Linter")
+    parser.add_argument("--include-fixtures", action="store_true", help="Also lint held-out fixture trees under benchmarks/fixtures/*/*.json")
+    args = parser.parse_args()
+
     tree_files = sorted(glob.glob(str(REPO_ROOT / "trees" / "*.json")))
+    if args.include_fixtures:
+        fixture_files = sorted(glob.glob(str(REPO_ROOT / "benchmarks" / "fixtures" / "*" / "*.json")))
+        seen = {str(Path(p).resolve()) for p in tree_files}
+        for fp in fixture_files:
+            if str(Path(fp).resolve()) not in seen:
+                tree_files.append(fp)
     if not tree_files:
         print("[lint_trees] ERROR: No tree files found in trees/*.json")
         return 1

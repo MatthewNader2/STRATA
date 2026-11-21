@@ -8,6 +8,7 @@ from __future__ import annotations
 import gc
 import inspect
 import json
+import math
 import os
 import sys
 import threading
@@ -105,7 +106,7 @@ def _validate_json_schema(val: Any, schema: Optional[Dict[str, Any]], _depth: in
                 ok_t = True
             elif t_s == "integer" and isinstance(val, int) and not isinstance(val, bool):
                 ok_t = True
-            elif t_s == "number" and isinstance(val, (int, float)) and not isinstance(val, bool):
+            elif t_s == "number" and isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(float(val)):
                 ok_t = True
             elif t_s == "boolean" and isinstance(val, bool):
                 ok_t = True
@@ -123,12 +124,23 @@ def _validate_json_schema(val: Any, schema: Optional[Dict[str, Any]], _depth: in
                 if pk in val and not _validate_json_schema(val[pk], p_sch, _depth + 1):
                     return False
         add_p = schema.get("additionalProperties")
-        if isinstance(add_p, dict):
+        if add_p is False and isinstance(props, dict):
+            declared = set(props.keys())
+            for vk in val.keys():
+                if vk not in declared:
+                    return False
+        elif isinstance(add_p, dict):
             declared = set(props.keys()) if isinstance(props, dict) else set()
             for vk, vv in val.items():
                 if vk not in declared and not _validate_json_schema(vv, add_p, _depth + 1):
                     return False
     elif isinstance(val, list):
+        min_items = schema.get("minItems")
+        if min_items is not None and len(val) < int(min_items):
+            return False
+        max_items = schema.get("maxItems")
+        if max_items is not None and len(val) > int(max_items):
+            return False
         item_sch = schema.get("items")
         if isinstance(item_sch, dict):
             for elem in val:
@@ -211,6 +223,326 @@ def _normalize_json_to_schema(val: Any, schema: Optional[Dict[str, Any]], _depth
     return val
 
 
+def _strip_thinking_blocks(text: str) -> str:
+    """Strips <think>...</think> reasoning traces (and unclosed leading <think>) without regex."""
+    if not text:
+        return ""
+    s = str(text)
+    while True:
+        low = s.lower()
+        start = low.find("<think>")
+        if start == -1:
+            break
+        end = low.find("</think>", start + 7)
+        if end != -1:
+            s = s[:start] + s[end + 8 :]
+        else:
+            s = s[:start]
+            break
+    low_rem = s.lower()
+    tail_idx = low_rem.rfind("</think>")
+    if tail_idx != -1:
+        s = s[tail_idx + 8 :]
+    return s.strip()
+
+
+def _is_thinking_model_llm(llm: Any) -> bool:
+    """Detects whether a loaded LLM declares <think> reasoning tags or enable_thinking template support."""
+    if llm is None:
+        return False
+    if bool(getattr(llm, "supports_thinking", False)):
+        return True
+    meta = getattr(llm, "metadata", None)
+    if isinstance(meta, dict):
+        tmpl = str(meta.get("tokenizer.chat_template", "") or "")
+        if "enable_thinking" in tmpl or "<think>" in tmpl:
+            return True
+    return False
+
+
+def _llm_supports_kwarg(llm: Any, method_name: str, kwarg_name: str) -> bool:
+    """Checks via inspect.signature whether llm.<method_name> accepts kwarg_name or **kwargs."""
+    fn = getattr(llm, method_name, None)
+    if not callable(fn):
+        return False
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+    if kwarg_name in sig.parameters:
+        return True
+    return any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+
+
+def _get_no_think_chat_handler(llm: Any) -> Optional[Any]:
+    """Builds or returns a cached llama_cpp chat handler with enable_thinking=False forced."""
+    cached = getattr(llm, "_nstl_no_think_handler", None)
+    if cached is not None:
+        return cached
+    meta = getattr(llm, "metadata", None)
+    if not isinstance(meta, dict):
+        return None
+    tmpl = str(meta.get("tokenizer.chat_template", "") or "")
+    if "enable_thinking" not in tmpl:
+        return None
+    try:
+        import llama_cpp.llama_chat_format as cf
+
+        def _decode_tok(tok_fn_name: str) -> Tuple[str, Optional[int]]:
+            detok = getattr(llm, "detokenize", None)
+            tok_fn = getattr(llm, tok_fn_name, None)
+            if callable(detok) and callable(tok_fn):
+                tok_id = tok_fn()
+                try:
+                    raw = detok([tok_id], special=True)
+                except TypeError:
+                    raw = detok([tok_id])
+                if isinstance(raw, bytes):
+                    txt = raw.decode("utf-8", "ignore")
+                else:
+                    txt = str(raw or "")
+                parsed_id = tok_id if isinstance(tok_id, int) and not isinstance(tok_id, bool) and tok_id >= 0 else None
+                return txt, parsed_id
+            return "", None
+
+        eos, eos_id = _decode_tok("token_eos")
+        if not eos:
+            return None
+        bos, _ = _decode_tok("token_bos")
+
+        class _NoThinkJinja2Formatter(cf.Jinja2ChatFormatter):
+            def __call__(self, *args: Any, **kw: Any) -> Any:
+                kw["enable_thinking"] = False
+                return super().__call__(*args, **kw)
+
+        stop_ids = [eos_id] if eos_id is not None else None
+        try:
+            formatter = _NoThinkJinja2Formatter(
+                template=tmpl, eos_token=eos, bos_token=bos, stop_token_ids=stop_ids
+            )
+        except TypeError:
+            formatter = _NoThinkJinja2Formatter(
+                template=tmpl, eos_token=eos, bos_token=bos
+            )
+        handler = formatter.to_chat_handler()
+        try:
+            setattr(llm, "_nstl_no_think_handler", handler)
+        except Exception:
+            pass
+        return handler
+    except Exception:
+        return None
+
+
+def _call_llama_chat_no_think(
+    llm: Any,
+    lock: threading.Lock,
+    call_kwargs: Dict[str, Any],
+) -> Any:
+    """Invokes create_chat_completion with thinking suppressed via API kwargs or validated Jinja handler."""
+    kw = dict(call_kwargs)
+    msgs = [dict(m) for m in (kw.get("messages") or [])]
+    kw["messages"] = msgs
+    supports_ctk = _llm_supports_kwarg(llm, "create_chat_completion", "chat_template_kwargs")
+    if supports_ctk:
+        ctk = dict(kw.get("chat_template_kwargs") or {})
+        ctk["enable_thinking"] = False
+        kw["chat_template_kwargs"] = ctk
+
+    with lock:
+        if not supports_ctk:
+            nt_handler = _get_no_think_chat_handler(llm)
+            if nt_handler is not None and hasattr(llm, "chat_handler"):
+                prev_handler = llm.chat_handler
+                llm.chat_handler = nt_handler
+                try:
+                    return llm.create_chat_completion(**kw)
+                finally:
+                    llm.chat_handler = prev_handler
+        return llm.create_chat_completion(**kw)
+
+
+def _count_fixed_leaves(sch: Any, depth: int) -> Optional[int]:
+    """Counts fixed primitive/list-of-primitive leaves in a bounded JSON Schema."""
+    if not isinstance(sch, dict) or depth > 2:
+        return None
+    if any(k in sch for k in ("anyOf", "oneOf", "allOf")):
+        return None
+    add_p = sch.get("additionalProperties")
+    if isinstance(add_p, dict) or add_p is True:
+        return None
+
+    t = sch.get("type")
+    if isinstance(t, str):
+        t_list = [t]
+    elif isinstance(t, list):
+        t_list = list(t)
+    else:
+        t_list = []
+
+    prims = ("string", "integer", "number", "boolean", "null")
+    if "enum" in sch and (not t_list or all(x in prims for x in t_list)):
+        return 1
+    if t_list and all(x in prims for x in t_list):
+        return 1
+
+    if "array" in t_list or ("items" in sch and not t_list):
+        item_sch = sch.get("items")
+        if not isinstance(item_sch, dict):
+            return None
+        if "properties" in item_sch or item_sch.get("type") in ("object", "array"):
+            return None
+        sub = _count_fixed_leaves(item_sch, depth + 1)
+        return 1 if sub == 1 else None
+
+    if "object" in t_list or ("properties" in sch and not t_list):
+        props = sch.get("properties")
+        if not isinstance(props, dict) or not props:
+            return None
+        total = 0
+        for p_sch in props.values():
+            sub = _count_fixed_leaves(p_sch, depth + 1)
+            if sub is None:
+                return None
+            total += sub
+        return total
+
+    return None
+
+
+def _is_small_fixed_schema(schema: Optional[Dict[str, Any]]) -> bool:
+    """Returns True for small fixed JSON schemas suited for direct single-pass GBNF decoding."""
+    leaves = _count_fixed_leaves(schema, 0)
+    return leaves is not None and 1 <= leaves <= 6
+
+
+def _parse_and_validate_schema_output(raw_text: str, schema: Dict[str, Any]) -> Optional[str]:
+    """Strips thinking tags, parses JSON, normalizes wrappers, and strictly validates schema."""
+    cleaned = _strip_thinking_blocks(raw_text)
+    if not cleaned:
+        return None
+    parsed: Any = None
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        try:
+            try:
+                from .utils import extract_json_object
+            except (ImportError, ValueError):
+                from utils import extract_json_object
+            parsed = extract_json_object(cleaned)
+        except Exception:
+            parsed = None
+    if isinstance(parsed, dict):
+        parsed = _normalize_json_to_schema(parsed, schema)
+        if _validate_json_schema(parsed, schema):
+            return json.dumps(parsed)
+    return None
+
+
+def _logsumexp(vals: List[float]) -> float:
+    m = max(vals)
+    return m + math.log(sum(math.exp(v - m) for v in vals))
+
+
+def _extract_first_token_top_logprobs(response: Any) -> Dict[str, float]:
+    """Extracts first generated token's logprobs {token_str: float} from chat or completion output."""
+    if not isinstance(response, dict):
+        return {}
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return {}
+    choice0 = choices[0]
+    if not isinstance(choice0, dict):
+        return {}
+    lp_block = choice0.get("logprobs")
+    if not isinstance(lp_block, dict):
+        return {}
+
+    out: Dict[str, float] = {}
+
+    def _record(tok: Any, lp: Any) -> None:
+        if tok is None:
+            return
+        try:
+            f = float(lp)
+        except (TypeError, ValueError):
+            return
+        if not math.isfinite(f):
+            return
+        ts = str(tok)
+        if ts not in out or f > out[ts]:
+            out[ts] = f
+
+    content_lps = lp_block.get("content")
+    if isinstance(content_lps, list) and content_lps:
+        entry0 = content_lps[0]
+        if isinstance(entry0, dict):
+            _record(entry0.get("token"), entry0.get("logprob"))
+            tops = entry0.get("top_logprobs")
+            if isinstance(tops, list):
+                for item in tops:
+                    if isinstance(item, dict):
+                        _record(item.get("token"), item.get("logprob"))
+            elif isinstance(tops, dict):
+                for tk, lv in tops.items():
+                    _record(tk, lv)
+        if out:
+            return out
+
+    tokens = lp_block.get("tokens")
+    tok_lps = lp_block.get("token_logprobs")
+    if isinstance(tokens, list) and isinstance(tok_lps, list) and tokens and tok_lps:
+        _record(tokens[0], tok_lps[0])
+    raw_tops = lp_block.get("top_logprobs")
+    if isinstance(raw_tops, list) and raw_tops:
+        top0 = raw_tops[0]
+        if isinstance(top0, dict):
+            for tk, lv in top0.items():
+                _record(tk, lv)
+    elif isinstance(raw_tops, dict):
+        for tk, lv in raw_tops.items():
+            _record(tk, lv)
+    return out
+
+
+def _map_label_logprobs_to_probs(
+    token_lps: Dict[str, float],
+    label_to_cid: Dict[str, str],
+) -> Dict[str, float]:
+    """Maps first-token option-label logprobs (A, B, ...) to calibrated softmax probabilities."""
+    if not token_lps or not label_to_cid:
+        return {}
+    strip_chars = " \t\r\n()[]*:\"'."
+    label_lps: Dict[str, float] = {}
+    for lbl in label_to_cid:
+        exact_matches = [
+            lv for tk, lv in token_lps.items()
+            if tk.strip(strip_chars) == lbl
+        ]
+        if exact_matches:
+            label_lps[lbl] = _logsumexp(exact_matches)
+            continue
+        ci_matches = [
+            lv for tk, lv in token_lps.items()
+            if tk.strip(strip_chars).upper() == lbl
+        ]
+        if ci_matches:
+            label_lps[lbl] = _logsumexp(ci_matches)
+
+    if not label_lps:
+        return {}
+
+    tail_floor = min(token_lps.values()) - 2.0
+    full_lps = {lbl: label_lps.get(lbl, tail_floor) for lbl in label_to_cid}
+    max_lp = max(full_lps.values())
+    exps = {lbl: math.exp(lp - max_lp) for lbl, lp in full_lps.items()}
+    z = sum(exps.values())
+    if z <= 0.0 or not math.isfinite(z):
+        return {}
+    return {label_to_cid[lbl]: exps[lbl] / z for lbl in label_to_cid}
+
+
 def _generate_llama_with_optional_schema(
     llm: Any,
     lock: threading.Lock,
@@ -219,50 +551,66 @@ def _generate_llama_with_optional_schema(
     schema: Optional[dict],
 ) -> str:
     """
-    Runs llama_cpp chat completion with a fast unconstrained JSON first-pass when a
-    JSON schema is supplied (~10-15x faster than per-token CPU GBNF masking), validating
-    the output strictly against the schema and falling back to GBNF only if validation fails.
+    Runs llama_cpp chat completion with optional JSON Schema enforcement.
+    - Small fixed schemas use direct single-pass GBNF with thinking suppressed (1 LLM call).
+    - Large/open schemas attempt fast unconstrained JSON (thinking suppressed) and fall back to GBNF only on failure.
     """
-    if schema:
-        try:
-            try:
-                from .utils import extract_json_object
-            except (ImportError, ValueError):
-                from utils import extract_json_object
-            spec_str = _render_schema_skeleton(schema)
-            if len(spec_str) > 2000:
-                spec_str = spec_str[:2000] + "...}"
-            req_keys = list(schema.get("required") or ()) if isinstance(schema, dict) else []
-            req_note = f" MUST include all required keys ({', '.join(req_keys)}, marked * — use [] or \"\" if none)." if req_keys else ""
-            schema_hint = (
-                "\nOutput ONLY ONE valid minified single-line JSON object (no newlines, no indentation) adhering to this type specification "
-                "(fill required fields with actual values derived from the user request; omit optional empty fields; match array vs object "
-                f"types and enum strings verbatim; no markdown fences, no commentary):{req_note}\nTypeSpec: {spec_str}"
-            )
-            fast_msgs = [dict(m) for m in messages]
-            if fast_msgs and fast_msgs[0].get("role") == "system":
-                fast_msgs[0]["content"] = fast_msgs[0]["content"] + schema_hint
-            else:
-                fast_msgs.insert(0, {"role": "system", "content": schema_hint.strip()})
-            fast_kwargs = dict(kwargs)
-            fast_kwargs["messages"] = fast_msgs
-            fast_kwargs["temperature"] = 0.0
-            with lock:
-                fast_resp = llm.create_chat_completion(**fast_kwargs)
-            fast_raw = (fast_resp["choices"][0]["message"]["content"] or "").strip()
-            parsed_fast = extract_json_object(fast_raw)
-            if isinstance(parsed_fast, dict):
-                parsed_fast = _normalize_json_to_schema(parsed_fast, schema)
-                if _validate_json_schema(parsed_fast, schema):
-                    return json.dumps(parsed_fast)
-        except Exception as _fast_err:
-            logger.debug(f"[INFERENCE] Fast JSON path fell back to GBNF schema: {_fast_err}")
-        kwargs["response_format"] = {"type": "json_object", "schema": schema}
+    if not schema:
+        call_kwargs = dict(kwargs)
+        call_kwargs["messages"] = messages
+        with lock:
+            response = llm.create_chat_completion(**call_kwargs)
+        return (response["choices"][0]["message"]["content"] or "").strip()
 
-    kwargs["messages"] = messages
-    with lock:
-        response = llm.create_chat_completion(**kwargs)
-    return (response["choices"][0]["message"]["content"] or "").strip()
+    if _is_small_fixed_schema(schema):
+        gbnf_kwargs = dict(kwargs)
+        gbnf_kwargs["messages"] = [dict(m) for m in messages]
+        gbnf_kwargs["temperature"] = 0.0
+        gbnf_kwargs["response_format"] = {"type": "json_object", "schema": schema}
+        response = _call_llama_chat_no_think(llm, lock, gbnf_kwargs)
+        raw = (response["choices"][0]["message"]["content"] or "").strip()
+        validated = _parse_and_validate_schema_output(raw, schema)
+        if validated is not None:
+            return validated
+        raise ValueError("Structured LLM output failed JSON schema validation.")
+
+    try:
+        spec_str = _render_schema_skeleton(schema)
+        if len(spec_str) > 2000:
+            spec_str = spec_str[:2000] + "...}"
+        req_keys = list(schema.get("required") or ()) if isinstance(schema, dict) else []
+        req_note = f" MUST include all required keys ({', '.join(req_keys)}, marked * — use [] or \"\" if none)." if req_keys else ""
+        schema_hint = (
+            "\nOutput ONLY ONE valid minified single-line JSON object (no newlines, no indentation) adhering to this type specification "
+            "(fill required fields with actual values derived from the user request; omit optional empty fields; match array vs object "
+            f"types and enum strings verbatim; no markdown fences, no commentary):{req_note}\nTypeSpec: {spec_str}"
+        )
+        fast_msgs = [dict(m) for m in messages]
+        if fast_msgs and fast_msgs[0].get("role") == "system":
+            fast_msgs[0]["content"] = fast_msgs[0]["content"] + schema_hint
+        else:
+            fast_msgs.insert(0, {"role": "system", "content": schema_hint.strip()})
+        fast_kwargs = dict(kwargs)
+        fast_kwargs["messages"] = fast_msgs
+        fast_kwargs["temperature"] = 0.0
+        fast_resp = _call_llama_chat_no_think(llm, lock, fast_kwargs)
+        fast_raw = (fast_resp["choices"][0]["message"]["content"] or "").strip()
+        validated_fast = _parse_and_validate_schema_output(fast_raw, schema)
+        if validated_fast is not None:
+            return validated_fast
+    except Exception as _fast_err:
+        logger.debug(f"[INFERENCE] Fast JSON path fell back to GBNF schema: {_fast_err}")
+
+    gbnf_kwargs = dict(kwargs)
+    gbnf_kwargs["messages"] = [dict(m) for m in messages]
+    gbnf_kwargs["temperature"] = 0.0
+    gbnf_kwargs["response_format"] = {"type": "json_object", "schema": schema}
+    response = _call_llama_chat_no_think(llm, lock, gbnf_kwargs)
+    raw = (response["choices"][0]["message"]["content"] or "").strip()
+    validated = _parse_and_validate_schema_output(raw, schema)
+    if validated is not None:
+        return validated
+    raise ValueError("Structured LLM output failed JSON schema validation.")
 
 
 def resolve_embedding_dimension(model: Any) -> int:
@@ -978,6 +1326,7 @@ class BenchmarkProfile_C(InferenceProfile):
                 n_ctx=settings.llm_context_length,
                 n_gpu_layers=gpu_layers,
                 n_threads=n_threads,
+                logits_all=bool(self.has_constrained_choice_scorer()),
                 verbose=False,
             )
             logger.info(f"[PROFILE C] Loaded Embedder '{self.embedder_name}' + LLM '{self.llm_name}' on {device.upper()} (gpu_layers={gpu_layers}, n_threads={n_threads})")
@@ -1288,6 +1637,7 @@ class BenchmarkProfile_U(InferenceProfile):
         self._dim = 896
         self.early_exit_layer = early_exit_layer
         self.k_layer = 0
+        self.early_exit_active: bool = False
         self.embedder_name = "llm_early_exit"
         self.llm_name = "default"
         self.is_torch = False
@@ -1340,8 +1690,13 @@ class BenchmarkProfile_U(InferenceProfile):
                     except Exception:
                         self._dim = getattr(self.llm, "n_embd", lambda: 896)() or 896
                     self.is_torch = False
+                    self.early_exit_active = False
                     loaded = True
-                    logger.info(f"[PROFILE U] Loaded single GGUF LLM '{self.llm_name}' (dim={self._dim}, embedding=True) on {device.upper()}")
+                    logger.info(
+                        f"[PROFILE U] Loaded single GGUF LLM '{self.llm_name}' (dim={self._dim}, "
+                        "embedding=True, early_exit_active=False full-layer pooling) on "
+                        f"{device.upper()}"
+                    )
                 except Exception as e:
                     logger.debug(f"[PROFILE U] GGUF loading skipped: {e}")
 
@@ -1354,11 +1709,17 @@ class BenchmarkProfile_U(InferenceProfile):
                     self.model = AutoModelForCausalLM.from_pretrained(llm_dir, trust_remote_code=True).to(device)
                     self.model.eval()
                     total_layers = len(getattr(getattr(self.model, "model", self.model), "layers", []))
-                    self.k_layer = self.early_exit_layer or max(1, total_layers // 2)
+                    raw_k = self.early_exit_layer or max(1, total_layers // 2)
+                    self.k_layer = max(1, min(int(raw_k), total_layers)) if total_layers > 0 else 0
+                    self.early_exit_active = bool(total_layers > 0 and 0 < self.k_layer < total_layers)
                     self._dim = getattr(self.model.config, "hidden_size", 896)
                     self.is_torch = True
                     loaded = True
-                    logger.info(f"[PROFILE U] Loaded single PyTorch LLM '{self.llm_name}' (k={self.k_layer}/{total_layers}, dim={self._dim}) on {device.upper()}")
+                    logger.info(
+                        f"[PROFILE U] Loaded single PyTorch LLM '{self.llm_name}' "
+                        f"(k={self.k_layer}/{total_layers}, early_exit_active={self.early_exit_active}, "
+                        f"dim={self._dim}) on {device.upper()}"
+                    )
             except Exception as e:
                 logger.debug(f"[PROFILE U] PyTorch model loading skipped: {e}")
 
@@ -1377,6 +1738,7 @@ class BenchmarkProfile_U(InferenceProfile):
         with self._lock:
             # 1. PyTorch early-exit forward pass through layers[:k]
             if self.is_torch and self.model is not None and self.tokenizer is not None:
+                _ensure_torch()
                 device = getattr(self.model, "device", "cpu")
                 inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt").to(device)
                 with torch.no_grad():
@@ -1402,8 +1764,10 @@ class BenchmarkProfile_U(InferenceProfile):
                         pad_mask = (1.0 - attn_2d.to(dtype=hidden.dtype)).unsqueeze(1).unsqueeze(2) * min_val
                         causal_mask = causal_base + pad_mask
 
-                    k = self.k_layer
                     layers = getattr(core_model, "layers", [])
+                    total_layers = len(layers)
+                    k = max(1, min(int(self.k_layer or total_layers), total_layers)) if total_layers > 0 else 0
+                    self.early_exit_active = bool(total_layers > 0 and 0 < k < total_layers)
                     for layer in layers[:k]:
                         layer_kwargs: Dict[str, Any] = {}
                         try:
@@ -1453,7 +1817,8 @@ class BenchmarkProfile_U(InferenceProfile):
                 inputs = self.tokenizer(full_p, return_tensors="pt").to(device)
                 with torch.no_grad():
                     out = self.model.generate(**inputs, max_new_tokens=max_tokens)
-                return self.tokenizer.decode(out[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+                decoded = self.tokenizer.decode(out[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+                return _strip_thinking_blocks(decoded) if schema is not None else decoded
 
         if self.llm is not None:
             messages = []
@@ -1523,11 +1888,26 @@ class BenchmarkProfile_AE(InferenceProfile):
         except (ImportError, ValueError):
             from latent_autoencoder import TransitionAutoencoder, train_autoencoder_from_orchestrator
 
+        orch = None
         try:
-            from .main import get_orchestrator
-            orch = get_orchestrator()
+            try:
+                from .lattice import LatticeOrchestrator
+            except (ImportError, ValueError):
+                from lattice import LatticeOrchestrator
+            orch = LatticeOrchestrator.get_active_instance()
         except Exception:
             orch = None
+
+        if orch is None or not getattr(orch, "loaded_cells", None):
+            try:
+                from .main import get_orchestrator
+                orch = get_orchestrator()
+            except Exception:
+                try:
+                    from main import get_orchestrator
+                    orch = get_orchestrator()
+                except Exception:
+                    orch = None
 
         if orch is not None and getattr(orch, "loaded_cells", None):
             self.autoencoder = train_autoencoder_from_orchestrator(orch, dimension=self._dim)
@@ -1544,7 +1924,17 @@ class BenchmarkProfile_AE(InferenceProfile):
         if not texts or self.autoencoder is None:
             return []
         with self._lock:
-            return [self.autoencoder.encode_signature(t).tolist() for t in texts]
+            out: List[List[float]] = []
+            ts_map = getattr(self.autoencoder, "typestate_to_idx", {}) or {}
+            txt_trained = bool(getattr(self.autoencoder, "_text_projection_trained", False))
+            for t in texts:
+                if t in ts_map:
+                    out.append(self.autoencoder.encode_signature(t).tolist())
+                elif txt_trained and hasattr(self.autoencoder, "encode_text"):
+                    out.append(self.autoencoder.encode_text(t).tolist())
+                else:
+                    out.append(self.autoencoder.encode_signature(t).tolist())
+            return out
 
     def score_transition(
         self,
@@ -1604,71 +1994,53 @@ class BenchmarkProfile_Omega(BenchmarkProfile_S):
         context_desc: str = "",
     ) -> Dict[str, float]:
         """
-        Schema-constrained SLM choice scorer restricted strictly to E_valid(Gamma_t).
-        Returns {cell_id: score in [0, 1]} only for candidate IDs in `candidates`.
+        Single-pass 1-token option-label logprob choice scorer restricted strictly to E_valid(Gamma_t).
+        Maps labels (A, B, ...) via log-sum-exp and numerically stable softmax into calibrated
+        probabilities summing to 1.0 over `candidates[:12]`, or {} on empty/missing logprobs.
         """
-        clean_cands = [str(c).strip() for c in (candidates or []) if c]
-        has_custom_gen = type(self).generate_text is not BenchmarkProfile_C.generate_text
-        if not clean_cands or (self.llm is None and not has_custom_gen):
+        clean_cands: List[str] = []
+        seen = set()
+        for c in (candidates or []):
+            s = str(c).strip() if c is not None else ""
+            if s and s not in seen:
+                seen.add(s)
+                clean_cands.append(s)
+        if not clean_cands or self.llm is None:
             return {}
+
         capped = clean_cands[:12]
-        choice_schema = {
-            "type": "object",
-            "properties": {
-                "rankings": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "cell_id": {"type": "string", "enum": capped},
-                            "score": {"type": "number"},
-                        },
-                        "required": ["cell_id", "score"],
-                    },
-                }
-            },
-            "required": ["rankings"],
-        }
-        ctx_line = f"\nCurrent typed context Gamma_t:\n{context_desc}\n" if context_desc else "\n"
+        if len(capped) == 1:
+            return {capped[0]: 1.0}
+
+        labels = [chr(ord("A") + i) for i in range(len(capped))]
+        label_to_cid = dict(zip(labels, capped))
+        ctx_line = f"\nContext: {context_desc}" if context_desc else ""
+        opts_block = "\n".join(f"{lbl}) {cid}" for lbl, cid in zip(labels, capped))
         sys_p = (
-            "You rank ONLY candidates from E_valid.\n"
-            "STRICT RULE: Every cell_id in rankings MUST be copied character-for-character from E_valid. "
-            "Do NOT output any cell_id that is not verbatim in E_valid. Assign float scores in [0.0, 1.0]."
+            f"Select the single best next operation option ({labels[0]}-{labels[-1]}). "
+            "Reply with ONLY the single capital letter."
         )
-        cands_numbered = "\n".join(f"- {cid}" for cid in capped)
-        ex_cid = capped[0]
         usr_p = (
-            f"Goal: {prompt}{ctx_line}"
-            f"Allowed E_valid IDs (choose ONLY from these exact strings):\n{cands_numbered}\n"
-            f'Return compact single-line JSON: {{"rankings":[{{"cell_id":"{ex_cid}","score":0.95}}]}}'
+            f"Goal: {prompt}{ctx_line}\n"
+            f"Options:\n{opts_block}\n"
+            f"Answer ({labels[0]}-{labels[-1]}):"
         )
+        call_kwargs: Dict[str, Any] = {
+            "messages": [
+                {"role": "system", "content": sys_p},
+                {"role": "user", "content": usr_p},
+            ],
+            "max_tokens": 1,
+            "temperature": 0.0,
+            "logprobs": True,
+            "top_logprobs": max(20, len(capped) * 2),
+        }
         try:
-            raw = self.generate_text(usr_p, max_tokens=256, schema=choice_schema, system_prompt=sys_p)
-            data = None
-            try:
-                data = json.loads(raw)
-            except Exception:
-                start = raw.find("{")
-                end = raw.rfind("}")
-                if start != -1 and end > start:
-                    data = json.loads(raw[start : end + 1])
-            if not isinstance(data, dict):
-                return {}
-            valid_set = set(capped)
-            out: Dict[str, float] = {}
-            for item in data.get("rankings", []) or []:
-                if not isinstance(item, dict):
-                    continue
-                cid = str(item.get("cell_id", "")).strip()
-                if cid in valid_set:
-                    try:
-                        sc = max(0.0, min(1.0, float(item.get("score", 0.0))))
-                        out[cid] = max(out.get(cid, 0.0), sc)
-                    except Exception:
-                        pass
-            return out
+            resp = _call_llama_chat_no_think(self.llm, self._llm_lock, call_kwargs)
+            token_lps = _extract_first_token_top_logprobs(resp)
+            return _map_label_logprobs_to_probs(token_lps, label_to_cid)
         except Exception as err:
-            logger.debug(f"[OMEGA] Constrained choice scoring skipped: {err}")
+            logger.debug(f"[OMEGA] Constrained logprob choice scoring skipped: {err}")
             return {}
 
 
@@ -1766,7 +2138,10 @@ class ModelManager:
                             prof.model = reused_emb
                 if isinstance(prof, BenchmarkProfile_C) and isinstance(prev, BenchmarkProfile_C) and getattr(prev, "llm", None) is not None:
                     target_llm = select_optimal_llm(llm_name)
-                    if getattr(prev, "llm_name", None) == target_llm:
+                    if getattr(prev, "llm_name", None) == target_llm and (
+                        (not prof.has_constrained_choice_scorer())
+                        or bool(getattr(prev.llm, "_logits_all", False))
+                    ):
                         prof.llm = prev.llm
                         prof.llm_name = target_llm
                         prev.llm = None

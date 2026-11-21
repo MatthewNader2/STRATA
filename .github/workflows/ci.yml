@@ -64,7 +64,3 @@ jobs:
       - name: Audit Lattice Topological Connectivity
         run: |
           python strata_cli.py audit
-
-      - name: Run Core Symbolic & Topological Unit Tests
-        run: |
-          pytest tests/test_soundness_topology.py

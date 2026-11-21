@@ -53,8 +53,8 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "repo_id": "unsloth/Qwen3.8-27B-GGUF",
         "filename": "Qwen3.8-27B-UD-IQ3_S.gguf",
         "n_gpu_layers": -1,
-        "n_ctx": 4096,
-        "max_tokens": 2560,
+        "n_ctx": 8192,
+        "max_tokens": 4096,
     },
     "gpt-oss-20b": {
         "display": "GPT-OSS-20B (Q4_K_M, 11.6GB)",
@@ -65,8 +65,8 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "repo_id": "unsloth/gpt-oss-20b-GGUF",
         "filename": "gpt-oss-20b-Q4_K_M.gguf",
         "n_gpu_layers": -1,
-        "n_ctx": 4096,
-        "max_tokens": 2560,
+        "n_ctx": 8192,
+        "max_tokens": 4096,
     },
     "qwen3-coder-30b-a3b": {
         "display": "Qwen3-Coder-30B-A3B-Instruct (Q3_K_S, 13.3GB)",
@@ -77,8 +77,8 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "repo_id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
         "filename": "Qwen3-Coder-30B-A3B-Instruct-Q3_K_S.gguf",
         "n_gpu_layers": -1,
-        "n_ctx": 4096,
-        "max_tokens": 2560,
+        "n_ctx": 8192,
+        "max_tokens": 4096,
     },
     "qwen3.5-35b-a3b": {
         "display": "Qwen3.5-35B-A3B MoE (UD-IQ3_XXS, 13.1GB)",
@@ -89,8 +89,8 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "repo_id": "unsloth/Qwen3.5-35B-A3B-GGUF",
         "filename": "Qwen3.5-35B-A3B-UD-IQ3_XXS.gguf",
         "n_gpu_layers": -1,
-        "n_ctx": 4096,
-        "max_tokens": 2560,
+        "n_ctx": 8192,
+        "max_tokens": 4096,
     },
     "qwen3.5-27b": {
         "display": "Qwen3.5-27B Dense (Q3_K_S, 12.3GB)",
@@ -101,8 +101,8 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "repo_id": "unsloth/Qwen3.5-27B-GGUF",
         "filename": "Qwen3.5-27B-Q3_K_S.gguf",
         "n_gpu_layers": -1,
-        "n_ctx": 4096,
-        "max_tokens": 2560,
+        "n_ctx": 8192,
+        "max_tokens": 4096,
     },
 }
 
@@ -212,20 +212,47 @@ def wait_for_server(base_url: str, proc: subprocess.Popen, server_log: Path, tim
     raise TimeoutError(f"llama-server did not become ready within {timeout_s}s.\n--- server log tail ---\n{tail}")
 
 
+def _positive_int(raw: str) -> int:
+    try:
+        val = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid integer value: {raw!r}") from exc
+    if val <= 0:
+        raise argparse.ArgumentTypeError(f"value must be a positive integer, got {val}")
+    return val
+
+
+def build_chat_completion_payload(
+    messages: List[Dict[str, str]],
+    max_tokens: int = 4096,
+    temperature: float = 0.0,
+    disable_thinking: bool = False,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "messages": messages,
+        "max_tokens": int(max_tokens),
+        "temperature": float(temperature),
+        "top_p": 0.95,
+    }
+    if disable_thinking:
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+    return payload
+
+
 def query_llama_server(
     base_url: str,
     messages: List[Dict[str, str]],
-    max_tokens: int = 2560,
+    max_tokens: int = 4096,
     temperature: float = 0.0,
+    disable_thinking: bool = False,
 ) -> Dict[str, Any]:
-    payload = json.dumps(
-        {
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.95,
-        }
-    ).encode("utf-8")
+    payload_dict = build_chat_completion_payload(
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        disable_thinking=disable_thinking,
+    )
+    payload = json.dumps(payload_dict).encode("utf-8")
     req = urllib.request.Request(
         f"{base_url}/v1/chat/completions",
         data=payload,
@@ -304,12 +331,21 @@ def run_model_via_server(
     out_dir: Path,
     port: int = 8091,
     cleanup_cache: bool = False,
+    disable_thinking: bool = False,
+    max_tokens_override: int | None = None,
+    n_ctx_override: int | None = None,
 ) -> Path:
+    eff_spec = dict(spec)
+    if n_ctx_override is not None:
+        eff_spec["n_ctx"] = int(n_ctx_override)
+    if max_tokens_override is not None:
+        eff_spec["max_tokens"] = int(max_tokens_override)
+
     model_cache = cache_dir / model_key
     t_dl0 = time.perf_counter()
-    _log(f"\n==================== {spec['display']} ====================")
-    _log(f"[COLAB] Downloading {spec['repo_id']} :: {spec['filename']} ...")
-    model_path = download_gguf(spec["repo_id"], spec["filename"], model_cache)
+    _log(f"\n==================== {eff_spec['display']} ====================")
+    _log(f"[COLAB] Downloading {eff_spec['repo_id']} :: {eff_spec['filename']} ...")
+    model_path = download_gguf(eff_spec["repo_id"], eff_spec["filename"], model_cache)
     dl_ms = round((time.perf_counter() - t_dl0) * 1000.0, 2)
     _log(f"[COLAB] Model ready at {model_path} ({dl_ms/1000.0:.1f}s)")
 
@@ -322,48 +358,50 @@ def run_model_via_server(
     log_fh = None
     records: List[Dict[str, Any]] = []
     init_ms = 0.0
-    used_ngl = spec["n_gpu_layers"]
+    used_ngl = eff_spec["n_gpu_layers"]
     gpu_after_init: Dict[str, Any] = {}
 
+    def _serialize_results() -> str:
+        return json.dumps(
+            {
+                "schema_version": "strata_bench_v2",
+                "arm": "pure",
+                "model_id": model_key,
+                "model_display": eff_spec["display"],
+                "family": eff_spec["family"],
+                "params_b": eff_spec["params_b"],
+                "active_params_b": eff_spec["active_params_b"],
+                "quant": eff_spec["quant"],
+                "init": {
+                    "download_ms": dl_ms,
+                    "init_ms": init_ms,
+                    "used_ngl": used_ngl,
+                    "n_ctx": eff_spec["n_ctx"],
+                    "max_tokens": eff_spec["max_tokens"],
+                    "disable_thinking": bool(disable_thinking),
+                    "mem_before": mem_before,
+                    "gpu_before": gpu_before,
+                    "gpu_after_init": gpu_after_init,
+                },
+                "records": records,
+            },
+            indent=2,
+        )
+
+    out_path = out_dir / f"results_{model_key}.json"
     try:
         proc, log_fh, used_ngl, init_ms = _launch_server_with_fallback(
             llama_server_bin=llama_server_bin,
             model_path=model_path,
-            spec=spec,
+            spec=eff_spec,
             env=env,
             server_log=server_log,
             port=port,
         )
         gpu_after_init = read_gpu_vram_mb()
 
-        out_path = out_dir / f"results_{model_key}.json"
-
         def _flush_checkpoint() -> None:
-            out_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "strata_bench_v2",
-                        "arm": "pure",
-                        "model_id": model_key,
-                        "model_display": spec["display"],
-                        "family": spec["family"],
-                        "params_b": spec["params_b"],
-                        "active_params_b": spec["active_params_b"],
-                        "quant": spec["quant"],
-                        "init": {
-                            "download_ms": dl_ms,
-                            "init_ms": init_ms,
-                            "used_ngl": used_ngl,
-                            "mem_before": mem_before,
-                            "gpu_before": gpu_before,
-                            "gpu_after_init": gpu_after_init,
-                        },
-                        "records": records,
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
+            out_path.write_text(_serialize_results(), encoding="utf-8")
 
         for idx, task in enumerate(tasks, 1):
             messages = build_task_messages(task)
@@ -373,7 +411,8 @@ def run_model_via_server(
                 res_llm = query_llama_server(
                     base_url,
                     messages=messages,
-                    max_tokens=spec.get("max_tokens", 2560),
+                    max_tokens=eff_spec.get("max_tokens", 4096),
+                    disable_thinking=disable_thinking,
                 )
                 code = extract_code_clean(res_llm["raw_reply"])
                 ev = evaluate_task_response(res_llm["raw_reply"], code, task, timeout=45.0)
@@ -382,11 +421,11 @@ def run_model_via_server(
                 rec = {
                     "arm": "pure",
                     "model_id": model_key,
-                    "model_display": spec["display"],
-                    "family": spec["family"],
-                    "params_b": spec["params_b"],
-                    "active_params_b": spec["active_params_b"],
-                    "quant": spec["quant"],
+                    "model_display": eff_spec["display"],
+                    "family": eff_spec["family"],
+                    "params_b": eff_spec["params_b"],
+                    "active_params_b": eff_spec["active_params_b"],
+                    "quant": eff_spec["quant"],
                     "task_id": task["id"],
                     "group": task["group"],
                     "kind": task["kind"],
@@ -415,11 +454,11 @@ def run_model_via_server(
                 rec = {
                     "arm": "pure",
                     "model_id": model_key,
-                    "model_display": spec["display"],
-                    "family": spec["family"],
-                    "params_b": spec["params_b"],
-                    "active_params_b": spec["active_params_b"],
-                    "quant": spec["quant"],
+                    "model_display": eff_spec["display"],
+                    "family": eff_spec["family"],
+                    "params_b": eff_spec["params_b"],
+                    "active_params_b": eff_spec["active_params_b"],
+                    "quant": eff_spec["quant"],
                     "task_id": task["id"],
                     "group": task["group"],
                     "kind": task["kind"],
@@ -462,37 +501,12 @@ def run_model_via_server(
             shutil.rmtree(model_cache, ignore_errors=True)
             _log(f"[COLAB] Freed disk cache: {model_cache}")
 
-    out_path = out_dir / f"results_{model_key}.json"
-    out_path.write_text(
-        json.dumps(
-            {
-                "schema_version": "strata_bench_v2",
-                "arm": "pure",
-                "model_id": model_key,
-                "model_display": spec["display"],
-                "family": spec["family"],
-                "params_b": spec["params_b"],
-                "active_params_b": spec["active_params_b"],
-                "quant": spec["quant"],
-                "init": {
-                    "download_ms": dl_ms,
-                    "init_ms": init_ms,
-                    "used_ngl": used_ngl,
-                    "mem_before": mem_before,
-                    "gpu_before": gpu_before,
-                    "gpu_after_init": gpu_after_init,
-                },
-                "records": records,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    out_path.write_text(_serialize_results(), encoding="utf-8")
     _log(f"[COLAB] Saved {out_path}")
     return out_path
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="STRATA Colab T4 Multi-Model Benchmark Runner")
     ap.add_argument(
         "--models",
@@ -509,9 +523,31 @@ def main() -> None:
     ap.add_argument("--llama-server", default="llama-server", help="Path to llama-server CUDA binary")
     ap.add_argument("--cache-dir", default="/content/hf_gguf_cache", help="Directory for GGUF downloads")
     ap.add_argument("--out-dir", default="test_logs/colab_bench", help="Output directory for result JSONs")
-    ap.add_argument("--port", type=int, default=8091)
+    ap.add_argument("--port", type=_positive_int, default=8091)
     ap.add_argument("--cleanup-cache", action="store_true", help="Delete GGUF file after each model finishes")
     ap.add_argument("--resume", action="store_true", help="Skip models whose output JSON already exists")
+    ap.add_argument(
+        "--disable-thinking",
+        action="store_true",
+        help="Pass chat_template_kwargs={'enable_thinking': False} to llama-server chat completions",
+    )
+    ap.add_argument(
+        "--n-ctx",
+        type=_positive_int,
+        default=None,
+        help="Override model context size (-c) for all launched servers (positive int)",
+    )
+    ap.add_argument(
+        "--max-tokens",
+        type=_positive_int,
+        default=None,
+        help="Override per-request max completion tokens (positive int)",
+    )
+    return ap
+
+
+def main() -> None:
+    ap = build_arg_parser()
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -539,6 +575,9 @@ def main() -> None:
                 out_dir=out_dir,
                 port=args.port,
                 cleanup_cache=args.cleanup_cache,
+                disable_thinking=args.disable_thinking,
+                max_tokens_override=args.max_tokens,
+                n_ctx_override=args.n_ctx,
             )
         except Exception as exc:
             _log(f"[COLAB][ERROR] Model '{mkey}' failed: {exc}")

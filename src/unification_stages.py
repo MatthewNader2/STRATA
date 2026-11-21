@@ -2,65 +2,36 @@
 src/unification_stages.py - STRATA (Symbolic Topological Routing Architecture for Typed Automata)
 Track 2.2: Modular Unification Pipeline Stages.
 
-Decomposes `UnificationGate.unify_pipeline()` and `emit_code()` into four
-cohesive, independently testable stages:
-  1. PortWiringStage           - connects output-to-input variables across DAG scope & adjacent cells.
-  2. TypeCoercionStage         - resolves poset subtype compatibility, product projections, and bridge adapters.
-  3. ScopeResolutionStage      - maintains ExecutionContext symbol tables, literal grounding, and provenance.
-  4. TemplateInstantiationStage - renders concrete Python AST code blocks and verifies AST liveness.
+Active modular stages used by UnificationGate:
+  1. PortWiringStage           - expands composite MacroCells into constituent micro-cells.
+  2. ScopeResolutionStage      - attaches TypedBindingRecord metadata to resolved cell ports.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from log_config import get_logger
 
 try:
-    from .lattice import Cell, MacroCell, TypeRegistry, UNRESOLVED_PORT
+    from .lattice import Cell, MacroCell
     from .unification import (
         ExecutionContext,
         Substitution,
-        MonadResult,
-        Success,
-        Failure,
         TypedBindingRecord,
         resolve_typed_binding_record,
-        substitute_generics,
-        _is_sink_cell,
-        _update_variable_provenance,
     )
     from .diagnostics import DiagnosticTelemetry
 except (ImportError, ValueError):
-    from lattice import Cell, MacroCell, TypeRegistry, UNRESOLVED_PORT
+    from lattice import Cell, MacroCell
     from unification import (
         ExecutionContext,
         Substitution,
-        MonadResult,
-        Success,
-        Failure,
         TypedBindingRecord,
         resolve_typed_binding_record,
-        substitute_generics,
-        _is_sink_cell,
-        _update_variable_provenance,
     )
     from diagnostics import DiagnosticTelemetry
 
 logger = get_logger("unification_stages")
-
-
-@dataclass
-class UnificationPipelineState:
-    """Shared state threaded cleanly through the four unification stages."""
-    cells: List[Cell]
-    ctx: ExecutionContext
-    sigma: Substitution = field(default_factory=Substitution)
-    pipeline_bindings: List[Tuple[Cell, Dict[str, str]]] = field(default_factory=list)
-    cell_out_vars: Dict[Any, str] = field(default_factory=dict)
-    cell_port_vars: Dict[Tuple[Any, str], str] = field(default_factory=dict)
-    producer_var: Optional[str] = None
-    llm_pipeline_bindings: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 class PortWiringStage:
@@ -118,36 +89,6 @@ class PortWiringStage:
         return current
 
 
-class TypeCoercionStage:
-    """
-    Stage 2 of Unification:
-    Resolves poset subtype compatibility, heterogeneous tuple/product member
-    projections (`var[i]`), and declared bridge-morphism coercion expressions
-    over arbitrary container/element carriers in the type lattice.
-    """
-
-    def __init__(self, gate: Any) -> None:
-        self.gate = gate
-
-    def coerce_carrier(
-        self,
-        src_var: str,
-        src_type: str,
-        dst_type: str,
-        literal_bindings: Dict[str, str],
-        dst_sig: Optional[Any],
-        ctx: ExecutionContext,
-    ) -> Optional[str]:
-        return self.gate._compose_declared_bridge_expr(
-            src_var=src_var,
-            src_type=src_type,
-            dst_type=dst_type,
-            literal_bindings=literal_bindings,
-            dst_sig=dst_sig,
-            ctx=ctx,
-        )
-
-
 class ScopeResolutionStage:
     """
     Stage 3 of Unification:
@@ -188,30 +129,7 @@ class ScopeResolutionStage:
         return cell_typed_bindings
 
 
-class TemplateInstantiationStage:
-    """
-    Stage 4 of Unification:
-    Prunes dead transform branches, collects and reconciles module imports,
-    instantiates cell AST templates, and enforces static AST variable liveness
-    and callable-callee sanity checks.
-    """
-
-    def __init__(self, gate: Any) -> None:
-        self.gate = gate
-
-    def render_pipeline(
-        self,
-        pipeline_bindings: List[Tuple[Cell, Dict[str, str]]],
-        ctx: ExecutionContext,
-        accum_sigma: Substitution,
-    ) -> str:
-        return self.gate.emit_code(pipeline_bindings, ctx, accum_sigma=accum_sigma)
-
-
 __all__ = [
-    "UnificationPipelineState",
     "PortWiringStage",
-    "TypeCoercionStage",
     "ScopeResolutionStage",
-    "TemplateInstantiationStage",
 ]

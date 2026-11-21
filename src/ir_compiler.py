@@ -144,13 +144,21 @@ class IR:
         )
 
     def validate(self, vocab: Set[str]) -> List[str]:
-        errs = []
-        def _check_step(s: Dict[str, Any], path: str):
+        errs: List[str] = []
+        vocab_norm = {str(v).strip().lower().replace("-", "_").replace(" ", "_") for v in (vocab or ()) if v}
+        vocab_subtokens = {p for v in vocab_norm for p in v.split("_") if len(p) >= 2}
+
+        def _check_step(s: Dict[str, Any], path: str) -> None:
             op = str(s.get("op", "")).strip().lower().replace("-", "_").replace(" ", "_")
             if op:
-                op_tokens = {t for t in op.split("_") if len(t) >= 3}
-                exact_or_token_match = (op in vocab) or bool(op_tokens and any(t in vocab for t in op_tokens))
-                if not exact_or_token_match:
+                op_tokens = [t for t in op.split("_") if t]
+                matched = sum(
+                    1
+                    for t in op_tokens
+                    if t in vocab_norm or (len(t) >= 2 and t in vocab_subtokens)
+                )
+                prec = (matched / len(op_tokens)) if op_tokens else 0.0
+                if op not in vocab_norm and prec < 0.6:
                     errs.append(f"{path}: unknown op {s.get('op')!r}")
             for sub_name in ("body", "then_branch", "else_branch"):
                 sub_list = s.get(sub_name)

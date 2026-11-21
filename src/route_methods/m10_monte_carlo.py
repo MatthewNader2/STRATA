@@ -179,11 +179,17 @@ class M10MonteCarloRouteMethod(RouteMethod):
                             tagged = nxt.clone() if hasattr(nxt, "clone") else nxt
                             tagged.matched_clause_idx = idx
                             tagged.clause_literals = list(literals[idx])
-                            prod = self._find_type_producer(tagged, cur, pool, clauses, orch)
+                            prod, prod_bridges = self._find_type_producer(tagged, cur, pool, clauses, orch)
                             if prod is None:
                                 connect_cache[ckey] = None
                                 return None
-                            if not (self.step_unifies(cur[-1], prod, prev_path=cur) or self.step_unifies_dag(prod, cur)):
+                            for pb in prod_bridges:
+                                pb.matched_clause_idx = idx
+                                pb.clause_literals = list(literals[idx])
+                                cur.append(pb)
+                                appended.append((pb.cell_id, idx))
+                                proto.setdefault(pb.cell_id, pb)
+                            if not prod_bridges and not (self.step_unifies(cur[-1], prod, prev_path=cur) or self.step_unifies_dag(prod, cur)):
                                 pbr = self.find_bridge_chain(cur[-1], prod, pool, prev_path=cur)
                                 if pbr:
                                     for b in pbr:
@@ -314,7 +320,7 @@ class M10MonteCarloRouteMethod(RouteMethod):
                     t_out = str(getattr(getattr(p_out, "signature", p_out), "type_name", "") or "").lower()
                     t_in = str(getattr(getattr(p_in, "signature", p_in), "type_name", "") or "").lower()
                     if t_out and t_in and not reg.is_declared_top(t_out) and not reg.is_declared_top(t_in):
-                        if not (reg.is_subtype(t_out, t_in) or reg.is_subtype(t_in, t_out)):
+                        if not reg.is_subtype(t_out, t_in):
                             compat_factor *= 0.5
 
             # Stage 3 UnificationGate + PreflightLinter validity check inside rollout reward

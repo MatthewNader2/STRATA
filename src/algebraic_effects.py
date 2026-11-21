@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 try:
-    from .lattice import Cell, PortSignature, AlgebraicSignature, TypeRegistry, is_path_port
+    from .lattice import Cell, InvariantEntailer, TypeRegistry, is_path_port
 except (ImportError, ValueError):
-    from lattice import Cell, PortSignature, AlgebraicSignature, TypeRegistry, is_path_port
+    from lattice import Cell, InvariantEntailer, TypeRegistry, is_path_port
 
 
 # ============================================================================
@@ -49,19 +49,38 @@ class PropertyBundle:
         removed_keys: Sequence[str] = (),
         partition_source: Optional[str] = None,
         partition_index: Optional[int] = None,
+        lineage_root: Optional[str] = None,
     ) -> "PropertyBundle":
-        """Monotonic semilattice join with selective property invalidation."""
+        """Monotonic semilattice join with selective mutual-exclusion and property invalidation."""
         states = set(self.active_states)
         reg = TypeRegistry.get_instance()
         if new_state:
             ns_low = new_state.strip().lower()
             if ns_low and not reg.is_declared_top(ns_low) and not reg.is_declared_top_state(ns_low):
+                new_p = reg.get_state_parent(ns_low)
+                invalidated_states = set()
+                for old_s in states:
+                    if old_s == ns_low:
+                        continue
+                    old_p = reg.get_state_parent(old_s)
+                    same_parent_sibling = bool(old_p and new_p and old_p == new_p)
+                    if (
+                        same_parent_sibling
+                        or reg.has_property_conflict(old_s, ns_low)
+                        or reg.has_property_conflict(ns_low, old_s)
+                        or reg.has_conflicting_qualifiers((old_s,), (ns_low,))
+                    ):
+                        invalidated_states.add(old_s)
+                states -= invalidated_states
                 states.add(ns_low)
 
+        invalidated_low = {str(p).strip().lower() for p in invalidated_props}
+        replaced_low = {str(ap[0]).strip().lower() for ap in added_predicates if ap}
         kept_preds = {
             (prop, op, val)
             for (prop, op, val) in self.predicates
-            if prop not in invalidated_props and not any(ap[0] == prop for ap in added_predicates)
+            if str(prop).strip().lower() not in invalidated_low
+            and str(prop).strip().lower() not in replaced_low
         }
         kept_preds.update(added_predicates)
 
@@ -76,7 +95,7 @@ class PropertyBundle:
             keys_deleted=tuple(sorted(k_del)),
             partition_source=partition_source if partition_source is not None else self.partition_source,
             partition_index=partition_index if partition_index is not None else self.partition_index,
-            lineage_root=self.lineage_root,
+            lineage_root=lineage_root if lineage_root is not None else self.lineage_root,
         )
 
     def entails(self, required_state: str, required_preds: Sequence[Tuple[str, str, Any]] = ()) -> bool:
@@ -102,10 +121,8 @@ class PropertyBundle:
             if not state_ok:
                 return False
 
-        pred_map = {(p, op): v for (p, op, v) in self.predicates}
-        for req_p, req_op, req_v in required_preds:
-            if (req_p, req_op) not in pred_map or pred_map[(req_p, req_op)] != req_v:
-                return False
+        if required_preds:
+            return InvariantEntailer.entails(self.predicates, required_preds, registry=reg)
         return True
 
 
@@ -327,17 +344,23 @@ def build_universal_verification_contract(
     except (ImportError, ValueError):
         from lattice import TypeRegistry
     reg = TypeRegistry.get_instance()
-    latest_carrier_lineage: Dict[str, str] = {}   # root_var -> latest mutated var
-    var_to_root: Dict[str, str] = {}              # var -> root_var
-    var_partition: Dict[str, Tuple[str, int]] = {}  # var -> (split_cell_id, partition_index)
-    partition_zero_by_role: Dict[str, str] = {}   # role/type -> var with partition_index == 0
-    var_props: Dict[str, Dict[str, Any]] = {}          # var -> {prop: expected_val}
+    latest_carrier_lineage: Dict[str, str] = {}                        # root_var -> latest mutated var (part 0 / unpartitioned)
+    latest_partition_lineage: Dict[Tuple[str, Optional[int]], str] = {}  # (root_var, partition_idx) -> latest var
+    var_to_root: Dict[str, str] = {}                                   # var -> root_var
+    var_partition: Dict[str, Tuple[str, int]] = {}                     # var -> (split_cell_id, partition_index)
+    var_bundles: Dict[str, PropertyBundle] = {}                        # var -> PropertyBundle
+    var_provenance: Dict[str, Dict[str, Any]] = {}                     # var -> causal provenance metadata
+
+    def _bundle_props_dict(b: Optional[PropertyBundle]) -> Dict[str, Any]:
+        if b is None:
+            return {}
+        return {str(p): v for (p, op, v) in b.predicates if op == "=="}
 
     for cell, bindings in pipeline_bindings:
         eff_map = infer_cell_algebraic_effects(cell)
         stage = getattr(cell, "stage", None)
 
-        # 1. Track Linear Carrier Mutation Lineage & Partition Indices before recording postconditions
+        # 1. Track Linear Carrier Mutation Lineage, PropertyBundles & Partition Indices
         carrier_in_name = _find_carrier_input_port(cell, reg)
         in_place_targets: Dict[str, str] = {}
 
@@ -346,23 +369,56 @@ def build_universal_verification_contract(
             if _is_void_binding(out_v):
                 continue
 
+            out_sig_inner = getattr(out_sig, "signature", out_sig)
+            out_type = str(getattr(out_sig_inner, "type_name", "any") or "any").strip()
+            out_state = str(getattr(out_sig_inner, "state", "") or "").strip() or None
             out_eff = eff_map.get(f"out:{out_name}")
+
+            resolved_part_idx: Optional[int] = out_eff.partition_index if out_eff else None
+            part_source: Optional[str] = cell.cell_id if (out_eff and out_eff.partition_index is not None) else None
+            if out_eff and out_eff.mutates_port:
+                mut_in_v = bindings.get(out_eff.mutates_port)
+                if isinstance(mut_in_v, str) and mut_in_v in var_partition:
+                    if resolved_part_idx is None:
+                        resolved_part_idx = var_partition[mut_in_v][1]
+                    if part_source is None:
+                        part_source = var_partition[mut_in_v][0]
+                    var_partition[out_v] = (var_partition[mut_in_v][0], resolved_part_idx)
+            if out_eff and out_eff.partition_index is not None:
+                var_partition[out_v] = (cell.cell_id, out_eff.partition_index)
+
             if out_eff and out_eff.mutates_port:
                 in_v = bindings.get(out_eff.mutates_port)
                 if in_v and isinstance(in_v, str):
                     root = var_to_root.get(in_v, in_v)
                     var_to_root[out_v] = root
-                    latest_carrier_lineage[root] = out_v
-                    inherited = dict(var_props.get(in_v, {}))
-                    var_props[out_v] = {**inherited, **var_props.get(out_v, {})}
+                    latest_partition_lineage[(root, resolved_part_idx)] = out_v
+                    if resolved_part_idx in (None, 0) or root not in latest_carrier_lineage:
+                        latest_carrier_lineage[root] = out_v
+                    base_b = var_bundles.get(in_v) or PropertyBundle(carrier_type=out_type, lineage_root=root)
+                    var_bundles[out_v] = base_b.transition(
+                        new_carrier=out_type,
+                        new_state=out_state,
+                        partition_source=part_source,
+                        partition_index=resolved_part_idx,
+                        lineage_root=root,
+                    )
                     if getattr(cell, "mutation_type", "") == "in_place":
                         in_place_targets[out_v] = in_v
+                        var_bundles[in_v] = var_bundles[out_v]
                 else:
-                    var_props.setdefault(out_v, {})
-            elif out_eff and out_eff.partition_index == 0 and carrier_in_name:
+                    var_to_root.setdefault(out_v, out_v)
+                    root = var_to_root[out_v]
+                    latest_partition_lineage[(root, resolved_part_idx)] = out_v
+                    latest_carrier_lineage.setdefault(root, out_v)
+                    var_bundles[out_v] = var_bundles.get(
+                        out_v,
+                        PropertyBundle(carrier_type=out_type, lineage_root=root),
+                    ).transition(new_state=out_state, partition_source=part_source, partition_index=resolved_part_idx, lineage_root=root)
+            elif out_eff and out_eff.partition_index is not None and carrier_in_name:
                 in_sig_c = (getattr(cell, "inputs", {}) or {}).get(carrier_in_name)
                 in_t_c = str(getattr(getattr(in_sig_c, "signature", in_sig_c), "type_name", "") or "").lower()
-                out_t_c = str(getattr(getattr(out_sig, "signature", out_sig), "type_name", "") or "").lower()
+                out_t_c = str(getattr(out_sig_inner, "type_name", "") or "").lower()
                 same_carrier_family = bool(
                     in_t_c and out_t_c and (out_t_c == in_t_c or (reg and reg.is_subtype(out_t_c, in_t_c)))
                 )
@@ -370,29 +426,52 @@ def build_universal_verification_contract(
                 if same_carrier_family and in_v and isinstance(in_v, str):
                     root = var_to_root.get(in_v, in_v)
                     var_to_root[out_v] = root
-                    latest_carrier_lineage[root] = out_v
-                    inherited = dict(var_props.get(in_v, {}))
-                    var_props[out_v] = {**inherited, **var_props.get(out_v, {})}
+                    latest_partition_lineage[(root, resolved_part_idx)] = out_v
+                    if resolved_part_idx == 0:
+                        latest_carrier_lineage[root] = out_v
+                    base_b = var_bundles.get(in_v) or PropertyBundle(carrier_type=out_type, lineage_root=root)
+                    var_bundles[out_v] = base_b.transition(
+                        new_carrier=out_type,
+                        new_state=out_state,
+                        partition_source=cell.cell_id,
+                        partition_index=resolved_part_idx,
+                        lineage_root=root,
+                    )
                 else:
                     var_to_root.setdefault(out_v, out_v)
-                    latest_carrier_lineage.setdefault(out_v, out_v)
-                    var_props.setdefault(out_v, {})
+                    root = var_to_root[out_v]
+                    latest_partition_lineage[(root, resolved_part_idx)] = out_v
+                    if resolved_part_idx in (None, 0):
+                        latest_carrier_lineage.setdefault(root, out_v)
+                    var_bundles[out_v] = PropertyBundle(carrier_type=out_type, lineage_root=root).transition(
+                        new_carrier=out_type,
+                        new_state=out_state,
+                        partition_source=cell.cell_id,
+                        partition_index=resolved_part_idx,
+                        lineage_root=root,
+                    )
             else:
                 var_to_root.setdefault(out_v, out_v)
-                latest_carrier_lineage.setdefault(out_v, out_v)
-                var_props.setdefault(out_v, {})
+                root = var_to_root[out_v]
+                latest_partition_lineage.setdefault((root, resolved_part_idx), out_v)
+                latest_carrier_lineage.setdefault(root, out_v)
+                var_bundles[out_v] = PropertyBundle(carrier_type=out_type, lineage_root=root).transition(
+                    new_carrier=out_type,
+                    new_state=out_state,
+                    partition_source=part_source,
+                    partition_index=resolved_part_idx,
+                    lineage_root=root,
+                )
 
-            if out_eff and out_eff.partition_index is not None:
-                var_partition[out_v] = (cell.cell_id, out_eff.partition_index)
-                if out_eff.partition_index == 0:
-                    role_key = str(getattr(out_sig, "port_role", "") or getattr(out_sig, "type_name", "data")).lower()
-                    partition_zero_by_role[role_key] = out_v
-            elif out_eff and out_eff.mutates_port:
-                mut_in_v = bindings.get(out_eff.mutates_port)
-                if isinstance(mut_in_v, str) and mut_in_v in var_partition:
-                    var_partition[out_v] = var_partition[mut_in_v]
+            var_provenance[out_v] = {
+                "cell_id": cell.cell_id,
+                "matched_clause_idx": getattr(cell, "matched_clause_idx", None),
+                "port_role": getattr(out_sig_inner, "port_role", None) or getattr(out_sig, "port_role", None),
+                "partition_index": resolved_part_idx,
+                "lineage_root": var_to_root.get(out_v, out_v),
+            }
 
-        # 2. Record declared cell postconditions along per-variable causal lineage
+        # 2. Record declared cell postconditions along per-variable causal lineage (PropertyBundle)
         for post in (getattr(cell, "postconditions", []) or []):
             prop = getattr(post, "property", None) or (post.get("property") if isinstance(post, dict) else None)
             op = getattr(post, "operator", "==") if not isinstance(post, dict) else post.get("operator", "==")
@@ -414,12 +493,19 @@ def build_universal_verification_contract(
                     "expression": expr,
                     "description": desc,
                 })
-                if prop and str(prop).strip().lower() != "state":
+                cur_b = var_bundles.get(t_var) or PropertyBundle(carrier_type="any", lineage_root=var_to_root.get(t_var, t_var))
+                if prop and str(prop).strip().lower() == "state" and val is not None:
+                    updated_b = cur_b.transition(new_state=str(val))
+                    var_bundles[t_var] = updated_b
+                    if t_var in in_place_targets:
+                        var_bundles[in_place_targets[t_var]] = updated_b
+                elif prop and str(prop).strip().lower() != "state":
                     # "state" is a compile-time typestate tag verified statically in Layer 2/3,
                     # not a runtime Python attribute on carriers like np.ndarray.
-                    var_props.setdefault(t_var, {})[str(prop)] = val
+                    updated_b = cur_b.transition(added_predicates=[(str(prop), str(op or "=="), val)])
+                    var_bundles[t_var] = updated_b
                     if t_var in in_place_targets:
-                        var_props.setdefault(in_place_targets[t_var], {})[str(prop)] = val
+                        var_bundles[in_place_targets[t_var]] = updated_b
 
         # 3. Universal Co-Initial Partition Verification on Multi-Input Consumers
         bound_split_ports: List[Tuple[str, str, Tuple[str, int]]] = []
@@ -479,16 +565,24 @@ def build_universal_verification_contract(
 
             if data_var and isinstance(data_var, str):
                 root = var_to_root.get(data_var, data_var)
-                expected_latest = latest_carrier_lineage.get(root, data_var)
+                var_part_idx = var_partition[data_var][1] if data_var in var_partition else None
+                expected_latest = (
+                    latest_partition_lineage.get((root, var_part_idx))
+                    or latest_carrier_lineage.get(root, data_var)
+                )
+                d_bundle = var_bundles.get(data_var)
                 contract.terminal_checks.append({
                     "type": "algebraic_linear_egress",
                     "cell_id": cell.cell_id,
                     "saved_var": data_var,
                     "ingress_var": root,
+                    "partition_index": var_part_idx,
                     "expected_var": expected_latest,
                     "actual_var": data_var,
                     "output_path": path_var,
-                    "expected_properties": dict(var_props.get(data_var, {})),
+                    "expected_properties": _bundle_props_dict(d_bundle),
+                    "active_states": d_bundle.active_states if d_bundle else (),
+                    "provenance": var_provenance.get(data_var),
                 })
 
     # 5. Universal In-Memory Observable Deliverable Verification
@@ -525,6 +619,7 @@ def build_universal_verification_contract(
                     continue
 
                 cell_posts = getattr(cell, "postconditions", []) or []
+                o_bundle = var_bundles.get(out_v)
                 contract.terminal_checks.append({
                     "type": "observable_deliverable",
                     "cell_id": cell.cell_id,
@@ -534,6 +629,9 @@ def build_universal_verification_contract(
                     "structure_kind": getattr(out_sig, "structure_kind", None),
                     "is_final": is_final_step,
                     "clause_idx": getattr(cell, "matched_clause_idx", None),
+                    "provenance": var_provenance.get(out_v),
+                    "active_states": o_bundle.active_states if o_bundle else (),
+                    "expected_properties": _bundle_props_dict(o_bundle),
                     "postconditions": [
                         p for p in cell_posts
                         if (getattr(p, "target", None) if not isinstance(p, dict) else p.get("target")) in (out_name, "output_var", None)

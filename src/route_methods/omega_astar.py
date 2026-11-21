@@ -19,8 +19,10 @@ from __future__ import annotations
 import ast
 from collections import deque
 import copy
+from dataclasses import dataclass
 import heapq
 import importlib.util
+import math
 import sys
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -286,9 +288,64 @@ def _structural_kind_compatible(out_port: Any, in_port: Any) -> bool:
 _MISSING_SENTINEL = object()
 
 
+@dataclass(frozen=True, slots=True)
+class GammaSlot:
+    """Single live carrier slot inside the symmetric monoidal state Gamma."""
+
+    carrier_type: Any
+    out_port: Any = None
+    prod_cell: Any = None
+    props: Tuple[Tuple[str, Any], ...] = ()
+    provenance_clause_tags: Tuple[int, ...] = ()
+
+
+def _hashable_prop_val(pv: Any) -> Any:
+    """Normalizes arbitrary postcondition/state values into hashable canonical tuples."""
+    if isinstance(pv, (list, set)):
+        return tuple(pv)
+    if isinstance(pv, dict):
+        return tuple(sorted((str(dk), str(dv)) for dk, dv in pv.items()))
+    return pv
+
+
+def _coerce_gamma_slot(item: Any) -> GammaSlot:
+    """Coerces external initial_gamma items (GammaSlot, 5-tuple, 3-tuple, or signature) to GammaSlot."""
+    if isinstance(item, GammaSlot):
+        return item
+    if isinstance(item, tuple):
+        if len(item) == 5:
+            sig, port, cell, props, prov = item
+            norm_props = tuple(sorted((str(k), _hashable_prop_val(v)) for k, v in (dict(props).items() if props else ())))
+            norm_prov = tuple(sorted({int(t) for t in (prov or ())}))
+            return GammaSlot(sig, port, cell, norm_props, norm_prov)
+        if len(item) == 3:
+            return GammaSlot(carrier_type=item[0], out_port=item[1], prod_cell=item[2])
+    return GammaSlot(carrier_type=item)
+
+
+def _slot_satisfies_preconds(
+    slot: GammaSlot,
+    pre_list: Any,
+) -> bool:
+    """True iff `slot.props` satisfies all (property, op, want) constraints in `pre_list`."""
+    if not pre_list:
+        return True
+    if not slot.props:
+        return False
+    prop_d = dict(slot.props)
+    for p_name, p_op, p_want in pre_list:
+        if p_name not in prop_d:
+            continue
+        cur_v = prop_d[p_name]
+        ok = (cur_v == p_want) if p_op == "==" else (cur_v != p_want)
+        if not ok:
+            return False
+    return True
+
+
 def _can_fire_under_gamma(
     cell: Any,
-    gamma: Sequence_Gamma,
+    gamma: Tuple[Any, ...],
     sigma: Any,
     unify_cache: Optional[Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], bool]] = None,
     edge_cache: Optional[Dict[Tuple[int, int, str, str], bool]] = None,
@@ -300,22 +357,38 @@ def _can_fire_under_gamma(
     empty_pair_cache: Optional[Dict[Tuple[int, int, int, int], Any]] = None,
     tv_id_cache: Optional[Dict[Tuple[int, int], bool]] = None,
     kept_sigs: Optional[Dict[int, Any]] = None,
-) -> Optional[Any]:
+    cell_preconds: Optional[Dict[str, List[Tuple[str, str, Any]]]] = None,
+    return_bindings: bool = False,
+) -> Any:
     """
-    Returns updated Substitution iff ALL required dataflow inputs of `cell`
-    satisfy carrier structure_kind compatibility and unify with carriers in `gamma`, else None.
+    Checks whether all required dataflow inputs of `cell` satisfy carrier structure_kind
+    compatibility and unify with carriers in `gamma`.
+
+    When `cell_preconds` constrains an input port, prefers a unifying `GammaSlot` whose
+    per-carrier `props` satisfy those preconditions before falling back to a unifying slot
+    whose properties conflict.
+
+    Returns updated Substitution (or `(Substitution, bound_slots)` when `return_bindings=True`),
+    or `None` (or `(None, {})`) if any required input cannot be unified.
     """
     if req_ins is None:
         req_ins = _cell_required_data_inputs(cell)
     if not req_ins:
-        return sigma.copy() if hasattr(sigma, "copy") else Substitution()
+        res_sig = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+        return (res_sig, {}) if return_bindings else res_sig
     if not gamma:
-        return None
+        return (None, {}) if return_bindings else None
     if reg is None:
         try:
             reg = TypeRegistry.get_instance()
         except Exception:
             reg = None
+
+    slots_gamma = (
+        gamma
+        if all(isinstance(g, GammaSlot) for g in gamma)
+        else tuple(_coerce_gamma_slot(g) for g in gamma)
+    )
     cur_sigma = sigma
     copied = False
     empty_sub = not getattr(cur_sigma, "mappings", None)
@@ -331,26 +404,39 @@ def _can_fire_under_gamma(
         if not disjoint_partners:
             disjoint_partners = None
     bound_g_idx: Dict[str, int] = {}
+    bound_slots: Dict[str, GammaSlot] = {}
+    single_req_port = len(req_ins) == 1
+
     for in_name, in_port in req_ins:
         in_sig = getattr(in_port, "signature", in_port)
         id_in_port = id(in_port)
         id_in_sig = id(in_sig)
         in_key = None
-        matched = False
         blocked_g_idxs = (
             {bound_g_idx[dp] for dp in disjoint_partners.get(in_name, ()) if dp in bound_g_idx}
             if disjoint_partners is not None
             else ()
         )
-        for g_idx, g_item in enumerate(gamma):
+        pre_for_in: Any = ()
+        if cell_preconds:
+            pre_for_in = cell_preconds.get(in_name) or (
+                cell_preconds.get("input_var") if single_req_port else None
+            ) or ()
+
+        chosen_match: Optional[Tuple[int, GammaSlot, Optional[Tuple[Tuple[str, Any], ...]], Any]] = None
+        fallback_match: Optional[Tuple[int, GammaSlot, Optional[Tuple[Tuple[str, Any], ...]], Any]] = None
+
+        for g_idx, slot in enumerate(slots_gamma):
             if blocked_g_idxs and g_idx in blocked_g_idxs:
                 continue
-            if type(g_item) is tuple and len(g_item) == 3:
-                out_sig, out_port, _prod_cell = g_item
-            else:
-                out_sig, out_port = g_item, None
+            out_sig = slot.carrier_type
+            out_port = slot.out_port
             id_out_port = id(out_port) if out_port is not None else 0
             id_out_sig = id(out_sig)
+
+            m_tup_cand: Optional[Tuple[Tuple[str, Any], ...]] = None
+            sub_cand: Any = None
+            resolved_via_fast = False
 
             if empty_sub and empty_pair_cache is not None:
                 ep_k = (id_out_port, id_out_sig, id_in_port, id_in_sig)
@@ -358,138 +444,132 @@ def _can_fire_under_gamma(
                 if ep_hit is not _MISSING_SENTINEL:
                     if ep_hit is None:
                         continue
-                    if not ep_hit:
-                        matched = True
-                        if disjoint_partners is not None:
-                            bound_g_idx[in_name] = g_idx
-                        break
-                    if not copied:
-                        cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
-                        copied = True
-                    cur_sigma.mappings.update(ep_hit)
-                    empty_sub = not cur_sigma.mappings
-                    matched = True
-                    if disjoint_partners is not None:
-                        bound_g_idx[in_name] = g_idx
-                    break
+                    resolved_via_fast = True
+                    m_tup_cand = ep_hit
 
-            if out_port is not None:
-                ek = (id_out_port, id_in_port)
-                ev_ok = edge_cache.get(ek) if edge_cache is not None else None
-                if ev_ok is None:
-                    ev_ok = _structural_kind_compatible(out_port, in_port)
-                    if edge_cache is not None:
-                        edge_cache[ek] = ev_ok
-                if not ev_ok:
+            if not resolved_via_fast:
+                if out_port is not None:
+                    ek = (id_out_port, id_in_port)
+                    ev_ok = edge_cache.get(ek) if edge_cache is not None else None
+                    if ev_ok is None:
+                        ev_ok = _structural_kind_compatible(out_port, in_port)
+                        if edge_cache is not None:
+                            edge_cache[ek] = ev_ok
+                    if not ev_ok:
+                        if empty_sub and empty_pair_cache is not None:
+                            if kept_sigs is not None:
+                                kept_sigs[id_out_sig] = out_sig
+                                kept_sigs[id_in_sig] = in_sig
+                                kept_sigs[id_out_port] = out_port
+                                kept_sigs[id_in_port] = in_port
+                            empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
+                        continue
+
+                tv_k = (id_out_sig, id_in_sig)
+                tv_blocked = tv_id_cache.get(tv_k) if tv_id_cache is not None else None
+                if tv_blocked is None:
+                    tv_blocked = _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache)
+                    if tv_id_cache is not None:
+                        if kept_sigs is not None:
+                            kept_sigs[id_out_sig] = out_sig
+                            kept_sigs[id_in_sig] = in_sig
+                        tv_id_cache[tv_k] = tv_blocked
+                if tv_blocked:
                     if empty_sub and empty_pair_cache is not None:
                         if kept_sigs is not None:
                             kept_sigs[id_out_sig] = out_sig
                             kept_sigs[id_in_sig] = in_sig
-                            kept_sigs[id_out_port] = out_port
-                            kept_sigs[id_in_port] = in_port
-                        empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
-                    continue
-
-            tv_k = (id_out_sig, id_in_sig)
-            tv_blocked = tv_id_cache.get(tv_k) if tv_id_cache is not None else None
-            if tv_blocked is None:
-                tv_blocked = _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache)
-                if tv_id_cache is not None:
-                    if kept_sigs is not None:
-                        kept_sigs[id_out_sig] = out_sig
-                        kept_sigs[id_in_sig] = in_sig
-                    tv_id_cache[tv_k] = tv_blocked
-            if tv_blocked:
-                if empty_sub and empty_pair_cache is not None:
-                    if kept_sigs is not None:
-                        kept_sigs[id_out_sig] = out_sig
-                        kept_sigs[id_in_sig] = in_sig
-                        if out_port is not None:
-                            kept_sigs[id_out_port] = out_port
-                        kept_sigs[id_in_port] = in_port
-                    empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
-                continue
-
-            if empty_sub and (unify_cache is not None or unify_empty_sub_cache is not None):
-                if in_key is None:
-                    in_key = _sig_dedup_key(in_sig, sig_key_cache)
-                out_key = _sig_dedup_key(out_sig, sig_key_cache)
-                pair_k = (out_key, in_key)
-                if unify_cache is not None and unify_cache.get(pair_k) is False:
-                    if empty_pair_cache is not None:
-                        if kept_sigs is not None:
-                            kept_sigs[id_out_sig] = out_sig
-                            kept_sigs[id_in_sig] = in_sig
                             if out_port is not None:
                                 kept_sigs[id_out_port] = out_port
                             kept_sigs[id_in_port] = in_port
                         empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
                     continue
-                if unify_empty_sub_cache is not None and pair_k in unify_empty_sub_cache:
-                    m_tup = unify_empty_sub_cache[pair_k]
-                    if empty_pair_cache is not None:
-                        if kept_sigs is not None:
-                            kept_sigs[id_out_sig] = out_sig
-                            kept_sigs[id_in_sig] = in_sig
-                            if out_port is not None:
-                                kept_sigs[id_out_port] = out_port
-                            kept_sigs[id_in_port] = in_port
-                        empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_tup
-                    if m_tup is None:
+
+                if empty_sub and (unify_cache is not None or unify_empty_sub_cache is not None):
+                    if in_key is None:
+                        in_key = _sig_dedup_key(in_sig, sig_key_cache)
+                    out_key = _sig_dedup_key(out_sig, sig_key_cache)
+                    pair_k = (out_key, in_key)
+                    if unify_cache is not None and unify_cache.get(pair_k) is False:
+                        if empty_pair_cache is not None:
+                            if kept_sigs is not None:
+                                kept_sigs[id_out_sig] = out_sig
+                                kept_sigs[id_in_sig] = in_sig
+                                if out_port is not None:
+                                    kept_sigs[id_out_port] = out_port
+                                kept_sigs[id_in_port] = in_port
+                            empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = None
                         continue
-                    if not m_tup:
-                        matched = True
-                        if disjoint_partners is not None:
-                            bound_g_idx[in_name] = g_idx
-                        break
-                    if not copied:
-                        cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
-                        copied = True
-                    cur_sigma.mappings.update(m_tup)
-                    empty_sub = not cur_sigma.mappings
-                    matched = True
-                    if disjoint_partners is not None:
-                        bound_g_idx[in_name] = g_idx
-                    break
-                if not copied:
-                    cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
-                    copied = True
-                sub = unify(out_sig, in_sig, cur_sigma)
-                if unify_cache is not None:
-                    unify_cache[pair_k] = (sub is not None)
-                m_store = (
-                    tuple(sub.mappings.items()) if (sub is not None and hasattr(sub, "mappings")) else (
-                        () if sub is not None else None
-                    )
-                )
-                if unify_empty_sub_cache is not None:
-                    unify_empty_sub_cache[pair_k] = m_store
-                if empty_pair_cache is not None:
-                    if kept_sigs is not None:
-                        kept_sigs[id_out_sig] = out_sig
-                        kept_sigs[id_in_sig] = in_sig
-                        if out_port is not None:
-                            kept_sigs[id_out_port] = out_port
-                        kept_sigs[id_in_port] = in_port
-                    empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_store
-            else:
-                if not copied:
-                    cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
-                    copied = True
-                sub = unify(out_sig, in_sig, cur_sigma)
-            if sub is not None:
-                cur_sigma = sub
-                copied = True
-                empty_sub = not getattr(cur_sigma, "mappings", None)
-                matched = True
-                if disjoint_partners is not None:
-                    bound_g_idx[in_name] = g_idx
+                    if unify_empty_sub_cache is not None and pair_k in unify_empty_sub_cache:
+                        m_tup = unify_empty_sub_cache[pair_k]
+                        if empty_pair_cache is not None:
+                            if kept_sigs is not None:
+                                kept_sigs[id_out_sig] = out_sig
+                                kept_sigs[id_in_sig] = in_sig
+                                if out_port is not None:
+                                    kept_sigs[id_out_port] = out_port
+                                kept_sigs[id_in_port] = in_port
+                            empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_tup
+                        if m_tup is None:
+                            continue
+                        resolved_via_fast = True
+                        m_tup_cand = m_tup
+                    else:
+                        base_trial = cur_sigma.copy() if hasattr(cur_sigma, "copy") else Substitution()
+                        sub_cand = unify(out_sig, in_sig, base_trial)
+                        if unify_cache is not None:
+                            unify_cache[pair_k] = (sub_cand is not None)
+                        m_store = (
+                            tuple(sub_cand.mappings.items())
+                            if (sub_cand is not None and hasattr(sub_cand, "mappings"))
+                            else (() if sub_cand is not None else None)
+                        )
+                        if unify_empty_sub_cache is not None:
+                            unify_empty_sub_cache[pair_k] = m_store
+                        if empty_pair_cache is not None:
+                            if kept_sigs is not None:
+                                kept_sigs[id_out_sig] = out_sig
+                                kept_sigs[id_in_sig] = in_sig
+                                if out_port is not None:
+                                    kept_sigs[id_out_port] = out_port
+                                kept_sigs[id_in_port] = in_port
+                            empty_pair_cache[(id_out_port, id_out_sig, id_in_port, id_in_sig)] = m_store
+                        if sub_cand is None:
+                            continue
+                else:
+                    base_trial = cur_sigma.copy() if hasattr(cur_sigma, "copy") else Substitution()
+                    sub_cand = unify(out_sig, in_sig, base_trial)
+                    if sub_cand is None:
+                        continue
+
+            cand_entry = (g_idx, slot, m_tup_cand if resolved_via_fast else None, None if resolved_via_fast else sub_cand)
+            if _slot_satisfies_preconds(slot, pre_for_in):
+                chosen_match = cand_entry
                 break
-        if not matched:
-            return None
-    if not copied:
-        return sigma.copy() if hasattr(sigma, "copy") else Substitution()
-    return cur_sigma
+            if fallback_match is None:
+                fallback_match = cand_entry
+
+        winner = chosen_match if chosen_match is not None else fallback_match
+        if winner is None:
+            return (None, {}) if return_bindings else None
+
+        win_idx, win_slot, win_mtup, win_sub = winner
+        if win_sub is not None:
+            cur_sigma = win_sub
+            copied = True
+            empty_sub = not getattr(cur_sigma, "mappings", None)
+        elif win_mtup:
+            if not copied:
+                cur_sigma = sigma.copy() if hasattr(sigma, "copy") else Substitution()
+                copied = True
+            cur_sigma.mappings.update(win_mtup)
+            empty_sub = not cur_sigma.mappings
+        bound_slots[in_name] = win_slot
+        if disjoint_partners is not None:
+            bound_g_idx[in_name] = win_idx
+
+    res_sig = (sigma.copy() if hasattr(sigma, "copy") else Substitution()) if not copied else cur_sigma
+    return (res_sig, bound_slots) if return_bindings else res_sig
 
 
 Sequence_Gamma = Tuple[Any, ...]
@@ -516,6 +596,12 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         rag: Any = None,
         **kwargs,
     ) -> List[Cell]:
+        self._current_prompt = prompt
+        self.fallback_reason = None
+        self.last_refusal = None
+        self.last_ambiguity_report = None
+        self.last_gamma: Tuple[GammaSlot, ...] = ()
+        self.last_search_stats: Dict[str, Any] = {}
         if orchestrator is not None:
             self.orchestrator = orchestrator
         if not tunnel:
@@ -1169,6 +1255,24 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if any(t[0] == cl_i for t in cell_clause_hits.get(pool_by_id_tmp.cell_id, ()))
             )
 
+        init_sigs: List[Any] = []
+        ext_gamma = kwargs.get("initial_gamma")
+        if ext_gamma:
+            for gs in ext_gamma:
+                if gs is not None:
+                    init_sigs.append(gs)
+        if start_sig is not None:
+            if isinstance(start_sig, (tuple, list)):
+                init_sigs.extend([s for s in start_sig if s is not None])
+            else:
+                init_sigs.append(start_sig)
+        init_gamma: Tuple[GammaSlot, ...] = tuple(_coerce_gamma_slot(gs) for gs in init_sigs)
+        init_sigma = Substitution()
+        init_reaches_goal = bool(
+            goal_sig is not None
+            and any(_unify_cached(gs.carrier_type, goal_sig) for gs in init_gamma)
+        )
+
         # Identify target goal cells (goal_sig unifying or verified sinks / final-clause anchors)
         goal_ids: Set[str] = set()
         for c in pool:
@@ -1194,20 +1298,42 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     goal_ids.add(c.cell_id)
 
         if not goal_ids:
-            # Final-clause anchors and top-relevance non-file candidates act as soft goals
-            if clause_sem_scores:
-                last_cl = clause_sem_scores[-1] or {}
-                top_last = sorted(
-                    [c for c in pool if not (is_terminal_sink(c, self.orchestrator) and not has_egress)],
-                    key=lambda c: float(last_cl.get(c.cell_id, 0.0) or 0.0) + 0.5 * cell_lex_score.get(c.cell_id, 0.0),
-                    reverse=True,
-                )
-                for c in top_last[:3]:
-                    goal_ids.add(c.cell_id)
-            if not goal_ids:
-                top_by_rel = sorted(pool, key=lambda c: cell_lex_score.get(c.cell_id, 0.0), reverse=True)
-                for c in top_by_rel[: max(2, min(5, len(top_by_rel)))]:
-                    goal_ids.add(c.cell_id)
+            if goal_sig is not None:
+                if not init_reaches_goal:
+                    reason = f"UNINHABITED_GOAL: no cell in lattice produces goal signature {goal_sig}"
+                    self.fallback_reason = reason
+                    self.last_refusal = {
+                        "kind": "UNINHABITED_GOAL",
+                        "reason": reason,
+                        "goal_sig": str(goal_sig),
+                    }
+                    self._trace("omega_uninhabited_goal", goal_sig=str(goal_sig))
+                    return []
+            else:
+                # Prefer final-clause targets before top-relevance soft goals
+                if n_clauses >= 1:
+                    last_cl_targets = {
+                        cid_t
+                        for (cl_i_t, _), cids_t in clause_top_cells.items()
+                        if cl_i_t == n_clauses - 1
+                        for cid_t in cids_t
+                        if not (is_sink_map.get(cid_t, False) and not has_egress and cand_needs_path_map.get(cid_t, False))
+                    }
+                    goal_ids.update(last_cl_targets)
+                # Final-clause anchors and top-relevance non-file candidates act as soft goals
+                if not goal_ids and clause_sem_scores:
+                    last_cl = clause_sem_scores[-1] or {}
+                    top_last = sorted(
+                        [c for c in pool if not (is_terminal_sink(c, self.orchestrator) and not has_egress)],
+                        key=lambda c: float(last_cl.get(c.cell_id, 0.0) or 0.0) + 0.5 * cell_lex_score.get(c.cell_id, 0.0),
+                        reverse=True,
+                    )
+                    for c in top_last[:3]:
+                        goal_ids.add(c.cell_id)
+                if not goal_ids:
+                    top_by_rel = sorted(pool, key=lambda c: cell_lex_score.get(c.cell_id, 0.0), reverse=True)
+                    for c in top_by_rel[: max(2, min(5, len(top_by_rel)))]:
+                        goal_ids.add(c.cell_id)
 
         clause_has_installed: Dict[TargetId, bool] = {
             cl_t: any(not cell_missing_dep_map.get(tcid, False) for tcid in t_cids)
@@ -1346,6 +1472,54 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     bwd_dist[prev_id] = d_cur + 1
                     dq.append(prev_id)
 
+        min_zero_in_goal_dist: Optional[int] = min(
+            (
+                1 + bwd_dist[c.cell_id]
+                for c in pool
+                if not cell_req_ins_map[c.cell_id] and c.cell_id in bwd_dist
+            ),
+            default=None,
+        )
+        min_init_fireable_goal_dist: Optional[int] = (
+            min(
+                (
+                    1 + bwd_dist[c.cell_id]
+                    for c in pool
+                    if c.cell_id in bwd_dist
+                    and _can_fire_under_gamma(
+                        c,
+                        init_gamma,
+                        init_sigma,
+                        unify_cache=unify_cache,
+                        edge_cache=edge_cache,
+                        reg=reg,
+                        req_ins=cell_req_ins_map[c.cell_id],
+                        sig_key_cache=sig_key_cache,
+                        tv_cache=tv_cache,
+                        cell_preconds=cell_preconds_map[c.cell_id],
+                    ) is not None
+                ),
+                default=None,
+            )
+            if init_gamma
+            else None
+        )
+        if (
+            goal_sig is not None
+            and not init_reaches_goal
+            and min_zero_in_goal_dist is None
+            and min_init_fireable_goal_dist is None
+        ):
+            reason = f"UNINHABITED_GOAL: no reachable execution path from available inputs produces {goal_sig}"
+            self.fallback_reason = reason
+            self.last_refusal = {
+                "kind": "UNINHABITED_GOAL",
+                "reason": reason,
+                "goal_sig": str(goal_sig),
+            }
+            self._trace("omega_uninhabited_goal", goal_sig=str(goal_sig))
+            return []
+
         # Constrained SLM choice scorer lookup
         try:
             try:
@@ -1364,48 +1538,56 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         scorer_wall_s = 0.0
         _choice_score_cache: Dict[Tuple[Tuple[str, ...], str], Dict[str, float]] = {}
 
+        C_MIN = 0.15
+        m_cover = 1  # Each transition adds at most one target (`bt_tgt`) to `cov_cl`
+
+        def _d_type(
+            gamma_state: Tuple[GammaSlot, ...],
+            last_cid: Optional[str],
+        ) -> float:
+            if goal_sig is not None:
+                if any(_unify_cached(gs.carrier_type, goal_sig) for gs in gamma_state):
+                    return 0.0
+            else:
+                if not goal_ids:
+                    return 0.0
+                if last_cid and last_cid in goal_ids:
+                    return 0.0
+                if any(
+                    gs.prod_cell is not None and gs.prod_cell.cell_id in goal_ids
+                    for gs in gamma_state
+                ):
+                    return 0.0
+            d_cands: List[int] = []
+            if last_cid and last_cid in bwd_dist:
+                d_cands.append(bwd_dist[last_cid])
+            for gs in gamma_state:
+                if gs.prod_cell is not None and gs.prod_cell.cell_id in bwd_dist:
+                    d_cands.append(bwd_dist[gs.prod_cell.cell_id])
+            if min_zero_in_goal_dist is not None:
+                d_cands.append(min_zero_in_goal_dist)
+            if not gamma_state and min_init_fireable_goal_dist is not None:
+                d_cands.append(min_init_fireable_goal_dist)
+            elif gamma_state and not d_cands and min_init_fireable_goal_dist is not None:
+                d_cands.append(min_init_fireable_goal_dist)
+            if d_cands:
+                return float(min(d_cands))
+            return math.inf if goal_sig is not None else 0.0
+
         def _heuristic(
             last_cid: Optional[str],
             covered_clauses: Tuple[TargetId, ...],
-            unlock_credit: float = 0.0,
-            gamma_state: Optional[Tuple[Any, ...]] = None,
+            gamma_state: Tuple[GammaSlot, ...] = (),
         ) -> float:
-            target_cl = max(len(coverable_clauses), n_clauses) if coverable_clauses else n_clauses
-            rem_clauses = max(0.0, float(target_cl - len(covered_clauses)) - unlock_credit) if target_cl > 1 else 0.0
-            near_done = len(covered_clauses) >= max(0, target_cl - 1)
-            if near_done and last_cid and last_cid in goal_ids:
-                h_goal = 0.0
-            else:
-                bwd_vals: List[int] = []
-                if last_cid and last_cid in bwd_dist:
-                    if not (not near_done and last_cid in goal_ids):
-                        bwd_vals.append(bwd_dist[last_cid])
-                if gamma_state:
-                    for gs in gamma_state:
-                        if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None:
-                            g_cid = gs[2].cell_id
-                            if g_cid in bwd_dist and not (not near_done and g_cid in goal_ids):
-                                bwd_vals.append(bwd_dist[g_cid])
-                h_goal = (0.35 * float(min(bwd_vals))) if bwd_vals else (0.35 if near_done else 1.5)
-            # Encourage covering all coverable sub-targets cleanly without combinatorial stalls
-            return rem_clauses * 2.25 + h_goal
-
-        init_sigs: List[Any] = []
-        ext_gamma = kwargs.get("initial_gamma")
-        if ext_gamma:
-            for gs in ext_gamma:
-                if gs is not None:
-                    init_sigs.append(gs)
-        if start_sig is not None:
-            if isinstance(start_sig, (tuple, list)):
-                init_sigs.extend([s for s in start_sig if s is not None])
-            else:
-                init_sigs.append(start_sig)
-        init_gamma: Tuple[Any, ...] = tuple(
-            gs if (isinstance(gs, tuple) and len(gs) == 3) else (gs, None, None)
-            for gs in init_sigs
-        )
-        init_sigma = Substitution()
+            """
+            Admissible & consistent hypergraph A* lower bound:
+              h_adm(Gamma, U) = max(c_min * ceil(|U| / M_cover), c_min * d_type(Gamma, G))
+            """
+            rem_u = len(coverable_clauses - set(covered_clauses)) if coverable_clauses else 0
+            h_cov = (C_MIN * float(math.ceil(rem_u / m_cover))) if rem_u > 0 else 0.0
+            d_t = _d_type(gamma_state, last_cid)
+            h_type = math.inf if math.isinf(d_t) else (C_MIN * d_t)
+            return max(h_cov, h_type)
 
         # Precompute setter value signatures so we know which transforms modify an open lens
         setter_val_sigs: List[Any] = []
@@ -1503,7 +1685,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         heapq.heappush(
             pq,
             (
-                _heuristic(None, ()),
+                _heuristic(None, (), gamma_state=init_gamma),
                 0.0,
                 counter,
                 0.0,
@@ -1521,10 +1703,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             ),
         )
 
-        best_full_complete: Optional[Tuple[float, Tuple[str, ...], Tuple[Optional[int], ...]]] = None
-        best_complete: Optional[Tuple[float, Tuple[str, ...], Tuple[Optional[int], ...]]] = None
+        amb_temp = float(kwargs.get("ambiguity_temperature", 0.5))
+        amb_ent_thresh = float(kwargs.get("ambiguity_entropy_threshold", 0.85))
+        amb_margin_thresh = float(kwargs.get("ambiguity_margin_threshold", 0.15))
+        detect_ambiguity = bool(kwargs.get("detect_ambiguity", True))
+        amb_window = float(kwargs.get("ambiguity_cost_window", max(0.35, amb_temp * 1.25)))
+
+        full_complete_plans: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+        complete_plans: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+        best_full_g: Optional[float] = None
         best_partial: Optional[Tuple[float, Tuple[str, ...], Tuple[Optional[int], ...]]] = None
-        visited_states: Set[Tuple[Tuple[str, ...], Tuple[TargetId, ...], Optional[str], bool, Tuple[str, ...]]] = set()
+        best_g: Dict[Tuple[Any, ...], float] = {}
+        state_tie_chains: Dict[Tuple[Any, ...], Set[Tuple[str, ...]]] = {}
+        relaxations = 0
 
         max_expansions = int(kwargs.get("max_expansions", max(900, n_clauses * 240)))
         max_chain_len = int(kwargs.get("max_chain_len", max(18, n_clauses + 12, len(coverable_clauses) + 8)))
@@ -1538,6 +1729,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         while pq and expansions < max_expansions:
             if time.perf_counter() >= _search_deadline:
                 break
+            if best_full_g is not None and pq[0][0] > best_full_g + amb_window:
+                break
             if first_full_exp is not None and (expansions - first_full_exp) >= 80:
                 break
             (
@@ -1547,20 +1740,50 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             ) = heapq.heappop(pq)
             expansions += 1
 
-            state_key = (tuple(sorted(chain_ids)), cov_cl, chain_ids[-1] if chain_ids else None, open_lens, active_focus)
-            if chain_ids and state_key in visited_states:
-                continue
-            visited_states.add(state_key)
+            gamma_sem_key = tuple(sorted(
+                (
+                    _sig_dedup_key(gs.carrier_type, sig_key_cache),
+                    gs.props,
+                    gs.provenance_clause_tags,
+                )
+                for gs in gamma
+            ))
+            state_key = (
+                gamma_sem_key,
+                cov_cl,
+                open_lens,
+                active_focus,
+                chain_ids[-1] if chain_ids else None,
+            )
+            if chain_ids:
+                prev_g = best_g.get(state_key)
+                if prev_g is not None:
+                    if g_cost < prev_g - 1e-9:
+                        best_g[state_key] = g_cost
+                        state_tie_chains[state_key] = {chain_ids}
+                        relaxations += 1
+                    elif (
+                        g_cost <= prev_g + amb_window
+                        and chain_ids not in state_tie_chains[state_key]
+                        and len(state_tie_chains[state_key]) < 6
+                    ):
+                        state_tie_chains[state_key].add(chain_ids)
+                    else:
+                        continue
+                else:
+                    best_g[state_key] = g_cost
+                    state_tie_chains[state_key] = {chain_ids}
 
-            # Evaluate candidate completeness / quality using marginal coverage + causal optic fidelity
+            # Evaluate candidate completeness / quality using strictly additive path cost + closure penalties
             if chain_ids:
                 chain_cells = [pool_by_id[cid] for cid in chain_ids]
                 last_c = chain_cells[-1]
-                reaches_goal = (last_c.cell_id in goal_ids)
                 if goal_sig is not None:
                     reaches_goal = any(
-                        _unify_cached(osig, goal_sig) for osig in cell_outs_map[last_c.cell_id]
+                        _unify_cached(gs.carrier_type, goal_sig) for gs in gamma
                     )
+                else:
+                    reaches_goal = (last_c.cell_id in goal_ids) if goal_ids else True
                 seen_toks: Set[str] = set()
                 step_deltas: List[int] = []
                 uniq_id_prec: Dict[str, float] = {}
@@ -1615,24 +1838,51 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     - 0.25 * domain_switches
                     - 0.60 * trailing_wasted
                 )
+                terminal_pen = (0.35 if (open_lens and focus_modified) else 0.0) + 0.45 * float(inv_count)
+                eff_plan_g = g_cost + terminal_pen
 
                 if best_partial is None or quality > best_partial[0]:
                     best_partial = (quality, chain_ids, step_clauses)
-                if (n_cov_target <= 1 and reaches_goal) or (n_cov_target > 1 and len(cov_cl) >= n_cov_target):
-                    full_score = quality + (0.6 if reaches_goal else 0.0)
-                    if best_full_complete is None:
+                is_full_complete = bool(
+                    (n_cov_target <= 1 and reaches_goal)
+                    or (
+                        n_cov_target > 1
+                        and len(cov_cl) >= n_cov_target
+                        and (reaches_goal or goal_sig is None)
+                    )
+                )
+                if is_full_complete:
+                    if best_full_g is None:
                         first_full_exp = expansions
-                        best_full_complete = (full_score, chain_ids, step_clauses)
-                    elif full_score > best_full_complete[0]:
-                        best_full_complete = (full_score, chain_ids, step_clauses)
+                        best_full_g = eff_plan_g
+                    elif eff_plan_g < best_full_g:
+                        best_full_g = eff_plan_g
+                    prev_rec = full_complete_plans.get(chain_ids)
+                    if prev_rec is None or eff_plan_g < prev_rec["eff_g"]:
+                        full_complete_plans[chain_ids] = {
+                            "eff_g": eff_plan_g,
+                            "g_cost": g_cost,
+                            "quality": quality,
+                            "chain_ids": chain_ids,
+                            "step_clauses": step_clauses,
+                            "gamma": gamma,
+                        }
                 min_steps_for_multi = (
                     min(len(clause_top_cells), max(2, n_clauses // 3))
                     if (n_clauses > 2 and len(clause_top_cells) >= 3)
                     else 1
                 )
                 if reaches_goal and len(chain_ids) >= min_steps_for_multi and (n_clauses <= 1 or len(cov_cl) >= max(1, n_clauses // 2)):
-                    if best_complete is None or quality > best_complete[0]:
-                        best_complete = (quality, chain_ids, step_clauses)
+                    prev_crec = complete_plans.get(chain_ids)
+                    if prev_crec is None or eff_plan_g < prev_crec["eff_g"]:
+                        complete_plans[chain_ids] = {
+                            "eff_g": eff_plan_g,
+                            "g_cost": g_cost,
+                            "quality": quality,
+                            "chain_ids": chain_ids,
+                            "step_clauses": step_clauses,
+                            "gamma": gamma,
+                        }
 
             if len(chain_ids) >= max_chain_len:
                 continue
@@ -1669,10 +1919,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             if cell_req_prod_masks and not getattr(sigma, "mappings", None):
                 use_gamma_mask = True
                 for g_item in gamma:
-                    if not (type(g_item) is tuple and len(g_item) == 3):
-                        use_gamma_mask = False
-                        break
-                    g_osig, g_oport, g_pc = g_item
+                    g_osig = g_item.carrier_type
+                    g_oport = g_item.out_port
+                    g_pc = g_item.prod_cell
                     if g_pc is None or g_oport is None or g_osig is not getattr(g_oport, "signature", g_oport):
                         use_gamma_mask = False
                         break
@@ -1682,8 +1931,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         break
                     gamma_mask |= gb
 
-            # Evaluate firing feasibility once per pool cell for this state
+            # Evaluate firing feasibility & per-slot input bindings once per pool cell for this state
             can_fire_map: Dict[str, Optional[Any]] = {}
+            bound_slots_map: Dict[str, Dict[str, GammaSlot]] = {}
             for c in pool:
                 cid_c = c.cell_id
                 if use_gamma_mask:
@@ -1696,8 +1946,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                 break
                         if blocked_by_mask:
                             can_fire_map[cid_c] = None
+                            bound_slots_map[cid_c] = {}
                             continue
-                can_fire_map[cid_c] = _can_fire_under_gamma(
+                sub_c, bslots_c = _can_fire_under_gamma(
                     c,
                     gamma,
                     sigma,
@@ -1711,7 +1962,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     empty_pair_cache=empty_pair_cache,
                     tv_id_cache=tv_id_cache,
                     kept_sigs=kept_sigs,
+                    cell_preconds=cell_preconds_map[cid_c],
+                    return_bindings=True,
                 )
+                can_fire_map[cid_c] = sub_c
+                bound_slots_map[cid_c] = bslots_c
 
             # Precompute unused high-value cells currently blocked, and expand up to 2 hops backward
             # along missing required inputs so multi-step initializers (KEY_GEN -> INIT -> ENCRYPT) unlock.
@@ -1743,11 +1998,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         if (gamma_mask & rmasks[idx_ip]) == 0
                         or not any(
                             _unify_cached(
-                                gs[0] if isinstance(gs, tuple) else gs,
+                                gs.carrier_type,
                                 getattr(ip, "signature", ip),
-                                out_port=gs[1] if isinstance(gs, tuple) else None,
+                                out_port=gs.out_port,
                                 in_port=ip,
-                                prod_cell=gs[2] if isinstance(gs, tuple) else None,
+                                prod_cell=gs.prod_cell,
                                 cons_cell=t_cell,
                             )
                             for gs in gamma
@@ -1758,11 +2013,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         ip for _, ip in req_list
                         if not any(
                             _unify_cached(
-                                gs[0] if isinstance(gs, tuple) else gs,
+                                gs.carrier_type,
                                 getattr(ip, "signature", ip),
-                                out_port=gs[1] if isinstance(gs, tuple) else None,
+                                out_port=gs.out_port,
                                 in_port=ip,
-                                prod_cell=gs[2] if isinstance(gs, tuple) else None,
+                                prod_cell=gs.prod_cell,
                                 cons_cell=t_cell,
                             )
                             for gs in gamma
@@ -1817,7 +2072,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if dp > 0 and tid in pool_by_id
             ]
 
-            # Identify any pending property preconditions on uncovered/goal/near-goal targets violated by active_prop_dict
+            # Identify pending property preconditions violated by bound per-carrier slots (or active_prop_dict fallback)
             needed_prop_repairs: Dict[str, Any] = {}
             for tc in pool:
                 if tc.cell_id in used_set:
@@ -1828,10 +2083,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     and bwd_dist.get(tc.cell_id, 99) > 2
                 ):
                     continue
-                for pre_list in cell_preconds_map[tc.cell_id].values():
+                tc_bs = bound_slots_map.get(tc.cell_id, {})
+                for pre_tgt, pre_list in cell_preconds_map[tc.cell_id].items():
+                    bound_s = tc_bs.get(pre_tgt)
+                    if bound_s is None and len(tc_bs) == 1 and pre_tgt == "input_var":
+                        bound_s = next(iter(tc_bs.values()))
+                    slot_props = dict(bound_s.props) if bound_s is not None else active_prop_dict
                     for p_name, p_op, p_want in pre_list:
-                        if p_name in active_prop_dict:
-                            cur_v = active_prop_dict[p_name]
+                        if p_name in slot_props:
+                            cur_v = slot_props[p_name]
                             ok = (cur_v == p_want) if p_op == "==" else (cur_v != p_want)
                             if not ok and p_op == "==":
                                 needed_prop_repairs[p_name] = p_want
@@ -1916,9 +2176,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 state_downstream_unblock_cids = set()
                 state_connects_gamma_cids = set()
                 gamma_cids = {
-                    gs[2].cell_id
+                    gs.prod_cell.cell_id
                     for gs in gamma
-                    if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None
+                    if gs.prod_cell is not None
                 } if gamma else set()
                 for tc in blocked_chain_targets:
                     tc_cid = tc.cell_id
@@ -1933,15 +2193,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         port_gamma_hit = [
                             any(
                                 (
-                                    not (isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None and gs[2].cell_id in pool_by_id)
-                                    or gs[2].cell_id in port_can_receive_from.get(id(ip_j), ())
+                                    not (gs.prod_cell is not None and gs.prod_cell.cell_id in pool_by_id)
+                                    or gs.prod_cell.cell_id in port_can_receive_from.get(id(ip_j), ())
                                 )
                                 and _unify_cached(
-                                    gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs,
+                                    gs.carrier_type,
                                     getattr(ip_j, "signature", ip_j),
-                                    out_port=(gs[1] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                    out_port=gs.out_port,
                                     in_port=ip_j,
-                                    prod_cell=(gs[2] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                    prod_cell=gs.prod_cell,
                                     cons_cell=tc,
                                 )
                                 for gs in gamma
@@ -1969,14 +2229,13 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             (recv_b := port_can_receive_from.get(id(ip_b)))
                             and (gamma_cids & recv_b)
                             and any(
-                                isinstance(gs, tuple) and len(gs) == 3
-                                and gs[2] is not None and gs[2].cell_id in recv_b
+                                gs.prod_cell is not None and gs.prod_cell.cell_id in recv_b
                                 and _unify_cached(
-                                    gs[0],
+                                    gs.carrier_type,
                                     getattr(ip_b, "signature", ip_b),
-                                    out_port=gs[1],
+                                    out_port=gs.out_port,
                                     in_port=ip_b,
-                                    prod_cell=gs[2],
+                                    prod_cell=gs.prod_cell,
                                     cons_cell=tc_b,
                                 )
                                 for gs in gamma
@@ -2283,10 +2542,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     and reg is not None
                     and any(
                         reg.is_composite_carrier(
-                            str(getattr(gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs, "type_name", "") or "").strip().lower()
+                            str(getattr(gs.carrier_type, "type_name", "") or "").strip().lower()
                         )
                         for gs in gamma
-                        if gs is not None
                     )
                 )
                 cand_unlocks_prereq = bool(
@@ -2403,11 +2661,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                             len(cell_req_ins_map.get(tc.cell_id, ())) >= 2
                                             and any(
                                                 _unify_cached(
-                                                    gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs,
+                                                    gs.carrier_type,
                                                     getattr(other_ip, "signature", other_ip),
-                                                    out_port=(gs[1] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                                    out_port=gs.out_port,
                                                     in_port=other_ip,
-                                                    prod_cell=(gs[2] if (isinstance(gs, tuple) and len(gs) == 3) else None),
+                                                    prod_cell=gs.prod_cell,
                                                     cons_cell=tc,
                                                 )
                                                 for gs in gamma
@@ -2468,13 +2726,13 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                 ):
                                     continue
                                 if any(
-                                    isinstance(gs, tuple) and len(gs) == 3
+                                    gs.prod_cell is not None
                                     and _unify_cached(
-                                        gs[0],
+                                        gs.carrier_type,
                                         getattr(ip, "signature", ip),
-                                        out_port=gs[1],
+                                        out_port=gs.out_port,
                                         in_port=ip,
-                                        prod_cell=gs[2],
+                                        prod_cell=gs.prod_cell,
                                         cons_cell=tc,
                                     )
                                     for gs in gamma
@@ -2500,7 +2758,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if chain_ids and last_cid:
                     last_gamma_items = [
                         gs for gs in gamma
-                        if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None and gs[2].cell_id == last_cid
+                        if gs.prod_cell is not None and gs.prod_cell.cell_id == last_cid
                     ]
                     cand_req_ins = cell_req_ins_map[cand.cell_id]
                     consumes_last = bool(
@@ -2508,11 +2766,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         and cand_req_ins
                         and any(
                             _unify_cached(
-                                gs[0],
+                                gs.carrier_type,
                                 getattr(ip, "signature", ip),
-                                out_port=gs[1],
+                                out_port=gs.out_port,
                                 in_port=ip,
-                                prod_cell=gs[2],
+                                prod_cell=gs.prod_cell,
                                 cons_cell=cand,
                             )
                             for gs in last_gamma_items
@@ -2532,19 +2790,19 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if chain_ids and is_sink_map[cand.cell_id]:
                     stage2_gamma_items = [
                         gs for gs in gamma
-                        if isinstance(gs, tuple) and len(gs) == 3 and gs[2] is not None
-                        and not is_ingress_map.get(gs[2].cell_id, False)
-                        and not is_sink_map.get(gs[2].cell_id, False)
+                        if gs.prod_cell is not None
+                        and not is_ingress_map.get(gs.prod_cell.cell_id, False)
+                        and not is_sink_map.get(gs.prod_cell.cell_id, False)
                     ]
                     cand_req_s2 = cell_req_ins_map[cand.cell_id]
                     if stage2_gamma_items and cand_req_s2:
                         consumes_stage2 = any(
                             _unify_cached(
-                                gs[0],
+                                gs.carrier_type,
                                 getattr(ip, "signature", ip),
-                                out_port=gs[1],
+                                out_port=gs.out_port,
                                 in_port=ip,
-                                prod_cell=gs[2],
+                                prod_cell=gs.prod_cell,
                                 cons_cell=cand,
                             )
                             for gs in stage2_gamma_items
@@ -2624,6 +2882,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if bp.get("lossy") and not eff_new_hits and not is_sink_map[cand.cell_id]:
                         continue
                     tier = float(bp.get("cost_tier", 1.0) or 1.0)
+                    if tier > 1.0:
+                        order_cost_penalty += min(4.0, 0.20 * (tier - 1.0))
                     if not eff_new_hits:
                         prior_sc -= min(1.5, 0.12 * tier)
                         order_cost_penalty += min(2.0, 0.08 * tier)
@@ -2645,17 +2905,24 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     prior_sc -= 0.40
                     order_cost_penalty += 0.25
 
-                # Property precondition / postcondition repair awareness (e.g. is_complex == False)
+                # Per-carrier property precondition / postcondition awareness (bound slot props)
                 cand_pre = cell_preconds_map[cand.cell_id]
+                cand_bs = bound_slots_map.get(cand.cell_id, {})
                 cand_violates_active = False
-                for pre_list in cand_pre.values():
+                for pre_tgt, pre_list in cand_pre.items():
+                    bound_s = cand_bs.get(pre_tgt)
+                    if bound_s is None and len(cand_bs) == 1 and pre_tgt == "input_var":
+                        bound_s = next(iter(cand_bs.values()))
+                    slot_props = dict(bound_s.props) if bound_s is not None else active_prop_dict
                     for p_name, p_op, p_want in pre_list:
-                        if p_name in active_prop_dict:
-                            cur_v = active_prop_dict[p_name]
+                        if p_name in slot_props:
+                            cur_v = slot_props[p_name]
                             ok = (cur_v == p_want) if p_op == "==" else (cur_v != p_want)
                             if not ok:
                                 cand_violates_active = True
                                 break
+                    if cand_violates_active:
+                        break
                 if cand_violates_active:
                     prior_sc -= 1.40
                     order_cost_penalty += 1.00
@@ -2699,7 +2966,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     and best_unlock <= 0.0
                     and prop_repair_bonus <= 0.0
                     and not (open_lens and optic_r == "setter")
-                    and not (not uncovered_cl and cand.cell_id in goal_ids)
+                    and not ((not uncovered_cl or goal_sig is not None) and cand.cell_id in goal_ids)
                 ):
                     continue
                 if cell_missing_dep_map.get(cand.cell_id, False):
@@ -2756,9 +3023,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             ):
                 gamma_desc = ", ".join(
                     sorted({
-                        str(getattr(s[0] if isinstance(s, tuple) else s, "type_name", s))
-                        for s in gamma
-                        if s is not None
+                        str(getattr(gs.carrier_type, "type_name", gs.carrier_type))
+                        for gs in gamma
                     })
                 ) or "empty (start)"
                 cand_ids_tuple = tuple(c.cell_id for c, _, _, _, _, _, _ in shortlist)
@@ -2789,11 +3055,11 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 new_cl = cell_clause_hits.get(cand.cell_id, set()) - cov_cl_set
                 step_cov_cnt = 1 if (n_clauses >= 3 and bt_tgt is not None) else len(new_cl)
                 step_gain = base_prior + 0.65 * slm_sc + 0.30 * step_cov_cnt
-                step_cost = max(0.10, 0.15 + 0.75 / (1.0 + max(0.0, step_gain))) + ord_pen
+                step_cost = max(C_MIN, C_MIN + 0.75 / (1.0 + max(0.0, step_gain))) + max(0.0, ord_pen)
                 scored_children.append((step_cost, step_gain, cand, next_sigma, unlock_cr, st_cl, bt_tgt))
 
-            scored_children.sort(key=lambda x: x[1], reverse=True)
-            for step_cost, step_gain, cand, next_sigma, unlock_cr, st_cl, bt_tgt in scored_children[:branch_factor]:
+            scored_children.sort(key=lambda x: (x[0], -x[1]))
+            for step_cost, step_gain, cand, next_sigma, _, st_cl, bt_tgt in scored_children[:branch_factor]:
                 has_mappings = bool(getattr(next_sigma, "mappings", None))
                 cand_pp = getattr(cand, "polymorphic_propagation", None)
                 src_live_port = None
@@ -2805,9 +3071,16 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if src_in_p is not None:
                         in_sig_pp = getattr(src_in_p, "signature", src_in_p)
                         for gs in reversed(gamma):
-                            if isinstance(gs, tuple) and len(gs) == 3 and gs[1] is not None:
-                                if _unify_cached(gs[0], in_sig_pp, out_port=gs[1], in_port=src_in_p, prod_cell=gs[2], cons_cell=cand):
-                                    src_live_port = gs[1]
+                            if gs.out_port is not None:
+                                if _unify_cached(
+                                    gs.carrier_type,
+                                    in_sig_pp,
+                                    out_port=gs.out_port,
+                                    in_port=src_in_p,
+                                    prod_cell=gs.prod_cell,
+                                    cons_cell=cand,
+                                ):
+                                    src_live_port = gs.out_port
                                     break
                 inst_pairs: List[Tuple[Any, Any]] = []
                 for oport, orig_osig in cell_out_ports_map[cand.cell_id]:
@@ -2834,17 +3107,6 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                 eff_port.layout = dict(src_live_port.layout)
                     inst_pairs.append((eff_port, inst_sig))
                 inst_outs = [osig for _, osig in inst_pairs]
-                existing_keys = {
-                    _sig_dedup_key(gs[0] if (isinstance(gs, tuple) and len(gs) == 3) else gs, sig_key_cache)
-                    for gs in gamma
-                }
-                added_sigs = []
-                for eff_port, osig in inst_pairs:
-                    ok = _sig_dedup_key(osig, sig_key_cache)
-                    if ok not in existing_keys:
-                        added_sigs.append((osig, eff_port, cand))
-                        existing_keys.add(ok)
-                next_gamma = gamma + tuple(added_sigs)
                 next_chain = chain_ids + (cand.cell_id,)
                 cand_optic_pre = str(getattr(cand, "optic_role", "") or "").strip().lower()
                 raw_cand_new_cl = cell_clause_hits.get(cand.cell_id, set()) - cov_cl_set
@@ -2856,19 +3118,66 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cand_new_cl = ({bt_tgt} if bt_tgt is not None else set()) if not closing_open_only else set()
                 next_cov = cov_cl if closing_open_only else tuple(sorted(cov_cl_set | cand_new_cl))
 
-                next_props_d = dict(active_props)
+                cand_bound_slots = bound_slots_map.get(cand.cell_id, {})
+                cand_bound_list = list(cand_bound_slots.values())
                 explicit_posts = {
                     str(_prop_cond_field(p, "property"))
                     for p in (getattr(cand, "postconditions", None) or ())
                     if _prop_cond_field(p, "property")
                 }
+                slot_prov_set: Set[int] = set()
+                for bs in cand_bound_list:
+                    slot_prov_set.update(bs.provenance_clause_tags)
+                if st_cl is not None:
+                    slot_prov_set.add(int(st_cl))
+                elif bt_tgt is not None:
+                    slot_prov_set.add(int(bt_tgt[0]))
+                slot_prov_t = tuple(sorted(slot_prov_set))
+
+                existing_keys = {
+                    (
+                        _sig_dedup_key(gs.carrier_type, sig_key_cache),
+                        gs.props,
+                        gs.provenance_clause_tags,
+                    )
+                    for gs in gamma
+                }
+                added_sigs: List[GammaSlot] = []
+                for eff_port, osig in inst_pairs:
+                    ok = _sig_dedup_key(osig, sig_key_cache)
+                    out_t_str = str(getattr(osig, "type_name", "") or "").strip().lower()
+                    parent_slot: Optional[GammaSlot] = None
+                    if cand_bound_list:
+                        for bs in cand_bound_list:
+                            bs_t = str(getattr(bs.carrier_type, "type_name", "") or "").strip().lower()
+                            if out_t_str and bs_t == out_t_str:
+                                parent_slot = bs
+                                break
+                        if parent_slot is None:
+                            parent_slot = cand_bound_list[0]
+                    slot_props_d: Dict[str, Any] = dict(parent_slot.props) if parent_slot is not None else {}
+                    for pk, pv in cell_props_map[cand.cell_id].items():
+                        hpv = _hashable_prop_val(pv)
+                        if pk in explicit_posts or pk not in slot_props_d:
+                            slot_props_d[pk] = hpv
+                    slot_props_t = tuple(sorted(slot_props_d.items()))
+                    full_slot_key = (ok, slot_props_t, slot_prov_t)
+                    if full_slot_key not in existing_keys:
+                        added_sigs.append(
+                            GammaSlot(
+                                carrier_type=osig,
+                                out_port=eff_port,
+                                prod_cell=cand,
+                                props=slot_props_t,
+                                provenance_clause_tags=slot_prov_t,
+                            )
+                        )
+                        existing_keys.add(full_slot_key)
+                next_gamma = gamma + tuple(added_sigs)
+
+                next_props_d = dict(active_props)
                 for pk, pv in cell_props_map[cand.cell_id].items():
-                    if isinstance(pv, (list, set)):
-                        hpv: Any = tuple(pv)
-                    elif isinstance(pv, dict):
-                        hpv = tuple(sorted((str(dk), str(dv)) for dk, dv in pv.items()))
-                    else:
-                        hpv = pv
+                    hpv = _hashable_prop_val(pv)
                     if pk in explicit_posts or pk not in next_props_d:
                         next_props_d[pk] = hpv
                 next_active_props = tuple(sorted(next_props_d.items()))
@@ -2915,12 +3224,17 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     next_max_cl = max_cl_seen
 
                 next_g = g_cost + step_cost
-                next_h = _heuristic(cand.cell_id, next_cov, unlock_credit=unlock_cr, gamma_state=next_gamma)
+                next_h = _heuristic(cand.cell_id, next_cov, gamma_state=next_gamma)
+                if math.isinf(next_h):
+                    continue
+                next_f = next_g + next_h
+                if best_full_g is not None and next_f > best_full_g + amb_window:
+                    continue
                 counter += 1
                 heapq.heappush(
                     pq,
                     (
-                        next_g + next_h,
+                        next_f,
                         neg_ev - step_gain,
                         counter,
                         next_g,
@@ -2938,36 +3252,196 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     ),
                 )
 
-        chosen_entry: Optional[Tuple[float, Tuple[str, ...], Tuple[Optional[int], ...]]] = None
-        if best_full_complete is not None:
-            chosen_entry = best_full_complete
-        elif goal_sig is not None and best_complete is not None:
-            chosen_entry = best_complete
-        elif best_complete is not None and best_partial is not None:
-            chosen_entry = best_complete if best_complete[0] >= best_partial[0] else best_partial
-        elif best_complete is not None:
-            chosen_entry = best_complete
+        # Admissible plan selection: strictly prefer complete/goal-satisfying plans; NEVER override with best_partial
+        raw_candidates: List[Dict[str, Any]] = (
+            list(full_complete_plans.values()) if full_complete_plans else list(complete_plans.values())
+        )
+        if not src_file_literals and not dest_file_literals:
+            filtered_raw: List[Dict[str, Any]] = []
+            for rec in raw_candidates:
+                cids_r = rec["chain_ids"]
+                if cids_r and all(cand_needs_path_map.get(cid, False) for cid in cids_r):
+                    _ch_seen: Set[str] = set()
+                    for _cid in cids_r:
+                        _ch_seen |= (prompt_toks & cell_id_toks_map.get(_cid, set()))
+                    if len(_ch_seen) / max(1, len(prompt_toks)) < 0.12:
+                        continue
+                filtered_raw.append(rec)
+            raw_candidates = filtered_raw
 
-        chosen_ids = chosen_entry[1] if chosen_entry is not None else None
-        chosen_clauses = chosen_entry[2] if chosen_entry is not None else ()
+        raw_candidates.sort(key=lambda r: (r["eff_g"], len(r["chain_ids"]), r["chain_ids"]))
 
-        if (
-            chosen_ids
-            and not src_file_literals
-            and not dest_file_literals
-            and all(cand_needs_path_map.get(cid, False) for cid in chosen_ids)
-        ):
-            _ch_seen: Set[str] = set()
-            for _cid in chosen_ids:
-                _ch_seen |= (prompt_toks & cell_id_toks_map.get(_cid, set()))
-            if len(_ch_seen) / max(1, len(prompt_toks)) < 0.12:
-                chosen_ids = None
-                chosen_clauses = ()
+        if not raw_candidates:
+            reason = "OMEGA found no complete path satisfying prompt/goal"
+            self.fallback_reason = reason
+            self.last_refusal = {"kind": "NO_COMPLETE_PLAN", "reason": reason}
+            self.last_search_stats = {
+                "c_min": C_MIN,
+                "m_cover": m_cover,
+                "expansions": expansions,
+                "relaxations": relaxations,
+                "complete_found": 0,
+                "verified_found": 0,
+                "non_equiv_found": 0,
+                "best_partial": list(best_partial[1]) if best_partial is not None else [],
+            }
+            self._trace(
+                "omega_astar_search",
+                expansions=expansions,
+                relaxations=relaxations,
+                scorer_calls=scorer_calls,
+                avg_valid_frontier=(
+                    round(sum(valid_frontier_sizes) / len(valid_frontier_sizes), 2)
+                    if valid_frontier_sizes
+                    else 0.0
+                ),
+                chosen=[],
+                best_partial=list(best_partial[1]) if best_partial is not None else [],
+            )
+            return []
 
-        # Honest coverage accounting. The search silently shrinks its coverage target to the
-        # clauses that have at least one candidate (`coverable_clauses`) and can accept a plan that
-        # covers only half of them. Never let that pass unreported: record exactly which prompt
-        # clauses the returned plan does not serve, and which of those had no candidate at all.
+        def _materialize_plan(rec: Dict[str, Any]) -> List[Cell]:
+            c_ids = rec["chain_ids"]
+            cl_seq = rec["step_clauses"]
+            mat: List[Cell] = []
+            for idx_r, cid_r in enumerate(c_ids):
+                base_c = pool_by_id[cid_r]
+                c_cl = base_c.clone() if hasattr(base_c, "clone") else copy.copy(base_c)
+                cl_idx_r = cl_seq[idx_r] if idx_r < len(cl_seq) else None
+                if cl_idx_r is not None:
+                    c_cl.matched_clause_idx = cl_idx_r
+                else:
+                    setattr(c_cl, "_auto_inserted_bridge", True)
+                mat.append(c_cl)
+            for i_r, c_cl in enumerate(mat):
+                if getattr(c_cl, "matched_clause_idx", None) is None:
+                    for nxt_r in mat[i_r + 1 :]:
+                        if getattr(nxt_r, "matched_clause_idx", None) is not None:
+                            c_cl.matched_clause_idx = nxt_r.matched_clause_idx
+                            break
+            return mat
+
+        verified_plans: List[Dict[str, Any]] = []
+        last_verr: Optional[str] = None
+        for rec in raw_candidates[:12]:
+            cand_cells = _materialize_plan(rec)
+            try:
+                verr = self.verify_planned_path(cand_cells, prompt, orch_ref, ctx=ctx)
+            except Exception as _vexc:
+                verr = f"{type(_vexc).__name__}: {_vexc}"
+            if verr is None:
+                verified_plans.append({**rec, "cells": cand_cells})
+            else:
+                last_verr = str(verr)
+
+        if not verified_plans:
+            reason = f"OMEGA verification failed: {last_verr or 'no valid plan'}"
+            self.fallback_reason = reason
+            self.last_refusal = {"kind": "VERIFICATION_FAILED", "reason": reason}
+            self.last_search_stats = {
+                "c_min": C_MIN,
+                "m_cover": m_cover,
+                "expansions": expansions,
+                "relaxations": relaxations,
+                "complete_found": len(raw_candidates),
+                "verified_found": 0,
+                "non_equiv_found": 0,
+            }
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
+
+        # Collapse structurally equivalent plans (identical non-bridge operator multiset + terminal sink)
+        non_equiv_by_key: Dict[Tuple[Tuple[str, ...], str], Dict[str, Any]] = {}
+        for rec in verified_plans:
+            op_multiset = tuple(sorted(
+                cid for cid in rec["chain_ids"]
+                if not (
+                    isinstance(getattr(pool_by_id[cid], "bridge_profile", None), dict)
+                    and pool_by_id[cid].bridge_profile.get("is_bridge")
+                )
+            ))
+            equiv_key = (op_multiset, rec["chain_ids"][-1] if rec["chain_ids"] else "")
+            if equiv_key not in non_equiv_by_key or rec["eff_g"] < non_equiv_by_key[equiv_key]["eff_g"]:
+                non_equiv_by_key[equiv_key] = rec
+
+        non_equiv_plans = sorted(
+            non_equiv_by_key.values(),
+            key=lambda r: (r["eff_g"], len(r["chain_ids"]), r["chain_ids"]),
+        )[:8]
+
+        g0 = non_equiv_plans[0]["eff_g"]
+        post_weights = [
+            math.exp(-max(0.0, rec["eff_g"] - g0) / max(amb_temp, 1e-6))
+            for rec in non_equiv_plans
+        ]
+        z_part = sum(post_weights) or 1.0
+        probs = [w / z_part for w in post_weights]
+        k_plans = len(non_equiv_plans)
+        entropy = -sum(p * math.log(max(p, 1e-15)) for p in probs)
+        norm_entropy = (entropy / math.log(k_plans)) if k_plans >= 2 else 0.0
+        margin = (probs[0] - probs[1]) if k_plans >= 2 else 1.0
+        cost_gap = (
+            (non_equiv_plans[1]["eff_g"] - non_equiv_plans[0]["eff_g"])
+            if k_plans >= 2
+            else math.inf
+        )
+        is_ambiguous = bool(
+            detect_ambiguity
+            and k_plans >= 2
+            and norm_entropy >= amb_ent_thresh
+            and margin <= amb_margin_thresh
+        )
+        self.last_ambiguity_report = {
+            "ambiguous": is_ambiguous,
+            "refusal_kind": "AMBIGUITY" if is_ambiguous else None,
+            "num_candidates": k_plans,
+            "entropy": round(entropy, 6),
+            "normalized_entropy": round(norm_entropy, 6),
+            "margin": round(margin, 6),
+            "cost_gap": None if math.isinf(cost_gap) else round(cost_gap, 6),
+            "temperature": amb_temp,
+            "entropy_threshold": amb_ent_thresh,
+            "margin_threshold": amb_margin_thresh,
+            "candidates": [
+                {
+                    "chain": list(rec["chain_ids"]),
+                    "eff_g": round(rec["eff_g"], 6),
+                    "posterior_prob": round(probs[idx_p], 6),
+                }
+                for idx_p, rec in enumerate(non_equiv_plans)
+            ],
+        }
+        self.last_search_stats = {
+            "c_min": C_MIN,
+            "m_cover": m_cover,
+            "expansions": expansions,
+            "relaxations": relaxations,
+            "complete_found": len(raw_candidates),
+            "verified_found": len(verified_plans),
+            "non_equiv_found": k_plans,
+        }
+
+        if is_ambiguous:
+            reason = (
+                f"AMBIGUITY: indecisive posterior across {k_plans} non-equivalent plans "
+                f"(H_norm={norm_entropy:.3f}, margin={margin:.3f})"
+            )
+            self.fallback_reason = reason
+            self.last_refusal = {
+                "kind": "AMBIGUITY",
+                "reason": reason,
+                "ambiguity_report": self.last_ambiguity_report,
+                "candidates": self.last_ambiguity_report["candidates"],
+            }
+            self._trace("omega_ambiguity_halt", **self.last_ambiguity_report)
+            return []
+
+        winner = non_equiv_plans[0]
+        chosen_ids = winner["chain_ids"]
+        chosen_clauses = winner["step_clauses"]
+        self.last_gamma = winner["gamma"]
+
+        # Honest coverage accounting.
         if chosen_ids and n_clauses > 0:
             _served = {c for c in chosen_clauses if c is not None}
             _coverable_idx = {t[0] for t in coverable_clauses}
@@ -2975,7 +3449,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             if _uncovered:
                 self._trace(
                     "omega_incomplete_plan",
-                    complete=bool(best_full_complete is not None and chosen_entry is best_full_complete),
+                    complete=bool(full_complete_plans),
                     n_clauses=n_clauses,
                     uncovered_clauses=_uncovered,
                     uncovered_without_candidates=[i for i in _uncovered if i not in _coverable_idx],
@@ -2985,33 +3459,18 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         self._trace(
             "omega_astar_search",
             expansions=expansions,
+            relaxations=relaxations,
             scorer_calls=scorer_calls,
             avg_valid_frontier=(
                 round(sum(valid_frontier_sizes) / len(valid_frontier_sizes), 2)
                 if valid_frontier_sizes
                 else 0.0
             ),
-            chosen=list(chosen_ids) if chosen_ids else [],
+            chosen=list(chosen_ids),
+            ambiguity=self.last_ambiguity_report,
         )
 
-        if not chosen_ids:
-            return []
-        result = []
-        for idx_r, cid in enumerate(chosen_ids):
-            c_cl = pool_by_id[cid].clone() if hasattr(pool_by_id[cid], "clone") else pool_by_id[cid]
-            cl_idx_r = chosen_clauses[idx_r] if idx_r < len(chosen_clauses) else None
-            if cl_idx_r is not None:
-                c_cl.matched_clause_idx = cl_idx_r
-            else:
-                setattr(c_cl, "_auto_inserted_bridge", True)
-            result.append(c_cl)
-        for i_r, c_cl in enumerate(result):
-            if getattr(c_cl, "matched_clause_idx", None) is None:
-                for nxt_r in result[i_r + 1 :]:
-                    if getattr(nxt_r, "matched_clause_idx", None) is not None:
-                        c_cl.matched_clause_idx = nxt_r.matched_clause_idx
-                        break
-        return result
+        return winner["cells"]
 
 
 __all__ = ["OmegaTypeDirectedAStarRouteMethod"]

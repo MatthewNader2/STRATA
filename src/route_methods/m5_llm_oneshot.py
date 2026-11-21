@@ -22,6 +22,11 @@ class M5LLMOneShotRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
+        def _fail(reason: str) -> List[Cell]:
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
+
         candidates = [
             c for c in tunnel
             if getattr(c, "node_type", "") != "constant"
@@ -32,13 +37,10 @@ class M5LLMOneShotRouteMethod(RouteMethod):
                     and not is_combinator_cell(c)
                 )
             )
-        ] or [tunnel[0]]
+        ]
+        if not candidates:
+            return _fail("no usable candidates")
         cand_map = {c.cell_id.lower(): c for c in candidates}
-
-        def _fail(reason: str) -> List[Cell]:
-            self.fallback_reason = reason
-            self._trace("method_failure", requested=type(self).__name__, reason=reason)
-            return []
 
         proposed: List[Cell] = []
         _llm_error = None
@@ -82,23 +84,14 @@ class M5LLMOneShotRouteMethod(RouteMethod):
             if self.step_unifies(curr, nxt, prev_path=chain) or self.step_unifies_dag(nxt, chain, ctx=ctx):
                 chain.append(nxt)
             else:
-                bridge = self.find_bridge(curr, nxt, candidates, orch, prev_path=chain)
-                if bridge:
-                    chain.extend([bridge, nxt])
-                else:
-                    connected = False
-                    for anc in reversed(chain[:-1]):
-                        if self.step_unifies(anc, nxt, prev_path=chain) or self.step_unifies_dag(nxt, chain, ctx=ctx):
-                            chain.append(nxt)
-                            connected = True
-                            break
-                        anc_brg = self.find_bridge(anc, nxt, candidates, orch, prev_path=chain)
-                        if anc_brg:
-                            chain.extend([anc_brg, nxt])
-                            connected = True
-                            break
-                    if not connected:
-                        return _fail(f"proposed step {nxt.cell_id} could not be connected or bridged")
+                connected = False
+                for anc in reversed(chain[:-1]):
+                    if self.step_unifies(anc, nxt, prev_path=chain) or self.step_unifies_dag(nxt, chain, ctx=ctx):
+                        chain.append(nxt)
+                        connected = True
+                        break
+                if not connected:
+                    return _fail(f"proposed step {nxt.cell_id} could not be connected directly")
 
         if len(chain) < 2 and len(proposed) >= 2:
             return _fail("verified chain shorter than 2 cells")
