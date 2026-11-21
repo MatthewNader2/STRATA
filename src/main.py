@@ -7,6 +7,7 @@ multi-profile engine initialization, program synthesis, and benchmark automation
 """
 
 from __future__ import annotations
+import ast
 import os
 import asyncio
 import sys
@@ -40,6 +41,8 @@ try:
     from .inference import ModelManager, select_optimal_embedder
     from .internal_rag import LocalRAG
     from .preflight import PreflightLinter
+    from .security_policy import SecurityPolicy
+    from .language_backend import get_active_language_backend
     from .utils import ensure_comprehensive_prompt, extract_code_from_llm_response
 except (ImportError, ValueError):
     from config import settings, MODELS_DIR
@@ -50,9 +53,34 @@ except (ImportError, ValueError):
     from inference import ModelManager, select_optimal_embedder
     from internal_rag import LocalRAG
     from preflight import PreflightLinter
+    from security_policy import SecurityPolicy
+    from language_backend import get_active_language_backend
     from utils import ensure_comprehensive_prompt, extract_code_from_llm_response
 
 logger = get_logger("main")
+
+
+def _validate_repaired_code(
+    repaired_code: str,
+    prompt: str,
+    orchestrator: Any,
+    allowed_capabilities: Optional[Any] = None,
+) -> tuple[bool, list[str]]:
+    """Validates repaired code without reusing stale pipeline bindings."""
+    try:
+        be = get_active_language_backend()
+        is_py = getattr(be, "spec", None) is None or be.is_python_ast
+        if is_py:
+            rep_tree = ast.parse(repaired_code)
+            SecurityPolicy(allowed_capabilities=set(allowed_capabilities or ())).validate_ast(rep_tree)
+        else:
+            ok_syn, err_syn = be.validate_syntax(repaired_code, allow_placeholders=False)
+            if not ok_syn:
+                return False, [str(err_syn or "Syntax validation failed")]
+        rep_lint = PreflightLinter.lint([], prompt=prompt, code_str=repaired_code, orchestrator=orchestrator)
+        return bool(rep_lint.is_valid), list(rep_lint.violations)
+    except Exception as _rep_err:
+        return False, [f"{type(_rep_err).__name__}: {_rep_err}"]
 
 DB_PATH = os.environ.get("NSTL_DB_PATH", str(settings.trees_dir / "lattice.db"))
 
@@ -153,6 +181,7 @@ class RunRequest(BaseModel):
     execute_in_sandbox: bool = Field(default=False, description="Whether to execute code in GEVR sandbox")
     timeout_seconds: float = Field(default=5.0, ge=0.5, le=60.0, description="Sandbox execution timeout")
     allowed_capabilities: Optional[List[str]] = Field(default=None, description="Optional list of capabilities to grant")
+    llm_feedback: bool = Field(default=False, description="Enable explicit LLM feedback/self-repair cycle")
 
 
 class RunResponse(BaseModel):
@@ -323,16 +352,19 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
         exec_sandbox = request.execute_in_sandbox
         timeout = request.timeout_seconds
         allowed_capabilities = request.allowed_capabilities
+        llm_feedback = bool(request.llm_feedback)
     elif isinstance(request, dict):
         prompt = request.get("prompt", "")
         exec_sandbox = request.get("execute_in_sandbox", False)
         timeout = float(request.get("timeout_seconds", 5.0))
         allowed_capabilities = request.get("allowed_capabilities")
+        llm_feedback = bool(request.get("llm_feedback", False))
     else:
         prompt = str(request)
         exec_sandbox = False
         timeout = 5.0
         allowed_capabilities = None
+        llm_feedback = False
 
     if not prompt or not prompt.strip():
         raise ValueError("Prompt must not be empty.")
@@ -437,28 +469,31 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
                 lint_violations = list(lint_res.violations)
                 logger.warning(f"Static Pre-Flight Lint Violations: {lint_violations}")
         except Exception as _lint_err:
-            logger.debug(f"Preflight linting error: {_lint_err}")
+            logger.warning(f"Preflight linting error (fail-closed): {_lint_err}")
+            lint_violations = [f"Pre-flight linter internal error: {type(_lint_err).__name__}: {_lint_err}"]
 
     # Layer 5 Self-Repair for Pre-Flight Lint Violations
-    # Strictly disabled in symbolic/retrieval profiles (0, B, A, D, AE) to prevent benchmark backdoor cheating.
+    # Strictly disabled unless explicit `llm_feedback=True` AND active profile allows feedback_check.
     emitted_code = code
     applied_repaired_code: Optional[str] = None
     repaired_via_feedback = False
-    if lint_violations and ModelManager.get_instance().can_feedback_check():
+    if llm_feedback and lint_violations and ModelManager.get_instance().can_feedback_check():
         mm = ModelManager.get_instance()
         if mm.profile and mm.can_feedback_check():
             err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_violations)
             repaired_code = extract_code_from_llm_response(mm.feedback_check(code, err_msg))
             if repaired_code and repaired_code.strip() != code.strip():
-                try:
-                    rep_lint = PreflightLinter.lint(local_gate.last_pipeline_bindings, prompt=prompt, code_str=repaired_code, orchestrator=_orchestrator)
-                    if rep_lint.is_valid:
-                        code = repaired_code
-                        applied_repaired_code = repaired_code
-                        lint_violations = []
-                        repaired_via_feedback = True
-                except Exception:
-                    pass
+                rep_ok, _ = _validate_repaired_code(
+                    repaired_code,
+                    prompt,
+                    _orchestrator,
+                    allowed_capabilities=allowed_capabilities,
+                )
+                if rep_ok:
+                    code = repaired_code
+                    applied_repaired_code = repaired_code
+                    lint_violations = []
+                    repaired_via_feedback = True
 
     if lint_violations:
         return RunResponse(

@@ -349,6 +349,13 @@ USER_REALISTIC_TASKS: List[Dict[str, Any]] = [
             "compute correlation matrix, and save the cleaned dataframe to sqlite database 'metrics.db' table 'clean_data'"
         ),
         "expected_literals": ["input.csv", "X", "metrics.db", "clean_data"],
+        "artifact_spec": {
+            "kind": "sqlite_clean_table",
+            "db_path": "metrics.db",
+            "table": "clean_data",
+            "source_csv": "input.csv",
+            "reject_square_identity_matrix": True,
+        },
     },
     {
         "id": "user_cv_contour",

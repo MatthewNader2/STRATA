@@ -2,12 +2,6 @@
 src/reranker.py - Neural Document Reranking for Layer 1 Semantic Tunneling
 Provides pluggable neural cross-encoder / listwise reranking (e.g. Jina Reranker v3.5).
 """
-import math
-import os
-import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
 import inspect
 import math
 import os
@@ -19,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 torch = None  # Lazily imported on first neural reranker instantiation
 AutoModel = None
 _TORCH_AVAILABLE: Optional[bool] = None
-_SHARED_RERANKERS: Dict[Tuple[str, str], "LocalReranker"] = {}
+_SHARED_RERANKERS: Dict[Tuple[str, str, bool], "LocalReranker"] = {}
 _SHARED_RERANKER_LOCK = threading.RLock()
 
 
@@ -86,8 +80,13 @@ class LocalReranker:
                 norm_name = avail[0]
             norm_dev = device
             if device == 'auto':
-                norm_dev = 'cuda' if (_ensure_reranker_imports() and torch.cuda.is_available()) else 'cpu'
-            key = (norm_name, norm_dev)
+                env_dev = os.environ.get('NSTL_RERANKER_DEVICE', '').strip().lower()
+                if env_dev in ('cpu', 'cuda', 'mps'):
+                    norm_dev = env_dev
+                else:
+                    norm_dev = 'cuda' if (_ensure_reranker_imports() and torch.cuda.is_available()) else 'cpu'
+            low_vram = (os.environ.get("NSTL_LOW_VRAM") == "1")
+            key = (norm_name, norm_dev, low_vram)
             inst = _SHARED_RERANKERS.get(key)
             if inst is None or inst.model is None:
                 inst = cls(model_name_or_path=model_name_or_path, device=device)
@@ -114,19 +113,58 @@ class LocalReranker:
         except Exception:
             pass
 
+    @staticmethod
+    def _resolve_device_and_dtype(
+        device: str,
+        low_vram: bool,
+        cuda_available: bool,
+        free_vram_gb: Optional[float] = None,
+    ) -> Tuple[str, Any, bool]:
+        """Determines (device, torch_dtype, offload_to_cpu) respecting NSTL_LOW_VRAM and free VRAM."""
+        req = str(device or "auto").strip().lower()
+        env_dev = os.environ.get("NSTL_RERANKER_DEVICE", "").strip().lower() if req == "auto" else ""
+        eff_req = env_dev if env_dev in ("cpu", "cuda", "mps") else req
+        eff_dev = ("cuda" if cuda_available else "cpu") if eff_req == "auto" else eff_req
+
+        if low_vram:
+            if eff_dev == "cpu" or (eff_dev == "cuda" and not cuda_available):
+                return ("cpu", "auto", False)
+            if req == "auto" and (
+                os.environ.get("NSTL_RERANKER_CPU_OFFLOAD") == "1"
+                or (free_vram_gb is not None and free_vram_gb < 2.5)
+            ):
+                return ("cpu", "auto", True)
+            if eff_dev == "cuda":
+                if torch is None and cuda_available:
+                    _ensure_reranker_imports()
+                fp16_dtype = torch.float16 if torch is not None else "float16"
+                return ("cuda", fp16_dtype, True)
+            return (eff_dev, "auto", False)
+        return (eff_dev, "auto", False)
+
     def __init__(self, model_name_or_path: Optional[str] = None, device: str = 'auto'):
+        self.low_vram = (os.environ.get("NSTL_LOW_VRAM") == "1")
         if not _ensure_reranker_imports():
             logger.warning("[RERANKER] torch/transformers unavailable; neural reranking disabled (no-op).")
-            self.device = 'cpu'
+            self.device, self.target_dtype, self.offload_to_cpu = self._resolve_device_and_dtype(
+                device, self.low_vram, cuda_available=False, free_vram_gb=None
+            )
             self.model_name = model_name_or_path or self._resolve_default_model()
             self.model = None
             self._supports_max_query_len = False
             self._doc_cache: Dict[str, str] = {}
             self._score_cache: Dict[Tuple[str, Tuple[str, ...]], List[Tuple[int, float]]] = {}
             return
-        self.device = (
-            'cuda' if (device == 'auto' and torch.cuda.is_available())
-            else ('cpu' if device == 'auto' else device)
+        cuda_ok = bool(torch.cuda.is_available())
+        free_vram_gb: Optional[float] = None
+        if cuda_ok:
+            try:
+                free_bytes, _ = torch.cuda.mem_get_info()
+                free_vram_gb = float(free_bytes) / (1024 ** 3)
+            except Exception:
+                free_vram_gb = None
+        self.device, self.target_dtype, self.offload_to_cpu = self._resolve_device_and_dtype(
+            device, self.low_vram, cuda_available=cuda_ok, free_vram_gb=free_vram_gb
         )
         self.model_name = model_name_or_path or self._resolve_default_model()
         self.model = None
@@ -149,21 +187,25 @@ class LocalReranker:
         r_dir = settings.rerankers_dir or os.path.join(MODELS_DIR, 'rerankers')
         local_cand = os.path.join(str(r_dir), self.model_name)
         model_path = local_cand if os.path.exists(local_cand) else self.model_name
-        logger.info(f"[RERANKER] Loading reranker '{self.model_name}' from {model_path} onto {self.device}...")
+        load_target = "cpu" if (self.offload_to_cpu and self.device == "cuda") else self.device
+        logger.info(
+            f"[RERANKER] Loading reranker '{self.model_name}' from {model_path} "
+            f"(target={load_target}, exec_device={self.device}, dtype={self.target_dtype}, offload={self.offload_to_cpu})..."
+        )
         try:
             try:
                 self.model = AutoModel.from_pretrained(
                     model_path,
                     trust_remote_code=True,
-                    torch_dtype='auto',
+                    torch_dtype=self.target_dtype,
                     low_cpu_mem_usage=True,
-                ).to(self.device)
+                ).to(load_target)
             except TypeError:
                 self.model = AutoModel.from_pretrained(
                     model_path,
                     trust_remote_code=True,
-                    torch_dtype='auto',
-                ).to(self.device)
+                    torch_dtype=self.target_dtype,
+                ).to(load_target)
             self.model.eval()
             try:
                 import gc as _gc
@@ -187,26 +229,79 @@ class LocalReranker:
 
     @staticmethod
     def _cell_to_document(cell: Cell) -> str:
-        """Constructs a concise semantic text representation of a lattice cell for fast reranking."""
+        """Constructs a rich 5-axis semantic text representation of a lattice cell for reranking."""
         raw_doc = (getattr(cell, 'docstring', '') or getattr(cell, 'doc', '') or '').strip()
         if raw_doc:
             first_line = " ".join(raw_doc.split())
-            if len(first_line) > 160:
-                cut = first_line[:160].rsplit(' ', 1)[0]
-                first_line = cut if cut else first_line[:160]
+            if len(first_line) > 240:
+                cut = first_line[:240].rsplit(' ', 1)[0]
+                first_line = cut if cut else first_line[:240]
         else:
             first_line = ""
         domain = getattr(cell, 'domain_name', '') or ''
+        node_role = getattr(cell, 'node_role', '') or ''
+        stage = getattr(cell, 'stage', None)
         tags = getattr(cell, 'semantic_tags', ()) or ()
         keywords = getattr(cell, 'keywords', ()) or ()
-        in_t = getattr(cell.primary_input, 'type_name', '') if getattr(cell, 'primary_input', None) else ''
-        out_t = getattr(cell.primary_output, 'type_name', '') if getattr(cell, 'primary_output', None) else ''
+        deps = getattr(cell, 'dependencies', ()) or ()
+
+        def _fmt_port(p_name: str, p_sig: Any) -> str:
+            sig = getattr(p_sig, 'signature', p_sig)
+            t_n = getattr(sig, 'type_name', '') or getattr(p_sig, 'type_name', '') or ''
+            st_n = getattr(sig, 'state', '') or getattr(p_sig, 'state', '') or ''
+            quals = getattr(sig, 'qualifiers', None) or getattr(p_sig, 'qualifiers', None) or ()
+            enums = getattr(sig, 'enum_values', None) or getattr(p_sig, 'enum_values', None) or ()
+            s = f"{p_name}:{t_n}" if t_n else str(p_name)
+            if st_n and str(st_n).lower() not in ('any', ''):
+                s += f"[{st_n}]"
+            if isinstance(quals, (list, tuple, set)) and quals:
+                q_str = ",".join(str(q) for q in list(quals)[:3] if q)
+                if q_str:
+                    s += f"{{{q_str}}}"
+            if isinstance(enums, (list, tuple, set)) and enums:
+                e_str = "|".join(str(ev) for ev in list(enums)[:4] if ev is not None)
+                if e_str:
+                    s += f"({e_str})"
+            return s
 
         parts = [f'Cell {cell.cell_id}: {first_line}' if first_line else f'Cell {cell.cell_id}']
         if domain:
             parts.append(f'Domain: {domain}')
-        if in_t or out_t:
-            parts.append(f'Sig: {in_t} -> {out_t}')
+        if node_role or stage is not None:
+            role_parts = []
+            if node_role:
+                role_parts.append(str(node_role))
+            if stage is not None:
+                role_parts.append(f'S{stage}')
+            parts.append(f'Role: {" ".join(role_parts)}')
+
+        in_dict = getattr(cell, 'inputs', None) or {}
+        out_dict = getattr(cell, 'outputs', None) or {}
+        if isinstance(in_dict, dict) and in_dict:
+            in_fmt = [_fmt_port(pn, ps) for pn, ps in list(in_dict.items())[:6]]
+            parts.append(f'Inputs: {", ".join(in_fmt)}')
+        if isinstance(out_dict, dict) and out_dict:
+            out_fmt = [_fmt_port(pn, ps) for pn, ps in list(out_dict.items())[:4]]
+            parts.append(f'Outputs: {", ".join(out_fmt)}')
+        if not in_dict and not out_dict:
+            in_t = getattr(cell.primary_input, 'type_name', '') if getattr(cell, 'primary_input', None) else ''
+            out_t = getattr(cell.primary_output, 'type_name', '') if getattr(cell, 'primary_output', None) else ''
+            if in_t or out_t:
+                parts.append(f'Sig: {in_t} -> {out_t}')
+
+        if deps:
+            dep_roots = []
+            seen_deps: set = set()
+            for d in list(deps):
+                ds = str(d).strip().split()[0].split('.')[0] if str(d).strip() else ''
+                if ds and ds not in seen_deps:
+                    seen_deps.add(ds)
+                    dep_roots.append(ds)
+                    if len(dep_roots) >= 4:
+                        break
+            if dep_roots:
+                parts.append(f'Deps: {", ".join(dep_roots)}')
+
         seen_terms: List[str] = []
         seen_low: set = set()
         for src in (keywords, tags):
@@ -216,9 +311,9 @@ class LocalReranker:
                 if tl and tl not in seen_low:
                     seen_low.add(tl)
                     seen_terms.append(term.strip())
-                    if len(seen_terms) >= 10:
+                    if len(seen_terms) >= 12:
                         break
-            if len(seen_terms) >= 10:
+            if len(seen_terms) >= 12:
                 break
         if seen_terms:
             parts.append(f'Terms: {", ".join(seen_terms)}')
@@ -274,7 +369,18 @@ class LocalReranker:
                     if cid:
                         self._doc_cache[cid] = doc
                 documents.append(doc)
+            moved_to_gpu = False
             try:
+                if getattr(self, "offload_to_cpu", False) and self.device == "cuda":
+                    try:
+                        tgt_dtype = getattr(self, "target_dtype", "auto")
+                        if tgt_dtype not in ("auto", None):
+                            self.model.to("cuda", dtype=tgt_dtype)
+                        else:
+                            self.model.to("cuda")
+                    except TypeError:
+                        self.model.to("cuda")
+                    moved_to_gpu = True
                 rerank_kwargs = {"top_n": len(documents)}
                 if getattr(self, "_supports_max_query_len", False):
                     rerank_kwargs["max_query_length"] = 512
@@ -294,6 +400,14 @@ class LocalReranker:
             except Exception as e:
                 logger.warning(f'[RERANKER] Reranking inference failed: {e}. Falling back to RAG.')
                 return candidate_cells, relevance_map, []
+            finally:
+                if moved_to_gpu:
+                    try:
+                        self.model.to("cpu")
+                    except Exception:
+                        pass
+                    if torch is not None and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
             cached_pairs = [(int(res['index']), float(res['relevance_score'])) for res in results]
             if len(self._score_cache) >= 256:
                 try:

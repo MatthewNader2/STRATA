@@ -301,14 +301,14 @@ class LatticeRouter:
         except Exception:
             pass
         reranker_val = kwargs.get("use_reranker")
-        if is_p0 or profile_name_now == "B":
+        if is_p0 or profile_name_now in ("B", "AE"):
             self.use_reranker = False
         elif reranker_val is not None:
             self.use_reranker = bool(reranker_val)
         else:
             self.use_reranker = bool(_cfg("use_reranker", False)) or profile_uses_reranker
         self.reranker_model = kwargs.get("reranker_model") or _cfg("reranker_model", None)
-        self.reranker = None if (is_p0 or profile_name_now == "B") else kwargs.get("reranker")
+        self.reranker = None if (is_p0 or profile_name_now in ("B", "AE")) else kwargs.get("reranker")
         if self.use_reranker and self.reranker is None and LocalReranker is not None:
             try:
                 if hasattr(LocalReranker, "get_shared"):
@@ -627,10 +627,64 @@ class LatticeRouter:
         return best_cell
 
 
+    @staticmethod
+    def _intent_data_to_ir(intent_data: Optional[Dict[str, Any]]) -> Optional[Any]:
+        """Converts validated Layer-0 compiled intent into a structured IR without re-invoking the LLM."""
+        if not isinstance(intent_data, dict):
+            return None
+        raw_ops = intent_data.get("operations")
+        if not isinstance(raw_ops, list):
+            return None
+        ops = [str(op).strip() for op in raw_ops if isinstance(op, str) and str(op).strip()]
+        if not ops:
+            return None
+
+        domain = str(intent_data.get("domain") or "").strip()
+        steps = [{"op": op, "library": domain, "params": {}} for op in ops]
+        literals: Dict[str, Any] = {}
+        for dict_k in ("parameters", "slots", "hyperparameters"):
+            sub = intent_data.get(dict_k)
+            if isinstance(sub, dict):
+                for lk, lv in sub.items():
+                    lk_s = str(lk).strip()
+                    if lk_s and lv is not None:
+                        literals[lk_s] = lv
+        for list_k in ("source_files", "inputs", "dest_files", "outputs"):
+            vals = intent_data.get(list_k)
+            if isinstance(vals, list) and vals:
+                clean_vals = [v for v in vals if isinstance(v, (str, int, float)) and str(v).strip()]
+                if clean_vals:
+                    literals[list_k] = clean_vals[0] if len(clean_vals) == 1 else clean_vals
+        tgt = intent_data.get("target_sink") or intent_data.get("deliverable")
+        if isinstance(tgt, str) and tgt.strip():
+            literals.setdefault("target_sink", tgt.strip())
+
+        raw_vars = intent_data.get("variables")
+        variables = (
+            [{"id": str(v).strip()} for v in raw_vars if isinstance(v, str) and str(v).strip()]
+            if isinstance(raw_vars, list)
+            else []
+        )
+        try:
+            from ir_compiler import IR
+        except Exception:
+            try:
+                from .ir_compiler import IR
+            except Exception:
+                return None
+        return IR(
+            steps=steps,
+            literals=literals,
+            libraries=[domain] if domain else [],
+            task_objective={"kind": str(intent_data.get("task") or "")},
+            variables=variables,
+        )
+
     def route(
         self,
         prompt: str,
-        top_k: int = 150
+        top_k: int = 150,
+        intent_data: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Cell], Dict[str, float]]:
         """
         Two-Stage Retrieval Architecture (Phase 4):
@@ -660,6 +714,15 @@ class LatticeRouter:
         except Exception:
             pass
 
+        l0_ops_key = (
+            tuple(
+                str(op).strip()
+                for op in (intent_data.get("operations") or ())[:8]
+                if isinstance(op, str) and str(op).strip()
+            )
+            if isinstance(intent_data, dict)
+            else ()
+        )
         cache_key = (
             prompt.strip(),
             int(top_k),
@@ -668,6 +731,7 @@ class LatticeRouter:
             id(getattr(self, "internal_rag", None)) if not is_p0 else 0,
             cur_prof_name,
             bool(getattr(self, "_use_ir_compiler", False)) and not is_p0,
+            l0_ops_key,
         )
         if getattr(self, "enable_route_cache", True) and hasattr(self, "_route_cache") and cache_key in self._route_cache:
             entry = self._route_cache[cache_key]
@@ -710,9 +774,20 @@ class LatticeRouter:
         ir_clauses: List[str] = []
         self.last_compiled_ir = None
         self.last_ir_literals = {}
-        if not is_p0 and getattr(self, "_use_ir_compiler", False) and self._ir_compiler is not None:
+        is_omega_profile = False
+        try:
+            is_omega_profile = bool(
+                ModelManager.get_instance().has_coalgebraic_unfolder()
+            )
+        except Exception:
+            is_omega_profile = False
+        if not is_p0 and getattr(self, "_use_ir_compiler", False) and (
+            self._ir_compiler is not None or (is_omega_profile and intent_data)
+        ):
             try:
-                _ir = self._ir_compiler.compile(prompt,)
+                _ir = self._intent_data_to_ir(intent_data) if (is_omega_profile and intent_data) else None
+                if _ir is None and self._ir_compiler is not None:
+                    _ir = self._ir_compiler.compile(prompt,)
                 if _ir is not None and _ir.steps:
                     self.last_compiled_ir = _ir
                     self.last_ir_literals = dict(getattr(_ir, "literals", {}) or {})
@@ -2025,7 +2100,10 @@ class LatticeRouter:
             if not prog_cells and prog_err:
                 logger.warning(f"[ROUTER/P0] Strict formal Program_0 rejected prompt '{prompt}': {prog_err}")
             return (plan_res, cand_ids) if return_tuple else plan_res
-        tunnel_cells, relevance_map = self.route(prompt, top_k=top_k)
+        l0_intent = kwargs.pop("intent_data", None)
+        if l0_intent is None and ctx is not None:
+            l0_intent = getattr(ctx, "intent_data", None)
+        tunnel_cells, relevance_map = self.route(prompt, top_k=top_k, intent_data=l0_intent)
         # A caller-supplied relevance_map arrives inside **kwargs; if it were
         # re-expanded into method.plan(...) below it would collide with the
         # explicit `relevance_map` argument (TypeError: got multiple values),
@@ -2205,20 +2283,20 @@ class LatticeRouter:
                 has_generative = (
                     mm is not None
                     and mm.profile is not None
-                    and mm.can_synthesize()
+                    and getattr(mm, "has_coalgebraic_unfolder", lambda: False)()
                 )
             except Exception:
                 has_generative = False
                 mm = None
 
             if not has_generative:
-                # When generative synthesis is disabled, psi(g) is a null operator (empty set).
-                # Preserves scientific negative-control integrity.
+                # When coalgebraic unfolding is disabled, psi(g) is a null operator (empty set).
+                # Preserves scientific negative-control and profile isolation integrity.
                 route_trace.append({
                     "event": "coalgebraic_unfolding_null",
                     "residual": residual,
                     "kappa": round(float(kappa), 4),
-                    "reason": "Generative synthesis disabled (null decomposition operator)",
+                    "reason": "Coalgebraic unfolding disabled for active profile (null decomposition operator)",
                 })
             else:
                 try:
@@ -2488,7 +2566,7 @@ class LatticeRouter:
         Delegates to CoalgebraicUnfolder with dynamic domain-agnostic lattice
         schema extraction and bounded recursive unfolding.
         """
-        if not model_mgr or not orchestrator:
+        if not model_mgr or not orchestrator or not getattr(model_mgr, "has_coalgebraic_unfolder", lambda: False)():
             return []
         try:
             try:
@@ -2555,44 +2633,6 @@ class HardwareProfiler:
         return cls._cached_device
 
 
-class MCTSEngine:
-    """
-    Gap-bridging proxy kept for backward compatibility with older tests. It is NOT Monte Carlo: it tries a
-    1-step direct transition, then a 2-step BFS. Nothing in the planner calls it.
-    """
-    def __init__(self, orchestrator: LatticeOrchestrator):
-        self.orchestrator = orchestrator
-        self.planner = LatticePlanner(orchestrator)
-
-    def search(self, arg1: Any, arg2: Any = None) -> Optional[List[Cell]]:
-        try:
-            from lattice import AlgebraicSignature
-        except (ImportError, ValueError):
-            from .lattice import AlgebraicSignature
-
-        if isinstance(arg1, AlgebraicSignature) and isinstance(arg2, AlgebraicSignature):
-            start_sig, goal_sig = arg1, arg2
-            # 1-step direct transition:
-            for cell in self.orchestrator.cells:
-                if cell.primary_input.unifies_with(start_sig) and cell.primary_output.unifies_with(goal_sig):
-                    return [cell]
-            # 2-step BFS:
-            for c1 in self.orchestrator.cells:
-                if c1.primary_input.unifies_with(start_sig):
-                    for c2 in self.orchestrator.cells:
-                        if c2.cell_id == c1.cell_id:
-                            continue  # no self-composition: a cell cannot consume its own output
-                        if c1.primary_output.unifies_with(c2.primary_input) and c2.primary_output.unifies_with(goal_sig):
-                            return [c1, c2]
-            return []
-
-        if isinstance(arg1, list) and isinstance(arg2, dict):
-            return self.planner._monte_carlo_chain_search("", arg1, arg2)
-        if isinstance(arg1, str) and isinstance(arg2, list):
-            return self.planner._monte_carlo_chain_search(arg1, arg2, {})
-        return []
-
-
 def log_coverage_gap(prompt: str, domain_guess: str = "", score: float = 0.0, node_id: str = ""):
     """Telemetry logging for below-threshold query gaps."""
     import os
@@ -2619,7 +2659,7 @@ class SemanticRouteOptimizer:
         self,
         orchestrator: LatticeOrchestrator,
         profile: Optional[Any] = None,
-        use_reranker: bool = False,
+        use_reranker: Optional[bool] = None,
         **kwargs
     ):
         self.orchestrator = orchestrator

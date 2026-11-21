@@ -60,6 +60,33 @@ except (ImportError, ValueError):
 
 logger = get_logger("cli")
 
+
+def _validate_repaired_code(
+    repaired_code: str,
+    prompt: str,
+    orchestrator: Any,
+    allowed_capabilities: Optional[Set[str]] = None,
+) -> Tuple[bool, Optional[Any]]:
+    """
+    Validates LLM-repaired code independently without reusing stale pipeline bindings:
+    checks syntax, AST SecurityPolicy (for Python backend/default), and empty-binding PreflightLinter.
+    """
+    try:
+        be = get_active_language_backend()
+        is_py = getattr(be, "spec", None) is None or be.is_python_ast
+        if is_py:
+            rep_tree = ast.parse(repaired_code)
+            SecurityPolicy(allowed_capabilities=set(allowed_capabilities or ())).validate_ast(rep_tree)
+        else:
+            ok_syn, _ = be.validate_syntax(repaired_code, allow_placeholders=False)
+            if not ok_syn:
+                return False, None
+        rep_lint = PreflightLinter.lint([], prompt=prompt, code_str=repaired_code, orchestrator=orchestrator)
+        return bool(rep_lint.is_valid), rep_lint
+    except Exception as _rep_err:
+        logger.debug("[REPAIR] Validation rejected repaired code: %s", _rep_err)
+        return False, None
+
 try:
     from lattice import LatticeOrchestrator, Cell, PortSignature, AlgebraicSignature, UNRESOLVED_PORT
     from router import LatticeRouter, HardwareProfiler
@@ -77,6 +104,8 @@ try:
     from tokenizer import CellTokenizer
     from planner import _segment_prompt_clauses
     from preflight import PreflightLinter
+    from security_policy import SecurityPolicy
+    from language_backend import get_active_language_backend
     from lattice_auditor import LatticeAuditor
     from macro_harvester import MacroHarvester
     from route_methods import ROUTE_METHOD_REGISTRY, get_route_method, route_method_ids, describe_route_methods
@@ -99,6 +128,8 @@ except ImportError as _err:
         from .tokenizer import CellTokenizer
         from .planner import _segment_prompt_clauses
         from .preflight import PreflightLinter
+        from .security_policy import SecurityPolicy
+        from .language_backend import get_active_language_backend
         from .lattice_auditor import LatticeAuditor
         from .macro_harvester import MacroHarvester
         from .route_methods import ROUTE_METHOD_REGISTRY, get_route_method, route_method_ids, describe_route_methods
@@ -645,8 +676,18 @@ class PipelineDebugger:
         self.llm_feedback = llm_feedback
 
     @staticmethod
-    def _build_failure_record(*, cells, internal_error_msg, unify_fail_reason, refusal_exc, refusal_reason,
-                              sandbox_res, final_code) -> Optional[Dict[str, Any]]:
+    def _build_failure_record(
+        *,
+        cells,
+        internal_error_msg,
+        unify_fail_reason,
+        refusal_exc,
+        refusal_reason,
+        sandbox_res,
+        final_code,
+        planner_refusal: Optional[Dict[str, Any]] = None,
+        lint_refusal_kind: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Structured, machine-readable account of WHY a run did not succeed (None on success).
         Reports consume this instead of pattern-matching rendered console text, so the failure class,
@@ -656,6 +697,13 @@ class PipelineDebugger:
         if internal_error_msg:
             return {"stage": "engine", "kind": "INTERNAL_ERROR", "detail": internal_error_msg}
         if not cells:
+            if isinstance(planner_refusal, dict) and str(planner_refusal.get("kind") or "").strip().upper() == "AMBIGUITY":
+                return {
+                    "stage": "planning",
+                    "kind": "AMBIGUITY",
+                    "detail": str(planner_refusal.get("reason") or "ambiguous non-equivalent plans"),
+                    "candidates": list(planner_refusal.get("candidates") or []),
+                }
             return {"stage": "planning", "kind": "PLANNING_FAILED", "detail": "no compositional path found"}
         if unify_fail_reason:
             return {"stage": "unification", "kind": "UNIFICATION_FAILED", "detail": unify_fail_reason}
@@ -663,10 +711,26 @@ class PipelineDebugger:
             if getattr(refusal_exc, "is_engine_defect", False):
                 return {"stage": "emission", "kind": "EMISSION_DEFECT", "detail": str(refusal_reason)}
             ports = [f"{cid}.{p}" for cid, p in (getattr(refusal_exc, "ports", None) or [])]
+            holes = list(getattr(refusal_exc, "typed_holes", None) or [])
+            if holes:
+                return {
+                    "stage": "synthesis",
+                    "kind": "TYPED_HOLE",
+                    "detail": str(refusal_reason),
+                    "unresolved_ports": ports,
+                    "typed_holes": [repr(h) for h in holes],
+                }
             return {"stage": "synthesis", "kind": "UNRESOLVED_PORTS", "detail": str(refusal_reason), "unresolved_ports": ports}
         viol = sandbox_res.get("preflight_lint_violations")
         if viol:
-            return {"stage": "lint", "kind": "LINT_REJECTED", "detail": f"{len(viol)} violation(s)", "violations": list(viol)}
+            lk = str(lint_refusal_kind or "").strip().upper()
+            if lk == "AMBIGUITY":
+                lkind = "AMBIGUITY"
+            elif lk == "TYPED_HOLE":
+                lkind = "TYPED_HOLE"
+            else:
+                lkind = "LINT_REJECTED"
+            return {"stage": "lint", "kind": lkind, "detail": f"{len(viol)} violation(s)", "violations": list(viol)}
         if not final_code:
             return {"stage": "synthesis", "kind": "NO_CODE", "detail": "no code was emitted"}
         if not sandbox_res.get("success", False):
@@ -772,7 +836,7 @@ class PipelineDebugger:
         gamma = getattr(self.router, "gamma", 0.15)
         epsilon = getattr(self.router, "epsilon", 0.001)
 
-        tunnel_cells, relevance_map = self.router.route(effective_prompt, top_k=400)
+        tunnel_cells, relevance_map = self.router.route(effective_prompt, top_k=400, intent_data=intent_data)
         route_dt = (time.perf_counter() - t_route_0) * 1000.0
 
         reranker_active = bool(getattr(self.router, "use_reranker", False) and getattr(self.router, "last_reranker_telemetry", None))
@@ -1209,6 +1273,8 @@ class PipelineDebugger:
         refusal_exc: Optional[BaseException] = None
         unify_fail_reason: Optional[str] = None
         lint_error_msg: Optional[str] = None
+        lint_res = None
+        planner_refusal = getattr(getattr(self.router, "planner", None), "last_refusal", None)
 
         if cells:
             t_synth_0 = time.perf_counter()
@@ -1394,6 +1460,8 @@ class PipelineDebugger:
                             cells=cells, internal_error_msg=None, unify_fail_reason=None,
                             refusal_exc=refusal_exc, refusal_reason=refusal_reason,
                             sandbox_res={}, final_code="",
+                            planner_refusal=planner_refusal,
+                            lint_refusal_kind=(getattr(lint_res, "refusal_kind", None) if lint_res is not None else None),
                         ),
                         "lint_error": None,
                         "route_ms": route_dt,
@@ -1412,8 +1480,7 @@ class PipelineDebugger:
                     except Exception as lint_err:
                         logger.warning(f"[PREFLIGHT] Linting exception: {lint_err}")
                         lint_res = None
-                        lint_valid = True
-                        # The program still runs, but it must not be reported as lint-verified.
+                        lint_valid = False
                         lint_error_msg = f"{type(lint_err).__name__}: {lint_err}"
 
                 # Deterministic Bridge Insertion for Pre-Flight Lint Violations
@@ -1554,10 +1621,15 @@ class PipelineDebugger:
                 # Layer 5 Self-Repair for Pre-Flight Lint Violations
                 llm_feedback = getattr(self, "llm_feedback", False)
                 rep_dt = 0.0
+                lint_viols = (
+                    list(lint_res.violations)
+                    if lint_res is not None
+                    else [f"Pre-flight linter internal error: {lint_error_msg or 'unknown error'}"]
+                )
                 if not lint_valid and llm_feedback and final_code:
                     mm = ModelManager.get_instance()
                     if mm.profile and mm.can_feedback_check():
-                        err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_res.violations)
+                        err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_viols)
                         c.print(Panel("[bold yellow]⚡ LAYER 5: Pre-Flight Lint LLM Self-Repair Cycle[/bold yellow]", border_style="yellow"))
                         t_rep_0 = time.perf_counter()
                         failing_code = final_code
@@ -1566,18 +1638,24 @@ class PipelineDebugger:
                         if repaired_code and repaired_code.strip() != failing_code.strip():
                             unknown = _unknown_api_references(repaired_code, failing_code, self.orchestrator.loaded_cells.values())
                             if not unknown:
-                                rep_lint = PreflightLinter.lint(pipeline_bindings, prompt=prompt, code_str=repaired_code, orchestrator=self.orchestrator)
-                                if rep_lint.is_valid:
+                                rep_ok, rep_lint = _validate_repaired_code(
+                                    repaired_code,
+                                    prompt,
+                                    self.orchestrator,
+                                    getattr(self, "allowed_capabilities", None),
+                                )
+                                if rep_ok:
                                     c.print(f"  [bold green][✓] Pre-flight repair accepted ({rep_dt:.1f}ms).[/bold green]\n")
                                     final_code = repaired_code
                                     lint_valid = True
                                     lint_res = rep_lint
+                                    lint_viols = []
 
-                if not lint_valid and lint_res is not None:
-                    logger.error(f"[CLI] Pre-flight lint validation failed ({len(lint_res.violations)} violations): {'; '.join(lint_res.violations)}")
+                if not lint_valid:
+                    logger.error(f"[CLI] Pre-flight lint validation failed ({len(lint_viols)} violations): {'; '.join(lint_viols)}")
                     c.print(Panel(
                         "[bold red]❌ PRE-FLIGHT LINT VIOLATIONS DETECTED:[/bold red]\n" +
-                        "\n".join(f"  • {v}" for v in lint_res.violations),
+                        "\n".join(f"  • {v}" for v in lint_viols),
                         title="[bold red]⚠️ Pre-Flight Static Validator[/bold red]",
                         border_style="red"
                     ))
@@ -1585,7 +1663,7 @@ class PipelineDebugger:
                     final_code = None
                     path_ids = [cl.cell_id for cl in cells] if cells else []
                     total_dt = (time.perf_counter() - t_total_start) * 1000.0
-                    _lint_fail_sb = {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_res.violations)}", "preflight_lint_violations": lint_res.violations}
+                    _lint_fail_sb = {"success": False, "error": f"Pre-flight lint validation failed: {'; '.join(lint_viols)}", "preflight_lint_violations": lint_viols}
                     return {
                         "prompt": prompt_clean,
                         "profile": self.active_profile,
@@ -1601,6 +1679,8 @@ class PipelineDebugger:
                             refusal_reason=refusal_reason,
                             sandbox_res=_lint_fail_sb,
                             final_code=final_code or "",
+                            planner_refusal=planner_refusal,
+                            lint_refusal_kind=(getattr(lint_res, "refusal_kind", None) if lint_res is not None else None),
                         ),
                         "lint_error": lint_error_msg,
                         "route_ms": route_dt,
@@ -1656,8 +1736,13 @@ class PipelineDebugger:
             has_unresolved = bool(getattr(ctx, "unresolved_ports", None))
             if not lint_valid or has_unresolved:
                 reasons = []
-                if not lint_valid and 'lint_res' in locals():
-                    reasons.extend(lint_res.violations)
+                if not lint_valid:
+                    if 'lint_res' in locals() and lint_res is not None:
+                        reasons.extend(lint_res.violations)
+                    elif 'lint_error_msg' in locals() and lint_error_msg:
+                        reasons.append(f"Pre-flight linter internal error: {lint_error_msg}")
+                    else:
+                        reasons.append("Pre-flight lint validation failed.")
                 if has_unresolved:
                     reasons.extend([f"Unresolved port: {cid}.{p}" for cid, p in ctx.unresolved_ports])
                 err_msg = f"Pre-flight lint validation failed: {'; '.join(reasons)}"
@@ -1852,6 +1937,8 @@ class PipelineDebugger:
             refusal_reason=refusal_reason,
             sandbox_res=sandbox_res,
             final_code=final_code,
+            planner_refusal=planner_refusal,
+            lint_refusal_kind=(getattr(lint_res, "refusal_kind", None) if lint_res is not None else None),
         )
         sb_status = "PASSED" if sandbox_res.get("success", False) else ("FAILED: " + sandbox_res.get("error", "").splitlines()[-1] if sandbox_res.get("error") else "FAILED")
         return {
@@ -2173,6 +2260,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             self.rag = None
             self.embedder_name = ""
             self.llm_name = ""
+            self.use_reranker = False
             self.router = LatticeRouter(
                 self.orchestrator,
                 internal_rag=None,
@@ -2273,7 +2361,7 @@ class NSTLInteractiveShell(cmd.Cmd):
             return False
 
     def do_profile(self, arg: str):
-        """Switch active inference profile. Usage: profile <0|A|B|C|D|E|S|U|AE>"""
+        """Switch active inference profile. Usage: profile <0|A|B|C|D|E|S|U|AE|O>"""
         arg = arg.strip().lstrip("/")
         if arg.lower().startswith("profile"):
             arg = arg[7:].strip()
@@ -2890,31 +2978,50 @@ class NSTLInteractiveShell(cmd.Cmd):
 
         # Step 3b: Static Pre-Flight Linting
         lint_valid = True
+        lint_res = None
+        lint_error_msg = None
         if not query_no_lint and hasattr(self.gate, "last_pipeline_bindings") and self.gate.last_pipeline_bindings:
-            lint_res = PreflightLinter.lint(self.gate.last_pipeline_bindings, prompt=effective_prompt, code_str=final_code, orchestrator=self.orchestrator)
-            lint_valid = lint_res.is_valid
-            if not lint_res.is_valid:
-                console.print("\n[bold red][!] Static Pre-Flight Lint Violations:[/bold red]")
-                for v in lint_res.violations:
-                    console.print(f"  [red]• {v}[/red]")
-            elif lint_res.warnings:
-                console.print("\n[bold yellow][!] Pre-Flight Warnings:[/bold yellow]")
-                for w in lint_res.warnings:
-                    console.print(f"  [yellow]• {w}[/yellow]")
+            try:
+                lint_res = PreflightLinter.lint(self.gate.last_pipeline_bindings, prompt=effective_prompt, code_str=final_code, orchestrator=self.orchestrator)
+                lint_valid = lint_res.is_valid
+                if not lint_res.is_valid:
+                    console.print("\n[bold red][!] Static Pre-Flight Lint Violations:[/bold red]")
+                    for v in lint_res.violations:
+                        console.print(f"  [red]• {v}[/red]")
+                elif lint_res.warnings:
+                    console.print("\n[bold yellow][!] Pre-Flight Warnings:[/bold yellow]")
+                    for w in lint_res.warnings:
+                        console.print(f"  [yellow]• {w}[/yellow]")
+            except Exception as lint_err:
+                lint_res = None
+                lint_valid = False
+                lint_error_msg = f"{type(lint_err).__name__}: {lint_err}"
+                console.print(f"\n[bold red][!] Pre-Flight Linter Error: {lint_error_msg}[/bold red]")
 
-            # Layer 5 Self-Repair for Pre-Flight Lint Violations (Controlled by active profile capabilities)
-            if not lint_valid and ModelManager.get_instance().can_feedback_check() and final_code:
+            # Layer 5 Self-Repair for Pre-Flight Lint Violations (Explicit llm_feedback + active profile)
+            if not lint_valid and getattr(self, "llm_feedback", False) and ModelManager.get_instance().can_feedback_check() and final_code:
                 mm = ModelManager.get_instance()
                 if mm.profile and mm.can_feedback_check():
-                    err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_res.violations)
+                    lint_viols_i = (
+                        list(lint_res.violations)
+                        if lint_res is not None
+                        else [f"Pre-flight linter internal error: {lint_error_msg or 'unknown error'}"]
+                    )
+                    err_msg = "Pre-flight lint validation failed:\n" + "\n".join(f"- {v}" for v in lint_viols_i)
                     console.print("\n[bold yellow]⚡ LAYER 5: Pre-Flight Lint LLM Self-Repair Cycle[/bold yellow]")
                     repaired_code = extract_code_from_llm_response(mm.feedback_check(final_code, err_msg))
                     if repaired_code and repaired_code.strip() != final_code.strip():
-                        rep_lint = PreflightLinter.lint(self.gate.last_pipeline_bindings, prompt=prompt, code_str=repaired_code, orchestrator=self.orchestrator)
-                        if rep_lint.is_valid:
-                            console.print("  [bold green][✓] Pre-flight repair accepted.[/bold green]\n")
-                            final_code = repaired_code
-                            lint_valid = True
+                        if not _unknown_api_references(repaired_code, final_code, self.orchestrator.loaded_cells.values()):
+                            rep_ok, _rep_lint = _validate_repaired_code(
+                                repaired_code,
+                                effective_prompt,
+                                self.orchestrator,
+                                getattr(self, "allowed_capabilities", None),
+                            )
+                            if rep_ok:
+                                console.print("  [bold green][✓] Pre-flight repair accepted.[/bold green]\n")
+                                final_code = repaired_code
+                                lint_valid = True
 
         if not lint_valid:
             console.print("\n[bold red][!] Execution halted due to pre-flight lint violations.[/bold red]\n")
@@ -3487,7 +3594,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_shell = subparsers.add_parser("shell", help="Launch real-time interactive synthesis TUI studio")
     p_shell.add_argument("--db", type=str, default="trees/lattice.db", help="Path to SQLite database")
-    p_shell.add_argument("--profile", type=str, default="0", help="Initial inference profile (0, A, B, C, D, E, S, U, AE)")
+    p_shell.add_argument("--profile", type=str, default="0", help="Initial inference profile (0, A, B, C, D, E, S, U, AE, O)")
     p_shell.add_argument("--route-method", "-m", type=str, default=None, choices=route_method_ids(), help="Initial routing method")
     p_shell.add_argument("--dev", action="store_true", default=False, help="Launch studio with Dev Mode enabled")
     p_shell.add_argument("--no-lint", action="store_true", help="Skip static pre-flight linter")

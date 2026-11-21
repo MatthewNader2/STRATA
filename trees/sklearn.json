@@ -2868,7 +2868,17 @@
       ],
       "edges": [],
       "primary_in": "X",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "typestate",
+          "invariants"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "sklearn.preprocessing.MinMaxScaler.fit_transform",
@@ -3046,7 +3056,17 @@
       ],
       "edges": [],
       "primary_in": "X",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "typestate",
+          "invariants"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "sklearn.preprocessing.RobustScaler.fit_transform",
@@ -3224,7 +3244,17 @@
       ],
       "edges": [],
       "primary_in": "X",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "typestate",
+          "invariants"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "sklearn.impute.SimpleImputer.fit_transform",
@@ -3443,7 +3473,17 @@
       ],
       "edges": [],
       "primary_in": "X",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "typestate",
+          "invariants"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "sklearn.preprocessing.OneHotEncoder.fit_transform",
@@ -3710,9 +3750,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "degree": {
           "name": "degree",
@@ -3931,9 +3969,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_components": {
           "name": "n_components",
@@ -4371,9 +4407,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -4674,9 +4708,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -5763,9 +5795,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -6092,9 +6122,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -6542,9 +6570,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -6828,9 +6854,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -7428,9 +7452,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_clusters": {
           "name": "n_clusters",
@@ -7666,9 +7688,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_clusters": {
           "name": "n_clusters",
@@ -7922,9 +7942,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "eps": {
           "name": "eps",
@@ -8849,9 +8867,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -10527,9 +10543,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "labels": {
           "name": "labels",
@@ -14380,9 +14394,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         }
       },
       "outputs": {
@@ -14562,9 +14574,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_components": {
           "name": "n_components",
@@ -14822,9 +14832,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_components": {
           "name": "n_components",
@@ -15337,9 +15345,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -15636,9 +15642,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_components": {
           "name": "n_components",
@@ -16184,9 +16188,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -16485,9 +16487,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -16807,9 +16807,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -17168,9 +17166,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -17451,9 +17447,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -17695,9 +17689,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -18061,9 +18053,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -18419,9 +18409,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -18740,9 +18728,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -19101,9 +19087,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -19465,9 +19449,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -19789,9 +19771,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -20068,9 +20048,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_clusters": {
           "name": "n_clusters",
@@ -20288,9 +20266,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_components": {
           "name": "n_components",
@@ -20544,9 +20520,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "n_clusters": {
           "name": "n_clusters",
@@ -21218,9 +21192,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -21489,9 +21461,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "y": {
           "name": "y",
@@ -22740,9 +22710,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "labels": {
           "name": "labels",
@@ -22961,9 +22929,7 @@
           },
           "semantics": "sklearn.scaled_features",
           "typestate": "sklearn::scaled_features",
-          "invariants": [
-            "scaled_features"
-          ]
+          "invariants": []
         },
         "labels": {
           "name": "labels",

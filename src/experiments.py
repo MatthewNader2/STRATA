@@ -12,6 +12,7 @@ Provides toggleable experimental engines for empirical tinkering and ablation st
 from __future__ import annotations
 from collections import deque
 import collections.abc
+import inspect
 import math
 import time
 from dataclasses import dataclass, field
@@ -74,6 +75,7 @@ class EarlyExitLatentProbe:
         self.cfg = config or ACTIVE_EXPERIMENTS
         self._mean: Optional[np.ndarray] = None
         self._W_zca: Optional[np.ndarray] = None
+        self.early_exit_active: bool = False
 
     def fit_whitening(self, cell_vectors: np.ndarray) -> None:
         """
@@ -95,42 +97,140 @@ class EarlyExitLatentProbe:
             float(np.max(s) / max(float(np.min(s)), 1e-9)),
         )
 
-    def encode_early_exit(self, text: str, layer_idx: Optional[int] = None) -> np.ndarray:
+    def encode_early_exit(self, text: str, layer_idx: Optional[int] = None, mode: str = "document") -> np.ndarray:
         """
         If `layer_idx` is set and the underlying backend is a PyTorch Transformer,
         executes ONLY the first `layer_idx` transformer blocks and mean-pools the
-        residual stream. Otherwise falls back to full-model encoding.
+        residual stream (updating `self.early_exit_active`). Otherwise falls back
+        to full-model encoding with `self.early_exit_active = False`.
         """
         target_layer = layer_idx if layer_idx is not None else self.cfg.early_exit_layer
+        self.early_exit_active = False
         model = getattr(self.extractor, "_model", None)
 
         if target_layer is not None and getattr(self.extractor, "_backend", "") == "sentence_transformers" and model is not None:
             try:
                 import torch
-                first_mod = model[0]
-                auto_model = getattr(first_mod, "auto_model", None)
-                tokenizer = getattr(first_mod, "tokenizer", None)
+                first_mod = model[0] if hasattr(model, "__getitem__") else model
+                auto_model = getattr(first_mod, "auto_model", None) or first_mod
+                tokenizer = getattr(first_mod, "tokenizer", None) or getattr(self.extractor, "tokenizer", None)
                 if auto_model is not None and tokenizer is not None:
-                    device = next(auto_model.parameters()).device
+                    params_iter = list(auto_model.parameters())
+                    device = params_iter[0].device if params_iter else torch.device("cpu")
                     inputs = tokenizer(
                         [text],
                         padding=True,
                         truncation=True,
                         return_tensors="pt",
-                    ).to(device)
+                    )
+                    if hasattr(inputs, "to"):
+                        inputs = inputs.to(device)
+                    elif isinstance(inputs, dict):
+                        inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
+
+                    input_ids = inputs["input_ids"]
+                    attn_2d = inputs.get("attention_mask")
+                    if attn_2d is None:
+                        attn_2d = torch.ones_like(input_ids)
+
                     with torch.inference_mode():
-                        outputs = auto_model(**inputs, output_hidden_states=True)
-                        hidden_states = outputs.hidden_states
-                        chosen_idx = max(0, min(int(target_layer), len(hidden_states) - 1))
-                        layer_h = hidden_states[chosen_idx]  # [1, seq_len, dim]
-                        mask = inputs["attention_mask"].unsqueeze(-1).float()
-                        pooled = (layer_h * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
-                        vec = pooled[0].detach().cpu().numpy().astype(np.float32)
-                        return self._postprocess(vec)
+                        embeddings = getattr(auto_model, "embeddings", None)
+                        enc_layers = getattr(getattr(auto_model, "encoder", None), "layer", None)
+                        if enc_layers is None:
+                            enc_layers = getattr(getattr(auto_model, "transformer", None), "layer", None)
+
+                        core_model = getattr(auto_model, "model", auto_model)
+                        dec_embed = getattr(core_model, "embed_tokens", None)
+                        dec_layers = getattr(core_model, "layers", None)
+
+                        if embeddings is not None and enc_layers is not None and len(enc_layers) > 0:
+                            total_layers = len(enc_layers)
+                            chosen_idx = max(1, min(int(target_layer), total_layers))
+                            emb_kwargs: Dict[str, Any] = {}
+                            try:
+                                emb_params = inspect.signature(embeddings.forward).parameters
+                                if "token_type_ids" in emb_params and "token_type_ids" in inputs:
+                                    emb_kwargs["token_type_ids"] = inputs["token_type_ids"]
+                            except (TypeError, ValueError):
+                                pass
+                            hidden = embeddings(input_ids, **emb_kwargs)
+                            if hasattr(auto_model, "get_extended_attention_mask"):
+                                ext_mask = auto_model.get_extended_attention_mask(attn_2d, input_ids.shape)
+                            else:
+                                min_val = torch.finfo(hidden.dtype).min if hidden.dtype.is_floating_point else -1e9
+                                ext_mask = (1.0 - attn_2d.to(dtype=hidden.dtype)).unsqueeze(1).unsqueeze(2) * min_val
+
+                            for layer in enc_layers[:chosen_idx]:
+                                l_kwargs: Dict[str, Any] = {}
+                                try:
+                                    l_params = inspect.signature(layer.forward).parameters
+                                    if "attention_mask" in l_params:
+                                        l_kwargs["attention_mask"] = ext_mask
+                                except (TypeError, ValueError):
+                                    pass
+                                l_out = layer(hidden, **l_kwargs)
+                                hidden = l_out[0] if isinstance(l_out, tuple) else l_out
+
+                            mask = attn_2d.unsqueeze(-1).float()
+                            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+                            vec = pooled[0].detach().cpu().numpy().astype(np.float32)
+                            self.early_exit_active = bool(0 < chosen_idx < total_layers)
+                            return self._postprocess(vec)
+
+                        if dec_embed is not None and dec_layers is not None and len(dec_layers) > 0:
+                            total_layers = len(dec_layers)
+                            chosen_idx = max(1, min(int(target_layer), total_layers))
+                            hidden = dec_embed(input_ids)
+                            batch_size, seq_len = input_ids.shape[0], input_ids.shape[1]
+                            position_ids = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0).expand(batch_size, seq_len)
+                            rotary_pos_emb = None
+                            if hasattr(core_model, "rotary_emb"):
+                                try:
+                                    rotary_pos_emb = core_model.rotary_emb(hidden, position_ids)
+                                except Exception:
+                                    rotary_pos_emb = None
+                            min_val = torch.finfo(hidden.dtype).min if hidden.dtype.is_floating_point else -1e9
+                            causal_base = torch.triu(
+                                torch.full((seq_len, seq_len), min_val, dtype=hidden.dtype, device=device),
+                                diagonal=1,
+                            ).unsqueeze(0).unsqueeze(0)
+                            pad_mask = (1.0 - attn_2d.to(dtype=hidden.dtype)).unsqueeze(1).unsqueeze(2) * min_val
+                            causal_mask = causal_base + pad_mask
+
+                            for layer in dec_layers[:chosen_idx]:
+                                l_kwargs: Dict[str, Any] = {}
+                                try:
+                                    l_params = inspect.signature(layer.forward).parameters
+                                    if "position_ids" in l_params:
+                                        l_kwargs["position_ids"] = position_ids
+                                    if "position_embeddings" in l_params and rotary_pos_emb is not None:
+                                        l_kwargs["position_embeddings"] = rotary_pos_emb
+                                    if "attention_mask" in l_params:
+                                        l_kwargs["attention_mask"] = causal_mask
+                                except (TypeError, ValueError):
+                                    pass
+                                l_out = layer(hidden, **l_kwargs)
+                                hidden = l_out[0] if isinstance(l_out, tuple) else l_out
+
+                            if hasattr(core_model, "norm") and core_model.norm is not None:
+                                hidden = core_model.norm(hidden)
+                            mask = attn_2d.unsqueeze(-1).float()
+                            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+                            vec = pooled[0].detach().cpu().numpy().astype(np.float32)
+                            self.early_exit_active = bool(0 < chosen_idx < total_layers)
+                            return self._postprocess(vec)
             except Exception as exc:
                 logger.debug("[EXP:EARLY_EXIT] Fallback to standard encode: %s", exc)
 
-        vec = self.extractor.encode(text)
+        self.early_exit_active = False
+        try:
+            enc_params = inspect.signature(self.extractor.encode).parameters
+        except (TypeError, ValueError):
+            enc_params = {}
+        if "mode" in enc_params:
+            vec = self.extractor.encode(text, mode=mode)
+        else:
+            vec = self.extractor.encode(text)
         return self._postprocess(vec)
 
     def _postprocess(self, vec: np.ndarray) -> np.ndarray:

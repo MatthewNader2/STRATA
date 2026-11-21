@@ -47,8 +47,6 @@ class M3GreedyFreezeRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [
             c for c in tunnel
@@ -62,7 +60,9 @@ class M3GreedyFreezeRouteMethod(RouteMethod):
             )
         ]
         if not candidates:
-            return [tunnel[0]]
+            self.fallback_reason = "no usable candidates"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         prompt_tokens = CellTokenizer.tokenize_prompt(prompt)
         src_file_literals, dest_file_literals = self.extract_file_literals(prompt or "", ctx=ctx)

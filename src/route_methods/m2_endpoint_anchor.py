@@ -48,8 +48,6 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [
             c for c in tunnel
@@ -63,7 +61,9 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
             )
         ]
         if not candidates:
-            return [tunnel[0]]
+            self.fallback_reason = "no usable candidates"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         prompt_tokens = CellTokenizer.tokenize_prompt(prompt)
         src_file_literals, dest_file_literals = self.extract_file_literals(prompt or "", ctx=ctx)
@@ -153,6 +153,11 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
 
         # Single-node pipeline if source is also sink
         if best_sink and best_source.cell_id == best_sink.cell_id:
+            _verr = self.verify_planned_path([best_source], prompt, orch, ctx=ctx)
+            if _verr:
+                self.fallback_reason = f"M2 {_verr}"
+                self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+                return []
             return [best_source]
 
         clauses = self.segment_prompt_clauses(prompt, ctx=ctx)
@@ -167,6 +172,11 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
                     key=lambda c: (self.clause_fit(last_clause, c), relevance_map.get(c.cell_id, 0.0)),
                 )
             else:
+                _verr = self.verify_planned_path([best_source], prompt, orch, ctx=ctx)
+                if _verr:
+                    self.fallback_reason = f"M2 {_verr}"
+                    self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+                    return []
                 return [best_source]
 
         # 3. True Bidirectional Meet-in-the-Middle Search from c_start to c_end for arbitrary K >= 1
@@ -247,9 +257,9 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
         meeting_candidates: List[List[Cell]] = []
         seen_signatures: Set[Tuple[str, ...]] = set()
 
-        def _record_meeting(fp: List[Cell], bp: List[Cell]) -> None:
-            # fp ends with M, bp starts with M
-            merged = fp + bp[1:]
+        def _record_meeting(fp: List[Cell], bp: List[Cell], shared_midpoint: bool = True) -> None:
+            # fp ends with M, bp starts with M when shared_midpoint=True
+            merged = (fp + bp[1:]) if shared_midpoint else (fp + bp)
             if len(merged) > max_total_len or len(merged) < 2:
                 return
             sig = tuple(c.cell_id for c in merged)
@@ -327,7 +337,7 @@ class M2EndpointAnchorRouteMethod(RouteMethod):
                 for nbr in _get_fwd_neighbors(fid):
                     if nbr.cell_id in bwd_paths:
                         for bp in bwd_paths[nbr.cell_id][:3]:
-                            _record_meeting(fp, bp)
+                            _record_meeting(fp, bp, shared_midpoint=False)
 
         if not meeting_candidates:
             reason = f"Bidirectional Meet-in-the-Middle found no connecting path between {best_source.cell_id} and {best_sink.cell_id}"

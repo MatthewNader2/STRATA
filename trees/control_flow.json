@@ -1575,7 +1575,7 @@
         }
       },
       "dependencies": [
-        "functools"
+        "import functools"
       ],
       "outputs": {
         "accumulated_state": {
@@ -1593,7 +1593,7 @@
         }
       },
       "code_templates": {
-        "python": "import functools\n{accumulated_state} = functools.reduce({accumulator}, {collection}, {initial})",
+        "python": "{accumulated_state} = functools.reduce({accumulator}, {collection}, {initial})",
         "cpp": "{State} {accumulated_state} = std::accumulate({collection}.begin(), {collection}.end(), {initial}, {accumulator});",
         "rust": "let {accumulated_state}: {State} = {collection}.iter().fold({initial}, |acc, item| {accumulator}(acc, item));"
       },
@@ -1607,7 +1607,7 @@
         "combine"
       ],
       "effects": [],
-      "code_template": "import functools\n{accumulated_state} = functools.reduce({accumulator}, {collection}, {initial})",
+      "code_template": "{accumulated_state} = functools.reduce({accumulator}, {collection}, {initial})",
       "node_role": "combinator",
       "primary_in": "collection",
       "primary_out": "accumulated_state",
@@ -3456,7 +3456,7 @@
         }
       },
       "dependencies": [
-        "time"
+        "import time"
       ],
       "outputs": {
         "result": {
@@ -3474,7 +3474,7 @@
         }
       },
       "code_templates": {
-        "python": "import time\nfor _attempt in range({max_retries}):\n    try:\n        {result} = {action}({data})\n        break\n    except Exception as _err:\n        if _attempt == {max_retries} - 1:\n            {result} = {fallback}(_err, {data})\n        else:\n            time.sleep({backoff_sec} * (2 ** _attempt))",
+        "python": "for _attempt in range({max_retries}):\n    try:\n        {result} = {action}({data})\n        break\n    except Exception as _err:\n        if _attempt == {max_retries} - 1:\n            {result} = {fallback}(_err, {data})\n        else:\n            time.sleep({backoff_sec} * (2 ** _attempt))",
         "cpp": "{U} {result};\nfor (int _att = 0; _att < {max_retries}; ++_att) {\n    try {\n        {result} = {action}({data});\n        break;\n    } catch (const std::exception& _err) {\n        if (_att == {max_retries} - 1) {\n            {result} = {fallback}(_err, {data});\n        } else {\n            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>({backoff_sec} * 1000 * (1 << _att))));\n        }\n    }\n}",
         "rust": "let mut {result}: Option<{U}> = None;\nfor _att in 0..{max_retries} {\n    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {action}({data}))) {\n        Ok(res) => { {result} = Some(res); break; },\n        Err(_err) => {\n            if _att == {max_retries} - 1 { {result} = Some({fallback}(_err, {data})); }\n            else { std::thread::sleep(std::time::Duration::from_millis(({backoff_sec} * 1000.0 * (1 << _att) as f64) as u64)); }\n        }\n    }\n}\nlet {result} = {result}.unwrap();"
       },
@@ -3487,7 +3487,7 @@
         "exponential"
       ],
       "effects": [],
-      "code_template": "import time\nfor _attempt in range({max_retries}):\n    try:\n        {result} = {action}({data})\n        break\n    except Exception as _err:\n        if _attempt == {max_retries} - 1:\n            {result} = {fallback}(_err, {data})\n        else:\n            time.sleep({backoff_sec} * (2 ** _attempt))",
+      "code_template": "for _attempt in range({max_retries}):\n    try:\n        {result} = {action}({data})\n        break\n    except Exception as _err:\n        if _attempt == {max_retries} - 1:\n            {result} = {fallback}(_err, {data})\n        else:\n            time.sleep({backoff_sec} * (2 ** _attempt))",
       "node_role": "combinator",
       "primary_in": "data",
       "primary_out": "result",
@@ -3552,7 +3552,7 @@
         "default_val": {
           "type_name": "Optional[T]",
           "required": false,
-          "default_value": "None",
+          "default_value": null,
           "port_role": "literal_parameter",
           "structure_kind": "handle",
           "rank": null,

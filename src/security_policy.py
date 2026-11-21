@@ -34,6 +34,15 @@ NON_OVERRIDABLE_BLOCKED_MODULES: Tuple[str, ...] = (
     "marshal",
     "shelve",
     "multiprocessing",
+    "sys",
+    "builtins",
+    "_socket",
+    "nt",
+    "io",
+    "_io",
+    "gc",
+    "inspect",
+    "traceback",
 )
 
 NON_OVERRIDABLE_BLOCKED_ATTRS: Tuple[str, ...] = (
@@ -47,10 +56,31 @@ NON_OVERRIDABLE_BLOCKED_ATTRS: Tuple[str, ...] = (
     "__import__",
     "__loader__",
     "__spec__",
+    "__class__",
+    "__dict__",
+    "__module__",
+    "__self__",
+    "__func__",
+    "__wrapped__",
+    "__qualname__",
+    "__reduce__",
+    "__reduce_ex__",
+    "__getattribute__",
+    "__setattr__",
+    "__delattr__",
+    "__init_subclass__",
     "gi_frame",
+    "gi_code",
     "f_locals",
     "f_globals",
+    "f_back",
+    "f_builtins",
+    "f_code",
     "cr_frame",
+    "cr_code",
+    "ag_frame",
+    "tb_frame",
+    "tb_next",
 )
 
 NON_OVERRIDABLE_BLOCKED_CALLS: Tuple[str, ...] = (
@@ -60,6 +90,9 @@ NON_OVERRIDABLE_BLOCKED_CALLS: Tuple[str, ...] = (
     "breakpoint",
     "input",
     "__import__",
+    "vars",
+    "globals",
+    "locals",
 )
 
 NON_OVERRIDABLE_BLOCKED_OS_OPS: Tuple[str, ...] = (
@@ -166,6 +199,18 @@ class _SecurityVisitor(ast.NodeVisitor):
             allowed, reason = self.policy.is_module_allowed(node.module)
             if not allowed:
                 raise SecurityViolationError(f"Line {node.lineno}: {reason}")
+        if node.module == "os.path":
+            for alias in node.names:
+                if alias.name in {"os", "sys", "genericpath", "posixpath", "ntpath", "*"}:
+                    raise SecurityViolationError(
+                        f"Line {node.lineno}: Importing '{alias.name}' from 'os.path' is blocked."
+                    )
+        elif node.module == "os":
+            for alias in node.names:
+                if alias.name in NON_OVERRIDABLE_BLOCKED_OS_OPS or alias.name == "*":
+                    raise SecurityViolationError(
+                        f"Line {node.lineno}: Importing dangerous operation '{alias.name}' from 'os' is blocked."
+                    )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
@@ -248,13 +293,20 @@ class _SecurityVisitor(ast.NodeVisitor):
                 )
             if node.func.id in ("getattr", "hasattr", "setattr", "delattr") and len(node.args) >= 2:
                 arg_str = self._evaluate_constant_str(node.args[1])
-                if arg_str and (
-                    arg_str in NON_OVERRIDABLE_BLOCKED_ATTRS
-                    or (arg_str.startswith("__") and arg_str.endswith("__"))
+                if arg_str is None:
+                    raise SecurityViolationError(
+                        f"Line {node.lineno}: Dynamic non-constant attribute name in {node.func.id} is blocked."
+                    )
+                if arg_str in NON_OVERRIDABLE_BLOCKED_ATTRS or (
+                    arg_str.startswith("__") and arg_str.endswith("__")
                 ):
                     raise SecurityViolationError(
                         f"Line {node.lineno}: Dynamic access to forbidden dunder attribute '{arg_str}' via {node.func.id} is blocked."
                     )
+            if node.func.id == "type" and (len(node.args) >= 3 or len(node.keywords) > 0):
+                raise SecurityViolationError(
+                    f"Line {node.lineno}: Dynamic class construction via 3-arg type() is blocked."
+                )
         self.generic_visit(node)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:

@@ -181,6 +181,47 @@ def _canonical_typestate_str(sig: Any) -> str:
     return "".join(parts)
 
 
+def _extract_text_terms(text: str) -> List[str]:
+    """Extracts compositional unigrams, bigrams, and subword trigrams without regex."""
+    toks = _split_camel_and_punct(text or "")
+    terms: List[str] = []
+    for tok in toks:
+        terms.append(f"tok:{tok}")
+        if len(tok) >= 4:
+            for j in range(len(tok) - 2):
+                terms.append(f"tri:{tok[j:j + 3]}")
+    for j in range(len(toks) - 1):
+        terms.append(f"big:{toks[j]}_{toks[j + 1]}")
+    return terms
+
+
+def _cell_to_text_document(cell: Any) -> str:
+    """Collects rich textual descriptors from a cell and its typed ports for W_txt fitting."""
+    parts: List[str] = []
+    cid = getattr(cell, "cell_id", None) or getattr(cell, "name", "")
+    if cid:
+        parts.append(str(cid))
+    dom = getattr(cell, "domain_name", None)
+    if dom:
+        parts.append(str(dom))
+    doc = getattr(cell, "docstring", None)
+    if doc:
+        parts.append(str(doc))
+    for src in (getattr(cell, "keywords", None) or (), getattr(cell, "semantic_tags", None) or ()):
+        for kw in src:
+            if kw:
+                parts.append(str(kw))
+    for port_map in (getattr(cell, "inputs", None) or {}, getattr(cell, "outputs", None) or {}):
+        if isinstance(port_map, dict):
+            for p_name, p_sig in port_map.items():
+                parts.append(str(p_name))
+                p_doc = getattr(p_sig, "doc", None) or getattr(p_sig, "description", None)
+                if p_doc:
+                    parts.append(str(p_doc))
+                parts.append(_canonical_typestate_str(p_sig))
+    return " ".join(parts)
+
+
 class TransitionAutoencoder:
     """
     Self-Supervised Structural Transition Autoencoder (TransE / Koopman style).
@@ -207,6 +248,11 @@ class TransitionAutoencoder:
         self.Z: Optional[np.ndarray] = None  # (N_types, d)
         self.T: Optional[np.ndarray] = None  # (N_cells, d)
         self.is_trained: bool = False
+
+        self._text_vocab: Dict[str, int] = {}
+        self._text_idf: Optional[np.ndarray] = None
+        self.W_txt: Optional[np.ndarray] = None
+        self._text_projection_trained: bool = False
 
     def extract_triples_from_cells(
         self,
@@ -459,6 +505,128 @@ class TransitionAutoencoder:
         top_indices = np.argsort(sims)[::-1][:top_k]
         return [(self.idx_to_cell[i], float(sims[i])) for i in top_indices]
 
+    def train_text_projection(
+        self,
+        cells: Union[Dict[str, Any], List[Any], Collection[Any]],
+        reg_lambda: float = 1.0,
+        max_features: int = 2048,
+        max_rank: int = 256,
+    ) -> bool:
+        """
+        Fits a linear ridge projector W_txt in R^{F x d} via thin SVD mapping
+        TF-IDF cell descriptions into the trained TransE manifold target space:
+            y_c = norm(t_c + 0.5 * mean(z_out) + 0.25 * mean(z_in)).
+        """
+        if not self.is_trained or self.T is None or self.Z is None:
+            return False
+        cell_list = list(cells.values()) if isinstance(cells, dict) else list(cells)
+
+        docs_terms: List[List[str]] = []
+        targets: List[np.ndarray] = []
+        df_counts: Dict[str, int] = {}
+
+        for c in cell_list:
+            cid = getattr(c, "cell_id", None) or getattr(c, "name", None)
+            if not cid or cid not in self.cell_to_idx:
+                continue
+            terms = _extract_text_terms(_cell_to_text_document(c))
+            if not terms:
+                continue
+
+            vec_y = self.T[self.cell_to_idx[cid]].astype(np.float64).copy()
+            out_vecs: List[np.ndarray] = []
+            for p_sig in (getattr(c, "outputs", None) or {}).values():
+                ts = _canonical_typestate_str(p_sig)
+                if ts in self.typestate_to_idx:
+                    out_vecs.append(self.Z[self.typestate_to_idx[ts]].astype(np.float64))
+            if out_vecs:
+                vec_y += 0.5 * np.mean(out_vecs, axis=0)
+
+            in_vecs: List[np.ndarray] = []
+            for p_sig in (getattr(c, "inputs", None) or {}).values():
+                if getattr(p_sig, "required", False) or getattr(p_sig, "default_value", None) is None:
+                    ts = _canonical_typestate_str(p_sig)
+                    if ts in self.typestate_to_idx:
+                        in_vecs.append(self.Z[self.typestate_to_idx[ts]].astype(np.float64))
+            if in_vecs:
+                vec_y += 0.25 * np.mean(in_vecs, axis=0)
+
+            norm_y = float(np.linalg.norm(vec_y))
+            if norm_y > 1e-9:
+                vec_y /= norm_y
+
+            docs_terms.append(terms)
+            targets.append(vec_y)
+            for term in set(terms):
+                df_counts[term] = df_counts.get(term, 0) + 1
+
+        if not docs_terms or not df_counts:
+            return False
+
+        sorted_terms = sorted(df_counts.keys(), key=lambda t: (-df_counts[t], t))[:max_features]
+        vocab: Dict[str, int] = {t: idx for idx, t in enumerate(sorted_terms)}
+        n_docs = len(docs_terms)
+        n_feats = len(vocab)
+        idf = np.array(
+            [math.log((1.0 + n_docs) / (1.0 + df_counts[t])) + 1.0 for t in sorted_terms],
+            dtype=np.float64,
+        )
+
+        X = np.zeros((n_docs, n_feats), dtype=np.float64)
+        for row_i, terms in enumerate(docs_terms):
+            tf: Dict[int, float] = {}
+            for term in terms:
+                col_j = vocab.get(term)
+                if col_j is not None:
+                    tf[col_j] = tf.get(col_j, 0.0) + 1.0
+            for col_j, cnt in tf.items():
+                X[row_i, col_j] = (1.0 + math.log(cnt)) * idf[col_j]
+            row_norm = float(np.linalg.norm(X[row_i]))
+            if row_norm > 1e-9:
+                X[row_i] /= row_norm
+
+        Y = np.vstack(targets).astype(np.float64)
+        U, s, Vt = np.linalg.svd(X, full_matrices=False)
+        r = min(int(np.sum(s > 1e-8)), int(max_rank))
+        if r == 0:
+            return False
+
+        filt = s[:r] / (s[:r] ** 2 + float(reg_lambda))
+        W = (Vt[:r].T * filt[None, :]) @ (U[:, :r].T @ Y)
+
+        self._text_vocab = vocab
+        self._text_idf = idf.astype(np.float32)
+        self.W_txt = W.astype(np.float32)
+        self._text_projection_trained = True
+        return True
+
+    def encode_text(self, text: str) -> np.ndarray:
+        """Projects natural-language queries/documents into the manifold via W_txt."""
+        if (
+            self._text_projection_trained
+            and self.W_txt is not None
+            and self._text_vocab
+            and self._text_idf is not None
+        ):
+            terms = _extract_text_terms(text)
+            if terms:
+                x = np.zeros(len(self._text_vocab), dtype=np.float32)
+                tf: Dict[int, float] = {}
+                for term in terms:
+                    idx = self._text_vocab.get(term)
+                    if idx is not None:
+                        tf[idx] = tf.get(idx, 0.0) + 1.0
+                for idx, cnt in tf.items():
+                    x[idx] = np.float32((1.0 + math.log(cnt)) * float(self._text_idf[idx]))
+                norm_x = float(np.linalg.norm(x))
+                if norm_x > 1e-9:
+                    x /= norm_x
+                    z = x @ self.W_txt
+                    norm_z = float(np.linalg.norm(z))
+                    if norm_z > 1e-9:
+                        return (z / norm_z).astype(np.float32)
+        return self.encode_signature(text)
+
 
 def train_autoencoder_from_orchestrator(
     orchestrator: Any,
@@ -470,4 +638,5 @@ def train_autoencoder_from_orchestrator(
     ae = TransitionAutoencoder(dimension=dimension)
     triples = ae.extract_triples_from_cells(cells)
     ae.train(triples, epochs=epochs)
+    ae.train_text_projection(cells)
     return ae

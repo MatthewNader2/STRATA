@@ -1771,7 +1771,17 @@
       "primary_in": "waveform",
       "primary_out": "mono_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "layout",
+          "typestate"
+        ],
+        "cost_tier": 10.0,
+        "lossy": true,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "AUDIO_MONO_TO_STEREO",
@@ -1848,7 +1858,17 @@
       "primary_in": "waveform",
       "primary_out": "stereo_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "layout",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": false
+      }
     },
     {
       "cell_id": "AUDIO_SPLIT_CHANNELS",
@@ -2157,7 +2177,14 @@
       "primary_in": "waveform",
       "primary_out": "norm_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_NORMALIZE_RMS",
@@ -2262,7 +2289,14 @@
       "primary_in": "waveform",
       "primary_out": "norm_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_APPLY_GAIN_DB",
@@ -2365,7 +2399,14 @@
       "primary_in": "waveform",
       "primary_out": "gained_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_FADE_IN",
@@ -2504,7 +2545,14 @@
           "source_port": "waveform",
           "target_port": "sample_rate"
         }
-      ]
+      ],
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_FADE_OUT",
@@ -2643,7 +2691,14 @@
           "source_port": "waveform",
           "target_port": "sample_rate"
         }
-      ]
+      ],
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_HARD_CLIP",
@@ -2749,7 +2804,14 @@
       "primary_in": "waveform",
       "primary_out": "clipped_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_TRIM_SLICE",
@@ -3198,7 +3260,14 @@
       "primary_in": "waveform",
       "primary_out": "reversed_waveform",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_semantics": false,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "waveform"
+      }
     },
     {
       "cell_id": "AUDIO_TIME_PAD",
@@ -3876,7 +3945,19 @@
           "source_port": "waveform",
           "target_port": "sample_rate"
         }
-      ]
+      ],
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "carrier",
+          "layout",
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "AUDIO_COMPUTE_ISTFT",
@@ -4006,7 +4087,19 @@
       "primary_in": "zxx",
       "primary_out": "waveform",
       "effects": [],
-      "mutation_type": "io"
+      "mutation_type": "io",
+      "bridge_profile": {
+        "is_bridge": true,
+        "delta_axes": [
+          "carrier",
+          "layout",
+          "semantics",
+          "typestate"
+        ],
+        "cost_tier": 1.0,
+        "lossy": false,
+        "requires_intent": true
+      }
     },
     {
       "cell_id": "AUDIO_COMPUTE_SPECTROGRAM",
@@ -4320,7 +4413,7 @@
           "invariants": []
         }
       },
-      "code_template": "_freqs, _m = np.linspace(0.0, {sample_rate} / 2.0, {spectrogram}.shape[0]), 700.0 * (10.0 ** (np.linspace(0.0, 2595.0 * np.log10(1.0 + ({sample_rate} / 2.0) / 700.0), {n_mels} + 2) / 2595.0) - 1.0)\n{mel_spectrogram} = np.maximum(0.0, np.minimum((_freqs[None, :] - _m[:-2, None]) / np.maximum(_m[1:-1, None] - _m[:-2, None], 1e-12), (_m[2:, None] - _freqs[None, :]) / np.maximum(_m[2:, None] - _m[1:-1, None], 1e-12))).astype(np.float32) @ {spectrogram}",
+      "code_template": "_m = 700.0 * (10.0 ** (np.linspace(0.0, 2595.0 * np.log10(1.0 + ({sample_rate} / 2.0) / 700.0), {n_mels} + 2) / 2595.0) - 1.0)\n{mel_spectrogram} = np.maximum(0.0, np.minimum((np.linspace(0.0, {sample_rate} / 2.0, {spectrogram}.shape[0])[None, :] - _m[:-2, None]) / np.maximum(_m[1:-1, None] - _m[:-2, None], 1e-12), (_m[2:, None] - np.linspace(0.0, {sample_rate} / 2.0, {spectrogram}.shape[0])[None, :]) / np.maximum(_m[2:, None] - _m[1:-1, None], 1e-12))).astype(np.float32) @ {spectrogram}",
       "dependencies": [
         "import numpy as np"
       ],
@@ -4613,7 +4706,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 4000.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Cutoff frequency in Hz.",
           "structure_kind": "scalar",
@@ -4641,7 +4736,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 4,
-          "value_constraints": {"min": 1},
+          "value_constraints": {
+            "min": 1
+          },
           "port_role": "configuration",
           "description": "Butterworth filter order.",
           "structure_kind": "scalar",
@@ -4788,7 +4885,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 100.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Highpass cutoff frequency in Hz.",
           "structure_kind": "scalar",
@@ -4816,7 +4915,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 4,
-          "value_constraints": {"min": 1},
+          "value_constraints": {
+            "min": 1
+          },
           "port_role": "configuration",
           "description": "Butterworth filter order.",
           "structure_kind": "scalar",
@@ -4956,7 +5057,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 300.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Lower passband edge in Hz.",
           "structure_kind": "scalar",
@@ -4984,7 +5087,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 3000.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Upper passband edge in Hz.",
           "structure_kind": "scalar",
@@ -5012,7 +5117,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 4,
-          "value_constraints": {"min": 1},
+          "value_constraints": {
+            "min": 1
+          },
           "port_role": "configuration",
           "description": "Filter order.",
           "structure_kind": "scalar",
@@ -5152,7 +5259,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 60.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Frequency to notch out in Hz.",
           "structure_kind": "scalar",
@@ -5180,7 +5289,9 @@
           "abstract_type": "scalar",
           "required": false,
           "default_value": 30.0,
-          "value_constraints": {"exclusive_min": 0},
+          "value_constraints": {
+            "exclusive_min": 0
+          },
           "port_role": "configuration",
           "description": "Quality factor Q of the notch filter.",
           "structure_kind": "scalar",
@@ -5805,50 +5916,18 @@
           "invariants": []
         }
       },
-      "outputs": {
-        "out_image_path": {
-          "type_name": "File[image_format]",
-          "state": "plot_saved",
-          "abstract_type": "path",
-          "port_role": "result",
-          "description": "Path to the saved waveform plot.",
-          "structure_kind": "path_spec",
-          "rank": 0,
-          "element_type": "string",
-          "supported_formats": [
-            "png",
-            "jpg",
-            "jpeg",
-            "svg",
-            "pdf",
-            "bmp",
-            "tiff"
-          ],
-          "carrier": "File[image_format]",
-          "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "string",
-            "memory_order": "any",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "semantics": "audio.plot_saved",
-          "typestate": "audio::plot_saved",
-          "invariants": []
-        }
-      },
-      "code_template": "(_fig := plt.figure(figsize=(10, 3))).add_subplot(111).plot(np.linspace(0.0, len({waveform}) / float({sample_rate}), len({waveform}), endpoint=False), {waveform}, linewidth=0.5)\n{out_image_path} = ({image_path}, _fig.axes[0].set(title='Waveform Envelope', xlabel='Time (s)', ylabel='Amplitude'), _fig.tight_layout(), _fig.savefig({image_path}, dpi=150), plt.close(_fig))[0]",
+      "outputs": {},
+      "code_template": "plt.plot(np.linspace(0.0, len({waveform}) / float({sample_rate}), len({waveform}), endpoint=False), {waveform}, linewidth=0.5)\nplt.savefig({image_path}, dpi=150)",
       "dependencies": [
         "import matplotlib.pyplot as plt",
         "import numpy as np"
       ],
       "primary_in": "waveform",
-      "primary_out": "out_image_path",
-      "effects": [],
-      "mutation_type": "io",
+      "primary_out": null,
+      "effects": [
+        "io_write"
+      ],
+      "mutation_type": "sink",
       "relations": [
         {
           "kind": "same_provenance",

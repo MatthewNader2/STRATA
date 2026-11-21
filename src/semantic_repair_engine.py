@@ -38,6 +38,7 @@ class CallExpressionInfo:
         lhs: Optional[str],
         prefix_code: str = "",
         suffix_code: str = "",
+        is_instance_method_call: bool = False,
     ):
         self.func_expr = func_expr
         self.positional = positional
@@ -45,6 +46,7 @@ class CallExpressionInfo:
         self.lhs = lhs
         self.prefix_code = prefix_code
         self.suffix_code = suffix_code
+        self.is_instance_method_call = bool(is_instance_method_call)
 
     def __iter__(self):
         return iter((self.func_expr, self.positional, self.keywords, self.lhs))
@@ -147,7 +149,7 @@ def parse_call_expression(
             base = _unparse_name(node.value)
             return f"{base}.{node.attr}" if base else None
         if isinstance(node, ast.Call):
-            return _unparse_name(node.func)
+            return _restore_placeholders(ast.unparse(node))
         return None
 
     func_expr = _unparse_name(call.func)
@@ -198,7 +200,31 @@ def parse_call_expression(
     if not placeholders and not positional and not keywords:
         return None
 
-    return CallExpressionInfo(func_expr, positional, keywords, lhs, prefix_code, suffix_code)
+    is_inst_method = isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Call)
+    return CallExpressionInfo(
+        func_expr,
+        positional,
+        keywords,
+        lhs,
+        prefix_code,
+        suffix_code,
+        is_instance_method_call=is_inst_method,
+    )
+
+
+def _strip_call_suffix(segment: str) -> str:
+    """Strips balanced trailing `(...)` constructor call arguments for module reflection."""
+    s = segment.strip()
+    if s.endswith(")"):
+        depth = 0
+        for idx in range(len(s) - 1, -1, -1):
+            if s[idx] == ")":
+                depth += 1
+            elif s[idx] == "(":
+                depth -= 1
+                if depth == 0:
+                    return s[:idx].strip()
+    return s
 
 
 def resolve_callable_from_expr(func_expr: str, dependencies: Optional[List[str]] = None):
@@ -210,7 +236,13 @@ def resolve_callable_from_expr(func_expr: str, dependencies: Optional[List[str]]
     if not func_expr:
         return None
 
-    root, _, rest = func_expr.partition(".")
+    raw_parts = func_expr.split(".")
+    clean_parts = [_strip_call_suffix(part) for part in raw_parts if _strip_call_suffix(part)]
+    if not clean_parts:
+        return None
+    root = clean_parts[0]
+    rest_parts = clean_parts[1:]
+    rest = ".".join(rest_parts)
     candidate_modules: List[str] = []
 
     try:
@@ -224,7 +256,7 @@ def resolve_callable_from_expr(func_expr: str, dependencies: Optional[List[str]]
 
     candidate_modules.append(root)
 
-    attr_chain = rest.split(".") if rest else []
+    attr_chain = rest_parts
 
     for mod_name in candidate_modules:
         try:
@@ -287,6 +319,7 @@ def validate_and_reconstruct_call(
     func_expr: str,
     raw_args: List[str],
     raw_kwargs: Dict[str, str],
+    is_instance_method_call: Optional[bool] = None,
 ) -> str:
     """
     Validates a parsed call against the ground-truth signature of `func_obj`
@@ -330,6 +363,23 @@ def validate_and_reconstruct_call(
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
         )
     ]
+    if is_instance_method_call is None:
+        inferred_instance_method = False
+        fe_s = (func_expr or "").strip()
+        if fe_s:
+            ast_fe = fe_s
+            for ph_name in extract_template_placeholders(fe_s):
+                ast_fe = ast_fe.replace(f"{{{ph_name}}}", f"_nstl_ph_{ph_name}")
+            try:
+                fe_node = ast.parse(ast_fe, mode="eval").body
+                inferred_instance_method = isinstance(fe_node, ast.Attribute) and isinstance(fe_node.value, ast.Call)
+            except SyntaxError:
+                inferred_instance_method = False
+        inst_method = inferred_instance_method
+    else:
+        inst_method = bool(is_instance_method_call)
+    if inst_method and pos_params and pos_params[0].name == "self":
+        pos_params = pos_params[1:]
     supplied_count = min(len(raw_args), len(pos_params))
     restored_positional: List[str] = []
 
@@ -386,7 +436,11 @@ def repair_cell_semantics(cell: Dict[str, Any], domain: str = "generic") -> bool
 
         if func_obj is not None and callable(func_obj):
             reconstructed = validate_and_reconstruct_call(
-                func_obj, func_expr, raw_args, raw_kwargs
+                func_obj,
+                func_expr,
+                raw_args,
+                raw_kwargs,
+                is_instance_method_call=call_info.is_instance_method_call,
             )
 
             # Preserve the original assignment target if one existed.

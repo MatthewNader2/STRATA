@@ -937,7 +937,7 @@ def _segment_prompt_clauses(prompt: str) -> List[str]:
             depth += 1; buf.append(ch); continue
         if ch in "])}":
             depth = max(0, depth - 1); buf.append(ch); continue
-        if depth == 0 and ch in ",;\n":
+        if depth == 0 and ch in ";\n":
             seg = "".join(buf).strip()
             if seg: parts.append(seg)
             buf = []; continue
@@ -3776,7 +3776,16 @@ class LatticePlanner:
                         )
                         cand_private = self._insert_property_bridges(cand_private)
 
-                    emitted = gate.emit_code(cand_private, ExecutionContext(prompt=prompt), extract_llm_slots=False)
+                    probe_ctx = ExecutionContext(prompt=prompt)
+                    ur_quick = gate.unify_pipeline(cand_private, probe_ctx, extract_llm_slots=False)
+                    if ur_quick.is_bottom() or not getattr(ur_quick, "value", None):
+                        raise ValueError(f"Unification failed: {getattr(ur_quick, 'reason', 'bottom')}")
+                    try:
+                        from .inference import ModelManager as _PlannerMM
+                    except (ImportError, ValueError):
+                        from inference import ModelManager as _PlannerMM
+                    can_slots = bool(_PlannerMM.get_instance().can_extract_slots())
+                    emitted = gate.emit_code(cand_private, probe_ctx, extract_llm_slots=can_slots)
 
                     from preflight import PreflightLinter
                     lint_res = PreflightLinter.lint(
@@ -5080,6 +5089,25 @@ class LatticePlanner:
         """
         topology = getattr(parent_cell, "topology_type", "sequential")
 
+        def _verify_loop_body_child(target_u: Any, cand_child: Any, child_sigma: Any) -> bool:
+            """Verify Tr^U feedback invariant against cand_child's substituted output type."""
+            out_port = getattr(cand_child, "primary_output", None)
+            if out_port is None:
+                outs = getattr(cand_child, "outputs", None) or {}
+                if outs:
+                    out_port = next(iter(outs.values()))
+            if out_port is None:
+                return False
+            raw_out_sig = getattr(out_port, "signature", out_port)
+            raw_out_type = getattr(raw_out_sig, "type_name", raw_out_sig)
+            if not raw_out_type:
+                return False
+            body_out = substitute_generics(str(raw_out_type), child_sigma)
+            if not body_out:
+                return False
+            valid, _ = verify_traced_loop_invariant(target_u, body_out, child_sigma)
+            return valid
+
         # 1. Traced Loop Slot Planning (Tr^U) — dispatched by the DECLARED topology
         # of the macro cell, never by cell identifier substrings.
         if topology == "traced_loop":
@@ -5142,7 +5170,7 @@ class LatticePlanner:
                     _sig_i = getattr(_ps, "signature", _ps)
                     _ok = False
                     if slot_u_str is not None:
-                        if unify(slot_u_str, _sig_i, active_sigma) is not None or unify(_sig_i, slot_u_str, active_sigma) is not None:
+                        if unify(slot_u_str, _sig_i, active_sigma) is not None:
                             _ok = True
                     if not _ok:
                         return False
@@ -5164,7 +5192,7 @@ class LatticePlanner:
                 if not _slot_cand_inhabited(cand, item_type):
                     continue
                 for p_name, p_sig in cand.inputs.items():
-                    u_cand = unify(item_type, p_sig.signature, active_sigma) or unify(p_sig.signature, item_type, active_sigma)
+                    u_cand = unify(item_type, p_sig.signature, active_sigma)
                     if u_cand is not None:
                         rel = relevance_map.get(cand.cell_id, 0.0)
                         bonus_val = float(settings.domain_affinity_bonus)
@@ -5175,11 +5203,10 @@ class LatticePlanner:
 
             if child_candidates:
                 child_candidates.sort(key=lambda x: x[1], reverse=True)
-                best_child, _, child_sigma = child_candidates[0]
-
-                valid, _ = verify_traced_loop_invariant(u_concrete, u_concrete, child_sigma)
-                if valid:
-                    return [best_child]
+                for cand_child, _, child_sigma in child_candidates:
+                    if _verify_loop_body_child(u_concrete, cand_child, child_sigma):
+                        return [cand_child]
+                return []
 
         # 2. State Loop / Fixed Point / While Loop / Repeat Until (Tr^{State}: State -> State)
         elif topology in (TypeRegistry.get_instance().get_roles_for_category("state_loop") | {"state_loop"}):
@@ -5223,7 +5250,7 @@ class LatticePlanner:
                     _sig_i = getattr(_ps, "signature", _ps)
                     _ok = False
                     if slot_u_str is not None:
-                        if unify(slot_u_str, _sig_i, active_sigma) is not None or unify(_sig_i, slot_u_str, active_sigma) is not None:
+                        if unify(slot_u_str, _sig_i, active_sigma) is not None:
                             _ok = True
                     if not _ok:
                         return False
@@ -5247,7 +5274,7 @@ class LatticePlanner:
                 cand_sub = active_sigma
                 in_unified = False
                 for p_name, p_sig in cand.inputs.items():
-                    u_cand = unify(u_concrete, p_sig.signature, active_sigma) or unify(p_sig.signature, u_concrete, active_sigma)
+                    u_cand = unify(u_concrete, p_sig.signature, active_sigma)
                     if u_cand is not None:
                         in_unified = True
                         cand_sub = u_cand
@@ -5267,8 +5294,7 @@ class LatticePlanner:
             if child_candidates:
                 child_candidates.sort(key=lambda x: x[1], reverse=True)
                 for cand_child, _, child_sigma in child_candidates:
-                    valid, _ = verify_traced_loop_invariant(u_concrete, u_concrete, child_sigma)
-                    if valid:
+                    if _verify_loop_body_child(u_concrete, cand_child, child_sigma):
                         return [cand_child]
                 return []
 
@@ -5370,13 +5396,13 @@ class LatticePlanner:
                 _sig_i = getattr(_ps, "signature", _ps)
                 _in_u = False
                 if u_slot is not None:
-                    if unify(u_slot, _sig_i, active_sigma) is not None or unify(_sig_i, u_slot, active_sigma) is not None:
+                    if unify(u_slot, _sig_i, active_sigma) is not None:
                         _in_u = True
                 if not _in_u:
                     # Also allow unifying with parent's primary/data inputs (e.g. T or State)
                     for _pp in (getattr(parent_cell, "inputs", {}) or {}).values():
                         _ps_i = getattr(_pp, "signature", _pp)
-                        if unify(_ps_i, _sig_i, active_sigma) is not None or unify(_sig_i, _ps_i, active_sigma) is not None:
+                        if unify(_ps_i, _sig_i, active_sigma) is not None:
                             _in_u = True
                             break
                 if not _in_u:

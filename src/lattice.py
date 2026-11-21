@@ -9,6 +9,7 @@ Conforms strictly to Sections 3.1-3.2 of the STRATA paper:
 """
 
 from __future__ import annotations
+import ast
 import copy
 import functools
 import json
@@ -43,7 +44,7 @@ from abc import ABC
 from collections import deque
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any, Callable, Union, Collection
+from typing import Dict, List, Optional, Set, Tuple, Any, Callable, Union, Collection, Sequence
 import collections.abc
 
 from log_config import get_logger
@@ -214,8 +215,15 @@ class LatticeType:
         )
 
     def is_bottom(self) -> bool:
-        low = self.constructor.lower()
-        return bool(low) and (low in _BOTTOM_LITERALS or TypeRegistry.get_instance().is_declared_bottom(low))
+        low = self.constructor.strip().lower()
+        return bool(low) and (
+            low in _TRUE_BOTTOM_SYMBOLS
+            or TypeRegistry.get_instance().is_uninhabited_bottom(low)
+        )
+
+    def is_void(self) -> bool:
+        low = self.constructor.strip().lower()
+        return bool(low) and low in _VOID_UNIT_SYMBOLS
 
     def is_top(self, is_top_fn: Optional[Callable[[str], bool]] = None) -> bool:
         if is_top_fn is not None:
@@ -228,11 +236,20 @@ class LatticeType:
         poset_lookup: Callable[[str, str], bool],
         is_top_fn: Optional[Callable[[str], bool]] = None,
     ) -> bool:
-        if self.is_bottom() or other.is_bottom():
+        # 1. Initial bottom axiom: _|_ <= tau for all tau (including _|_)
+        if self.is_bottom():
+            return True
+        if other.is_bottom():
             return False
+
+        # 2. Terminal unit/void isolation: void/None only matches void/None
+        if self.is_void() or other.is_void():
+            return self.is_void() and other.is_void()
+
+        # 3. Terminal top axiom: tau <= Top for all non-void tau
         if other.is_top(is_top_fn):
             return True
-        if self.is_top(is_top_fn) and not other.is_top(is_top_fn):
+        if self.is_top(is_top_fn):
             return False
         if self == other:
             return True
@@ -241,18 +258,49 @@ class LatticeType:
         if not poset_lookup(self.constructor, other.constructor):
             return False
 
-        # Raw type fallback: F[T1, ..., Tn] <: F
+        # Qualifiers MUST be checked before raw-type fallback F[T] <= F{q}
+        if other.qualifiers:
+            if not set(other.qualifiers).issubset(set(self.qualifiers)):
+                return False
+
+        # Raw type fallback: F[T1, ..., Tn] <: F (once required qualifiers match)
         if len(other.parameters) == 0:
             return True
 
+        c_low = other.constructor.strip().lower()
+
         # Variadic tuple subtyping: Tuple[S1, ..., Sn] <: Tuple[T, ...]
-        if other.constructor.lower() == "tuple" and len(other.parameters) == 2 and other.parameters[1].constructor in ("...", "Ellipsis"):
+        if c_low == "tuple" and len(other.parameters) == 2 and other.parameters[1].constructor in ("...", "Ellipsis"):
             elem_t = other.parameters[0]
             if len(self.parameters) == 2 and self.parameters[1].constructor in ("...", "Ellipsis"):
                 return self.parameters[0].is_subtype_of(elem_t, poset_lookup, is_top_fn=is_top_fn)
             if len(self.parameters) > 0:
                 return all(p.is_subtype_of(elem_t, poset_lookup, is_top_fn=is_top_fn) for p in self.parameters)
             return False
+
+        # Callable contravariance in parameters, covariance in return type
+        if c_low == "callable":
+            if len(self.parameters) == 0:
+                o_args_ok = len(other.parameters) >= 1 and other.parameters[0].constructor in ("...", "Ellipsis")
+                o_ret_ok = len(other.parameters) < 2 or other.parameters[1].is_top(is_top_fn)
+                return o_args_ok and o_ret_ok
+            if len(self.parameters) == 2 and len(other.parameters) == 2:
+                s_args, s_ret = self.parameters
+                o_args, o_ret = other.parameters
+                if not s_ret.is_subtype_of(o_ret, poset_lookup, is_top_fn=is_top_fn):
+                    return False
+                if s_args.constructor in ("...", "Ellipsis"):
+                    return True
+                if o_args.constructor in ("...", "Ellipsis"):
+                    return False
+                s_list = s_args.parameters if s_args.constructor == "" else (s_args,)
+                o_list = o_args.parameters if o_args.constructor == "" else (o_args,)
+                if len(s_list) != len(o_list):
+                    return False
+                return all(
+                    oa.is_subtype_of(sa, poset_lookup, is_top_fn=is_top_fn)
+                    for sa, oa in zip(s_list, o_list)
+                )
 
         # Sound parameter demand: F </: F[T] if producer is unparameterized
         if len(self.parameters) == 0 and len(other.parameters) > 0:
@@ -261,11 +309,192 @@ class LatticeType:
         if len(self.parameters) != len(other.parameters):
             return False
 
-        if other.qualifiers:
-            if not set(other.qualifiers).issubset(set(self.qualifiers)):
-                return False
+        var_spec = _CONSTRUCTOR_VARIANCE.get(c_low, "covariant")
+        for idx, (p1, p2) in enumerate(zip(self.parameters, other.parameters)):
+            pos_var = var_spec[idx] if isinstance(var_spec, tuple) and idx < len(var_spec) else (
+                var_spec if isinstance(var_spec, str) else "covariant"
+            )
+            if pos_var == "invariant":
+                if not (
+                    p2.is_top(is_top_fn)
+                    or (
+                        p1.is_subtype_of(p2, poset_lookup, is_top_fn=is_top_fn)
+                        and p2.is_subtype_of(p1, poset_lookup, is_top_fn=is_top_fn)
+                    )
+                ):
+                    return False
+            elif pos_var == "contravariant":
+                if not p2.is_subtype_of(p1, poset_lookup, is_top_fn=is_top_fn):
+                    return False
+            else:
+                if not p1.is_subtype_of(p2, poset_lookup, is_top_fn=is_top_fn):
+                    return False
+        return True
 
-        return all(p1.is_subtype_of(p2, poset_lookup, is_top_fn=is_top_fn) for p1, p2 in zip(self.parameters, other.parameters))
+    def meet(self, other: "LatticeType", reg: Optional["TypeRegistry"] = None) -> "LatticeType":
+        """Greatest lower bound (meet: self |\\ other) in the parameterized carrier lattice."""
+        if self.is_bottom() or other.is_bottom():
+            return LatticeType(constructor="bottom")
+        if self.is_void() and other.is_void():
+            return self
+        if self.is_void() or other.is_void():
+            return LatticeType(constructor="bottom")
+        r = reg or TypeRegistry.get_instance()
+        poset_fn = r._atomic_is_subtype
+        top_fn = r.is_declared_top
+        if self == other:
+            return self
+        if other.is_top(top_fn):
+            return self
+        if self.is_top(top_fn):
+            return other
+        if self.is_subtype_of(other, poset_fn, is_top_fn=top_fn):
+            return self
+        if other.is_subtype_of(self, poset_fn, is_top_fn=top_fn):
+            return other
+
+        c_meet = r.meet_types(self.constructor, other.constructor)
+        if not c_meet or r.is_uninhabited_bottom(c_meet):
+            return LatticeType(constructor="bottom")
+        quals = tuple(sorted(set(self.qualifiers) | set(other.qualifiers)))
+
+        if not self.parameters and not other.parameters:
+            return LatticeType(constructor=c_meet, qualifiers=quals)
+        if not self.parameters:
+            cand = LatticeType(constructor=c_meet, parameters=other.parameters, qualifiers=quals)
+            return cand if (cand.is_subtype_of(self, poset_fn, is_top_fn=top_fn) and cand.is_subtype_of(other, poset_fn, is_top_fn=top_fn)) else LatticeType(constructor="bottom")
+        if not other.parameters:
+            cand = LatticeType(constructor=c_meet, parameters=self.parameters, qualifiers=quals)
+            return cand if (cand.is_subtype_of(self, poset_fn, is_top_fn=top_fn) and cand.is_subtype_of(other, poset_fn, is_top_fn=top_fn)) else LatticeType(constructor="bottom")
+
+        if len(self.parameters) != len(other.parameters):
+            return LatticeType(constructor="bottom")
+
+        c_low = c_meet.strip().lower()
+        if c_low == "callable" and len(self.parameters) == 2:
+            s_args, s_ret = self.parameters
+            o_args, o_ret = other.parameters
+            m_ret = s_ret.meet(o_ret, r)
+            if m_ret.is_bottom():
+                return LatticeType(constructor="bottom")
+            if s_args.constructor in ("...", "Ellipsis"):
+                j_args = o_args
+            elif o_args.constructor in ("...", "Ellipsis"):
+                j_args = s_args
+            elif s_args.constructor == "" and o_args.constructor == "" and len(s_args.parameters) == len(o_args.parameters):
+                j_args = LatticeType(
+                    constructor="",
+                    parameters=tuple(sa.join(oa, r) for sa, oa in zip(s_args.parameters, o_args.parameters)),
+                )
+            elif s_args.constructor != "" and o_args.constructor != "":
+                j_args = s_args.join(o_args, r)
+            else:
+                return LatticeType(constructor="bottom")
+            cand = LatticeType(constructor=c_meet, parameters=(j_args, m_ret), qualifiers=quals)
+            return cand if (cand.is_subtype_of(self, poset_fn, is_top_fn=top_fn) and cand.is_subtype_of(other, poset_fn, is_top_fn=top_fn)) else LatticeType(constructor="bottom")
+
+        var_spec = _CONSTRUCTOR_VARIANCE.get(c_low, "covariant")
+        merged_params: List[LatticeType] = []
+        for idx, (p1, p2) in enumerate(zip(self.parameters, other.parameters)):
+            pos_var = var_spec[idx] if isinstance(var_spec, tuple) and idx < len(var_spec) else (
+                var_spec if isinstance(var_spec, str) else "covariant"
+            )
+            if pos_var == "invariant":
+                if p1.is_subtype_of(p2, poset_fn, is_top_fn=top_fn) and p2.is_subtype_of(p1, poset_fn, is_top_fn=top_fn):
+                    merged_params.append(p1)
+                elif p2.is_top(top_fn):
+                    merged_params.append(p1)
+                elif p1.is_top(top_fn):
+                    merged_params.append(p2)
+                else:
+                    return LatticeType(constructor="bottom")
+            elif pos_var == "contravariant":
+                merged_params.append(p1.join(p2, r))
+            else:
+                mp = p1.meet(p2, r)
+                if mp.is_bottom():
+                    return LatticeType(constructor="bottom")
+                merged_params.append(mp)
+
+        cand = LatticeType(constructor=c_meet, parameters=tuple(merged_params), qualifiers=quals)
+        if cand.is_subtype_of(self, poset_fn, is_top_fn=top_fn) and cand.is_subtype_of(other, poset_fn, is_top_fn=top_fn):
+            return cand
+        return LatticeType(constructor="bottom")
+
+    def join(self, other: "LatticeType", reg: Optional["TypeRegistry"] = None) -> "LatticeType":
+        """Least upper bound (join: self |_| other) in the parameterized carrier lattice."""
+        if self.is_bottom():
+            return other
+        if other.is_bottom():
+            return self
+        if self.is_void() and other.is_void():
+            return self
+        if self.is_void() or other.is_void():
+            return LatticeType(constructor="any")
+        r = reg or TypeRegistry.get_instance()
+        poset_fn = r._atomic_is_subtype
+        top_fn = r.is_declared_top
+        if self == other:
+            return self
+        if self.is_top(top_fn) or other.is_top(top_fn):
+            return LatticeType(constructor="any")
+        if self.is_subtype_of(other, poset_fn, is_top_fn=top_fn):
+            return other
+        if other.is_subtype_of(self, poset_fn, is_top_fn=top_fn):
+            return self
+
+        c_join = r.join_types(self.constructor, other.constructor)
+        if not c_join or r.is_declared_top(c_join):
+            return LatticeType(constructor="any")
+        quals = tuple(sorted(set(self.qualifiers) & set(other.qualifiers)))
+
+        if not self.parameters or not other.parameters or len(self.parameters) != len(other.parameters):
+            return LatticeType(constructor=c_join, qualifiers=quals)
+
+        c_low = c_join.strip().lower()
+        if c_low == "callable" and len(self.parameters) == 2:
+            s_args, s_ret = self.parameters
+            o_args, o_ret = other.parameters
+            j_ret = s_ret.join(o_ret, r)
+            if s_args.constructor in ("...", "Ellipsis") or o_args.constructor in ("...", "Ellipsis"):
+                m_args = LatticeType(constructor="...")
+            elif s_args.constructor == "" and o_args.constructor == "" and len(s_args.parameters) == len(o_args.parameters):
+                args_meets = tuple(sa.meet(oa, r) for sa, oa in zip(s_args.parameters, o_args.parameters))
+                if any(a.is_bottom() for a in args_meets):
+                    return LatticeType(constructor=c_join, qualifiers=quals)
+                m_args = LatticeType(constructor="", parameters=args_meets)
+            elif s_args.constructor != "" and o_args.constructor != "":
+                m_args = s_args.meet(o_args, r)
+                if m_args.is_bottom():
+                    return LatticeType(constructor=c_join, qualifiers=quals)
+            else:
+                return LatticeType(constructor=c_join, qualifiers=quals)
+            cand = LatticeType(constructor=c_join, parameters=(m_args, j_ret), qualifiers=quals)
+            return cand if (self.is_subtype_of(cand, poset_fn, is_top_fn=top_fn) and other.is_subtype_of(cand, poset_fn, is_top_fn=top_fn)) else LatticeType(constructor=c_join, qualifiers=quals)
+
+        var_spec = _CONSTRUCTOR_VARIANCE.get(c_low, "covariant")
+        merged_params: List[LatticeType] = []
+        for idx, (p1, p2) in enumerate(zip(self.parameters, other.parameters)):
+            pos_var = var_spec[idx] if isinstance(var_spec, tuple) and idx < len(var_spec) else (
+                var_spec if isinstance(var_spec, str) else "covariant"
+            )
+            if pos_var == "invariant":
+                if p1.is_subtype_of(p2, poset_fn, is_top_fn=top_fn) and p2.is_subtype_of(p1, poset_fn, is_top_fn=top_fn):
+                    merged_params.append(p1)
+                else:
+                    return LatticeType(constructor=c_join, qualifiers=quals)
+            elif pos_var == "contravariant":
+                mp = p1.meet(p2, r)
+                if mp.is_bottom():
+                    return LatticeType(constructor=c_join, qualifiers=quals)
+                merged_params.append(mp)
+            else:
+                merged_params.append(p1.join(p2, r))
+
+        cand = LatticeType(constructor=c_join, parameters=tuple(merged_params), qualifiers=quals)
+        if self.is_subtype_of(cand, poset_fn, is_top_fn=top_fn) and other.is_subtype_of(cand, poset_fn, is_top_fn=top_fn):
+            return cand
+        return LatticeType(constructor=c_join, qualifiers=quals)
 
     def __str__(self) -> str:
         s = self.constructor
@@ -277,6 +506,25 @@ class LatticeType:
 
 _SUBTYPE_CACHE_MAX = 16384
 _EMPTY_TUPLE: Tuple[str, ...] = ()
+_TRUE_BOTTOM_SYMBOLS: Tuple[str, ...] = ("bottom", "never", "\u22a5")
+_VOID_UNIT_SYMBOLS: Tuple[str, ...] = ("void", "unit", "none", "nonetype", "null", "nil", "undefined")
+_CONSTRUCTOR_VARIANCE: Dict[str, Any] = {
+    "callable": "callable",
+    "list": "invariant",
+    "dict": "invariant",
+    "set": "invariant",
+    "mutablemapping": "invariant",
+    "mutablesequence": "invariant",
+    "mutableset": "invariant",
+    "deque": "invariant",
+    "mapping": ("invariant", "covariant"),
+    "tuple": "covariant",
+    "sequence": "covariant",
+    "iterable": "covariant",
+    "iterator": "covariant",
+    "optional": "covariant",
+    "union": "covariant",
+}
 _TOP_STATE_LITERALS: Set[str] = set(DEFAULT_STATE_SYMBOLS) | {"unregistered"}
 _TOP_TYPE_FAST: Set[str] = set(UNIVERSAL_TOP_SYMBOLS)
 _BOTTOM_LITERALS: Set[str] = set(UNIVERSAL_BOTTOM_SYMBOLS)
@@ -378,6 +626,9 @@ class TypeRegistry:
         # Subtype memo: per-instance, invalidated by bumping a generation counter
         # so a result computed against a stale poset can never be cached.
         self._subtype_cache: Dict[Tuple[Any, Any], bool] = {}
+        self._meet_cache: Dict[Tuple[str, str], str] = {}
+        self._join_cache: Dict[Tuple[str, str], str] = {}
+        self._state_raw_cache: Dict[Any, bool] = {}
         self._registered_types_cache: Optional[Set[str]] = None
         self._composite_carrier_cache: Dict[str, bool] = {}
         self._state_properties_cache: Dict[str, Dict[str, Any]] = {}
@@ -417,9 +668,13 @@ class TypeRegistry:
         self._cached_atomic_carrier_roots: Optional[Set[str]] = None
         self._cached_composite_carrier_roots: Optional[Set[str]] = None
         self._generation: int = 0
-        self._bootstrap_carrier_hierarchy()
-        self._bootstrap_state_hierarchy()
-        self._bootstrap_plugin_types()
+        self._batch_depth: int = 0
+        self._batch_dirty: bool = False
+        self._reflected_python_classes: Set[int] = set()
+        with self.batch_mutations():
+            self._bootstrap_carrier_hierarchy()
+            self._bootstrap_state_hierarchy()
+            self._bootstrap_plugin_types()
 
     @property
     def _parents_lower(self) -> Dict[str, Set[str]]:
@@ -508,7 +763,8 @@ class TypeRegistry:
                 from .runtime_poset import bootstrap_python_runtime_poset
             except (ImportError, ValueError):
                 from runtime_poset import bootstrap_python_runtime_poset
-            bootstrap_python_runtime_poset(self)
+            with self.batch_mutations():
+                bootstrap_python_runtime_poset(self)
         self._invalidate_caches()
 
     def get_language_spec(self, name: Optional[str] = None) -> Optional[Any]:
@@ -533,9 +789,8 @@ class TypeRegistry:
             return cached
         gen = self._generation
         direct = {t for t, tk in self._type_kinds.items() if tk == k}
-        if k == "top":
-            # Downward subtypes below Top (e.g. any, unknown) are concrete specializations,
-            # never Top symbols themselves.
+        if k in ("top", "bottom"):
+            # Top/bottom symbols do not expand downward via poset closure on mutation checks.
             res = set(direct)
             with self._lock:
                 if gen == self._generation:
@@ -1007,13 +1262,35 @@ class TypeRegistry:
                     logger.debug("suppressed: %s", e, exc_info=False)
 
     # --- Cache invalidation -------------------------------------------------
+    @contextlib.contextmanager
+    def batch_mutations(self):
+        """Defers cache invalidation until a batch of poset registrations finishes."""
+        with self._lock:
+            self._batch_depth += 1
+        try:
+            yield
+        finally:
+            should_flush = False
+            with self._lock:
+                self._batch_depth = max(0, self._batch_depth - 1)
+                if self._batch_depth == 0 and self._batch_dirty:
+                    self._batch_dirty = False
+                    should_flush = True
+            if should_flush:
+                self._invalidate_caches()
+
     @_locked
     def _invalidate_caches(self) -> None:
         """Drop every derived cache. Bumping the generation makes any in-flight
         computation refuse to store its (possibly stale) result."""
         with self._lock:
+            if getattr(self, "_batch_depth", 0) > 0:
+                self._batch_dirty = True
+                return
             self._generation += 1
             self._subtype_cache.clear()
+            self._meet_cache.clear()
+            self._join_cache.clear()
             self._ancestry_cache.clear()
             self._registered_types_cache = None
             self._composite_carrier_cache.clear()
@@ -1021,6 +1298,8 @@ class TypeRegistry:
             self._states_by_property_cache.clear()
             self._state_carrier_cache.clear()
             self._state_compatible_cache.clear()
+            if hasattr(self, "_state_raw_cache"):
+                self._state_raw_cache.clear()
             self._terminal_sink_states_cache = None
             self._path_port_sig_cache.clear()
             self._unifies_cache.clear()
@@ -1217,6 +1496,13 @@ class TypeRegistry:
                         self._top_cache.clear()
                     self._top_cache[name] = res
         return res
+
+    def is_uninhabited_bottom(self, name: Optional[str]) -> bool:
+        """True iff `name` denotes true uninhabited bottom (_|_: bottom/never)."""
+        if name is None:
+            return False
+        s = name.strip().lower() if isinstance(name, str) else str(name).strip().lower()
+        return s in _TRUE_BOTTOM_SYMBOLS or (s in self.get_types_by_kind("bottom") and s not in _VOID_UNIT_SYMBOLS)
 
     def is_declared_bottom(self, name: Optional[str]) -> bool:
         if name is None:
@@ -2148,51 +2434,90 @@ class TypeRegistry:
 
     def _would_create_poset_cycle(self, name: str, super_name: str) -> bool:
         """Checks whether adding edge name -> super_name violates Top/Bottom or creates a poset cycle in O(deg * depth)."""
-        if (
-            "[" in name or "[" in super_name
-            or "{" in name or "{" in super_name
-            or "_or_" in name or "_or_" in super_name
-        ):
-            return self._compute_is_subtype(super_name, name)
-
-        sub_c = self.canonical_name(name).lower()
-        sup_c = self.canonical_name(super_name).lower()
-        bottom_set = self.get_bottom_types_set()
-        if sub_c in bottom_set or sup_c in bottom_set or name in bottom_set or super_name in bottom_set:
-            return False
-        top_set = self.get_top_types_set()
-        if sub_c in top_set or name in top_set:
-            return True
-        if sup_c in top_set or super_name in top_set:
-            return False
-
-        sub_targets = {name, sub_c}
-        if "." in name:
-            sub_targets.add(name.rsplit(".", 1)[-1])
-        if "." in sub_c:
-            sub_targets.add(sub_c.rsplit(".", 1)[-1])
-        if sup_c in sub_targets or super_name in sub_targets:
-            return True
-
-        visited: Set[str] = set()
-        queue = deque([sup_c, super_name])
-        if "." in sup_c and sup_c not in self._parents:
-            queue.append(sup_c.rsplit(".", 1)[-1])
-        if "." in super_name and super_name not in self._parents:
-            queue.append(super_name.rsplit(".", 1)[-1])
-
+        bottom_set = set(_BOTTOM_LITERALS) | {t for t, tk in self._type_kinds.items() if tk == "bottom"}
+        uninhabited_bottom = {t for t in bottom_set if t not in _VOID_UNIT_SYMBOLS} | set(_TRUE_BOTTOM_SYMBOLS)
+        top_set = set(_TOP_TYPE_FAST) | set(self._declared_top) | {t for t, tk in self._type_kinds.items() if tk == "top"}
         parents = self._parents
-        while queue:
-            cur = queue.popleft()
-            if cur in visited:
-                continue
-            visited.add(cur)
-            for p in parents.get(cur, ()):
-                if p in sub_targets:
+
+        def _is_top_sym(t: str) -> bool:
+            tl = str(t or "").strip().lower()
+            if not tl:
+                return False
+            if tl in top_set:
+                return True
+            return self.canonical_name(tl).lower() in top_set
+
+        def _live_atomic_is_subtype(sub: str, sup: str) -> bool:
+            sub_l = str(sub or "").strip().lower()
+            sup_l = str(sup or "").strip().lower()
+            if not sub_l or not sup_l:
+                return False
+            sub_c = self.canonical_name(sub_l).lower()
+            sup_c = self.canonical_name(sup_l).lower()
+
+            if sub_l in uninhabited_bottom or sub_c in uninhabited_bottom:
+                return True
+            if sup_l in uninhabited_bottom or sup_c in uninhabited_bottom:
+                return False
+
+            if (
+                sub_l in bottom_set or sub_c in bottom_set
+                or sup_l in bottom_set or sup_c in bottom_set
+            ):
+                return sub_c == sup_c or (
+                    sub_c in _VOID_UNIT_SYMBOLS and sup_c in _VOID_UNIT_SYMBOLS
+                )
+
+            if sup_c in top_set or sup_l in top_set:
+                return True
+            if sub_c in top_set or sub_l in top_set:
+                return False
+
+            if "_or_" in sub_c:
+                parts = [p for p in sub_c.split("_or_") if p]
+                if parts and all(_live_atomic_is_subtype(part, sup_c) for part in parts):
                     return True
-                if p not in visited:
-                    queue.append(p)
-        return False
+            if "_or_" in sup_c:
+                parts = [p for p in sup_c.split("_or_") if p]
+                if parts and any(_live_atomic_is_subtype(sub_c, part) for part in parts):
+                    return True
+
+            sup_targets = {sup_l, sup_c}
+            if "." in sup_l:
+                sup_targets.add(sup_l.rsplit(".", 1)[-1])
+            if "." in sup_c:
+                sup_targets.add(sup_c.rsplit(".", 1)[-1])
+            if sub_l in sup_targets or sub_c in sup_targets:
+                return True
+
+            visited: Set[str] = set()
+            queue = deque([sub_c, sub_l])
+            if "." in sub_c and sub_c not in parents:
+                queue.append(sub_c.rsplit(".", 1)[-1])
+            if "." in sub_l and sub_l not in parents:
+                queue.append(sub_l.rsplit(".", 1)[-1])
+
+            while queue:
+                cur = queue.popleft()
+                if cur in visited:
+                    continue
+                visited.add(cur)
+                for p in parents.get(cur, ()):
+                    if p in sup_targets:
+                        return True
+                    if p not in visited:
+                        queue.append(p)
+            return False
+
+        if "[" in name or "[" in super_name or "{" in name or "{" in super_name:
+            if _live_atomic_is_subtype(super_name, name):
+                return True
+            return LatticeType.from_str(super_name).is_subtype_of(
+                LatticeType.from_str(name),
+                _live_atomic_is_subtype,
+                is_top_fn=_is_top_sym,
+            )
+        return _live_atomic_is_subtype(super_name, name)
 
     @_locked
     def register_type(self, type_name: str, super_type: Optional[str] = None):
@@ -2405,6 +2730,141 @@ class TypeRegistry:
                 self._subtype_cache[key] = result
         return result
 
+    def _collect_all_supertypes(self, typ: str) -> Set[str]:
+        canon = self.canonical_name(typ).strip().lower()
+        if not canon:
+            return set()
+        out: Set[str] = {canon}
+        canon_key = canon.rsplit(".", 1)[-1] if canon not in self._parents and "." in canon else canon
+        out.add(canon_key)
+        q: deque[str] = deque([canon, canon_key])
+        seen: Set[str] = set()
+        while q:
+            curr = q.popleft()
+            if not curr or curr in seen:
+                continue
+            seen.add(curr)
+            out.add(curr)
+            for par in self._parents.get(curr, ()):
+                pl = str(par).strip().lower()
+                if pl and pl not in seen:
+                    out.add(pl)
+                    q.append(pl)
+        return out
+
+    def join_types(self, t1: str, t2: str) -> str:
+        """Least upper bound (join: t1 |_| t2) over the dynamic type poset."""
+        a = str(t1 or "").strip()
+        b = str(t2 or "").strip()
+        if not a:
+            return b.lower() if b else "any"
+        if not b:
+            return a.lower()
+        hit = self._join_cache.get((a, b))
+        if hit is not None:
+            return hit
+        gen = self._generation
+
+        if self.is_uninhabited_bottom(a):
+            res = b.lower() if ("[" not in b and "{" not in b) else str(LatticeType.from_str(b))
+        elif self.is_uninhabited_bottom(b):
+            res = a.lower() if ("[" not in a and "{" not in a) else str(LatticeType.from_str(a))
+        elif a.lower() in _VOID_UNIT_SYMBOLS and b.lower() in _VOID_UNIT_SYMBOLS:
+            res = self.canonical_name(a).lower()
+        elif a.lower() in self.get_bottom_types_set() or b.lower() in self.get_bottom_types_set():
+            res = "any"
+        elif self.is_declared_top(a) or self.is_declared_top(b):
+            res = "any"
+        elif "[" in a or "[" in b or "{" in a or "{" in b:
+            res = str(LatticeType.from_str(a).join(LatticeType.from_str(b), self))
+        elif self.is_subtype(a, b) and self.is_subtype(b, a):
+            ca, cb = self.canonical_name(a).lower(), self.canonical_name(b).lower()
+            res = min(ca, cb)
+        elif self.is_subtype(a, b):
+            res = self.canonical_name(b).lower()
+        elif self.is_subtype(b, a):
+            res = self.canonical_name(a).lower()
+        else:
+            top_exclude = self.get_top_types_set() | self.get_void_types_set() | {"object"}
+            common = (self._collect_all_supertypes(a) & self._collect_all_supertypes(b)) - top_exclude
+            if not common:
+                res = "any"
+            else:
+                minimal = [
+                    x for x in common
+                    if not any(y != x and self.is_subtype(y, x) for y in common)
+                ]
+                pool = minimal if minimal else list(common)
+                # Prefer the candidate with the largest ancestor chain (deepest/most specific), then lexical
+                res = sorted(pool, key=lambda x: (-len(self._collect_all_supertypes(x)), x))[0]
+
+        with self._lock:
+            if gen == self._generation:
+                if len(self._join_cache) >= _SUBTYPE_CACHE_MAX:
+                    self._join_cache.clear()
+                self._join_cache[(a, b)] = res
+                self._join_cache[(b, a)] = res
+        return res
+
+    def meet_types(self, t1: str, t2: str) -> str:
+        """Greatest lower bound (meet: t1 |\\ t2) over the dynamic type poset."""
+        a = str(t1 or "").strip()
+        b = str(t2 or "").strip()
+        if not a or not b:
+            return "bottom"
+        hit = self._meet_cache.get((a, b))
+        if hit is not None:
+            return hit
+        gen = self._generation
+
+        if self.is_uninhabited_bottom(a) or self.is_uninhabited_bottom(b):
+            res = "bottom"
+        elif a.lower() in _VOID_UNIT_SYMBOLS and b.lower() in _VOID_UNIT_SYMBOLS:
+            res = self.canonical_name(a).lower()
+        elif a.lower() in self.get_bottom_types_set() or b.lower() in self.get_bottom_types_set():
+            res = "bottom"
+        elif self.is_declared_top(a):
+            res = self.canonical_name(b).lower() if ("[" not in b and "{" not in b) else str(LatticeType.from_str(b))
+        elif self.is_declared_top(b):
+            res = self.canonical_name(a).lower() if ("[" not in a and "{" not in a) else str(LatticeType.from_str(a))
+        elif "[" in a or "[" in b or "{" in a or "{" in b:
+            res = str(LatticeType.from_str(a).meet(LatticeType.from_str(b), self))
+        elif self.is_subtype(a, b) and self.is_subtype(b, a):
+            ca, cb = self.canonical_name(a).lower(), self.canonical_name(b).lower()
+            res = min(ca, cb)
+        elif self.is_subtype(a, b):
+            res = self.canonical_name(a).lower()
+        elif self.is_subtype(b, a):
+            res = self.canonical_name(b).lower()
+        else:
+            excluded = self.get_void_types_set() | self.get_top_types_set() | set(_TRUE_BOTTOM_SYMBOLS) | {"object"}
+            common_lb = [
+                x for x in self._parents.keys()
+                if x not in excluded and self.is_subtype(x, a) and self.is_subtype(x, b)
+            ]
+            if not common_lb:
+                res = "bottom"
+            else:
+                maximal = [
+                    x for x in common_lb
+                    if not any(y != x and self.is_subtype(x, y) for y in common_lb)
+                ]
+                if len(maximal) == 1:
+                    res = maximal[0]
+                elif maximal:
+                    # Prefer shallowest (closest to join / fewest ancestors -> most general common lower bound), then lexical
+                    res = sorted(maximal, key=lambda x: (len(self._collect_all_supertypes(x)), x))[0]
+                else:
+                    res = "bottom"
+
+        with self._lock:
+            if gen == self._generation:
+                if len(self._meet_cache) >= _SUBTYPE_CACHE_MAX:
+                    self._meet_cache.clear()
+                self._meet_cache[(a, b)] = res
+                self._meet_cache[(b, a)] = res
+        return res
+
     def _compute_is_subtype(self, sub: str, super_: str) -> bool:
         """
         Computes poset partial order: returns True iff sub <= super_.
@@ -2417,9 +2877,16 @@ class TypeRegistry:
         sub_str = str(sub).strip()
         super_str = str(super_).strip()
 
-        bottom_set = self.get_bottom_types_set()
-        if sub_str.lower() in bottom_set or super_str.lower() in bottom_set:
+        sub_low = sub_str.lower()
+        super_low = super_str.lower()
+        if sub_low in _TRUE_BOTTOM_SYMBOLS or self.is_uninhabited_bottom(sub_low):
+            return True
+        if super_low in _TRUE_BOTTOM_SYMBOLS or self.is_uninhabited_bottom(super_low):
             return False
+
+        bottom_set = self.get_bottom_types_set()
+        if sub_low in bottom_set or super_low in bottom_set:
+            return sub_low == super_low or (sub_low in _VOID_UNIT_SYMBOLS and super_low in _VOID_UNIT_SYMBOLS)
 
         if "[" in sub_str or "[" in super_str or "{" in sub_str or "{" in super_str:
             if self._atomic_is_subtype(sub_str, super_str):
@@ -2439,9 +2906,14 @@ class TypeRegistry:
         sub_l = sub_c.lower()
         super_l = super_c.lower()
 
+        if sub_l in _TRUE_BOTTOM_SYMBOLS or self.is_uninhabited_bottom(sub_l):
+            return True
+        if super_l in _TRUE_BOTTOM_SYMBOLS or self.is_uninhabited_bottom(super_l):
+            return False
+
         bottom_set = self.get_bottom_types_set()
         if sub_l in bottom_set or super_l in bottom_set:
-            return False
+            return sub_l == super_l or (sub_l in _VOID_UNIT_SYMBOLS and super_l in _VOID_UNIT_SYMBOLS)
 
         top_set = self.get_top_types_set()
         if super_l in top_set:
@@ -2846,7 +3318,7 @@ class TypeRegistry:
 
         # 1. Unconstrained consumer typestate (Phi = Top)
         if any(self.is_declared_top_state(s) for s in (c_acc or (c_state,))) or (
-            self.is_declared_top_state(c_state) and not (c_acc - self._declared_top_states)
+            self.is_declared_top_state(c_state) and not (set(c_acc) - self._declared_top_states)
         ):
             return True
 
@@ -2870,8 +3342,6 @@ class TypeRegistry:
         target_ancestors: Set[str] = set()
         if c_state and not self.is_declared_top_state(c_state):
             target_ancestors.add(c_state)
-        if c_par:
-            target_ancestors.add(c_par)
         target_ancestors.update(c_acc)
 
         if p_state and target_ancestors:
@@ -2889,7 +3359,7 @@ class TypeRegistry:
             seen_dp: Set[str] = {p_state}
             while curr_p and curr_p not in seen_dp:
                 seen_dp.add(curr_p)
-                if curr_p in target_ancestors and not self.has_property_conflict(curr_p, curr_p):
+                if curr_p in target_ancestors and not self.has_property_conflict(p_state, curr_p):
                     return True
                 if self.state_ancestry_reaches(curr_p, tgt_tuple):
                     for tgt in target_ancestors:
@@ -3813,6 +4283,470 @@ class PortSignature:
         return f"Port({self.name}: {self.signature.type_name}[{self.signature.state}]{abs_info}{acc_info}, req={self.required})"
 
 
+class InvariantEntailer:
+    """
+    Domain-agnostic decidable QF_LIA (interval + excluded values) + equality/set
+    invariant entailment engine for Axis 5 (Phi_out |= Phi_in). Uses stdlib AST
+    parsing and string methods (zero regular expressions).
+    """
+
+    @staticmethod
+    def _is_num(val: Any) -> bool:
+        return isinstance(val, (int, float)) and not isinstance(val, bool)
+
+    @classmethod
+    def _norm_val(cls, val: Any) -> Any:
+        if cls._is_num(val):
+            return float(val)
+        if isinstance(val, str):
+            return val.strip().lower()
+        return val
+
+    @classmethod
+    def _parse_scalar(cls, raw: str) -> Any:
+        s = raw.strip()
+        if not s:
+            return ""
+        try:
+            return ast.literal_eval(s)
+        except (ValueError, SyntaxError):
+            sl = s.lower()
+            if sl == "true":
+                return True
+            if sl == "false":
+                return False
+            if sl == "none":
+                return None
+            return s
+
+    @classmethod
+    def _ast_lit(cls, node: ast.AST) -> Tuple[bool, Any]:
+        if isinstance(node, ast.Constant):
+            return True, node.value
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            ok, inner = cls._ast_lit(node.operand)
+            if ok and cls._is_num(inner):
+                return True, (-inner if isinstance(node.op, ast.USub) else inner)
+            return False, None
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            items: List[Any] = []
+            for elt in node.elts:
+                ok, iv = cls._ast_lit(elt)
+                if not ok:
+                    return False, None
+                items.append(iv)
+            if isinstance(node, ast.Set):
+                return True, set(items)
+            return True, tuple(items)
+        if isinstance(node, ast.Name):
+            low = node.id.lower()
+            if low == "true":
+                return True, True
+            if low == "false":
+                return True, False
+            if low == "none":
+                return True, None
+            return True, node.id
+        return False, None
+
+    @staticmethod
+    def _ast_prop_name(node: ast.AST) -> str:
+        if isinstance(node, ast.Name):
+            return node.id.strip().lower()
+        try:
+            return ast.unparse(node).strip().lower()
+        except Exception:
+            return str(node).strip().lower()
+
+    @staticmethod
+    def _cmpop_str(op_node: ast.cmpop) -> Optional[str]:
+        if isinstance(op_node, (ast.Eq, ast.Is)):
+            return "=="
+        if isinstance(op_node, (ast.NotEq, ast.IsNot)):
+            return "!="
+        if isinstance(op_node, ast.Lt):
+            return "<"
+        if isinstance(op_node, ast.LtE):
+            return "<="
+        if isinstance(op_node, ast.Gt):
+            return ">"
+        if isinstance(op_node, ast.GtE):
+            return ">="
+        if isinstance(op_node, ast.In):
+            return "in"
+        if isinstance(op_node, ast.NotIn):
+            return "not in"
+        return None
+
+    @staticmethod
+    def _flip_op(op: str) -> str:
+        if op == "<":
+            return ">"
+        if op == "<=":
+            return ">="
+        if op == ">":
+            return "<"
+        if op == ">=":
+            return "<="
+        return op
+
+    @classmethod
+    def extract_value_constraints(cls, vc: Any) -> List[Tuple[str, str, Any]]:
+        if not vc:
+            return []
+        if isinstance(vc, dict):
+            if "property" in vc:
+                return cls.parse_predicate(vc)
+            out: List[Tuple[str, str, Any]] = []
+            for k, v in vc.items():
+                kl = str(k).strip().lower()
+                if kl in ("description", "note", "notes", "reason", "optional"):
+                    continue
+                if kl in ("min", "gte") and cls._is_num(v):
+                    out.append(("value", ">=", v))
+                elif kl in ("max", "lte") and cls._is_num(v):
+                    out.append(("value", "<=", v))
+                elif kl in ("gt", "exclusive_min") and cls._is_num(v):
+                    out.append(("value", ">", v))
+                elif kl in ("lt", "exclusive_max") and cls._is_num(v):
+                    out.append(("value", "<", v))
+                elif kl in ("neq", "not_equal"):
+                    out.append(("value", "!=", v))
+                elif kl in ("in", "allowed", "enum") and isinstance(v, (list, tuple, set)):
+                    out.append(("value", "in", tuple(v)))
+                else:
+                    out.append((kl, "==", v))
+            return out
+        if isinstance(vc, (list, tuple)):
+            out = []
+            for item in vc:
+                out.extend(cls.parse_predicate(item))
+            return out
+        return cls.parse_predicate(vc)
+
+    @classmethod
+    def parse_predicate(cls, raw: Any) -> List[Tuple[str, str, Any]]:
+        """Parses structured or string invariants/conditions into (prop, op, val) triples."""
+        if raw is None:
+            return []
+        if isinstance(raw, tuple) and len(raw) == 3:
+            prop, op, val = raw
+            op_map = {"is": "==", "is not": "!=", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_s = op_map.get(str(op).strip().lower(), str(op).strip().lower())
+            return [(str(prop).strip().lower(), op_s, val)]
+        if isinstance(raw, dict):
+            prop = raw.get("property")
+            if prop:
+                op = str(raw.get("operator", "==")).strip().lower()
+                return [(str(prop).strip().lower(), op, raw.get("value"))]
+            if raw.get("expression"):
+                return cls.parse_predicate(raw["expression"])
+            return cls.extract_value_constraints(raw)
+        if hasattr(raw, "property"):
+            prop = getattr(raw, "property", None)
+            if prop:
+                op = str(getattr(raw, "operator", "==") or "==").strip().lower()
+                return [(str(prop).strip().lower(), op, getattr(raw, "value", None))]
+            expr = getattr(raw, "expression", None)
+            if expr:
+                return cls.parse_predicate(expr)
+            return []
+
+        s = str(raw).strip()
+        if not s:
+            return []
+
+        # Single '=' tree shorthand: min=0, max=1.0, gt=0.0, dtype=uint8, nonzero=True
+        if (
+            "=" in s
+            and s.count("=") == 1
+            and "==" not in s
+            and "!=" not in s
+            and "<=" not in s
+            and ">=" not in s
+        ):
+            lhs, rhs = s.split("=", 1)
+            lk = lhs.strip().lower()
+            if lk and all(ch.isalnum() or ch in "._" for ch in lk):
+                rv = cls._parse_scalar(rhs)
+                if lk in ("min", "gte") and cls._is_num(rv):
+                    return [("value", ">=", rv)]
+                if lk in ("max", "lte") and cls._is_num(rv):
+                    return [("value", "<=", rv)]
+                if lk == "gt" and cls._is_num(rv):
+                    return [("value", ">", rv)]
+                if lk == "lt" and cls._is_num(rv):
+                    return [("value", "<", rv)]
+                return [(lk, "==", rv)]
+
+        has_cmp = any(tok in s for tok in ("==", "!=", "<=", ">=", "<", ">", " in ", " not in ", " is "))
+        if has_cmp:
+            try:
+                tree = ast.parse(s, mode="eval").body
+                parsed: List[Tuple[str, str, Any]] = []
+
+                def _walk_expr(node: ast.AST) -> bool:
+                    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
+                        return all(_walk_expr(v) for v in node.values)
+                    if isinstance(node, ast.Compare):
+                        left = node.left
+                        for op_node, right in zip(node.ops, node.comparators):
+                            op_s = cls._cmpop_str(op_node)
+                            if op_s is None:
+                                return False
+                            r_ok, r_val = cls._ast_lit(right)
+                            l_ok, l_val = cls._ast_lit(left)
+                            if isinstance(left, (ast.Name, ast.Attribute, ast.Subscript)) and r_ok and not isinstance(right, ast.Name):
+                                parsed.append((cls._ast_prop_name(left), op_s, r_val))
+                            elif isinstance(left, ast.Name) and isinstance(right, ast.Name):
+                                parsed.append((left.id.strip().lower(), op_s, right.id))
+                            elif isinstance(left, (ast.Attribute, ast.Subscript)) and r_ok:
+                                parsed.append((cls._ast_prop_name(left), op_s, r_val))
+                            elif l_ok and isinstance(right, (ast.Name, ast.Attribute, ast.Subscript)):
+                                parsed.append((cls._ast_prop_name(right), cls._flip_op(op_s), l_val))
+                            else:
+                                return False
+                            left = right
+                        return True
+                    return False
+
+                if _walk_expr(tree) and parsed:
+                    return parsed
+            except SyntaxError:
+                pass
+
+        return [(s.lower(), "tag", True)]
+
+    @classmethod
+    def _compile_domains(cls, preds: Sequence[Any]) -> Tuple[bool, Dict[str, Dict[str, Any]], Set[str]]:
+        domains: Dict[str, Dict[str, Any]] = {}
+        tags: Set[str] = set()
+        contradictory = False
+
+        def _dom(prop: str) -> Dict[str, Any]:
+            d = domains.get(prop)
+            if d is None:
+                d = {
+                    "lo": None,
+                    "lo_inc": True,
+                    "hi": None,
+                    "hi_inc": True,
+                    "excluded_nums": set(),
+                    "eq_set": False,
+                    "eq_val": None,
+                    "neq_vals": set(),
+                    "allowed_set": None,
+                    "contradictory": False,
+                }
+                domains[prop] = d
+            return d
+
+        for raw in preds or ():
+            for prop, op, val in cls.parse_predicate(raw):
+                if op == "tag":
+                    tags.add(prop)
+                    continue
+                d = _dom(prop)
+                if op == "==":
+                    if cls._is_num(val):
+                        fv = float(val)
+                        if d["lo"] is None or fv > d["lo"]:
+                            d["lo"], d["lo_inc"] = fv, True
+                        if d["hi"] is None or fv < d["hi"]:
+                            d["hi"], d["hi_inc"] = fv, True
+                        if d["eq_set"] and cls._norm_val(d["eq_val"]) != fv:
+                            d["contradictory"] = True
+                        d["eq_set"] = True
+                        d["eq_val"] = fv
+                    else:
+                        nv = cls._norm_val(val)
+                        if d["eq_set"] and d["eq_val"] != nv:
+                            d["contradictory"] = True
+                        d["eq_set"] = True
+                        d["eq_val"] = nv
+                elif op == "!=":
+                    if cls._is_num(val):
+                        d["excluded_nums"].add(float(val))
+                    else:
+                        d["neq_vals"].add(cls._norm_val(val))
+                elif op == ">" and cls._is_num(val):
+                    fv = float(val)
+                    if d["lo"] is None or fv > d["lo"]:
+                        d["lo"], d["lo_inc"] = fv, False
+                    elif fv == d["lo"]:
+                        d["lo_inc"] = False
+                elif op == ">=" and cls._is_num(val):
+                    fv = float(val)
+                    if d["lo"] is None or fv > d["lo"]:
+                        d["lo"], d["lo_inc"] = fv, True
+                elif op == "<" and cls._is_num(val):
+                    fv = float(val)
+                    if d["hi"] is None or fv < d["hi"]:
+                        d["hi"], d["hi_inc"] = fv, False
+                    elif fv == d["hi"]:
+                        d["hi_inc"] = False
+                elif op == "<=" and cls._is_num(val):
+                    fv = float(val)
+                    if d["hi"] is None or fv < d["hi"]:
+                        d["hi"], d["hi_inc"] = fv, True
+                elif op == "in" and isinstance(val, (list, tuple, set)):
+                    norm_s = {cls._norm_val(x) for x in val}
+                    d["allowed_set"] = norm_s if d["allowed_set"] is None else (d["allowed_set"] & norm_s)
+                elif op == "not in" and isinstance(val, (list, tuple, set)):
+                    for x in val:
+                        if cls._is_num(x):
+                            d["excluded_nums"].add(float(x))
+                        else:
+                            d["neq_vals"].add(cls._norm_val(x))
+
+        for d in domains.values():
+            lo, hi = d["lo"], d["hi"]
+            if lo is not None and hi is not None:
+                if lo > hi:
+                    d["contradictory"] = True
+                elif lo == hi and (not d["lo_inc"] or not d["hi_inc"] or lo in d["excluded_nums"]):
+                    d["contradictory"] = True
+            if d["eq_set"]:
+                ev = d["eq_val"]
+                if cls._is_num(ev):
+                    fev = float(ev)
+                    if fev in d["excluded_nums"]:
+                        d["contradictory"] = True
+                    if d["allowed_set"] is not None and fev not in d["allowed_set"]:
+                        d["contradictory"] = True
+                else:
+                    if ev in d["neq_vals"]:
+                        d["contradictory"] = True
+                    if d["allowed_set"] is not None and ev not in d["allowed_set"]:
+                        d["contradictory"] = True
+            if d["allowed_set"] is not None and len(d["allowed_set"]) == 0:
+                d["contradictory"] = True
+            if d["contradictory"]:
+                contradictory = True
+
+        return contradictory, domains, tags
+
+    @staticmethod
+    def _num_satisfies(x: float, op: str, c: float) -> bool:
+        if op == ">":
+            return x > c
+        if op == ">=":
+            return x >= c
+        if op == "<":
+            return x < c
+        if op == "<=":
+            return x <= c
+        if op == "==":
+            return x == c
+        if op == "!=":
+            return x != c
+        return False
+
+    @classmethod
+    def entails(
+        cls,
+        producer_preds: Sequence[Any],
+        consumer_preds: Sequence[Any],
+        registry: Optional["TypeRegistry"] = None,
+    ) -> bool:
+        """
+        True iff producer_preds logically entail every requirement in consumer_preds
+        (without contradictory producer assumptions).
+        """
+        reqs: List[Tuple[str, str, Any]] = []
+        for raw in consumer_preds or ():
+            reqs.extend(cls.parse_predicate(raw))
+        if not reqs:
+            return True
+
+        contradictory, domains, tags = cls._compile_domains(producer_preds or ())
+        if contradictory:
+            return False
+
+        for prop, op, val in reqs:
+            if op == "tag":
+                if prop in tags:
+                    continue
+                dom = domains.get(prop)
+                if dom is not None and dom["eq_set"] and dom["eq_val"] is True:
+                    continue
+                if registry is not None and any(registry.state_ancestry_reaches(t, (prop,)) for t in tags):
+                    continue
+                return False
+
+            dom = domains.get(prop)
+            if dom is None:
+                return False
+
+            if op in (">", ">=", "<", "<=", "==", "!=") and cls._is_num(val):
+                c = float(val)
+                if dom["allowed_set"] is not None and dom["allowed_set"] and all(cls._is_num(x) for x in dom["allowed_set"]):
+                    if all(cls._num_satisfies(float(x), op, c) for x in dom["allowed_set"]):
+                        continue
+                    # Also allow interval bounds below if tighter than allowed_set alone
+                lo, lo_inc = dom["lo"], dom["lo_inc"]
+                hi, hi_inc = dom["hi"], dom["hi_inc"]
+                excl = dom["excluded_nums"]
+                if op == ">":
+                    ok = lo is not None and (lo > c or (lo == c and (not lo_inc or c in excl)))
+                elif op == ">=":
+                    ok = lo is not None and lo >= c
+                elif op == "<":
+                    ok = hi is not None and (hi < c or (hi == c and (not hi_inc or c in excl)))
+                elif op == "<=":
+                    ok = hi is not None and hi <= c
+                elif op == "==":
+                    ok = lo is not None and hi is not None and lo == c and hi == c and lo_inc and hi_inc and c not in excl
+                else:  # !=
+                    ok = (
+                        c in excl
+                        or (lo is not None and (lo > c or (lo == c and (not lo_inc or c in excl))))
+                        or (hi is not None and (hi < c or (hi == c and (not hi_inc or c in excl))))
+                    )
+                if not ok:
+                    return False
+                continue
+
+            if op == "==":
+                nv = cls._norm_val(val)
+                ok = (
+                    (dom["eq_set"] and dom["eq_val"] == nv)
+                    or (dom["allowed_set"] is not None and dom["allowed_set"] == {nv})
+                )
+                if not ok:
+                    return False
+            elif op == "!=":
+                nv = cls._norm_val(val)
+                ok = (
+                    nv in dom["neq_vals"]
+                    or (dom["eq_set"] and dom["eq_val"] != nv)
+                    or (dom["allowed_set"] is not None and nv not in dom["allowed_set"])
+                )
+                if not ok:
+                    return False
+            elif op == "in" and isinstance(val, (list, tuple, set)):
+                s_vals = {cls._norm_val(x) for x in val}
+                ok = (
+                    (dom["eq_set"] and dom["eq_val"] in s_vals)
+                    or (dom["allowed_set"] is not None and dom["allowed_set"].issubset(s_vals))
+                )
+                if not ok:
+                    return False
+            elif op == "not in" and isinstance(val, (list, tuple, set)):
+                s_vals = {cls._norm_val(x) for x in val}
+                ok = (
+                    (dom["eq_set"] and dom["eq_val"] not in s_vals)
+                    or (dom["allowed_set"] is not None and dom["allowed_set"].isdisjoint(s_vals))
+                    or s_vals.issubset(dom["neq_vals"])
+                )
+                if not ok:
+                    return False
+            else:
+                return False
+
+        return True
+
+
 @dataclass(frozen=True, slots=True)
 class AxisResidual:
     """
@@ -3866,7 +4800,7 @@ def compute_port_residual(
     """
     Computes the 5-Axis Product Lattice residual Delta(P_out, P_in) between a producer
     output port and a consumer input port, orthogonalizing:
-      C (carrier + nominal identity), M (layout rank/dtype), Sigma (domain semantics),
+      C (carrier + nominal identity), M (layout rank/dtype/shape), Sigma (domain semantics),
       S (typestate/lifecycle), and Phi (invariants/value constraints).
     """
     reg = registry or TypeRegistry.get_instance()
@@ -3881,7 +4815,7 @@ def compute_port_residual(
         if not reg.is_subtype(p_nom, c_nom):
             nominal_conflict = True
 
-    # Axis 1b: Carrier subtyping (C_out <= C_in)
+    # Axis 1b: Carrier subtyping (C_out <= C_in) with full recursive variance
     p_car = str(getattr(p_out, "carrier", None) or getattr(p_sig, "type_name", "any") or "any").strip()
     c_car = str(getattr(p_in, "carrier", None) or getattr(c_sig, "type_name", "any") or "any").strip()
     both_path = is_path_port(p_out, reg) and is_path_port(p_in, reg)
@@ -3889,16 +4823,27 @@ def compute_port_residual(
     if not (both_path or reg.is_declared_top(c_car) or reg.is_type_variable(c_car)):
         if reg.is_declared_top(p_car):
             carrier_delta = True
-        elif not reg.is_subtype(p_car, c_car):
+        elif not LatticeType.from_str(p_car).is_subtype_of(
+            LatticeType.from_str(c_car), reg._atomic_is_subtype, is_top_fn=reg.is_declared_top
+        ):
             p_abs = str(getattr(p_out, "abstract_type", "") or getattr(p_sig, "abstract_type", "") or "").strip().lower()
             c_abs = str(getattr(p_in, "abstract_type", "") or getattr(c_sig, "abstract_type", "") or "").strip().lower()
             c_is_abs = reg.is_abstract_carrier(c_car.lower()) or (c_car.lower() == c_abs)
             if not (c_is_abs and p_abs and c_abs and reg.is_subtype(p_abs, c_abs)):
-                # Generic / Callable carriers may still unify via type_name brackets
-                if not ("[" in p_car and "[" in c_car and p_car.split("[", 1)[0].strip().lower() == c_car.split("[", 1)[0].strip().lower()):
-                    carrier_delta = True
+                carrier_delta = True
 
     # Axis 2: Algebraic Memory Layout (M_out <= M_in)
+    def _is_poly_dtype(raw_dt: Any) -> bool:
+        if raw_dt is None:
+            return True
+        raw_s = str(raw_dt).strip()
+        dt = raw_s.lower()
+        if not dt or reg.is_declared_top(dt) or reg.is_type_variable(raw_s):
+            return True
+        if dt in ("opaque", "composite_record", "object") or dt in reg.get_types_by_kind("opaque"):
+            return True
+        return False
+
     layout_delta = False
     c_lay = getattr(p_in, "layout", None)
     p_lay = getattr(p_out, "layout", None)
@@ -3906,14 +4851,48 @@ def compute_port_residual(
         c_rk = c_lay.get("rank")
         p_rk = p_lay.get("rank")
         c_poly = bool(c_lay.get("rank_polymorphic")) or (isinstance(c_rk, str) and not c_rk.isdigit())
-        if not c_poly and isinstance(c_rk, int) and isinstance(p_rk, int) and p_rk != c_rk:
+        if not c_poly and isinstance(c_rk, int) and not isinstance(c_rk, bool) and isinstance(p_rk, int) and not isinstance(p_rk, bool) and p_rk != c_rk:
             layout_delta = True
+
         c_ch = c_lay.get("channel_count")
         p_ch = p_lay.get("channel_count")
         if c_ch is not None and p_ch is not None and c_ch != p_ch:
             layout_delta = True
 
-    # Axis 3 & 4: Domain-scoped Typestate / Semantics (Sigma + S)
+        c_ax = c_lay.get("channel_axis")
+        p_ax = p_lay.get("channel_axis")
+        if isinstance(c_ax, int) and not isinstance(c_ax, bool) and isinstance(p_ax, int) and not isinstance(p_ax, bool) and p_ax != c_ax:
+            layout_delta = True
+
+        raw_p_dt = p_lay.get("dtype")
+        raw_c_dt = c_lay.get("dtype")
+        p_dt = str(raw_p_dt or "").strip().lower()
+        c_dt = str(raw_c_dt or "").strip().lower()
+        c_dt_poly = _is_poly_dtype(raw_c_dt)
+        p_dt_poly = _is_poly_dtype(raw_p_dt)
+        if not c_dt_poly and not p_dt_poly and p_dt != c_dt:
+            if not reg.is_subtype(p_dt, c_dt):
+                layout_delta = True
+
+        p_ord = str(p_lay.get("memory_order") or "any").strip().lower()
+        c_ord = str(c_lay.get("memory_order") or "any").strip().lower()
+        if p_ord != "any" and c_ord != "any" and p_ord != c_ord:
+            layout_delta = True
+
+        p_len = p_lay.get("length")
+        c_len = c_lay.get("length")
+        if isinstance(p_len, int) and not isinstance(p_len, bool) and isinstance(c_len, int) and not isinstance(c_len, bool) and p_len != c_len:
+            layout_delta = True
+
+        p_sh = p_lay.get("shape")
+        c_sh = c_lay.get("shape")
+        if isinstance(p_sh, (list, tuple)) and isinstance(c_sh, (list, tuple)) and len(p_sh) == len(c_sh):
+            for pd, cd in zip(p_sh, c_sh):
+                if isinstance(pd, int) and not isinstance(pd, bool) and isinstance(cd, int) and not isinstance(cd, bool) and pd != cd:
+                    layout_delta = True
+                    break
+
+    # Axis 3 & 4: Domain-scoped Typestate (S) & Semantics (Sigma)
     p_dom = str(getattr(producer_cell, "domain_name", "") or getattr(p_out, "domain", "") or "").strip().lower() or None
     c_dom = str(getattr(consumer_cell, "domain_name", "") or getattr(p_in, "domain", "") or "").strip().lower() or None
     c_sem = str(getattr(p_in, "semantics", "") or "").strip().lower()
@@ -3929,19 +4908,84 @@ def compute_port_residual(
         consumer_domain=c_dom,
     )
     typestate_delta = not st_ok
-    if both_path or c_sem == "any":
+
+    def _is_top_sem(sem_val: str) -> bool:
+        return (not sem_val) or reg.is_declared_top(sem_val)
+
+    def _is_universal_top_state(st_val: str) -> bool:
+        return (not st_val) or (st_val in _TOP_STATE_LITERALS) or reg.is_declared_top(st_val)
+
+    p_state_l = str(getattr(p_sig, "state", "") or "").strip().lower()
+    c_state_l = str(getattr(c_sig, "state", "") or "").strip().lower()
+    c_acc = tuple(getattr(p_in, "accepted_states", ()) or getattr(c_sig, "accepted_states", ()) or ())
+    c_sem_is_state_mirror = (
+        not _is_universal_top_state(c_state_l)
+        and (c_sem == c_state_l or (bool(c_dom) and c_sem == f"{c_dom}.{c_state_l}"))
+    )
+    p_sem_is_state_mirror = (
+        not _is_universal_top_state(p_state_l)
+        and (p_sem == p_state_l or (bool(p_dom) and p_sem == f"{p_dom}.{p_state_l}"))
+    )
+
+    if both_path or _is_top_sem(c_sem):
         semantics_delta = False
-    elif p_sem and c_sem and p_sem == c_sem:
+    elif (not _is_top_sem(p_sem)) and (
+        p_sem == c_sem
+        or p_sem.startswith(c_sem + ".")
+        or reg.is_subtype(p_sem, c_sem)
+        or reg.state_ancestry_reaches(p_sem, (c_sem,))
+    ):
         semantics_delta = False
+    elif st_ok and c_sem_is_state_mirror:
+        p_reaches_acc = (
+            bool(c_acc)
+            and (not _is_universal_top_state(p_state_l))
+            and (p_state_l in c_acc or reg.state_ancestry_reaches(p_state_l, c_acc))
+        )
+        if p_reaches_acc and (_is_top_sem(p_sem) or p_sem_is_state_mirror):
+            semantics_delta = False
+        elif p_dom and c_dom and p_dom == c_dom and p_sem_is_state_mirror:
+            semantics_delta = False
+        else:
+            semantics_delta = True
     else:
-        semantics_delta = not st_ok
+        semantics_delta = True
 
     # Axis 5: Mathematical Invariants / Refinements (Phi_out |= Phi_in)
-    # Exclude advisory/carrier qualifiers (e.g. 'matrix') registered on TypeRegistry.
-    adv_flat = {".".join(str(x).lower() for x in q) for q in getattr(reg, "_advisory_qualifiers", set())}
-    p_inv = {i for i in (getattr(p_out, "invariants", ()) or ()) if i not in adv_flat and not reg.is_abstract_carrier(i)}
-    c_inv = {i for i in (getattr(p_in, "invariants", ()) or ()) if i not in adv_flat and not reg.is_abstract_carrier(i)}
-    invariants_delta = bool(c_inv and not c_inv.issubset(p_inv))
+    if both_path:
+        invariants_delta = False
+    else:
+        adv_flat = {
+            q.strip().lower() if isinstance(q, str) else ".".join(str(x).strip().lower() for x in q)
+            for q in getattr(reg, "_advisory_qualifiers", set())
+        }
+        p_inv_raw = getattr(p_out, "invariants", ()) or ()
+        c_inv_raw = getattr(p_in, "invariants", ()) or ()
+        p_inv_list: List[Any] = [
+            i for i in p_inv_raw
+            if str(i).strip().lower() not in adv_flat and not reg.is_abstract_carrier(str(i))
+        ]
+        c_inv_list: List[Any] = [
+            i for i in c_inv_raw
+            if str(i).strip().lower() not in adv_flat and not reg.is_abstract_carrier(str(i))
+        ]
+        p_vc = getattr(p_out, "value_constraints", None)
+        c_vc = getattr(p_in, "value_constraints", None)
+        if p_vc:
+            p_inv_list.extend(InvariantEntailer.extract_value_constraints(p_vc))
+        if c_vc:
+            c_inv_list.extend(InvariantEntailer.extract_value_constraints(c_vc))
+        if isinstance(p_lay, dict):
+            raw_lay_dt = p_lay.get("dtype")
+            lay_dt = str(raw_lay_dt or "").strip().lower()
+            if lay_dt and not _is_poly_dtype(raw_lay_dt):
+                p_inv_list.append(("dtype", "==", lay_dt))
+            lay_ch = p_lay.get("channel_count")
+            if isinstance(lay_ch, int) and not isinstance(lay_ch, bool):
+                p_inv_list.append(("channels", "==", lay_ch))
+        invariants_delta = bool(c_inv_list) and not InvariantEntailer.entails(
+            p_inv_list, c_inv_list, registry=reg
+        )
 
     return AxisResidual(
         carrier_delta=carrier_delta,

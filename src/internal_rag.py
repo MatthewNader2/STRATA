@@ -59,6 +59,7 @@ _CACHE_DIR_NAME = ".rag_cache"
 # Persisted-index format version: bump to invalidate on-disk FAISS indexes when
 # the embedding-text construction changes.
 _INDEX_FORMAT_VERSION = 3
+FLAT_INDEX_THRESHOLD = 50_000
 
 
 def build_cell_embedding_text(cell: Any, orchestrator: Optional[Any] = None) -> str:
@@ -530,7 +531,10 @@ class LocalRAG:
             norms = np.where(norms == 0, 1.0, norms)
             matrix = matrix / norms
 
-            self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
+            if int(matrix.shape[0]) < FLAT_INDEX_THRESHOLD:
+                self.index = faiss.IndexFlatIP(self.dimension)
+            else:
+                self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
             self.index.add(matrix)
             self.bm25_index.index_schemas(self.id_to_schema)
             logger.info(f"[RAG] FAISS Index ready with {self.index.ntotal} vectors.")
@@ -551,6 +555,8 @@ class LocalRAG:
                 id_to_schema = pickle.load(f)
             index = faiss.read_index(faiss_path)
             if index.ntotal != len(id_to_schema):
+                return False
+            if int(index.ntotal) < FLAT_INDEX_THRESHOLD and not isinstance(index, faiss.IndexFlatIP):
                 return False
             self.index = index
             self.id_to_schema = id_to_schema

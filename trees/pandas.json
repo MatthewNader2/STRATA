@@ -4151,9 +4151,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "List[str]",
@@ -5006,9 +5004,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         }
       },
       "outputs": {
@@ -5738,7 +5734,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_LOC",
@@ -7026,7 +7029,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_SORT_INDEX",
@@ -7175,7 +7185,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_HEAD",
@@ -7323,7 +7340,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_TAIL",
@@ -7470,7 +7494,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_SAMPLE",
@@ -7652,7 +7683,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "port_0",
-      "primary_out": "port_0"
+      "primary_out": "port_0",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": false,
+        "preserves_nominal": false,
+        "source_port": "port_0"
+      }
     },
     {
       "cell_id": "PD_ASSIGN",
@@ -10481,9 +10519,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "List[str]",
@@ -13189,9 +13225,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -13375,9 +13409,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -13561,9 +13593,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -13747,9 +13777,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "float",
@@ -14288,9 +14316,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -14438,9 +14464,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -14592,9 +14616,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         }
       },
       "outputs": {
@@ -14856,9 +14878,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "float",
@@ -15030,9 +15050,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "File[Tabular, CSV]",
@@ -15249,9 +15267,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "File[Tabular, Parquet]",
@@ -15466,9 +15482,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "File[Tabular, JSONFormat]",
@@ -15686,9 +15700,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "File[Tabular, Excel]",
@@ -15909,9 +15921,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "str",
@@ -16190,9 +16200,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "File[Tabular, Feather]",
@@ -16371,9 +16379,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "str",
@@ -16527,9 +16533,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "columns": {
           "type_name": "List[str]",
@@ -16729,9 +16733,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "str",
@@ -16952,9 +16954,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -17137,9 +17137,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "int",
@@ -17511,9 +17509,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "str",
@@ -17708,9 +17704,7 @@
           },
           "semantics": "pandas.cleaned",
           "typestate": "pandas::cleaned",
-          "invariants": [
-            "cleaned"
-          ]
+          "invariants": []
         },
         "port_1": {
           "type_name": "str",

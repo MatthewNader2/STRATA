@@ -42,8 +42,18 @@ def _iter_port_entries(cell: Dict[str, Any]) -> List[Tuple[str, str, Dict[str, A
     return entries
 
 
-def audit_directory(trees_dir: Path, strict_five_axis: bool = False) -> Dict[str, Any]:
+def audit_directory(
+    trees_dir: Path,
+    strict_five_axis: bool = False,
+    include_fixtures: bool = False,
+) -> Dict[str, Any]:
     files = sorted(glob.glob(str(trees_dir / "*.json")))
+    if include_fixtures:
+        fixture_files = sorted(glob.glob(str(ROOT / "benchmarks" / "fixtures" / "*" / "*.json")))
+        seen_paths = {str(Path(p).resolve()) for p in files}
+        for fp in fixture_files:
+            if str(Path(fp).resolve()) not in seen_paths:
+                files.append(fp)
     declared_by_domain: Dict[str, Dict[str, Dict[str, Any]]] = {}
     state_defs_global: Dict[str, List[Tuple[str, Any, Any, Any]]] = collections.defaultdict(list)
     all_declared_states: Set[str] = set()
@@ -133,9 +143,33 @@ def audit_directory(trees_dir: Path, strict_five_axis: bool = False) -> Dict[str
                 if port.get("accepted_states"):
                     d_counts["ports_with_accepted_states"] += 1
 
-                if all(k in port for k in ("carrier", "layout", "semantics", "typestate", "invariants")):
+                carrier_val = port.get("carrier")
+                typestate_val = port.get("typestate")
+                semantics_val = port.get("semantics")
+                layout_present = "layout" in port
+                layout_val = port.get("layout")
+                invariants_val = port.get("invariants")
+
+                carrier_ok = isinstance(carrier_val, str) and bool(carrier_val.strip())
+                typestate_ok = isinstance(typestate_val, str) and bool(typestate_val.strip())
+                semantics_ok = isinstance(semantics_val, str) and bool(semantics_val.strip())
+                layout_ok = layout_present and (layout_val is None or isinstance(layout_val, dict))
+                invariants_ok = isinstance(invariants_val, list)
+
+                if not carrier_ok:
+                    d_counts["ports_empty_carrier"] += 1
+                if not typestate_ok:
+                    d_counts["ports_empty_typestate"] += 1
+                if not semantics_ok:
+                    d_counts["ports_empty_semantics"] += 1
+                if not layout_ok:
+                    d_counts["ports_invalid_layout"] += 1
+                if not invariants_ok:
+                    d_counts["ports_invalid_invariants"] += 1
+
+                if carrier_ok and typestate_ok and semantics_ok and layout_ok and invariants_ok:
                     five_axis_ports += 1
-                    ts_val = str(port.get("typestate") or "").strip().lower()
+                    ts_val = str(typestate_val).strip().lower()
                     if st in colliding_states and "::" not in ts_val and ts_val != "any":
                         d_counts["unnamespaced_colliding_ports"] += 1
 
@@ -161,11 +195,12 @@ def audit_directory(trees_dir: Path, strict_five_axis: bool = False) -> Dict[str
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit trees/*.json for 5-axis & universal schema integrity.")
     parser.add_argument("--trees-dir", type=Path, default=ROOT / "trees", help="Path to trees directory")
-    parser.add_argument("--strict-five-axis", action="store_true", help="Fail if any port lacks explicit 5-axis fields")
+    parser.add_argument("--strict-five-axis", action="store_true", help="Fail if any port lacks explicit non-empty 5-axis fields")
+    parser.add_argument("--include-fixtures", action="store_true", help="Also audit held-out fixture trees under benchmarks/fixtures/*/*.json")
     parser.add_argument("--json", action="store_true", help="Emit JSON report")
     args = parser.parse_args()
 
-    rep = audit_directory(args.trees_dir, strict_five_axis=args.strict_five_axis)
+    rep = audit_directory(args.trees_dir, strict_five_axis=args.strict_five_axis, include_fixtures=args.include_fixtures)
     if args.json:
         print(json.dumps(rep, indent=2, sort_keys=True))
     else:
@@ -197,6 +232,11 @@ def main() -> int:
         t = rep["totals"]
         if (
             t.get("five_axis_ports", 0) < t.get("total_ports", 0)
+            or t.get("ports_empty_carrier", 0) > 0
+            or t.get("ports_empty_typestate", 0) > 0
+            or t.get("ports_empty_semantics", 0) > 0
+            or t.get("ports_invalid_layout", 0) > 0
+            or t.get("ports_invalid_invariants", 0) > 0
             or t.get("manual_source_priority", 0) > 0
             or t.get("unnamespaced_colliding_ports", 0) > 0
             or t.get("ports_undeclared_state", 0) > 0

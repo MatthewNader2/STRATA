@@ -3989,7 +3989,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -4173,7 +4173,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -4312,7 +4312,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -4467,7 +4467,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -4609,7 +4609,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -4727,7 +4727,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -4868,7 +4868,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5007,7 +5007,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5148,7 +5148,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5181,7 +5181,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5290,7 +5290,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5323,7 +5323,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5462,7 +5462,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5495,7 +5495,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5602,7 +5602,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5635,7 +5635,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5743,7 +5743,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -5776,7 +5776,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5809,7 +5809,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5917,7 +5917,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -5950,7 +5950,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -6068,7 +6068,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -6211,7 +6211,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -7622,7 +7622,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -7732,7 +7732,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -7902,7 +7902,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8012,7 +8012,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8186,7 +8186,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8360,7 +8360,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8534,7 +8534,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8708,7 +8708,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -8881,7 +8881,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -9022,7 +9022,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -9163,7 +9163,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -9305,7 +9305,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -9458,7 +9458,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9495,7 +9495,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9606,7 +9606,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9643,7 +9643,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9767,7 +9767,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9800,7 +9800,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9905,7 +9905,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9938,7 +9938,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10055,7 +10055,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10171,7 +10171,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10289,7 +10289,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10407,7 +10407,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10526,7 +10526,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10678,7 +10678,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10822,7 +10822,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10938,7 +10938,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10971,7 +10971,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -11093,7 +11093,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -11296,7 +11296,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11444,7 +11444,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11794,7 +11794,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11982,7 +11982,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -12165,7 +12165,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -12348,7 +12348,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -12531,7 +12531,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -12721,7 +12721,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -12902,7 +12902,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -13043,7 +13043,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -13862,7 +13862,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -13958,7 +13958,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -14064,7 +14064,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -14175,7 +14175,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -14306,7 +14306,14 @@
       "effects": [],
       "edges": [],
       "primary_in": "array",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "array"
+      }
     },
     {
       "cell_id": "NUMPY_ARGSORT",
@@ -14364,7 +14371,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -14543,7 +14550,7 @@
           "layout": {
             "rank": 2,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -14578,7 +14585,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -14728,7 +14735,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -14886,7 +14893,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15038,7 +15045,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15152,7 +15159,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15300,7 +15307,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15513,7 +15520,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15647,7 +15654,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15679,7 +15686,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15832,7 +15839,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -15864,7 +15871,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -16007,7 +16014,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -16180,7 +16187,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -16394,7 +16401,7 @@
           "layout": {
             "rank": null,
             "shape": null,
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,

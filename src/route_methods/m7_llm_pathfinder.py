@@ -37,14 +37,6 @@ try:
 except ImportError:
     from ..utils import extract_json_object
 
-try:
-    from node_resolver import DynamicNodeResolver
-except (ImportError, ValueError):
-    try:
-        from ..node_resolver import DynamicNodeResolver
-    except (ImportError, ValueError):
-        DynamicNodeResolver = None
-
 # How many candidate cells (by relevance) get shown to the model. Keeps the
 # prompt within a small local model's context window regardless of how wide
 # the retrieved tunnel is; ordering by relevance_map means truncation drops
@@ -116,8 +108,11 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
+
+        def _fallback(reason):
+            self.fallback_reason = reason
+            self._trace("method_failure", requested=type(self).__name__, reason=reason)
+            return []
 
         candidates = [
             c for c in tunnel
@@ -129,18 +124,15 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                     and not is_combinator_cell(c)
                 )
             )
-        ] or [tunnel[0]]
+        ]
+        if not candidates:
+            return _fallback("no usable candidates")
         try:
             from inference import ModelManager
         except (ImportError, ValueError):
             from ..inference import ModelManager
         mm = ModelManager.get_instance()
         has_llm = mm.can_synthesize()
-
-        def _fallback(reason):
-            self.fallback_reason = reason
-            self._trace("method_failure", requested=type(self).__name__, reason=reason)
-            return []
 
         if not has_llm or not ModelManager.get_instance().can_synthesize():
             return _fallback("no LLM loaded in this profile")
@@ -159,23 +151,11 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             return _fallback(f"LLM generation raised {type(_llm_err).__name__}: {_llm_err}")
 
         raw_ids = _parse_proposed_path(raw)
+        all_cand_map = {c.cell_id.lower(): c for c in candidates}
         proposed: List[Cell] = []
         for cid in raw_ids:
-            c = cand_map.get(cid.strip().lower())
-            if c is None:
-                try:
-                    from node_resolver import DynamicNodeResolver
-                    c = DynamicNodeResolver.resolve_node(
-                        raw_id=cid,
-                        prompt=prompt,
-                        orchestrator=orch,
-                        rag=kwargs.get("rag"),
-                    )
-                    if c is not None:
-                        cand_map[c.cell_id.lower()] = c
-                        candidates.append(c)
-                except Exception:
-                    c = None
+            key = cid.strip().lower()
+            c = cand_map.get(key) or all_cand_map.get(key)
             if c is not None and (not proposed or proposed[-1].cell_id != c.cell_id):
                 proposed.append(c)
 
@@ -195,7 +175,7 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                 s1_candidates = [c for c in orch.loaded_cells.values() if self.is_ingress_node(c, orch)]
             if s1_candidates:
                 best_s1 = None
-                best_bridge = None
+                best_bridges: List[Cell] = []
                 best_score = -1.0
                 for s1 in s1_candidates:
                     rel = relevance_map.get(s1.cell_id, 0.0) if relevance_map else 0.0
@@ -204,7 +184,7 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                         if score > best_score:
                             best_score = score
                             best_s1 = s1
-                            best_bridge = None
+                            best_bridges = []
                     else:
                         brg = self.find_bridge(s1, first, candidates, orch, prev_path=[s1])
                         if not brg and orch and hasattr(orch, "loaded_cells"):
@@ -214,20 +194,18 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                             if score > best_score:
                                 best_score = score
                                 best_s1 = s1
-                                best_bridge = brg
+                                best_bridges = [brg]
                 if best_s1 is None:
                     try:
                         p_clauses = self.segment_prompt_clauses(prompt)
-                        producer = self._find_type_producer(first, [], candidates, p_clauses, orch)
+                        producer, p_bridges = self._find_type_producer(first, [], candidates, p_clauses, orch)
                         if producer is not None and self.is_ingress_node(producer, orch):
                             best_s1 = producer
+                            best_bridges = list(p_bridges)
                     except Exception:
                         pass
                 if best_s1 is not None:
-                    if best_bridge is not None:
-                        chain = [best_s1, best_bridge] + chain
-                    else:
-                        chain = [best_s1] + chain
+                    chain = [best_s1] + best_bridges + chain
 
         for nxt in proposed[1:]:
             if any(c.cell_id == nxt.cell_id for c in chain):
@@ -261,21 +239,10 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
                 continue
 
             try:
-                from node_resolver import DynamicNodeResolver
-                dyn_bridge = DynamicNodeResolver.synthesize_adapter(curr, nxt, orch, rag=kwargs.get("rag"))
-                can_curr_dyn = self.step_unifies(curr, dyn_bridge, prev_path=chain) or self.step_unifies_dag(dyn_bridge, chain, ctx=ctx)
-                can_dyn_nxt = self.step_unifies(dyn_bridge, nxt, prev_path=chain + [dyn_bridge]) or self.step_unifies_dag(nxt, chain + [dyn_bridge], ctx=ctx)
-                if dyn_bridge and can_curr_dyn and can_dyn_nxt:
-                    chain.extend([dyn_bridge, nxt])
-                    continue
-            except Exception:
-                pass
-
-            try:
                 p_clauses = self.segment_prompt_clauses(prompt)
-                producer = self._find_type_producer(nxt, chain, candidates, p_clauses, orch)
+                producer, p_bridges = self._find_type_producer(nxt, chain, candidates, p_clauses, orch)
                 if producer is not None:
-                    chain.extend([producer, nxt])
+                    chain.extend(list(p_bridges) + [producer, nxt])
                     continue
             except Exception:
                 pass
@@ -298,8 +265,7 @@ class M7LLMPathfinderRouteMethod(RouteMethod):
             if _verr:
                 return _fallback(_verr)
         except Exception as _chk_exc:
-            if type(_chk_exc).__name__ in ("UnificationFailure", "UnresolvedPlaceholderError"):
-                return _fallback(f"M7 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
+            return _fallback(f"M7 verification raised {type(_chk_exc).__name__}: {_chk_exc}")
 
         clauses = self.segment_prompt_clauses(prompt)
         max_allowed = max(32, len(clauses) * 4 + 4, max_transforms + 8)

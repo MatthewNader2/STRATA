@@ -4276,7 +4276,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_RESIZE_BILINEAR",
@@ -4465,7 +4472,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_RESIZE_NEAREST",
@@ -4655,7 +4669,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_CROP",
@@ -4855,7 +4876,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_ROTATE",
@@ -5069,7 +5097,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": false,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_TRANSPOSE_FLIP_LEFT_RIGHT",
@@ -5212,7 +5247,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_TRANSPOSE_FLIP_TOP_BOTTOM",
@@ -5355,7 +5397,14 @@
       ],
       "edges": [],
       "primary_in": "image",
-      "primary_out": "output_var"
+      "primary_out": "output_var",
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_TRANSPOSE_ROTATE_90",
@@ -5691,7 +5740,14 @@
       "primary_out": "output_var",
       "imports": [
         "from PIL import ImageFilter"
-      ]
+      ],
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_FILTER_BOX_BLUR",
@@ -5877,7 +5933,14 @@
       "primary_out": "output_var",
       "imports": [
         "from PIL import ImageFilter"
-      ]
+      ],
+      "polymorphic_propagation": {
+        "preserves_semantics": true,
+        "preserves_layout": true,
+        "preserves_typestate": true,
+        "preserves_nominal": false,
+        "source_port": "image"
+      }
     },
     {
       "cell_id": "PILLOW_FILTER_FIND_EDGES",

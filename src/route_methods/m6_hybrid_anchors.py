@@ -47,12 +47,12 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
         orch = orchestrator or self.orchestrator
         if not tunnel:
             return []
-        if len(tunnel) == 1:
-            return [tunnel[0]]
 
         candidates = [c for c in tunnel if getattr(c, "node_type", "") != "constant" and not is_macro_cell(c)]
         if not candidates:
-            return [tunnel[0]]
+            self.fallback_reason = "no usable candidates"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         # 1. Extract universal literals (files, identifiers, etc.)
         src_file_literals, dest_file_literals = self.extract_file_literals(prompt or "", ctx=ctx)
@@ -130,6 +130,15 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                     clause_anchors.append(c)
 
         # 4. Assemble Waypoints
+        if (
+            not clause_anchors
+            and not sink_cell
+            and source_cell is not None
+            and self.file_compat(source_cell, src_lit) <= 0
+            and max(self.clause_fit(first_clause, source_cell)) <= 0.0
+        ):
+            source_cell = None
+
         waypoints: List[Cell] = []
         if source_cell:
             waypoints.append(source_cell)
@@ -153,7 +162,9 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
             waypoints.append(sink_cell)
 
         if not waypoints:
-            waypoints = [candidates[0]]
+            self.fallback_reason = "no hybrid anchor waypoints matched prompt"
+            self._trace("method_failure", requested=type(self).__name__, reason=self.fallback_reason)
+            return []
 
         # 5. Viterbi beam bridging across multi-hop gaps between locked waypoints
         def _viterbi_beam_bridge(src: Cell, dst: Cell, base_scope: List[Cell], max_hops: int = 4, beam_width: int = 4) -> Optional[List[Cell]]:
@@ -210,7 +221,12 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
         bridged_path: List[Cell] = [waypoints[0]]
         for nxt in waypoints[1:]:
             curr = bridged_path[-1]
-            if curr.cell_id == nxt.cell_id:
+            next_cl_idx = getattr(nxt, "matched_clause_idx", None)
+            if any(
+                c.cell_id == nxt.cell_id
+                and getattr(c, "matched_clause_idx", None) == next_cl_idx
+                for c in bridged_path
+            ):
                 continue
             if self.step_unifies(curr, nxt, prev_path=bridged_path) or self.step_unifies_dag(nxt, bridged_path, ctx=ctx):
                 bridged_path.append(nxt)
@@ -241,12 +257,12 @@ class M6HybridAnchorsRouteMethod(RouteMethod):
                             connected = True
                             break
                     if not connected:
-                        producer = self._find_type_producer(nxt, bridged_path, candidates, clauses, orch)
+                        producer, p_bridges = self._find_type_producer(nxt, bridged_path, candidates, clauses, orch)
                         if producer is not None:
                             self._trace("producer_inserted", cell=producer.cell_id, for_anchor=nxt.cell_id,
                                         clause_idx=getattr(nxt, "matched_clause_idx", None),
                                         reason="anchor input type unmet by scope; producer has same-clause identity evidence and unifies from scope")
-                            bridged_path.extend([producer, nxt])
+                            bridged_path.extend(list(p_bridges) + [producer, nxt])
                             connected = True
                     if not connected:
                         self._trace("anchor_dropped", cell=nxt.cell_id, clause_idx=getattr(nxt, "matched_clause_idx", None),

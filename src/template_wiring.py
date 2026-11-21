@@ -49,10 +49,10 @@ def extract_placeholders(template: str) -> List[str]:
             j = template.find('}', i + 1)
             if j != -1:
                 inner = template[i + 1:j]
-                if inner.isidentifier():
+                if "{" not in inner and inner.isidentifier():
                     placeholders.append(inner)
-                i = j + 1
-                continue
+                    i = j + 1
+                    continue
         i += 1
     return placeholders
 
@@ -71,10 +71,6 @@ def extract_placeholders(template: str) -> List[str]:
 #   3. The structural default "any".
 # Zero hardcoded name dictionaries live in the engine.
 
-def _canonicalize_param_name(param_name: str) -> str:
-    return str(param_name).strip().lower()
-
-
 def _registry():
     try:
         from .lattice import TypeRegistry
@@ -87,27 +83,6 @@ def _registry():
         return TypeRegistry.get_instance()
     except Exception:
         return None
-
-
-def resolve_placeholder_type(cell: Any, placeholder: str) -> str:
-    """
-    Returns the DECLARED type of a template placeholder port.
-    Reads the port schema off the cell itself; falls back to tree-declared
-    name hints, then to the structural default "any". No lexical guessing.
-    """
-    inputs = getattr(cell, "inputs", None)
-    if isinstance(cell, dict):
-        inputs = cell.get("inputs", inputs)
-    if isinstance(inputs, dict):
-        port = inputs.get(placeholder)
-        if port is not None:
-            t_name = (
-                port.get("type_name") if isinstance(port, dict)
-                else getattr(port, "type_name", None)
-            )
-            if t_name:
-                return str(t_name)
-    return infer_port_type(placeholder)
 
 
 def infer_port_type(param_name: str, domain: str = "generic") -> str:
@@ -127,16 +102,6 @@ def infer_port_type(param_name: str, domain: str = "generic") -> str:
                 return declared
         except Exception:
             pass
-        # Also try the canonicalized name (strip input_/arg_/_value etc.) so
-        # tree hints can be written against the semantic port name.
-        canonical = _canonicalize_param_name(str(param_name))
-        if canonical and canonical != str(param_name).strip().lower():
-            try:
-                declared = reg.lookup_port_name_type(canonical)
-                if declared:
-                    return declared
-            except Exception:
-                pass
     return "any"
 
 
@@ -197,16 +162,6 @@ def transform_call_ast_with_flag(code_snippet: str, mod_alias: str, flag_attr: s
         return clean_malformed_template_braces(unparsed)
     except Exception:
         return cleaned_snippet
-
-
-def wire_default_flag(cell: Any, code: str, mod_alias: str) -> str:
-    """Injects default flag attributes via AST without text surgery hacks."""
-    slots = getattr(cell, "slots", {}) if not isinstance(cell, dict) else cell.get("slots", {})
-    tree_meta = getattr(cell, "tree_meta", {}) if not isinstance(cell, dict) else cell.get("tree_meta", {})
-    flag_attr = (slots or {}).get("default_flag_attr") or (tree_meta or {}).get("default_flag_attr")
-    if not flag_attr:
-        return code
-    return transform_call_ast_with_flag(code, mod_alias, str(flag_attr))
 
 
 def _port_is_preservable(spec: Any) -> bool:

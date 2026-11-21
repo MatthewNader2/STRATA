@@ -5,21 +5,28 @@ static SDK typestate auditor, and resource telemetry utilities.
 from __future__ import annotations
 
 import ast
+import csv
 import io
+import math
 import os
-import re
 import resource
 import shutil
+import sqlite3
 import struct
 import subprocess
 import sys
+import tempfile
 import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .suites import SDK_SPECS
-
 ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from eval_metrics import _extract_ast_literals
+
+from .suites import SDK_SPECS
 
 
 def read_proc_mem_mb() -> Dict[str, Optional[float]]:
@@ -79,14 +86,71 @@ def read_cpu_times() -> Dict[str, float]:
     }
 
 
+def _strip_ci_closed_spans(text: str, open_tag: str, close_tag: str) -> str:
+    """Removes all closed case-insensitive `<open_tag>...<close_tag>` spans."""
+    open_l = open_tag.lower()
+    close_l = close_tag.lower()
+    out: List[str] = []
+    pos = 0
+    low = text.lower()
+    while True:
+        start = low.find(open_l, pos)
+        if start == -1:
+            out.append(text[pos:])
+            break
+        end = low.find(close_l, start + len(open_l))
+        if end == -1:
+            out.append(text[pos:])
+            break
+        out.append(text[pos:start])
+        pos = end + len(close_l)
+    return "".join(out)
+
+
 def strip_reasoning_traces(raw_text: str) -> str:
-    """Removes <think>...</think> and harmony/channel reasoning wrappers before code extraction."""
+    """Removes closed/unclosed <think> traces and harmony/channel reasoning wrappers."""
     if not raw_text:
         return ""
-    cleaned = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL | re.IGNORECASE)
-    if "<|channel|>final<|message|>" in cleaned:
-        cleaned = cleaned.split("<|channel|>final<|message|>")[-1]
-    cleaned = cleaned.replace("<|end|>", "").replace("<|return|>", "")
+    cleaned = _strip_ci_closed_spans(raw_text, "<think>", "</think>")
+    # Strip unclosed/truncated <think>... blocks when generation hits max_tokens mid-thought
+    open_idx = cleaned.lower().find("<think>")
+    if open_idx != -1:
+        cleaned = cleaned[:open_idx]
+    # Strip orphaned leading ...</think> when chat template pre-filled <think>
+    close_idx = cleaned.lower().find("</think>")
+    if close_idx != -1:
+        cleaned = cleaned[close_idx + len("</think>") :]
+
+    final_marker = "<|channel|>final<|message|>"
+    if final_marker in cleaned:
+        cleaned = cleaned.split(final_marker)[-1]
+    else:
+        open_markers = ("<|channel|>analysis<|message|>", "<|channel|>commentary<|message|>")
+        stop_markers = ("<|channel|>", "<|end|>", "<|return|>")
+        while True:
+            low = cleaned.lower()
+            found_start = -1
+            found_len = 0
+            for om in open_markers:
+                idx = low.find(om)
+                if idx != -1 and (found_start == -1 or idx < found_start):
+                    found_start = idx
+                    found_len = len(om)
+            if found_start == -1:
+                break
+            search_from = found_start + found_len
+            stop_idx = -1
+            for sm in stop_markers:
+                idx = low.find(sm, search_from)
+                if idx != -1 and (stop_idx == -1 or idx < stop_idx):
+                    stop_idx = idx
+            if stop_idx == -1:
+                cleaned = cleaned[:found_start]
+            else:
+                cleaned = cleaned[:found_start] + cleaned[stop_idx:]
+
+    for tok in ("<|end|>", "<|return|>", "<|start|>assistant", "<|message|>"):
+        cleaned = cleaned.replace(tok, "")
     return cleaned.strip()
 
 
@@ -96,17 +160,41 @@ def extract_code_clean(raw_text: str) -> str:
     if not cleaned:
         return ""
 
-    blocks = re.findall(r"```(?:python|py)?\s*\n(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    blocks: List[str] = []
+    open_fallback: Optional[str] = None
+    pos = 0
+    while True:
+        fence_start = cleaned.find("```", pos)
+        if fence_start == -1:
+            break
+        after_ticks = fence_start + 3
+        nl_idx = cleaned.find("\n", after_ticks)
+        if nl_idx == -1:
+            break
+        info = cleaned[after_ticks:nl_idx].strip().lower()
+        close_idx = cleaned.find("```", nl_idx + 1)
+        if info in ("", "python", "py"):
+            if close_idx != -1:
+                blocks.append(cleaned[nl_idx + 1 : close_idx])
+                pos = close_idx + 3
+            else:
+                if open_fallback is None:
+                    open_fallback = cleaned[nl_idx + 1 :].strip()
+                break
+        else:
+            if close_idx != -1:
+                pos = close_idx + 3
+            else:
+                pos = nl_idx + 1
+
     if blocks:
         # Prefer the last non-empty block (models sometimes draft then output final code)
         for blk in reversed(blocks):
             if blk.strip():
                 return blk.strip()
 
-    # Fallback: unclosed fence
-    m_open = re.search(r"```(?:python|py)?\s*\n(.*)$", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    if m_open:
-        return m_open.group(1).strip()
+    if open_fallback is not None:
+        return open_fallback
 
     # If the response contains prose (refusal/clarification) and no Python AST, return empty
     try:
@@ -127,7 +215,7 @@ def check_ast(code: str) -> Dict[str, Any]:
 
 
 def verify_literals_consumed(code: str, expected_literals: List[Any]) -> List[Any]:
-    """Checks that prompt-specified literals are present as Python AST constants/values."""
+    """Checks that prompt-specified literals are present as Python AST constants or JoinedStr fragments."""
     if not expected_literals or not code.strip():
         return list(expected_literals) if not code.strip() else []
     try:
@@ -135,25 +223,28 @@ def verify_literals_consumed(code: str, expected_literals: List[Any]) -> List[An
     except SyntaxError:
         return list(expected_literals)
 
-    consts: List[Any] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant):
-            consts.append(node.value)
-        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
-            if isinstance(node.operand.value, (int, float)):
-                consts.append(-node.operand.value)
+    str_consts, num_consts = _extract_ast_literals(tree)
+    bool_consts = {
+        n.value for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and isinstance(n.value, bool)
+    }
 
     missing: List[Any] = []
     for lit in expected_literals:
-        if isinstance(lit, float):
-            if not any(isinstance(c, (int, float)) and not isinstance(c, bool) and abs(float(c) - lit) < 1e-6 for c in consts):
+        if isinstance(lit, bool):
+            if lit not in bool_consts:
+                missing.append(lit)
+        elif isinstance(lit, float):
+            if not any(abs(c - lit) < 1e-6 for c in num_consts):
+                missing.append(lit)
+        elif isinstance(lit, int):
+            if not any(math.isclose(float(lit), c, rel_tol=1e-9, abs_tol=1e-9) for c in num_consts):
                 missing.append(lit)
         elif isinstance(lit, str):
-            if not any(isinstance(c, str) and (lit == c or lit in c) for c in consts):
+            if not any(lit == c or lit in c for c in str_consts):
                 missing.append(lit)
         else:
-            if lit not in consts:
-                missing.append(lit)
+            missing.append(lit)
     return missing
 
 
@@ -199,6 +290,122 @@ def provision_sandbox_fixtures(workdir: Path) -> None:
             wf.writeframes(bytes(frames))
 
 
+def _task_egress_paths(task: Dict[str, Any]) -> List[str]:
+    spec = task.get("artifact_spec")
+    if isinstance(spec, dict):
+        if str(spec.get("kind") or "").strip().lower() == "sqlite_clean_table" and spec.get("db_path"):
+            return [str(spec["db_path"])]
+        if spec.get("egress_paths"):
+            return [str(p) for p in spec["egress_paths"] if p]
+    return [str(p) for p in (task.get("egress_paths") or ()) if p]
+
+
+def verify_task_artifacts(
+    task: Dict[str, Any],
+    workdir: Path,
+    input_csv_path: Optional[Path] = None,
+) -> Optional[str]:
+    """Verifies declarative task output artifacts semantically (returns error message or None)."""
+    spec = task.get("artifact_spec")
+    if not isinstance(spec, dict):
+        return None
+    if str(spec.get("kind") or "").strip().lower() != "sqlite_clean_table":
+        return None
+
+    db_rel = str(spec.get("db_path") or "").strip()
+    table_name = str(spec.get("table") or "").strip()
+    source_csv = str(spec.get("source_csv") or "").strip()
+    if not db_rel or not table_name:
+        return "Incomplete sqlite_clean_table artifact_spec (missing db_path or table)"
+
+    wd = Path(workdir)
+    db_path = wd / db_rel
+    if not db_path.is_file() or db_path.stat().st_size <= 0:
+        return f"Output SQLite database '{db_rel}' was not created or is empty"
+
+    csv_candidate: Optional[Path] = Path(input_csv_path) if input_csv_path is not None else None
+    if (csv_candidate is None or not csv_candidate.is_file()) and source_csv:
+        cand = wd / source_csv
+        csv_candidate = cand if cand.is_file() else (ROOT_DIR / source_csv)
+    if csv_candidate is None or not csv_candidate.is_file():
+        return f"Reference CSV '{source_csv or '<unspecified>'}' unavailable for SQLite artifact verification"
+
+    raw_null_tokens = spec.get("null_tokens")
+    null_tokens = (
+        {str(tok).strip().lower() for tok in raw_null_tokens}
+        if raw_null_tokens is not None
+        else {"", "nan", "na", "null", "none"}
+    )
+    with open(csv_candidate, "r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        input_cols = [c for c in (reader.fieldnames or []) if c]
+        rows_csv = list(reader)
+
+    if not input_cols:
+        return f"Reference CSV '{csv_candidate.name}' has no columns"
+
+    expected_clean_rows = sum(
+        1
+        for r in rows_csv
+        if all(r.get(c) is not None and str(r.get(c)).strip().lower() not in null_tokens for c in input_cols)
+    )
+
+    quoted_table = '"' + table_name.replace('"', '""') + '"'
+    reject_diag = bool(spec.get("reject_square_identity_matrix", True))
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if cur.fetchone() is None:
+            return f"SQLite table '{table_name}' not found in '{db_rel}'"
+
+        cur.execute(f"PRAGMA table_info({quoted_table})")
+        table_cols = [str(r[1]) for r in cur.fetchall()]
+        missing_cols = [c for c in input_cols if c not in table_cols]
+        if missing_cols:
+            return f"Table '{table_name}' missing required columns {missing_cols}; found {table_cols}"
+
+        cur.execute(f"SELECT COUNT(*) FROM {quoted_table}")
+        row_count = int(cur.fetchone()[0])
+        if row_count == 0:
+            return f"Table '{table_name}' is empty (0 rows)"
+
+        quoted_cols = ", ".join('"' + c.replace('"', '""') + '"' for c in input_cols)
+        cur.execute(f"SELECT {quoted_cols} FROM {quoted_table}")
+        fetched = cur.fetchall()
+
+        if reject_diag and row_count == len(input_cols) and expected_clean_rows > len(input_cols):
+            diag_vals: List[float] = []
+            for idx_r in range(row_count):
+                cell_v = fetched[idx_r][idx_r]
+                if isinstance(cell_v, (int, float)) and not isinstance(cell_v, bool):
+                    diag_vals.append(float(cell_v))
+            if len(diag_vals) == len(input_cols) and all(abs(v - 1.0) < 1e-6 for v in diag_vals):
+                return (
+                    f"Table '{table_name}' appears to store a {row_count}x{len(input_cols)} "
+                    f"correlation matrix rather than the cleaned dataframe ({expected_clean_rows} rows)"
+                )
+
+        if row_count != expected_clean_rows:
+            return (
+                f"Table '{table_name}' has {row_count} rows, expected {expected_clean_rows} "
+                f"cleaned non-null rows from '{csv_candidate.name}'"
+            )
+
+        for r_vals in fetched:
+            for val in r_vals:
+                if val is None:
+                    return f"Table '{table_name}' contains NULL values in required columns (missing rows not dropped)"
+                if isinstance(val, str) and val.strip().lower() in null_tokens:
+                    return f"Table '{table_name}' contains blank/NaN string values in required columns"
+                if isinstance(val, float) and not math.isfinite(val):
+                    return f"Table '{table_name}' contains non-finite values in required columns"
+    finally:
+        conn.close()
+
+    return None
+
+
 def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
     """Executes generated Python code inside STRATA's headless GEVRSandbox and checks literal grounding."""
     ast_info = check_ast(code)
@@ -224,13 +431,22 @@ def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> 
 
     from gevr_sandbox import GEVRSandbox
 
+    expected_egress = _task_egress_paths(task)
     sandbox = GEVRSandbox(default_timeout=timeout, allowed_capabilities=set())
-    sb = sandbox.execute(code, timeout=timeout)
+    sb = sandbox.execute(
+        code,
+        timeout=timeout,
+        egress_paths=expected_egress or None,
+        capture_egress=bool(expected_egress),
+    )
     err_txt = str(sb.get("error") or sb.get("stderr") or "").strip()
 
     if not sb.get("success", False):
-        if any(k in err_txt for k in ("SecurityPolicyError", "Security violation", "Capability denied")):
+        err_kind = str(sb.get("error_kind") or "").strip().lower()
+        if err_kind == "security":
             st, cat = "SECURITY_BLOCKED", "SECURITY"
+        elif err_kind in ("egress", "contract"):
+            st, cat = "SEMANTIC_FAILED", "IMPLEMENTATION"
         else:
             st, cat = "SANDBOX_FAILED", "IMPLEMENTATION"
         last_line = err_txt.splitlines()[-1] if err_txt else "Runtime failure"
@@ -243,6 +459,31 @@ def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> 
             "stdout": str(sb.get("stdout") or "")[-1000:],
             "stderr": err_txt[-1500:],
         }
+
+    if expected_egress:
+        art_err: Optional[str] = None
+        captured = sb.get("egress_bytes") or {}
+        spec = task.get("artifact_spec") if isinstance(task.get("artifact_spec"), dict) else {}
+        src_csv = str(spec.get("source_csv") or "").strip() if spec else ""
+        ref_csv_path = (ROOT_DIR / src_csv) if src_csv else None
+        with tempfile.TemporaryDirectory(prefix="strata_eval_art_") as tmp_dir:
+            tmp_root = Path(tmp_dir).resolve()
+            for rel_p, raw_bytes in captured.items():
+                dst = (tmp_root / str(rel_p)).resolve()
+                if dst.is_relative_to(tmp_root) and isinstance(raw_bytes, (bytes, bytearray)):
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    dst.write_bytes(bytes(raw_bytes))
+            art_err = verify_task_artifacts(task, tmp_root, input_csv_path=ref_csv_path)
+        if art_err:
+            return {
+                "status": "SEMANTIC_FAILED",
+                "category": "IMPLEMENTATION",
+                "detail": art_err,
+                "ast_ok": True,
+                "missing_literals": verify_literals_consumed(code, task.get("expected_literals") or []),
+                "stdout": str(sb.get("stdout") or "")[-1000:],
+                "stderr": err_txt[-1000:],
+            }
 
     missing_lits = verify_literals_consumed(code, task.get("expected_literals") or [])
     if missing_lits:
@@ -419,22 +660,30 @@ def evaluate_task_response(raw_text: str, code: str, task: Dict[str, Any], timeo
 
     # Sandbox task
     if expected == "clarify" and not code.strip():
-        # Clean refusal / clarification request without hallucinated code
-        has_question_or_clarify = bool(raw_text and raw_text.strip())
+        # Clean refusal / clarification request only if visible text remains after stripping reasoning traces
+        visible_reply = strip_reasoning_traces(raw_text)
+        has_question_or_clarify = bool(visible_reply and visible_reply.strip())
         return {
             "kind": "sandbox",
             "expected": "clarify",
             "status": "REFUSED_OK" if has_question_or_clarify else "NO_CODE",
             "passed": False,
             "acceptable": has_question_or_clarify,
-            "detail": "Clean clarification/refusal on underspecified prompt" if has_question_or_clarify else "Empty reply",
+            "detail": (
+                "Clean clarification/refusal on underspecified prompt"
+                if has_question_or_clarify
+                else "Empty reply after stripping reasoning traces"
+            ),
             "ast_ok": False,
             "missing_literals": [],
         }
 
     sb = run_sandbox_eval(code, task, timeout=timeout)
     passed = sb["status"] == "PASSED"
-    acceptable = passed or (expected == "clarify" and sb["status"] in ("LINT_HALTED", "REFUSED_OK"))
+    acceptable = passed or (
+        expected == "clarify"
+        and sb["status"] in ("REFUSED_OK", "TYPED_HOLE_HALTED", "AMBIGUITY_HALTED", "UNRESOLVED_PORT")
+    )
     return {
         "kind": "sandbox",
         "expected": expected,
