@@ -28,9 +28,17 @@ from dataclasses import dataclass, field
 
 try:
     from .language_backend import get_active_language_backend
-    from .lattice import UNRESOLVED_PORT, TypeRegistry, AlgebraicSignature, PortSignature
+    from .lattice import (
+        UNRESOLVED_PORT,
+        TypeRegistry,
+        AlgebraicSignature,
+        PortSignature,
+        is_path_port,
+        apply_polymorphic_propagation,
+    )
     from .schema import DESTRUCTIVE_OR_CLEAN_EFFECT_KINDS, get_effect_kind, is_unresolved_value
     from .tokenizer import CellTokenizer
+    from .type_predicates import is_linear_handle_port
     from .unification import (
         ExecutionContext, unify, _shape_compatible, _is_sink_cell,
         resolve_typed_binding_record, TypedBindingRecord,
@@ -38,9 +46,17 @@ try:
     )
 except (ImportError, ValueError):
     from language_backend import get_active_language_backend
-    from lattice import UNRESOLVED_PORT, TypeRegistry, AlgebraicSignature, PortSignature
+    from lattice import (
+        UNRESOLVED_PORT,
+        TypeRegistry,
+        AlgebraicSignature,
+        PortSignature,
+        is_path_port,
+        apply_polymorphic_propagation,
+    )
     from schema import DESTRUCTIVE_OR_CLEAN_EFFECT_KINDS, get_effect_kind, is_unresolved_value
     from tokenizer import CellTokenizer
+    from type_predicates import is_linear_handle_port
     from unification import (
         ExecutionContext, unify, _shape_compatible, _is_sink_cell,
         resolve_typed_binding_record, TypedBindingRecord,
@@ -707,6 +723,7 @@ class PreflightLinter:
         waived_literals: Optional[Set[str]] = None,
         orchestrator: Optional[Any] = None,
         clause_semantic_scores: Optional[List[Dict[str, float]]] = None,
+        typed_proof: Optional[Any] = None,
     ) -> PreflightLintResult:
         violations: List[str] = []
         warnings: List[str] = []
@@ -1153,8 +1170,31 @@ class PreflightLinter:
         # -----------------------------------------------------------------
         # Check 2b: Cross-Port Static Type and Carrier Compatibility
         # -----------------------------------------------------------------
+        proof_var_sigs: Dict[str, Any] = dict(getattr(typed_proof, "var_signatures", None) or {})
         var_signatures: Dict[str, Any] = {}
         var_producers: Dict[str, Tuple[Any, str]] = {}
+        _lint_reg = cls._registry()
+
+        def _resolve_live_out_sig(
+            cell_obj: Any,
+            port_key: Optional[str],
+            static_sig: Any,
+            bound_v: Optional[str],
+            bindings_d: Dict[str, Any],
+        ) -> Any:
+            if isinstance(bound_v, str) and bound_v in proof_var_sigs:
+                return proof_var_sigs[bound_v]
+            prop_map = getattr(cell_obj, "_propagated_outputs", None)
+            if isinstance(prop_map, dict) and port_key and port_key in prop_map:
+                return prop_map[port_key]
+            pp_spec = getattr(cell_obj, "polymorphic_propagation", None)
+            if isinstance(pp_spec, dict) and static_sig is not None:
+                src_port_name = pp_spec.get("source_port") or getattr(cell_obj, "primary_in", None)
+                src_var = bindings_d.get(src_port_name) if src_port_name else None
+                src_live = var_signatures.get(src_var) if isinstance(src_var, str) else None
+                if src_live is not None:
+                    return apply_polymorphic_propagation(static_sig, src_live, pp_spec, _lint_reg)
+            return static_sig
 
         for cell, bindings in pipeline_bindings:
             if not isinstance(bindings, dict):
@@ -1219,15 +1259,8 @@ class PreflightLinter:
                 prod_cell, prod_port = var_producers.get(root_var, (None, None))
                 prod_id = prod_cell.cell_id if prod_cell else "unknown"
                 prod_sig_for_edge = resolved_sig
-                if (
-                    getattr(record, "kind", None) == "variable"
-                    and bound_val == root_var
-                    and prod_cell is not None
-                    and prod_port
-                ):
-                    _declared_out = (getattr(prod_cell, "outputs", {}) or {}).get(prod_port)
-                    if _declared_out is not None:
-                        prod_sig_for_edge = _declared_out
+                if getattr(record, "kind", None) == "variable" and bound_val == root_var:
+                    prod_sig_for_edge = var_signatures.get(root_var, resolved_sig)
 
                 # 1. Structural Carrier & Shape Compatibility
                 if not _shape_compatible(prod_sig_for_edge, in_port_sig, producer_cell=prod_cell, consumer_cell=cell):
@@ -1269,7 +1302,7 @@ class PreflightLinter:
                     continue
 
                 # 2. Algebraic Type Unification
-                p_term = getattr(resolved_sig, "signature", resolved_sig)
+                p_term = getattr(prod_sig_for_edge, "signature", prod_sig_for_edge)
                 c_term = getattr(in_port_sig, "signature", in_port_sig)
                 sub = unify(p_term, c_term)
                 if sub is None:
@@ -1302,29 +1335,31 @@ class PreflightLinter:
 
             # Register cell outputs for subsequent consumers
             prim_out = getattr(cell, "primary_output", None)
-            if prop_quals and prim_out is not None:
-                prim_out = _enrich_port_signature_qualifiers(prim_out, prop_quals)
-
             if prim_out is not None:
                 p_name = getattr(prim_out, "name", None)
                 if p_name and p_name in bindings:
                     v = bindings[p_name]
                     if isinstance(v, str) and v.isidentifier():
-                        var_signatures[v] = prim_out
+                        live_prim = _resolve_live_out_sig(cell, p_name, prim_out, v, bindings)
+                        if prop_quals and live_prim is not None:
+                            live_prim = _enrich_port_signature_qualifiers(live_prim, prop_quals)
+                        var_signatures[v] = live_prim
                         var_producers[v] = (cell, p_name)
 
             for out_name, out_sig in cell_outputs.items():
-                if prop_quals:
-                    out_sig = _enrich_port_signature_qualifiers(out_sig, prop_quals)
                 if out_name in bindings:
                     v = bindings[out_name]
                     if isinstance(v, str) and v.isidentifier():
-                        var_signatures[v] = out_sig
+                        live_out = _resolve_live_out_sig(cell, out_name, out_sig, v, bindings)
+                        if prop_quals and live_out is not None:
+                            live_out = _enrich_port_signature_qualifiers(live_out, prop_quals)
+                        var_signatures[v] = live_out
                         var_producers[v] = (cell, out_name)
 
             out_var = bindings.get("output_var")
             if isinstance(out_var, str) and out_var.isidentifier() and out_var not in var_signatures:
                 first_sig = prim_out or (next(iter(cell_outputs.values())) if cell_outputs else None)
+                first_sig = _resolve_live_out_sig(cell, "output_var", first_sig, out_var, bindings)
                 if first_sig is not None:
                     if prop_quals:
                         first_sig = _enrich_port_signature_qualifiers(first_sig, prop_quals)
@@ -1340,11 +1375,25 @@ class PreflightLinter:
         for i, (cell, bindings) in enumerate(pipeline_bindings):
             if not isinstance(bindings, dict):
                 continue
-            if _is_sink_cell(cell) or not getattr(cell, "outputs", None):
+            cell_outs_live = getattr(cell, "outputs", None)
+            if not cell_outs_live:
                 continue
             # The final step is the pipeline goal / return value
             if i == n_steps - 1:
                 continue
+            if _is_sink_cell(cell):
+                # True side-effect/I/O/void/status sinks (e.g. imwrite, to_csv, quit) have no
+                # downstream dataflow contract; value-returning mid-pipeline evaluators
+                # (e.g. confusion_matrix returning ndarray) still require liveness checks.
+                void_types_live = _registry_liveness.get_void_types_set()
+                all_effect_outs = all(
+                    is_path_port(op_live, _registry_liveness)
+                    or str(getattr(op_live, "type_name", "") or "").strip().lower() in void_types_live
+                    or _registry_liveness.is_subtype(str(getattr(op_live, "type_name", "") or "").strip().lower(), "bool")
+                    for op_live in cell_outs_live.values()
+                )
+                if all_effect_outs:
+                    continue
 
             # Output variables produced by this step
             produced_vars: Set[str] = set()
@@ -1401,12 +1450,11 @@ class PreflightLinter:
                 has_handle_output = False
                 c_ntype = str(getattr(cell, "node_type", "") or "").strip().lower()
                 for out_name, out_sig in getattr(cell, "outputs", {}).items():
-                    s_kind = str(getattr(out_sig, "structure_kind", "") or "").lower()
                     p_role = str(getattr(out_sig, "port_role", "") or "").lower()
                     o_tname = str(getattr(getattr(out_sig, "signature", out_sig), "type_name", "") or "").strip().lower()
                     if c_ntype in ("macro", "combinator") and p_role == "result" and o_tname == "state":
                         continue
-                    if s_kind == "handle" or cls._is_object_receiver_role(p_role):
+                    if is_linear_handle_port(out_sig, _registry_liveness):
                         has_handle_output = True
                         break
 
@@ -1458,7 +1506,7 @@ class PreflightLinter:
                 _t_out = str(getattr(_po, "type_name", "") or "").lower()
                 is_carrier_transform = bool(_k_in and _k_in == _k_out and _t_in == _t_out and _k_out not in ("scalar", "handle"))
                 if (
-                    is_terminal
+                    (is_terminal and (i == n_steps - 1 or is_teardown_tail))
                     or getattr(cell, "is_goal", False)
                     or (getattr(cell, "matched_clause_idx", None) is not None and not is_carrier_transform)
                 ):
@@ -1766,7 +1814,25 @@ class PreflightLinter:
                 # 2. Clause adjacency: immediately preceding clause (cons_clause - 1)
                 is_adjacent = (prod_clause == cons_clause - 1)
 
-                if not is_adjacent:
+                # 3. Shared entity provenance across producer and consumer clauses (e.g. named rect/surface/handle)
+                has_entity_provenance = False
+                if not is_adjacent and prod_clause < len(prompt_clauses):
+                    prod_clause_text = prompt_clauses[prod_clause]
+                    prod_clause_toks = (
+                        {
+                            t.lower()
+                            for t in prod_clause_text.replace(",", " ").replace('"', " ").replace("'", " ").split()
+                            if len(t) > 2
+                        }
+                        if prod_clause_text
+                        else set()
+                    )
+                    fn_words_4c = set(reg_4c.get_function_words()) if hasattr(reg_4c, "get_function_words") else set()
+                    shared_ent_toks = (prod_clause_toks & cons_clause_toks) - fn_words_4c
+                    if shared_ent_toks or str(getattr(p_sig, "structure_kind", "") or "").lower() in ("handle", "composite"):
+                        has_entity_provenance = True
+
+                if not is_adjacent and not has_entity_provenance:
                     msg = (
                         f"Provenance mismatch: Cell '{cell.cell_id}' port '{p_name}' bound variable '{val_expr}' "
                         f"produced by Cell '{prod_cell.cell_id}' (serving clause {prod_clause}) into clause {cons_clause} "

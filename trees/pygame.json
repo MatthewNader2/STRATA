@@ -287,23 +287,25 @@
         "status": {
           "type_name": "Tuple[int, int]",
           "state": "initialized",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "port_role": "result",
           "description": "Tuple of (n_successful_inits, n_failed_inits).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.initialized",
           "typestate": "pygame::initialized",
@@ -412,13 +414,14 @@
         "window",
         "screen",
         "set_mode",
-        "init_window"
+        "init_window",
+        "create_window"
       ],
       "inputs": {
         "size": {
           "type_name": "Tuple[int, int]",
           "state": "dimensions",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": false,
           "default_value": [
             0,
@@ -426,20 +429,22 @@
           ],
           "port_role": "configuration",
           "description": "Resolution width and height pair.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.dimensions",
           "typestate": "pygame::dimensions",
@@ -484,8 +489,6 @@
       "semantic_tags": [
         "caption",
         "title",
-        "window",
-        "display",
         "set_caption"
       ],
       "inputs": {
@@ -555,20 +558,37 @@
     },
     {
       "cell_id": "PYGAME_GET_SURFACE",
-      "stage": 1,
+      "stage": 2,
       "domain_name": "pygame",
       "node_type": "function",
-      "node_role": "source",
+      "node_role": "transformer",
       "topology_type": "sequential",
       "docstring": "Returns a reference to the currently set display Surface.",
       "semantic_tags": [
-        "display",
-        "surface",
-        "screen",
         "get_surface",
+        "get_screen",
+        "display_surface",
         "framebuffer"
       ],
-      "inputs": {},
+      "inputs": {
+        "display": {
+          "type_name": "surface",
+          "state": "display_surface",
+          "abstract_type": "handle",
+          "required": true,
+          "port_role": "data_input",
+          "description": "Initialized display Surface witness proving a display mode is active.",
+          "structure_kind": "handle",
+          "rank": null,
+          "element_type": "opaque",
+          "supported_formats": [],
+          "carrier": "surface",
+          "layout": null,
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
+          "invariants": []
+        }
+      },
       "outputs": {
         "screen": {
           "type_name": "surface",
@@ -591,7 +611,7 @@
       "dependencies": [
         "import pygame"
       ],
-      "primary_in": null,
+      "primary_in": "display",
       "primary_out": "screen",
       "effects": [],
       "mutation_type": "pure"
@@ -878,10 +898,12 @@
       "docstring": "Gets events from the queue and clears them.",
       "semantic_tags": [
         "event",
+        "events",
         "poll",
         "queue",
         "input",
-        "event_get"
+        "event_get",
+        "get_events"
       ],
       "inputs": {},
       "outputs": {
@@ -951,10 +973,10 @@
         "event": {
           "type_name": "event",
           "state": "event_object",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Single event pulled from queue.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -1046,23 +1068,25 @@
         "pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "port_role": "data_output",
           "description": "Mouse coordinates (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -1097,23 +1121,25 @@
         "buttons": {
           "type_name": "Tuple[bool, bool, bool]",
           "state": "mouse_state",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "port_role": "data_output",
           "description": "Tuple indicating pressed state for (left, middle, right) buttons.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[bool, bool, bool]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.mouse_state",
           "typestate": "pygame::mouse_state",
@@ -1148,11 +1174,11 @@
         "event": {
           "type_name": "event",
           "state": "event_object",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Event object to inspect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -1245,26 +1271,28 @@
         "size": {
           "type_name": "Tuple[int, int]",
           "state": "dimensions",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Surface resolution (width, height).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "role": "configuration",
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.dimensions",
           "typestate": "pygame::dimensions",
@@ -1309,9 +1337,10 @@
       "semantic_tags": [
         "fill",
         "clear",
-        "surface",
-        "color",
-        "background"
+        "fill_surface",
+        "fill_color",
+        "fill_background",
+        "clear_surface"
       ],
       "inputs": {
         "surface": {
@@ -1334,26 +1363,28 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "RGB fill color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "role": "configuration",
           "default_value": null,
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -1385,7 +1416,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_SURFACE_BLIT",
@@ -1405,7 +1440,7 @@
       "inputs": {
         "dest_surface": {
           "type_name": "surface",
-          "state": "active",
+          "state": "display_surface",
           "abstract_type": "handle",
           "required": true,
           "port_role": "data_input",
@@ -1416,9 +1451,14 @@
           "supported_formats": [],
           "carrier": "surface",
           "layout": null,
-          "semantics": "pygame.active",
-          "typestate": "pygame::active",
-          "invariants": []
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
+          "invariants": [],
+          "accepted_states": [
+            "display_surface",
+            "modified",
+            "initialized"
+          ]
         },
         "source_surface": {
           "type_name": "surface",
@@ -1440,25 +1480,27 @@
         "dest_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Destination top-left position or rect.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -1490,7 +1532,11 @@
       "primary_in": "dest_surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "io"
+      "mutation_type": "io",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "dest_surface"
+      }
     },
     {
       "cell_id": "PYGAME_SURFACE_CONVERT_ALPHA",
@@ -1624,10 +1670,9 @@
       "docstring": "Extracts a new Rect bounding box covering the dimensions of the surface.",
       "semantic_tags": [
         "get_rect",
-        "rect",
-        "surface",
+        "surface_rect",
         "bounding_box",
-        "geometry"
+        "bounds_rect"
       ],
       "inputs": {
         "surface": {
@@ -1652,10 +1697,10 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Rect with surface dimensions (origin at 0, 0).",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -1686,8 +1731,8 @@
       "semantic_tags": [
         "size",
         "dimensions",
-        "width",
-        "height",
+        "surface_size",
+        "resolution",
         "get_size"
       ],
       "inputs": {
@@ -1713,23 +1758,25 @@
         "size": {
           "type_name": "Tuple[int, int]",
           "state": "dimensions",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "port_role": "data_output",
           "description": "Tuple representing (width, height).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.dimensions",
           "typestate": "pygame::dimensions",
@@ -1757,6 +1804,9 @@
         "rect",
         "geometry",
         "init_rect",
+        "create_rect",
+        "width",
+        "height",
         "bounds",
         "box"
       ],
@@ -1876,10 +1926,10 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Instantiated Rect handle.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -1918,11 +1968,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Source Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -1991,10 +2041,10 @@
         "moved_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "New translated Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2033,11 +2083,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Rect to mutate.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2106,10 +2156,10 @@
         "out_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Mutated Rect handle.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2148,11 +2198,11 @@
         "rect_a": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "First Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2160,16 +2210,17 @@
           "layout": null,
           "semantics": "pygame.geometry",
           "typestate": "pygame::geometry",
-          "invariants": []
+          "invariants": [],
+          "disjoint_from_port": "rect_b"
         },
         "rect_b": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Second Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2177,7 +2228,8 @@
           "layout": null,
           "semantics": "pygame.geometry",
           "typestate": "pygame::geometry",
-          "invariants": []
+          "invariants": [],
+          "disjoint_from_port": "rect_a"
         }
       },
       "outputs": {
@@ -2227,7 +2279,7 @@
       "semantic_tags": [
         "collidepoint",
         "point_in_rect",
-        "collision",
+        "point_collision",
         "pick",
         "hit_test"
       ],
@@ -2235,11 +2287,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Target Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2252,25 +2304,27 @@
         "point": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Point (x, y) to check.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -2324,19 +2378,19 @@
       "semantic_tags": [
         "collidelist",
         "collision_list",
-        "intersect",
-        "detect",
-        "rect"
+        "intersect_list",
+        "detect_list",
+        "rect_list"
       ],
       "inputs": {
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Probe Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2440,11 +2494,11 @@
         "inner_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Rect to be clamped.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2452,16 +2506,17 @@
           "layout": null,
           "semantics": "pygame.geometry",
           "typestate": "pygame::geometry",
-          "invariants": []
+          "invariants": [],
+          "disjoint_from_port": "outer_rect"
         },
         "outer_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Bounding Rect container.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2469,17 +2524,18 @@
           "layout": null,
           "semantics": "pygame.geometry",
           "typestate": "pygame::geometry",
-          "invariants": []
+          "invariants": [],
+          "disjoint_from_port": "inner_rect"
         }
       },
       "outputs": {
         "clamped_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "New Rect constrained within outer_rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2518,11 +2574,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Rect to reposition.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2535,25 +2591,27 @@
         "center_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "New (x, y) center coordinate.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -2564,10 +2622,10 @@
         "out_rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Mutated Rect centered at center_pos.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2623,25 +2681,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -2650,11 +2710,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Rectangle coordinates and dimensions.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -2690,7 +2750,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_CIRCLE",
@@ -2728,25 +2792,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -2755,25 +2821,27 @@
         "center": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Center coordinates (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -2832,7 +2900,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_LINE",
@@ -2870,25 +2942,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -2897,25 +2971,27 @@
         "start_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Start position (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -2924,25 +3000,27 @@
         "end_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "End position (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -3001,7 +3079,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_LINES",
@@ -3039,25 +3121,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -3181,7 +3265,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_POLYGON",
@@ -3219,25 +3307,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -3307,7 +3397,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_ELLIPSE",
@@ -3345,25 +3439,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -3372,11 +3468,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Bounding Rect of the ellipse.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -3412,7 +3508,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DISPLAY_FLIP",
@@ -3432,7 +3532,7 @@
       "inputs": {
         "screen": {
           "type_name": "surface",
-          "state": "active",
+          "state": "display_surface",
           "abstract_type": "handle",
           "required": true,
           "port_role": "data_input",
@@ -3443,8 +3543,8 @@
           "supported_formats": [],
           "carrier": "surface",
           "layout": null,
-          "semantics": "pygame.active",
-          "typestate": "pygame::active",
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
           "invariants": []
         }
       },
@@ -3502,7 +3602,7 @@
       "inputs": {
         "screen": {
           "type_name": "surface",
-          "state": "active",
+          "state": "display_surface",
           "abstract_type": "handle",
           "required": true,
           "port_role": "data_input",
@@ -3513,8 +3613,8 @@
           "supported_formats": [],
           "carrier": "surface",
           "layout": null,
-          "semantics": "pygame.active",
-          "typestate": "pygame::active",
+          "semantics": "pygame.display_surface",
+          "typestate": "pygame::display_surface",
           "invariants": []
         },
         "rect_list": {
@@ -3735,7 +3835,7 @@
         "font",
         "sysfont",
         "typography",
-        "text",
+        "text_font",
         "font_create"
       ],
       "inputs": {
@@ -3886,7 +3986,8 @@
       "semantic_tags": [
         "font",
         "render",
-        "text",
+        "render_text",
+        "text_surface",
         "glyphs",
         "font_render"
       ],
@@ -3939,8 +4040,8 @@
           "type_name": "bool",
           "state": "configuration",
           "abstract_type": "logical",
-          "required": true,
-          "default_value": null,
+          "required": false,
+          "default_value": true,
           "port_role": "configuration",
           "description": "Smooth edges flag.",
           "structure_kind": "scalar",
@@ -3965,25 +4066,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "Text RGB color.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -4817,10 +4920,10 @@
         "event": {
           "type_name": "event",
           "state": "event_object",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Current Event instance being processed.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -4901,26 +5004,28 @@
         "size": {
           "type_name": "Tuple[int, int]",
           "state": "dimensions",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Target width and height.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "role": "configuration",
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.dimensions",
           "typestate": "pygame::dimensions",
@@ -5308,26 +5413,28 @@
         "size": {
           "type_name": "Tuple[int, int]",
           "state": "dimensions",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Target width and height.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "role": "configuration",
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.dimensions",
           "typestate": "pygame::dimensions",
@@ -5485,11 +5592,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Region to remove.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5602,10 +5709,10 @@
         "vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Vector2 instance.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5644,11 +5751,11 @@
         "v1": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "First vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5661,11 +5768,11 @@
         "v2": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Second vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5680,10 +5787,10 @@
         "v_out": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Resultant sum vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5722,11 +5829,11 @@
         "v1": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Minuend vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5739,11 +5846,11 @@
         "v2": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Subtrahend vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5758,10 +5865,10 @@
         "v_out": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Displacement difference vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5800,11 +5907,11 @@
         "vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Vector to scale.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5846,10 +5953,10 @@
         "scaled_vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Scaled vector product.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5888,11 +5995,11 @@
         "vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Vector operand.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5958,11 +6065,11 @@
         "vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Vector operand.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -5977,10 +6084,10 @@
         "normalized_vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Unit direction vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6019,11 +6126,11 @@
         "vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Vector to rotate.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6065,10 +6172,10 @@
         "rotated_vector": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Rotated vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6107,11 +6214,11 @@
         "v1": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Starting position vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6124,11 +6231,11 @@
         "v2": {
           "type_name": "vector2",
           "state": "vector_cartesian",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Target position vector.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6188,6 +6295,7 @@
         "rgba",
         "palette",
         "init_color",
+        "create_color",
         "alpha"
       ],
       "inputs": {
@@ -6304,10 +6412,10 @@
         "color": {
           "type_name": "color",
           "state": "color_object",
-          "abstract_type": "handle",
+          "abstract_type": "collection",
           "port_role": "data_output",
           "description": "Pygame Color handle.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6346,11 +6454,11 @@
         "c1": {
           "type_name": "color",
           "state": "color_object",
-          "abstract_type": "handle",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "data_input",
           "description": "Starting origin color.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6363,11 +6471,11 @@
         "c2": {
           "type_name": "color",
           "state": "color_object",
-          "abstract_type": "handle",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "data_input",
           "description": "Target destination color.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6409,10 +6517,10 @@
         "interpolated_color": {
           "type_name": "color",
           "state": "color_object",
-          "abstract_type": "handle",
+          "abstract_type": "collection",
           "port_role": "data_output",
           "description": "Blended Color handle.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -6733,7 +6841,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_SPRITE_COLLIDE_RECT",
@@ -7174,25 +7286,27 @@
         "offset": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Coordinate difference (mask_b.x - mask_a.x, mask_b.y - mask_a.y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -7930,25 +8044,27 @@
         "pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Target screen position (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -8097,25 +8213,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -8124,25 +8242,27 @@
         "start_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "Start position (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -8151,25 +8271,27 @@
         "end_pos": {
           "type_name": "Tuple[int, int]",
           "state": "coordinate",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "port_role": "configuration",
           "description": "End position (x, y).",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "default_value": null,
           "carrier": "Tuple[int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              2
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 2
           },
           "semantics": "pygame.coordinate",
           "typestate": "pygame::coordinate",
@@ -8228,7 +8350,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_DRAW_ARC",
@@ -8266,25 +8392,27 @@
         "color": {
           "type_name": "Tuple[int, int, int]",
           "state": "rgb_color",
-          "abstract_type": "scalar",
+          "abstract_type": "collection",
           "required": true,
           "default_value": null,
           "port_role": "configuration",
           "description": "RGB color tuple.",
-          "structure_kind": "scalar",
+          "structure_kind": "composite",
           "rank": 0,
-          "element_type": "float64",
+          "element_type": "composite_record",
           "supported_formats": [],
           "carrier": "Tuple[int, int, int]",
           "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
+            "rank": 1,
+            "shape": [
+              3
+            ],
+            "dtype": "composite_record",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
             "channel_axis": null,
-            "length": null
+            "length": 3
           },
           "semantics": "pygame.rgb_color",
           "typestate": "pygame::rgb_color",
@@ -8293,11 +8421,11 @@
         "rect": {
           "type_name": "rect",
           "state": "geometry",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Bounding box Rect.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -8414,7 +8542,11 @@
       "primary_in": "surface",
       "primary_out": "out_surface",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "polymorphic_propagation": {
+        "preserves_typestate": true,
+        "source_port": "surface"
+      }
     },
     {
       "cell_id": "PYGAME_TIME_SET_TIMER",
@@ -8569,11 +8701,11 @@
         "event": {
           "type_name": "event",
           "state": "event_object",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "required": true,
           "port_role": "data_input",
           "description": "Event instance to push.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],
@@ -8695,10 +8827,10 @@
         "event": {
           "type_name": "event",
           "state": "event_object",
-          "abstract_type": "handle",
+          "abstract_type": "record",
           "port_role": "data_output",
           "description": "Constructed Event message.",
-          "structure_kind": "handle",
+          "structure_kind": "composite",
           "rank": null,
           "element_type": "opaque",
           "supported_formats": [],

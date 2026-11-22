@@ -29,10 +29,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
     from .base import RouteMethod, _clause_has_egress_intent, is_ingress_source, is_terminal_sink
-    from ..lattice import Cell, TypeRegistry, is_path_port
+    from ..lattice import Cell, TypeRegistry, apply_polymorphic_propagation, is_path_port
     from ..unification import (
         unify,
+        is_edge_valid,
         Substitution,
+        ExecutionContext,
         _pointed_default,
         substitute_generics,
         _prop_cond_field,
@@ -40,10 +42,12 @@ try:
     from ..tokenizer import CellTokenizer
 except (ImportError, ValueError):
     from route_methods.base import RouteMethod, _clause_has_egress_intent, is_ingress_source, is_terminal_sink
-    from lattice import Cell, TypeRegistry, is_path_port
+    from lattice import Cell, TypeRegistry, apply_polymorphic_propagation, is_path_port
     from unification import (
         unify,
+        is_edge_valid,
         Substitution,
+        ExecutionContext,
         _pointed_default,
         substitute_generics,
         _prop_cond_field,
@@ -297,6 +301,7 @@ class GammaSlot:
     prod_cell: Any = None
     props: Tuple[Tuple[str, Any], ...] = ()
     provenance_clause_tags: Tuple[int, ...] = ()
+    consumed: bool = False
 
 
 def _hashable_prop_val(pv: Any) -> Any:
@@ -426,7 +431,13 @@ def _can_fire_under_gamma(
         chosen_match: Optional[Tuple[int, GammaSlot, Optional[Tuple[Tuple[str, Any], ...]], Any]] = None
         fallback_match: Optional[Tuple[int, GammaSlot, Optional[Tuple[Tuple[str, Any], ...]], Any]] = None
 
-        for g_idx, slot in enumerate(slots_gamma):
+        slot_order = [
+            g_idx for g_idx in range(len(slots_gamma) - 1, -1, -1) if not slots_gamma[g_idx].consumed
+        ] + [
+            g_idx for g_idx in range(len(slots_gamma) - 1, -1, -1) if slots_gamma[g_idx].consumed
+        ]
+        for g_idx in slot_order:
+            slot = slots_gamma[g_idx]
             if blocked_g_idxs and g_idx in blocked_g_idxs:
                 continue
             out_sig = slot.carrier_type
@@ -449,11 +460,18 @@ def _can_fire_under_gamma(
 
             if not resolved_via_fast:
                 if out_port is not None:
-                    ek = (id_out_port, id_in_port)
+                    p_cid_ec = getattr(slot.prod_cell, "cell_id", "") if slot.prod_cell is not None else ""
+                    c_cid_ec = getattr(cell, "cell_id", "") if cell is not None else ""
+                    ek = (id_out_port, id_in_port, p_cid_ec, c_cid_ec)
                     ev_ok = edge_cache.get(ek) if edge_cache is not None else None
                     if ev_ok is None:
-                        ev_ok = _structural_kind_compatible(out_port, in_port)
+                        ev_ok = _structural_kind_compatible(out_port, in_port) and is_edge_valid(
+                            out_port, in_port, producer_cell=slot.prod_cell, consumer_cell=cell
+                        )
                         if edge_cache is not None:
+                            if kept_sigs is not None:
+                                kept_sigs[id_out_port] = out_port
+                                kept_sigs[id_in_port] = in_port
                             edge_cache[ek] = ev_ok
                     if not ev_ok:
                         if empty_sub and empty_pair_cache is not None:
@@ -634,19 +652,22 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 str(getattr(c, "domain_name", "") or getattr(c, "domain", "") or "").strip().lower()
                 for c in pool
             } - {""}
-            _p_outs = [
-                getattr(op, "signature", op)
+            _p_out_pairs = [
+                (c, op, getattr(op, "signature", op))
                 for c in pool
                 for op in (getattr(c, "outputs", {}) or {}).values()
                 if getattr(op, "signature", op) is not None
             ]
-            _p_ins = [
-                (ip, getattr(ip, "signature", ip))
+            _p_outs = [osig for _, _, osig in _p_out_pairs]
+            _p_in_pairs = [
+                (c, ip, getattr(ip, "signature", ip))
                 for c in pool
                 for _, ip in _cell_required_data_inputs(c, reg=reg)
                 if getattr(ip, "signature", ip) is not None
             ]
+            _p_ins = [(ip, isig) for _, ip, isig in _p_in_pairs]
             _p_prompt_toks = set(CellTokenizer.tokenize_prompt(prompt)) if prompt else set()
+            _p_src_lits, _p_dest_lits = self.extract_file_literals(prompt or "", ctx=ctx)
 
             def _add_struct_cell(sc: Any) -> bool:
                 scid = getattr(sc, "cell_id", None)
@@ -656,53 +677,127 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     return False
                 pool.append(sc)
                 seen_ids.add(scid)
-                _p_outs.extend(
-                    getattr(op, "signature", op)
-                    for op in (getattr(sc, "outputs", {}) or {}).values()
-                    if getattr(op, "signature", op) is not None
-                )
-                _p_ins.extend(
-                    (ip, getattr(ip, "signature", ip))
-                    for _, ip in _cell_required_data_inputs(sc, reg=reg)
-                    if getattr(ip, "signature", ip) is not None
-                )
+                sc_dom = str(getattr(sc, "domain_name", "") or getattr(sc, "domain", "") or "").strip().lower()
+                if sc_dom:
+                    _p_domains.add(sc_dom)
+                for op in (getattr(sc, "outputs", {}) or {}).values():
+                    osig = getattr(op, "signature", op)
+                    if osig is not None:
+                        _p_out_pairs.append((sc, op, osig))
+                        _p_outs.append(osig)
+                for _, ip in _cell_required_data_inputs(sc, reg=reg):
+                    isig = getattr(ip, "signature", ip)
+                    if isig is not None:
+                        _p_in_pairs.append((sc, ip, isig))
+                        _p_ins.append((ip, isig))
                 return True
 
-            # Rule D: Unproduced handle producers (e.g. initializer/trainer for a handle consumer)
-            _unmet_handles = [
-                ip for ip, isig in _p_ins
-                if getattr(ip, "required", True)
-                and getattr(ip, "default_value", None) is None
-                and self.is_handle_port(ip)
-                and not any(unify(osig, isig) is not None for osig in _p_outs)
-            ]
-            for h_in in _unmet_handles:
-                h_sig = getattr(h_in, "signature", h_in)
-                h_nom = str(getattr(h_in, "nominal_type", "") or "").strip().lower()
-                h_cands: List[Tuple[Tuple[int, int, int], Any]] = []
-                for lc in orch_ref.loaded_cells.values():
-                    lcid = getattr(lc, "cell_id", None)
-                    if not lcid or lcid in seen_ids or is_terminal_sink(lc, orch_ref):
+            # Bounded 2-hop backward type-directed closure over unmet handle ports (Rule D)
+            # and unmet concrete-typestate non-handle artifact ports (Rule E).
+            _rule_e_added = 0
+            _RULE_E_CAP = 24
+            for _closure_hop in range(2):
+                _hop_added = 0
+
+                # Rule D: Unproduced handle producers (e.g. initializer/trainer for a handle consumer)
+                _unmet_handles = [
+                    ip for _, ip, isig in _p_in_pairs
+                    if getattr(ip, "required", True)
+                    and getattr(ip, "default_value", None) is None
+                    and self.is_handle_port(ip)
+                    and not any(unify(osig, isig) is not None for osig in _p_outs)
+                ]
+                for h_in in _unmet_handles:
+                    h_sig = getattr(h_in, "signature", h_in)
+                    h_nom = str(getattr(h_in, "nominal_type", "") or "").strip().lower()
+                    h_cands: List[Tuple[Tuple[int, int, int], Any]] = []
+                    for lc in orch_ref.loaded_cells.values():
+                        lcid = getattr(lc, "cell_id", None)
+                        if not lcid or lcid in seen_ids or is_terminal_sink(lc, orch_ref):
+                            continue
+                        lc_outs = list((getattr(lc, "outputs", {}) or {}).values())
+                        if not any(
+                            getattr(op, "signature", op) is not None
+                            and unify(getattr(op, "signature", op), h_sig) is not None
+                            for op in lc_outs
+                        ):
+                            continue
+                        nom_hit = 1 if (
+                            h_nom and any(str(getattr(op, "nominal_type", "") or "").strip().lower() == h_nom for op in lc_outs)
+                        ) else 0
+                        lc_id_toks = set(getattr(lc, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(lcid))
+                        id_ov = len(_p_prompt_toks & lc_id_toks)
+                        all_ov = len(_p_prompt_toks & (set(getattr(lc, "token_set", None) or ()) | lc_id_toks))
+                        if nom_hit or id_ov > 0:
+                            h_cands.append(((nom_hit, id_ov, all_ov), lc))
+                    h_cands.sort(key=lambda item: item[0], reverse=True)
+                    for _, h_prod in h_cands[:2]:
+                        if _add_struct_cell(h_prod):
+                            _hop_added += 1
+
+                # Rule E: Unmet concrete-typestate non-handle zero-input constructors (e.g. key/nonce producers)
+                for owner_c, ip, isig in list(_p_in_pairs):
+                    if _rule_e_added >= _RULE_E_CAP:
+                        break
+                    if not getattr(ip, "required", True) or getattr(ip, "default_value", None) is not None:
                         continue
-                    lc_outs = list((getattr(lc, "outputs", {}) or {}).values())
-                    if not any(
-                        getattr(op, "signature", op) is not None
-                        and unify(getattr(op, "signature", op), h_sig) is not None
-                        for op in lc_outs
-                    ):
+                    if self.is_handle_port(ip) or is_path_port(ip, reg):
                         continue
-                    nom_hit = 1 if (
-                        h_nom and any(str(getattr(op, "nominal_type", "") or "").strip().lower() == h_nom for op in lc_outs)
-                    ) else 0
-                    lc_id_toks = set(getattr(lc, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(lcid))
-                    id_ov = len(_p_prompt_toks & lc_id_toks)
-                    all_ov = len(_p_prompt_toks & (set(getattr(lc, "token_set", None) or ()) | lc_id_toks))
-                    if nom_hit or id_ov > 0:
-                        h_cands.append(((nom_hit, id_ov, all_ov), lc))
-                h_cands.sort(key=lambda item: item[0], reverse=True)
-                for _, h_prod in h_cands[:2]:
-                    _add_struct_cell(h_prod)
-            _p_src_lits, _p_dest_lits = self.extract_file_literals(prompt or "", ctx=ctx)
+                    in_st = str(getattr(isig, "state", "") or "").strip().lower()
+                    if not in_st or (reg is not None and reg.is_declared_top_state(in_st)):
+                        continue
+                    if any(is_edge_valid(op, ip, prod_c, owner_c) for prod_c, op, _ in _p_out_pairs):
+                        continue
+                    owner_dom = str(getattr(owner_c, "domain_name", "") or getattr(owner_c, "domain", "") or "").strip().lower()
+                    ip_acc = {
+                        str(s).strip().lower()
+                        for s in (getattr(ip, "accepted_states", ()) or getattr(isig, "accepted_states", ()) or ())
+                        if str(s).strip()
+                    }
+                    e_cands: List[Tuple[Tuple[int, int, int], Any]] = []
+                    for lc in orch_ref.loaded_cells.values():
+                        lcid = getattr(lc, "cell_id", None)
+                        if not lcid or lcid in seen_ids or is_terminal_sink(lc, orch_ref) or getattr(lc, "node_type", "") == "constant":
+                            continue
+                        lc_dom = str(getattr(lc, "domain_name", "") or getattr(lc, "domain", "") or "").strip().lower()
+                        if owner_dom and lc_dom != owner_dom:
+                            continue
+                        if any(is_path_port(p, reg) for p in (getattr(lc, "inputs", {}) or {}).values()):
+                            continue
+                        if _cell_required_data_inputs(lc, reg=reg):
+                            continue
+                        best_exact = -1
+                        for op in (getattr(lc, "outputs", {}) or {}).values():
+                            osig = getattr(op, "signature", op)
+                            if osig is None:
+                                continue
+                            out_st = str(getattr(osig, "state", "") or "").strip().lower()
+                            if out_st != in_st and out_st not in ip_acc:
+                                continue
+                            if _p_src_lits:
+                                out_abs = str(getattr(op, "abstract_type", "") or getattr(osig, "abstract_type", "") or "").strip().lower()
+                                if out_abs in ("tensor", "table", "collection"):
+                                    continue
+                            if is_edge_valid(op, ip, lc, owner_c):
+                                exact_flag = 1 if out_st == in_st else 0
+                                if exact_flag > best_exact:
+                                    best_exact = exact_flag
+                        if best_exact < 0:
+                            continue
+                        lc_id_toks = set(getattr(lc, "identity_tokens", None) or ()) | set(CellTokenizer.tokenize_identifier(lcid))
+                        id_ov = len(_p_prompt_toks & lc_id_toks)
+                        all_ov = len(_p_prompt_toks & (set(getattr(lc, "token_set", None) or ()) | lc_id_toks))
+                        e_cands.append(((best_exact, id_ov, all_ov), lc))
+                    e_cands.sort(key=lambda item: item[0], reverse=True)
+                    for _, e_prod in e_cands[:2]:
+                        if _rule_e_added >= _RULE_E_CAP:
+                            break
+                        if _add_struct_cell(e_prod):
+                            _hop_added += 1
+                            _rule_e_added += 1
+
+                if _hop_added == 0:
+                    break
             if _p_dest_lits:
                 _req_handles = [
                     (ip, isig) for ip, isig in _p_ins
@@ -848,12 +943,12 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         unify_empty_sub_cache: Dict[Tuple[Tuple[Any, ...], Tuple[Any, ...]], Optional[Tuple[Tuple[str, Any], ...]]] = (
             persistent_bag["unify_empty"] if persistent_bag is not None else {}
         )
-        edge_cache: Dict[Tuple[int, int], bool] = {}
+        edge_cache: Dict[Tuple[int, int, str, str], bool] = {}
         sig_key_cache: Dict[int, Tuple[Any, ...]] = {}
         tv_cache: Dict[Tuple[str, str], bool] = (
             persistent_bag["tv"] if persistent_bag is not None else {}
         )
-        port_unify_cache: Dict[Tuple[int, int], bool] = {}
+        port_unify_cache: Dict[Tuple[int, int, str, str], bool] = {}
         empty_pair_cache: Dict[Tuple[int, int, int, int], Any] = {}
         tv_id_cache: Dict[Tuple[int, int], bool] = {}
         kept_sigs: Dict[int, Any] = {}
@@ -867,37 +962,45 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             cons_cell: Any = None,
         ) -> bool:
             if out_port is not None and in_port is not None:
+                p_cid = getattr(prod_cell, "cell_id", "") if prod_cell is not None else ""
+                c_cid = getattr(cons_cell, "cell_id", "") if cons_cell is not None else ""
+                ek = (id(out_port), id(in_port), p_cid, c_cid)
                 is_raw_port_sigs = (
                     out_sig is getattr(out_port, "signature", out_port)
                     and in_sig is getattr(in_port, "signature", in_port)
                 )
                 if is_raw_port_sigs:
-                    puk = (id(out_port), id(in_port))
-                    pu_hit = port_unify_cache.get(puk)
+                    pu_hit = port_unify_cache.get(ek)
                     if pu_hit is not None:
                         return pu_hit
                     if _typevar_to_concrete_blocked(out_sig, in_sig, reg, tv_cache=tv_cache):
-                        port_unify_cache[puk] = False
+                        port_unify_cache[ek] = False
                         return False
-                    ek = puk
                     ev_ok = edge_cache.get(ek)
                     if ev_ok is None:
                         ev_ok = _structural_kind_compatible(out_port, in_port)
+                        if ev_ok and prod_cell is not None and cons_cell is not None:
+                            ev_ok = is_edge_valid(out_port, in_port, producer_cell=prod_cell, consumer_cell=cons_cell)
+                        kept_sigs[id(out_port)] = out_port
+                        kept_sigs[id(in_port)] = in_port
                         edge_cache[ek] = ev_ok
                     if not ev_ok:
-                        port_unify_cache[puk] = False
+                        port_unify_cache[ek] = False
                         return False
                     pk = (_sig_dedup_key(out_sig, sig_key_cache), _sig_dedup_key(in_sig, sig_key_cache))
                     res = unify_cache.get(pk)
                     if res is None:
                         res = unify(out_sig, in_sig) is not None
                         unify_cache[pk] = res
-                    port_unify_cache[puk] = res
+                    port_unify_cache[ek] = res
                     return res
-                ek = (id(out_port), id(in_port))
                 ev_ok = edge_cache.get(ek)
                 if ev_ok is None:
                     ev_ok = _structural_kind_compatible(out_port, in_port)
+                    if ev_ok and prod_cell is not None and cons_cell is not None:
+                        ev_ok = is_edge_valid(out_port, in_port, producer_cell=prod_cell, consumer_cell=cons_cell)
+                    kept_sigs[id(out_port)] = out_port
+                    kept_sigs[id(in_port)] = in_port
                     edge_cache[ek] = ev_ok
                 if not ev_ok:
                     return False
@@ -1005,6 +1108,245 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         cell_missing_dep_map: Dict[str, bool] = {
             c.cell_id: _cell_missing_runtime_dep(c) for c in pool
         }
+        cell_req_path_in_map: Dict[str, bool] = {
+            c.cell_id: any(
+                is_path_port(p, reg)
+                and getattr(p, "required", True)
+                and getattr(p, "default_value", None) is None
+                for p in (getattr(c, "inputs", {}) or {}).values()
+            )
+            for c in pool
+        }
+
+        pool_by_id = {c.cell_id: c for c in pool}
+        props_store = persistent_bag["props"] if persistent_bag is not None else {}
+        preconds_store = persistent_bag["preconds"] if persistent_bag is not None else {}
+        cell_props_map: Dict[str, Dict[str, Any]] = {}
+        cell_preconds_map: Dict[str, Dict[str, List[Tuple[str, str, Any]]]] = {}
+        for c in pool:
+            cid_c = c.cell_id
+            p_hit = props_store.get(cid_c)
+            if p_hit is None:
+                p_hit = _cell_declared_props(c, reg)
+                props_store[cid_c] = p_hit
+            cell_props_map[cid_c] = p_hit
+            pc_hit = preconds_store.get(cid_c)
+            if pc_hit is None:
+                pc_hit = _cell_required_preconds(c)
+                preconds_store[cid_c] = pc_hit
+            cell_preconds_map[cid_c] = pc_hit
+
+        rev_edges: Dict[str, List[str]] = {c.cell_id: [] for c in pool}
+        eff_edge_mode = str(getattr(orch_ref, "edge_mode", "") or "").strip().lower()
+        static_rev_adj = getattr(orch_ref, "_reverse_adjacency", None) if orch_ref is not None else None
+        port_can_receive_from: Dict[int, Set[str]] = {}
+        if eff_edge_mode == "static" and isinstance(static_rev_adj, dict):
+            for cons in pool:
+                if not cell_req_ins_map[cons.cell_id]:
+                    continue
+                for prod_id in static_rev_adj.get(cons.cell_id, ()):
+                    if prod_id != cons.cell_id and prod_id in pool_by_id:
+                        rev_edges[cons.cell_id].append(prod_id)
+        else:
+            def _port_abs_sk(p_obj: Any, sig_obj: Any) -> Tuple[str, str]:
+                p_sk = str(getattr(p_obj, "structure_kind", "") or "").strip().lower()
+                p_abs = str(getattr(p_obj, "abstract_type", "") or getattr(sig_obj, "abstract_type", "") or "").strip().lower()
+                return p_sk, p_abs
+
+            out_cls_prods: Dict[Tuple[Any, str, str], List[str]] = {}
+            out_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
+            for prod in pool:
+                p_outs = cell_out_ports_map[prod.cell_id]
+                if not p_outs:
+                    continue
+                for oport, osig in p_outs:
+                    ok = (_sig_dedup_key(osig, sig_key_cache), *_port_abs_sk(oport, osig))
+                    if ok not in out_cls_rep:
+                        out_cls_rep[ok] = (oport, osig)
+                        out_cls_prods[ok] = []
+                    if not out_cls_prods[ok] or out_cls_prods[ok][-1] != prod.cell_id:
+                        out_cls_prods[ok].append(prod.cell_id)
+
+            in_cls_cons: Dict[Tuple[Any, str, str], List[Tuple[str, int]]] = {}
+            in_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
+            for cons in pool:
+                req_ins = cell_req_ins_map[cons.cell_id]
+                if not req_ins:
+                    continue
+                for _, ip in req_ins:
+                    isig = getattr(ip, "signature", ip)
+                    ik = (_sig_dedup_key(isig, sig_key_cache), *_port_abs_sk(ip, isig))
+                    if ik not in in_cls_rep:
+                        in_cls_rep[ik] = (ip, isig)
+                        in_cls_cons[ik] = []
+                    in_cls_cons[ik].append((cons.cell_id, id(ip)))
+
+            cls_unify_store = persistent_bag["cls_unify"] if persistent_bag is not None else {}
+            sk_pair_cache: Dict[Tuple[str, str, str, str], bool] = {}
+            rev_edge_sets: Dict[str, Set[str]] = {c.cell_id: set() for c in pool}
+            for ok, (oport, osig) in out_cls_rep.items():
+                prods_for_ok = out_cls_prods[ok]
+                o_sk, o_abs = ok[1], ok[2]
+                for ik, (ip, isig) in in_cls_rep.items():
+                    sk_k = (o_sk, o_abs, ik[1], ik[2])
+                    sk_ok = sk_pair_cache.get(sk_k)
+                    if sk_ok is None:
+                        sk_ok = _structural_kind_compatible(oport, ip)
+                        sk_pair_cache[sk_k] = sk_ok
+                    if not sk_ok:
+                        continue
+                    cls_pair = (ok, ik)
+                    compat = cls_unify_store.get(cls_pair)
+                    if compat is None:
+                        compat = bool(_unify_cached(osig, isig, out_port=oport, in_port=ip))
+                        cls_unify_store[cls_pair] = compat
+                    if compat:
+                        for cons_cid, ip_id in in_cls_cons[ik]:
+                            recv_set = port_can_receive_from.get(ip_id)
+                            if recv_set is None:
+                                recv_set = set()
+                                port_can_receive_from[ip_id] = recv_set
+                            cons_rev_set = rev_edge_sets[cons_cid]
+                            cons_rev_list = rev_edges[cons_cid]
+                            for prod_cid in prods_for_ok:
+                                if prod_cid != cons_cid:
+                                    recv_set.add(prod_cid)
+                                    if prod_cid not in cons_rev_set:
+                                        cons_rev_set.add(prod_cid)
+                                        cons_rev_list.append(prod_cid)
+
+        # Forward reachability closure over pool from fireable 0-input cells and init_gamma
+        init_sigs: List[Any] = []
+        ext_gamma = kwargs.get("initial_gamma")
+        if ext_gamma:
+            for gs in ext_gamma:
+                if gs is not None:
+                    init_sigs.append(gs)
+        if start_sig is not None:
+            if isinstance(start_sig, (tuple, list)):
+                init_sigs.extend([s for s in start_sig if s is not None])
+            else:
+                init_sigs.append(start_sig)
+        init_gamma: Tuple[GammaSlot, ...] = tuple(_coerce_gamma_slot(gs) for gs in init_sigs)
+        init_sigma = Substitution()
+        init_reaches_goal = bool(
+            goal_sig is not None
+            and any(_unify_cached(gs.carrier_type, goal_sig) for gs in init_gamma)
+        )
+
+        has_non_path_zero_in = any(
+            not cell_req_ins_map[c.cell_id]
+            and not is_sink_map[c.cell_id]
+            and not cell_req_path_in_map[c.cell_id]
+            for c in pool
+        )
+        cl0_txt = clauses[0] if clauses else (prompt or "")
+        cl0_non_path_hit = any(
+            not cell_req_ins_map[c.cell_id]
+            and not is_sink_map[c.cell_id]
+            and not cell_req_path_in_map[c.cell_id]
+            and (self.clause_fit(cl0_txt, c)[0] > 0.0 if cl0_txt else True)
+            for c in pool
+        )
+        block_ungrounded_path_sources = bool(
+            not src_file_literals
+            and not dest_file_literals
+            and has_non_path_zero_in
+            and cl0_non_path_hit
+        )
+        active_zero_in_domains: Set[str] = set()
+        if prompt_toks:
+            for c in pool:
+                if not cell_req_ins_map[c.cell_id]:
+                    if (
+                        block_ungrounded_path_sources
+                        and not is_sink_map[c.cell_id]
+                        and cell_req_path_in_map[c.cell_id]
+                    ):
+                        continue
+                    if bool(prompt_toks & cell_id_toks_map[c.cell_id]) or any(
+                        self.clause_fit(cl_t, c)[0] > 0.0 for cl_t in clauses if cl_t
+                    ):
+                        c_dom_z = cell_domain_map[c.cell_id]
+                        if c_dom_z:
+                            active_zero_in_domains.add(c_dom_z)
+
+        fwd_reachable_cids: Set[str] = set()
+        if port_can_receive_from:
+            for c in pool:
+                if not cell_req_ins_map[c.cell_id]:
+                    if (
+                        block_ungrounded_path_sources
+                        and not is_sink_map[c.cell_id]
+                        and cell_req_path_in_map[c.cell_id]
+                    ):
+                        continue
+                    if (
+                        n_clauses > 1
+                        and active_zero_in_domains
+                        and is_ingress_map[c.cell_id]
+                        and not is_sink_map[c.cell_id]
+                        and cell_domain_map[c.cell_id] not in active_zero_in_domains
+                        and not (prompt_toks & cell_id_toks_map[c.cell_id])
+                    ):
+                        continue
+                    fwd_reachable_cids.add(c.cell_id)
+                elif init_gamma and _can_fire_under_gamma(
+                    c,
+                    init_gamma,
+                    init_sigma,
+                    unify_cache=unify_cache,
+                    edge_cache=edge_cache,
+                    reg=reg,
+                    req_ins=cell_req_ins_map[c.cell_id],
+                    sig_key_cache=sig_key_cache,
+                    tv_cache=tv_cache,
+                    cell_preconds=cell_preconds_map[c.cell_id],
+                ) is not None:
+                    fwd_reachable_cids.add(c.cell_id)
+            _added_fwd = True
+            while _added_fwd:
+                _added_fwd = False
+                for c in pool:
+                    if c.cell_id in fwd_reachable_cids:
+                        continue
+                    req_ins_c = cell_req_ins_map[c.cell_id]
+                    if all(
+                        any(
+                            prod_cid in fwd_reachable_cids
+                            and any(
+                                _unify_cached(
+                                    osig,
+                                    getattr(ip, "signature", ip),
+                                    out_port=oport,
+                                    in_port=ip,
+                                    prod_cell=pool_by_id[prod_cid],
+                                    cons_cell=c,
+                                )
+                                for oport, osig in cell_out_ports_map[prod_cid]
+                            )
+                            for prod_cid in (port_can_receive_from.get(id(ip)) or ())
+                        )
+                        or (
+                            bool(init_gamma)
+                            and any(
+                                _unify_cached(
+                                    gs.carrier_type,
+                                    getattr(ip, "signature", ip),
+                                    out_port=gs.out_port,
+                                    in_port=ip,
+                                    prod_cell=gs.prod_cell,
+                                    cons_cell=c,
+                                )
+                                for gs in init_gamma
+                            )
+                        )
+                        for _, ip in req_ins_c
+                    ):
+                        fwd_reachable_cids.add(c.cell_id)
+                        _added_fwd = True
+        else:
+            fwd_reachable_cids = {c.cell_id for c in pool}
 
         try:
             try:
@@ -1020,6 +1362,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         cell_clause_hits: Dict[str, Set[TargetId]] = {c.cell_id: set() for c in pool}
         clause_cell_strength: Dict[Tuple[str, TargetId], float] = {}
         cell_clause_cf: Dict[Tuple[str, int], Tuple[float, float, float]] = {}
+        clause_best_cf: Dict[int, Tuple[float, float, float]] = {}
         cell_clause_port_frac: Dict[Tuple[str, int], float] = {}
         cell_input_tok_groups: Dict[str, List[Tuple[str, ...]]] = {}
         for c in pool:
@@ -1037,6 +1380,65 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         cell_target_has_lex: Set[Tuple[str, TargetId]] = set()
         clause_top_cells: Dict[TargetId, Set[str]] = {}
         sub_anchor_owner: Dict[TargetId, str] = {}
+        clause_lit_counts: Dict[int, Tuple[int, int]] = {}
+        for cl_i_l in range(n_clauses):
+            cl_txt_l = clauses[cl_i_l] if cl_i_l < len(clauses) else ""
+            _cl_lits = ExecutionContext._extract_universal_literals(cl_txt_l) if cl_txt_l else ()
+            _num_c = sum(1 for _, _lk, _ in _cl_lits if _lk in ("numeric", "int_literal", "float_literal"))
+            _str_c = sum(1 for _, _lk, _ in _cl_lits if _lk in ("quoted_str", "file_asset"))
+            clause_lit_counts[cl_i_l] = (_num_c, _str_c)
+
+        _proj_key_roles_lit = (
+            reg.get_roles_for_category("projection")
+            | set(reg.get_projection_tokens() or ())
+            | reg.get_roles_for_category("key")
+            | reg.get_roles_for_category("feature")
+            | reg.get_roles_for_category("target")
+        ) if reg is not None else set()
+        _proj_states_lit = reg.get_states_by_property("is_projection", True) if reg is not None else set()
+        cell_req_lit_ports: Dict[str, Tuple[Tuple[Any, ...], Tuple[Any, ...], int, int]] = {}
+        for c in pool:
+            _num_ports: List[Any] = []
+            _str_ports: List[Any] = []
+            _req_num_arity = 0
+            _req_str_non_key = 0
+            for pn, p in (getattr(c, "inputs", {}) or {}).items():
+                if not getattr(p, "required", False) or getattr(p, "default_value", None) is not None:
+                    continue
+                if self.is_handle_port(p) or is_path_port(p, reg):
+                    continue
+                if _pointed_default(p, c) is not None:
+                    continue
+                psig = getattr(p, "signature", p)
+                tn_l = str(getattr(psig, "type_name", "") or "").strip().lower()
+                sk_l = str(getattr(p, "structure_kind", "") or "").strip().lower()
+                if reg is not None and (reg.is_composite_carrier(tn_l) or reg.is_abstract_carrier(tn_l)):
+                    continue
+                if sk_l in ("table", "tensor", "matrix", "handle"):
+                    continue
+                p_role_l = str(getattr(p, "port_role", "") or "").strip().lower()
+                p_state_l = str(getattr(psig, "state", "") or "").strip().lower()
+                if p_role_l in _proj_key_roles_lit or p_state_l in _proj_states_lit or getattr(c, "key_port", None) == pn:
+                    continue
+                is_bool_t = (tn_l == "bool") or (reg is not None and reg.is_subtype(tn_l, "bool"))
+                if not is_bool_t and (tn_l in ("int", "float", "numeric") or (reg is not None and reg.is_subtype(tn_l, "numeric"))):
+                    _num_ports.append(p)
+                    _req_num_arity += 1
+                elif tn_l.startswith("tuple[") and tn_l.endswith("]"):
+                    inner_t = tn_l[tn_l.index("[") + 1:-1]
+                    t_args = [a.strip() for a in inner_t.split(",") if a.strip()]
+                    if t_args and all(
+                        (a in ("int", "float", "numeric") or (reg is not None and reg.is_subtype(a, "numeric")))
+                        and not (a == "bool" or (reg is not None and reg.is_subtype(a, "bool")))
+                        for a in t_args
+                    ):
+                        _num_ports.append(p)
+                        _req_num_arity += len(t_args)
+                elif tn_l == "str" or (reg is not None and reg.is_subtype(tn_l, "str")):
+                    if not getattr(p, "enum_values", None):
+                        _str_ports.append(p)
+                        _req_str_non_key += 1
+            cell_req_lit_ports[c.cell_id] = (tuple(_num_ports), tuple(_str_ports), _req_num_arity, _req_str_non_key)
         for cl_i in range(n_clauses):
             cl_txt = clauses[cl_i] if cl_i < len(clauses) else ""
             cl_word_set = {
@@ -1055,6 +1457,18 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             best_id_prec = 0.0
             cl_pool: List[Cell] = []
             for c in pool:
+                if (
+                    c.cell_id not in fwd_reachable_cids
+                    and (
+                        bool(cell_req_ins_map[c.cell_id])
+                        or (
+                            block_ungrounded_path_sources
+                            and not is_sink_map[c.cell_id]
+                            and cell_req_path_in_map[c.cell_id]
+                        )
+                    )
+                ):
+                    continue
                 if cl_i == 0 and n_clauses > 1 and has_compat_src_in_pool and is_ingress_source(c, self.orchestrator):
                     c_needs_path = any(is_path_port(p) for p in (getattr(c, "inputs", {}) or {}).values())
                     if c_needs_path and self.file_compat(c, src_file_literals[0]) < 0:
@@ -1076,17 +1490,22 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 if cf[1] > best_id_prec:
                     best_id_prec = cf[1]
 
+            clause_best_cf[cl_i] = best_cf
+
             sub_anchors: List[Tuple[Cell, Dict[str, Any]]] = []
             if ev is not None and anchors_for_clause is not None and cl_txt and cl_pool:
                 raw_ancs = anchors_for_clause(ev, cl_txt, cl_pool, relevance_map, clause_idx=cl_i)
                 if raw_ancs:
                     sub_anchors.append(raw_ancs[0])
                     root_toks = {str(t).lower() for t in (raw_ancs[0][1].get("tokens", ()) or ())}
+                    covered_sub_toks = set(root_toks)
                     for a_c, a_o in raw_ancs[1:]:
-                        # Split compound clauses on operational anchors, macro/combinators,
-                        # or distinct-token boundary initializers/sinks (ingress/terminal/producers).
+                        # Split compound clauses only when a secondary anchor explains distinct
+                        # residual tokens beyond earlier anchors in the same clause.
                         a_toks = {str(t).lower() for t in (a_o.get("tokens", ()) or ())}
-                        has_distinct_tok = bool(a_toks - root_toks)
+                        has_distinct_tok = bool(a_toks - covered_sub_toks)
+                        if not has_distinct_tok:
+                            continue
                         is_macro_or_comb = (
                             str(getattr(a_c, "node_type", "") or "").strip().lower() == "macro"
                             or bool(getattr(a_c, "slots", None))
@@ -1097,8 +1516,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             or is_ingress_source(a_c, self.orchestrator)
                             or bool(getattr(a_c, "outputs", None))
                         )
-                        if cell_req_ins_map.get(a_c.cell_id) or is_macro_or_comb or (has_distinct_tok and is_boundary_op):
+                        if cell_req_ins_map.get(a_c.cell_id) or is_macro_or_comb or is_boundary_op:
                             sub_anchors.append((a_c, a_o))
+                            covered_sub_toks |= a_toks
 
             if len(sub_anchors) > 1 and ev is not None:
                 cl_toks_all = CellTokenizer.tokenize_prompt(cl_txt)
@@ -1117,7 +1537,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if not positions and cl_tok_seq:
                         positions = [ti for ti, t in enumerate(cl_tok_seq) if t in core_m]
                     return (
-                        1 if is_sink_map.get(anc_c.cell_id, False) else 0,
+                        0 if getattr(anc_c, "stage", None) == 1 else (2 if is_sink_map.get(anc_c.cell_id, False) else 1),
                         min(positions) if positions else 10**6,
                         1 if anc_optic == "setter" else 0,
                         -float((anc_pair[1].get("rank") or (0.0,))[0]),
@@ -1172,16 +1592,27 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     cid = c.cell_id
                     cf = cf_scores.get(cid, (0.0, 0.0, 0.0))
                     sem_sc = float(cl_dict.get(cid, 0.0) or 0.0)
+                    _cl_num_l, _cl_str_l = clause_lit_counts.get(cl_i, (0, 0))
+                    _, _, _c_req_num, _c_req_str = cell_req_lit_ports.get(cid, ((), (), 0, 0))
+                    _lit_arity_hit = bool(
+                        cf[0] > 0.0
+                        and cf[1] > 0.0
+                        and cf[1] >= 0.50 * best_id_prec
+                        and _c_req_num >= 2
+                        and _cl_num_l >= _c_req_num
+                        and (_c_req_str == 0 or _cl_str_l >= _c_req_str)
+                    )
                     lex_hit = bool(
                         best_cf[0] > 0.0
                         and (
                             (cf[0] >= 0.85 * best_cf[0] and cf[2] >= 0.45 * best_cf[2])
                             or (cf[0] >= 0.70 * best_cf[0] and (cf[1] >= 0.50 * best_cf[1] or cf[2] >= 0.65 * best_cf[2]))
-                            or (cf[0] >= 0.30 * best_cf[0] and cf[1] > best_cf[1] and cf[2] >= 0.45 * best_cf[2] and cf[1] >= 0.75 * best_id_prec)
+                            or (cf[0] >= 0.55 * best_cf[0] and cf[1] > best_cf[1] and cf[2] >= 0.65 * best_cf[2] and cf[1] >= 0.75 * best_id_prec)
+                            or _lit_arity_hit
                         )
                     )
-                    if best_cf[0] >= 0.70:
-                        if cf[0] >= 0.30 * best_cf[0]:
+                    if best_cf[0] >= 0.55 and best_cf[2] >= 0.25:
+                        if cf[0] >= 0.80 * best_cf[0]:
                             sem_hit = bool(
                                 max_sem > 0.0
                                 and sem_sc >= 0.85 * max_sem
@@ -1220,7 +1651,12 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         else:
                             strength = 0.40 * cf_rel + 0.15 * prec_rel + 0.45 * sem_rel
                         clause_cell_strength[(cid, t_id)] = strength
-                        if cf_rel >= 0.80 or (best_cf[0] == 0.0 and sem_rel >= 0.85) or (sem_hit and sem_rel >= 0.90 and best_cf[0] < 0.85):
+                        if (
+                            cf_rel >= 0.80
+                            or _lit_arity_hit
+                            or (best_cf[0] == 0.0 and sem_rel >= 0.85)
+                            or (sem_hit and sem_rel >= 0.90 and best_cf[0] < 0.85)
+                        ):
                             top_cids.add(cid)
                 if top_cids:
                     clause_top_cells[t_id] = top_cids
@@ -1254,24 +1690,6 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 for pool_by_id_tmp in pool
                 if any(t[0] == cl_i for t in cell_clause_hits.get(pool_by_id_tmp.cell_id, ()))
             )
-
-        init_sigs: List[Any] = []
-        ext_gamma = kwargs.get("initial_gamma")
-        if ext_gamma:
-            for gs in ext_gamma:
-                if gs is not None:
-                    init_sigs.append(gs)
-        if start_sig is not None:
-            if isinstance(start_sig, (tuple, list)):
-                init_sigs.extend([s for s in start_sig if s is not None])
-            else:
-                init_sigs.append(start_sig)
-        init_gamma: Tuple[GammaSlot, ...] = tuple(_coerce_gamma_slot(gs) for gs in init_sigs)
-        init_sigma = Substitution()
-        init_reaches_goal = bool(
-            goal_sig is not None
-            and any(_unify_cached(gs.carrier_type, goal_sig) for gs in init_gamma)
-        )
 
         # Identify target goal cells (goal_sig unifying or verified sinks / final-clause anchors)
         goal_ids: Set[str] = set()
@@ -1359,105 +1777,6 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 and (not dest_file_literals or not cand_needs_path_map[c.cell_id] or self.file_compat(c, dest_file_literals[0]) >= 0)
             )
         }
-
-        # Build backward adjacency inside tunnel via cached unification for h_bwd heuristic
-        pool_by_id = {c.cell_id: c for c in pool}
-        props_store = persistent_bag["props"] if persistent_bag is not None else {}
-        preconds_store = persistent_bag["preconds"] if persistent_bag is not None else {}
-        cell_props_map: Dict[str, Dict[str, Any]] = {}
-        cell_preconds_map: Dict[str, Dict[str, List[Tuple[str, str, Any]]]] = {}
-        for c in pool:
-            cid_c = c.cell_id
-            p_hit = props_store.get(cid_c)
-            if p_hit is None:
-                p_hit = _cell_declared_props(c, reg)
-                props_store[cid_c] = p_hit
-            cell_props_map[cid_c] = p_hit
-            pc_hit = preconds_store.get(cid_c)
-            if pc_hit is None:
-                pc_hit = _cell_required_preconds(c)
-                preconds_store[cid_c] = pc_hit
-            cell_preconds_map[cid_c] = pc_hit
-        rev_edges: Dict[str, List[str]] = {c.cell_id: [] for c in pool}
-        eff_edge_mode = str(getattr(orch_ref, "edge_mode", "") or "").strip().lower()
-        static_rev_adj = getattr(orch_ref, "_reverse_adjacency", None) if orch_ref is not None else None
-        port_can_receive_from: Dict[int, Set[str]] = {}
-        if eff_edge_mode == "static" and isinstance(static_rev_adj, dict):
-            for cons in pool:
-                if not cell_req_ins_map[cons.cell_id]:
-                    continue
-                for prod_id in static_rev_adj.get(cons.cell_id, ()):
-                    if prod_id != cons.cell_id and prod_id in pool_by_id:
-                        rev_edges[cons.cell_id].append(prod_id)
-        else:
-            # Group unique (signature_key, structure_kind, abstract_type) classes so we check ~50x50
-            # equivalence classes instead of N x N (~215k) cell port pairs directly.
-            def _port_abs_sk(p_obj: Any, sig_obj: Any) -> Tuple[str, str]:
-                p_sk = str(getattr(p_obj, "structure_kind", "") or "").strip().lower()
-                p_abs = str(getattr(p_obj, "abstract_type", "") or getattr(sig_obj, "abstract_type", "") or "").strip().lower()
-                return p_sk, p_abs
-
-            out_cls_prods: Dict[Tuple[Any, str, str], List[str]] = {}
-            out_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
-            for prod in pool:
-                p_outs = cell_out_ports_map[prod.cell_id]
-                if not p_outs:
-                    continue
-                for oport, osig in p_outs:
-                    ok = (_sig_dedup_key(osig, sig_key_cache), *_port_abs_sk(oport, osig))
-                    if ok not in out_cls_rep:
-                        out_cls_rep[ok] = (oport, osig)
-                        out_cls_prods[ok] = []
-                    if not out_cls_prods[ok] or out_cls_prods[ok][-1] != prod.cell_id:
-                        out_cls_prods[ok].append(prod.cell_id)
-
-            in_cls_cons: Dict[Tuple[Any, str, str], List[Tuple[str, int]]] = {}
-            in_cls_rep: Dict[Tuple[Any, str, str], Tuple[Any, Any]] = {}
-            for cons in pool:
-                req_ins = cell_req_ins_map[cons.cell_id]
-                if not req_ins:
-                    continue
-                for _, ip in req_ins:
-                    isig = getattr(ip, "signature", ip)
-                    ik = (_sig_dedup_key(isig, sig_key_cache), *_port_abs_sk(ip, isig))
-                    if ik not in in_cls_rep:
-                        in_cls_rep[ik] = (ip, isig)
-                        in_cls_cons[ik] = []
-                    in_cls_cons[ik].append((cons.cell_id, id(ip)))
-
-            cls_unify_store = persistent_bag["cls_unify"] if persistent_bag is not None else {}
-            sk_pair_cache: Dict[Tuple[str, str, str, str], bool] = {}
-            rev_edge_sets: Dict[str, Set[str]] = {c.cell_id: set() for c in pool}
-            for ok, (oport, osig) in out_cls_rep.items():
-                prods_for_ok = out_cls_prods[ok]
-                o_sk, o_abs = ok[1], ok[2]
-                for ik, (ip, isig) in in_cls_rep.items():
-                    sk_k = (o_sk, o_abs, ik[1], ik[2])
-                    sk_ok = sk_pair_cache.get(sk_k)
-                    if sk_ok is None:
-                        sk_ok = _structural_kind_compatible(oport, ip)
-                        sk_pair_cache[sk_k] = sk_ok
-                    if not sk_ok:
-                        continue
-                    cls_pair = (ok, ik)
-                    compat = cls_unify_store.get(cls_pair)
-                    if compat is None:
-                        compat = bool(_unify_cached(osig, isig, out_port=oport, in_port=ip))
-                        cls_unify_store[cls_pair] = compat
-                    if compat:
-                        for cons_cid, ip_id in in_cls_cons[ik]:
-                            recv_set = port_can_receive_from.get(ip_id)
-                            if recv_set is None:
-                                recv_set = set()
-                                port_can_receive_from[ip_id] = recv_set
-                            cons_rev_set = rev_edge_sets[cons_cid]
-                            cons_rev_list = rev_edges[cons_cid]
-                            for prod_cid in prods_for_ok:
-                                if prod_cid != cons_cid:
-                                    recv_set.add(prod_cid)
-                                    if prod_cid not in cons_rev_set:
-                                        cons_rev_set.add(prod_cid)
-                                        cons_rev_list.append(prod_cid)
 
         bwd_dist: Dict[str, int] = {}
         dq = deque()
@@ -1676,6 +1995,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         # (f_score, neg_evidence, counter, g_cost, chain_ids, gamma, sigma,
         #  covered_clauses, active_props, open_lens, active_focus, focus_modified,
         #  step_clauses, inv_count, max_cl_seen)
+        n_cov_init = len(coverable_clauses) if len(coverable_clauses) > 1 else n_clauses
+        astar_w = float(kwargs.get("astar_weight", 3.2 if n_cov_init >= 3 else 1.0))
+
         pq: List[Tuple[
             float, float, int, float, Tuple[str, ...], Tuple[Any, ...], Any,
             Tuple[TargetId, ...], Tuple[Tuple[str, Any], ...], bool,
@@ -1685,7 +2007,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         heapq.heappush(
             pq,
             (
-                _heuristic(None, (), gamma_state=init_gamma),
+                astar_w * _heuristic(None, (), gamma_state=init_gamma),
                 0.0,
                 counter,
                 0.0,
@@ -1729,7 +2051,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
         while pq and expansions < max_expansions:
             if time.perf_counter() >= _search_deadline:
                 break
-            if best_full_g is not None and pq[0][0] > best_full_g + amb_window:
+            if best_full_g is not None and astar_w <= 1.0 and pq[0][0] > best_full_g + amb_window:
                 break
             if first_full_exp is not None and (expansions - first_full_exp) >= 80:
                 break
@@ -1826,6 +2148,54 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     else 0.0
                 )
                 lens_closure_term = -0.35 if (open_lens and focus_modified) else 0.15
+                last_cid = chain_ids[-1] if chain_ids else None
+                abandoned_handles = 0
+                s2_has_consumed: Dict[Tuple[str, Tuple[int, ...]], bool] = {}
+                s2_has_non_diag: Dict[Tuple[str, Tuple[int, ...]], bool] = {}
+                for gs in gamma:
+                    if gs.prod_cell is None:
+                        continue
+                    pcid = gs.prod_cell.cell_id
+                    if pcid == last_cid or is_sink_map.get(pcid, False):
+                        continue
+                    is_hdl = self.is_handle_port(gs.out_port)
+                    p_stage = getattr(gs.prod_cell, "stage", None)
+                    if is_hdl:
+                        if gs.consumed:
+                            continue
+                        p_pos = -1
+                        for s_idx in range(len(chain_ids) - 1, -1, -1):
+                            if chain_ids[s_idx] == pcid:
+                                p_pos = s_idx
+                                break
+                        if (
+                            p_stage == 2
+                            and p_pos >= 0
+                            and p_pos < len(chain_ids) - 1
+                            and all(is_sink_map.get(dcid, False) for dcid in chain_ids[p_pos + 1 :])
+                        ):
+                            continue
+                        abandoned_handles += 1
+                    elif p_stage == 2:
+                        inv_key = (pcid, gs.provenance_clause_tags)
+                        if gs.consumed:
+                            s2_has_consumed[inv_key] = True
+                        else:
+                            s2_has_consumed.setdefault(inv_key, False)
+                            t_out = str(
+                                getattr(gs.carrier_type, "type_name", None)
+                                or getattr(gs.out_port, "type_name", "")
+                                or ""
+                            ).strip().lower()
+                            is_diag_scalar = (
+                                bool(reg is not None and (reg.is_subtype(t_out, "numeric") or reg.is_subtype(t_out, "bool")))
+                                or t_out in ("int", "float", "bool")
+                            )
+                            if not is_diag_scalar:
+                                s2_has_non_diag[inv_key] = True
+                dead_stage2_outputs = sum(
+                    1 for k, was_cons in s2_has_consumed.items() if not was_cons and s2_has_non_diag.get(k, False)
+                )
                 quality = (
                     1.45 * tok_frac
                     + 0.40 * mean_gain
@@ -1837,8 +2207,15 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     - 0.04 * max(0, non_optic_steps - 1)
                     - 0.25 * domain_switches
                     - 0.60 * trailing_wasted
+                    - 0.65 * abandoned_handles
+                    - 0.35 * dead_stage2_outputs
                 )
-                terminal_pen = (0.35 if (open_lens and focus_modified) else 0.0) + 0.45 * float(inv_count)
+                terminal_pen = (
+                    (0.35 if (open_lens and focus_modified) else 0.0)
+                    + 0.45 * float(inv_count)
+                    + 0.65 * float(abandoned_handles)
+                    + 0.35 * float(dead_stage2_outputs)
+                )
                 eff_plan_g = g_cost + terminal_pen
 
                 if best_partial is None or quality > best_partial[0]:
@@ -1863,6 +2240,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             "eff_g": eff_plan_g,
                             "g_cost": g_cost,
                             "quality": quality,
+                            "cov_cnt": len(cov_cl),
+                            "abandoned_handles": abandoned_handles,
+                            "dead_stage2_outputs": dead_stage2_outputs,
                             "chain_ids": chain_ids,
                             "step_clauses": step_clauses,
                             "gamma": gamma,
@@ -1879,6 +2259,9 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             "eff_g": eff_plan_g,
                             "g_cost": g_cost,
                             "quality": quality,
+                            "cov_cnt": len(cov_cl),
+                            "abandoned_handles": abandoned_handles,
+                            "dead_stage2_outputs": dead_stage2_outputs,
                             "chain_ids": chain_ids,
                             "step_clauses": step_clauses,
                             "gamma": gamma,
@@ -2344,13 +2727,26 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cand_new_cl_reuse = cell_clause_hits.get(cand.cell_id, set()) - cov_cl_set
                 if cand.cell_id in used_set:
                     reuse_lex_ok = any((cand.cell_id, t_r) in cell_target_has_lex for t_r in cand_new_cl_reuse)
+                    is_parameterless_zero_in = (
+                        not cell_req_ins_map[cand.cell_id]
+                        and not cand_needs_path_map[cand.cell_id]
+                        and (
+                            not cell_any_req_map[cand.cell_id]
+                            or str(getattr(cand, "node_type", "") or "").strip().lower() == "macro"
+                            or bool(getattr(cand, "slots", None))
+                        )
+                    )
                     is_pure_constructor = not any(
                         self.is_handle_port(ip) for _, ip in cell_req_ins_map[cand.cell_id]
                     )
                     repeat_cap = (
-                        max(3, n_clauses)
-                        if (is_repeatable_optic or is_ingress_map[cand.cell_id] or is_pure_constructor)
-                        else max(2, n_clauses // 4)
+                        1
+                        if is_parameterless_zero_in
+                        else (
+                            max(3, n_clauses)
+                            if (is_repeatable_optic or is_ingress_map[cand.cell_id] or is_pure_constructor)
+                            else max(2, n_clauses // 4)
+                        )
                     )
                     if (
                         is_sink_map[cand.cell_id]
@@ -2444,10 +2840,53 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         0.40 * cell_lex_score.get(cand.cell_id, 0.0)
                         + 1.80 * cl_cf[0]
                         + 0.90 * cl_cf[1]
+                        + 0.60 * cl_cf[2]
                         + 0.55 * port_frac
                         + (0.35 if sub_anchor_owner.get(best_target) == cand.cell_id else 0.0)
                         + (0.35 if (cand.cell_id, best_target) in cell_target_has_lex else -0.35)
                     )
+                    cl_num_cnt, cl_str_cnt = clause_lit_counts.get(best_target[0], (0, 0))
+                    num_ports, str_ports, req_num_arity, req_str_non_key = cell_req_lit_ports.get(
+                        cand.cell_id, ((), (), 0, 0)
+                    )
+                    if req_num_arity > 0 and cl_num_cnt == 0:
+                        num_satisfied_by_gamma = all(
+                            any(
+                                gs.out_port is not None
+                                and _unify_cached(
+                                    gs.carrier_type,
+                                    getattr(np_p, "signature", np_p),
+                                    out_port=gs.out_port,
+                                    in_port=np_p,
+                                    prod_cell=gs.prod_cell,
+                                    cons_cell=cand,
+                                )
+                                for gs in gamma
+                            )
+                            for np_p in num_ports
+                        )
+                        if not num_satisfied_by_gamma:
+                            prior_sc -= 0.65
+                    elif req_num_arity >= 2 and cl_num_cnt >= req_num_arity:
+                        prior_sc += 0.30
+                    if req_str_non_key > 0 and cl_str_cnt == 0 and cl_cf[1] == 0.0:
+                        str_satisfied_by_gamma = all(
+                            any(
+                                gs.out_port is not None
+                                and _unify_cached(
+                                    gs.carrier_type,
+                                    getattr(sp_p, "signature", sp_p),
+                                    out_port=gs.out_port,
+                                    in_port=sp_p,
+                                    prod_cell=gs.prod_cell,
+                                    cons_cell=cand,
+                                )
+                                for gs in gamma
+                            )
+                            for sp_p in str_ports
+                        )
+                        if not str_satisfied_by_gamma:
+                            prior_sc -= 0.65
                 else:
                     prior_sc = cell_lex_score.get(cand.cell_id, 0.0)
                 cand_dom = cell_domain_map[cand.cell_id]
@@ -2595,6 +3034,12 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     )
                 ):
                     continue
+                if (
+                    block_ungrounded_path_sources
+                    and not is_sink_map[cand.cell_id]
+                    and cell_req_path_in_map[cand.cell_id]
+                ):
+                    continue
                 is_zero_in_reader = is_ingress_map[cand.cell_id] or (
                     not cell_req_ins_map[cand.cell_id] and cand_needs_path
                 )
@@ -2647,6 +3092,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                                         not is_stage1_source
                                         or cand_has_handle_out
                                         or not cand_has_composite_out
+                                        or not src_file_literals
+                                        or num_sources_used < len(src_file_literals)
                                     )
                                 )
                                 if not has_compat_dest_handle_file
@@ -2876,6 +3323,13 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             if unlock_credit > 0.0 and order_cost_penalty > 0.0 and not new_hits:
                                 order_cost_penalty = 0.0
 
+                cand_bslots = bound_slots_map.get(cand.cell_id) or {}
+                if any(
+                    (not bs.consumed) and self.is_handle_port(bs.out_port)
+                    for bs in cand_bslots.values()
+                ):
+                    prior_sc += 0.25
+
                 # 5-Axis Bridge Profile cost-tiering & lossy guard
                 bp = getattr(cand, "bridge_profile", None)
                 if isinstance(bp, dict) and bp.get("is_bridge"):
@@ -2960,9 +3414,40 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     if dest_file_literals and all(self.file_compat(cand, df) < 0 for df in dest_file_literals):
                         continue
 
+                # Handle closure (linear-resource duality): a terminal sink of the same domain that consumes a
+                # still-open linear handle produced upstream is a lifecycle closer, admissible without a clause hit.
+                closes_open_handle = False
+                if not eff_new_hits and is_sink_map[cand.cell_id] and chain_ids:
+                    for _, ip_h in cell_req_ins_map[cand.cell_id]:
+                        if not self.is_handle_port(ip_h):
+                            continue
+                        for gs_h in gamma:
+                            if (
+                                gs_h.prod_cell is None
+                                or gs_h.consumed
+                                or is_sink_map.get(gs_h.prod_cell.cell_id, False)
+                                or cell_domain_map.get(gs_h.prod_cell.cell_id) != cand_dom
+                                or not self.is_handle_port(gs_h.out_port)
+                            ):
+                                continue
+                            if _unify_cached(
+                                gs_h.carrier_type,
+                                getattr(ip_h, "signature", ip_h),
+                                out_port=gs_h.out_port,
+                                in_port=ip_h,
+                                prod_cell=gs_h.prod_cell,
+                                cons_cell=cand,
+                            ):
+                                closes_open_handle = True
+                                break
+                        if closes_open_handle:
+                            break
+                    if closes_open_handle:
+                        prior_sc += 0.60
                 # Restrict valid frontier to uncovered prompt-relevant cells, optic/property bridges, or unlockers
                 if (
                     not eff_new_hits
+                    and not closes_open_handle
                     and best_unlock <= 0.0
                     and prop_repair_bonus <= 0.0
                     and not (open_lens and optic_r == "setter")
@@ -3003,7 +3488,16 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         for tc_n in next_target_anchors:
                             for _, ip_n in cell_req_ins_map.get(tc_n.cell_id, ()):
                                 unblock_cids_for_next.update(port_can_receive_from.get(id(ip_n), ()))
-                    if not (unblock_cids_for_next and any(item[0].cell_id in unblock_cids_for_next for item in e_valid)):
+                    if port_can_receive_from:
+                        for tc_b in blocked_chain_targets:
+                            if next_target in unlock_clause_hits.get(tc_b.cell_id, ()):
+                                for _, ip_b in cell_req_ins_map.get(tc_b.cell_id, ()):
+                                    unblock_cids_for_next.update(port_can_receive_from.get(id(ip_b), ()))
+                    has_next_unblocker = bool(
+                        (unblock_cids_for_next and any(item[0].cell_id in unblock_cids_for_next for item in e_valid))
+                        or any(next_target in unlock_clause_hits.get(item[0].cell_id, ()) for item in e_valid)
+                    )
+                    if not has_next_unblocker:
                         fireable_targets = [item[6] for item in e_valid if item[6] is not None]
                         if fireable_targets:
                             eff_next = min(fireable_targets)
@@ -3049,39 +3543,73 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     _search_deadline += min(_dt_sc, 6.0)
                     _choice_score_cache[cache_key] = choice_scores
 
-            scored_children: List[Tuple[float, float, Cell, Any, float, Optional[int], Optional[TargetId]]] = []
+            raw_children: List[Tuple[float, float, Cell, Any, float, Optional[int], Optional[TargetId], bool, float]] = []
+            max_lex_by_tgt: Dict[TargetId, float] = {}
             for cand, next_sigma, base_prior, unlock_cr, ord_pen, st_cl, bt_tgt in shortlist:
                 slm_sc = float(choice_scores.get(cand.cell_id, 0.0))
                 new_cl = cell_clause_hits.get(cand.cell_id, set()) - cov_cl_set
                 step_cov_cnt = 1 if (n_clauses >= 3 and bt_tgt is not None) else len(new_cl)
                 step_gain = base_prior + 0.65 * slm_sc + 0.30 * step_cov_cnt
-                step_cost = max(C_MIN, C_MIN + 0.75 / (1.0 + max(0.0, step_gain))) + max(0.0, ord_pen)
+                is_pure_prereq = (not new_cl) and (unlock_cr > 0.0)
+                cand_lex_spec = 0.0
+                if (
+                    n_clauses >= 3
+                    and bt_tgt is not None
+                    and clause_best_cf.get(bt_tgt[0], (0.0, 0.0, 0.0))[0] >= 0.55
+                ):
+                    cl_cf_r = cell_clause_cf.get((cand.cell_id, bt_tgt[0]), (0.0, 0.0, 0.0))
+                    cand_lex_spec = 1.80 * cl_cf_r[0] + 0.90 * cl_cf_r[1] + 0.60 * cl_cf_r[2]
+                    prev_max_lex = max_lex_by_tgt.get(bt_tgt)
+                    if prev_max_lex is None or cand_lex_spec > prev_max_lex:
+                        max_lex_by_tgt[bt_tgt] = cand_lex_spec
+                raw_children.append(
+                    (step_gain, ord_pen, cand, next_sigma, unlock_cr, st_cl, bt_tgt, is_pure_prereq, cand_lex_spec)
+                )
+
+            scored_children: List[Tuple[float, float, Cell, Any, float, Optional[int], Optional[TargetId]]] = []
+            for step_gain, ord_pen, cand, next_sigma, unlock_cr, st_cl, bt_tgt, is_pure_prereq, cand_lex_spec in raw_children:
+                base_sc = C_MIN + (0.15 if is_pure_prereq else 0.75) / (1.0 + max(0.0, step_gain))
+                regret_pen = (
+                    1.50 * max(0.0, max_lex_by_tgt[bt_tgt] - cand_lex_spec)
+                    if (bt_tgt is not None and bt_tgt in max_lex_by_tgt)
+                    else 0.0
+                )
+                step_cost = max(C_MIN, base_sc + regret_pen) + max(0.0, ord_pen)
                 scored_children.append((step_cost, step_gain, cand, next_sigma, unlock_cr, st_cl, bt_tgt))
 
             scored_children.sort(key=lambda x: (x[0], -x[1]))
-            for step_cost, step_gain, cand, next_sigma, _, st_cl, bt_tgt in scored_children[:branch_factor]:
+            for step_cost, step_gain, cand, next_sigma, unlock_cr, st_cl, bt_tgt in scored_children[:branch_factor]:
                 has_mappings = bool(getattr(next_sigma, "mappings", None))
+                cand_bound_slots = bound_slots_map.get(cand.cell_id, {})
                 cand_pp = getattr(cand, "polymorphic_propagation", None)
                 src_live_port = None
-                if isinstance(cand_pp, dict) and (cand_pp.get("preserves_semantics") or cand_pp.get("preserves_layout")):
+                if isinstance(cand_pp, dict) and (
+                    cand_pp.get("preserves_semantics")
+                    or cand_pp.get("preserves_layout")
+                    or cand_pp.get("preserves_typestate")
+                ):
                     src_pn = cand_pp.get("source_port") or getattr(cand, "primary_in", None)
-                    src_in_p = (getattr(cand, "inputs", None) or {}).get(src_pn) if src_pn else None
-                    if src_in_p is None and getattr(cand, "inputs", None):
-                        src_in_p = next(iter(cand.inputs.values()), None)
-                    if src_in_p is not None:
-                        in_sig_pp = getattr(src_in_p, "signature", src_in_p)
-                        for gs in reversed(gamma):
-                            if gs.out_port is not None:
-                                if _unify_cached(
-                                    gs.carrier_type,
-                                    in_sig_pp,
-                                    out_port=gs.out_port,
-                                    in_port=src_in_p,
-                                    prod_cell=gs.prod_cell,
-                                    cons_cell=cand,
-                                ):
-                                    src_live_port = gs.out_port
-                                    break
+                    bs_src = cand_bound_slots.get(src_pn) if src_pn else None
+                    if bs_src is not None and bs_src.out_port is not None:
+                        src_live_port = bs_src.out_port
+                    else:
+                        src_in_p = (getattr(cand, "inputs", None) or {}).get(src_pn) if src_pn else None
+                        if src_in_p is None and getattr(cand, "inputs", None):
+                            src_in_p = next(iter(cand.inputs.values()), None)
+                        if src_in_p is not None:
+                            in_sig_pp = getattr(src_in_p, "signature", src_in_p)
+                            for gs in reversed(gamma):
+                                if gs.out_port is not None:
+                                    if _unify_cached(
+                                        gs.carrier_type,
+                                        in_sig_pp,
+                                        out_port=gs.out_port,
+                                        in_port=src_in_p,
+                                        prod_cell=gs.prod_cell,
+                                        cons_cell=cand,
+                                    ):
+                                        src_live_port = gs.out_port
+                                        break
                 inst_pairs: List[Tuple[Any, Any]] = []
                 for oport, orig_osig in cell_out_ports_map[cand.cell_id]:
                     inst_sig = substitute_generics(orig_osig, next_sigma) if has_mappings else orig_osig
@@ -3091,20 +3619,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                         if not hasattr(oport, "model_copy"):
                             eff_port.signature = inst_sig
                     if src_live_port is not None and isinstance(cand_pp, dict):
-                        copied = (eff_port is not oport)
-                        if cand_pp.get("preserves_semantics") and getattr(eff_port, "semantics", "any") in ("", "any", None):
-                            src_sem = getattr(src_live_port, "semantics", None)
-                            if src_sem and src_sem != "any":
-                                if not copied:
-                                    eff_port = copy.copy(eff_port)
-                                    copied = True
-                                eff_port.semantics = src_sem
-                        if cand_pp.get("preserves_layout") and isinstance(getattr(src_live_port, "layout", None), dict):
-                            cur_lay = getattr(eff_port, "layout", None)
-                            if not isinstance(cur_lay, dict) or cur_lay.get("rank") is None:
-                                if not copied:
-                                    eff_port = copy.copy(eff_port)
-                                eff_port.layout = dict(src_live_port.layout)
+                        eff_port = apply_polymorphic_propagation(eff_port, src_live_port, cand_pp, reg)
+                        inst_sig = getattr(eff_port, "signature", inst_sig)
                     inst_pairs.append((eff_port, inst_sig))
                 inst_outs = [osig for _, osig in inst_pairs]
                 next_chain = chain_ids + (cand.cell_id,)
@@ -3118,7 +3634,6 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cand_new_cl = ({bt_tgt} if bt_tgt is not None else set()) if not closing_open_only else set()
                 next_cov = cov_cl if closing_open_only else tuple(sorted(cov_cl_set | cand_new_cl))
 
-                cand_bound_slots = bound_slots_map.get(cand.cell_id, {})
                 cand_bound_list = list(cand_bound_slots.values())
                 explicit_posts = {
                     str(_prop_cond_field(p, "property"))
@@ -3173,7 +3688,21 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                             )
                         )
                         existing_keys.add(full_slot_key)
-                next_gamma = gamma + tuple(added_sigs)
+                bound_slot_ids = {id(b) for b in cand_bound_list}
+                updated_gamma = tuple(
+                    GammaSlot(
+                        carrier_type=gs.carrier_type,
+                        out_port=gs.out_port,
+                        prod_cell=gs.prod_cell,
+                        props=gs.props,
+                        provenance_clause_tags=gs.provenance_clause_tags,
+                        consumed=True,
+                    )
+                    if (id(gs) in bound_slot_ids and not gs.consumed)
+                    else gs
+                    for gs in gamma
+                )
+                next_gamma = updated_gamma + tuple(added_sigs)
 
                 next_props_d = dict(active_props)
                 for pk, pv in cell_props_map[cand.cell_id].items():
@@ -3227,9 +3756,10 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 next_h = _heuristic(cand.cell_id, next_cov, gamma_state=next_gamma)
                 if math.isinf(next_h):
                     continue
-                next_f = next_g + next_h
-                if best_full_g is not None and next_f > best_full_g + amb_window:
+                if best_full_g is not None and (next_g + next_h) > best_full_g + amb_window:
                     continue
+                unlock_bias = (min(0.75, max(0.0, float(unlock_cr))) * 0.35) if astar_w > 1.0 else 0.0
+                next_f = next_g + astar_w * next_h - unlock_bias
                 counter += 1
                 heapq.heappush(
                     pq,
@@ -3269,7 +3799,16 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 filtered_raw.append(rec)
             raw_candidates = filtered_raw
 
-        raw_candidates.sort(key=lambda r: (r["eff_g"], len(r["chain_ids"]), r["chain_ids"]))
+        raw_candidates.sort(
+            key=lambda r: (
+                int(r.get("abandoned_handles", 0)) > 0,
+                int(r.get("dead_stage2_outputs", 0)) > 0,
+                -int(r.get("cov_cnt", 0)),
+                r["eff_g"],
+                len(r["chain_ids"]),
+                r["chain_ids"],
+            )
+        )
 
         if not raw_candidates:
             reason = "OMEGA found no complete path satisfying prompt/goal"
@@ -3310,20 +3849,76 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 cl_idx_r = cl_seq[idx_r] if idx_r < len(cl_seq) else None
                 if cl_idx_r is not None:
                     c_cl.matched_clause_idx = cl_idx_r
-                else:
+                elif not is_sink_map.get(cid_r, False):
                     setattr(c_cl, "_auto_inserted_bridge", True)
                 mat.append(c_cl)
+            prev_assigned_cl = 0
             for i_r, c_cl in enumerate(mat):
-                if getattr(c_cl, "matched_clause_idx", None) is None:
-                    for nxt_r in mat[i_r + 1 :]:
-                        if getattr(nxt_r, "matched_clause_idx", None) is not None:
-                            c_cl.matched_clause_idx = nxt_r.matched_clause_idx
-                            break
+                cur_cl = getattr(c_cl, "matched_clause_idx", None)
+                if cur_cl is not None:
+                    prev_assigned_cl = int(cur_cl)
+                    continue
+                next_cl = None
+                for nxt_r in mat[i_r + 1 :]:
+                    nxt_cl_val = getattr(nxt_r, "matched_clause_idx", None)
+                    if nxt_cl_val is not None:
+                        next_cl = int(nxt_cl_val)
+                        break
+                lower_cl = max(0, prev_assigned_cl)
+                upper_cl = min(next_cl, n_clauses - 1) if next_cl is not None else (n_clauses - 1)
+                best_window_cl: Optional[int] = None
+                best_window_cf = (0.0, 0.0, 0.0)
+                if upper_cl >= lower_cl:
+                    matching_cis = [
+                        ci for ci in range(lower_cl, upper_cl + 1)
+                        if cell_clause_cf.get((c_cl.cell_id, ci), (0.0, 0.0, 0.0))[0] > 0.0
+                    ]
+                    if matching_cis:
+                        best_window_cl = max(
+                            matching_cis,
+                            key=lambda ci: (cell_clause_cf[(c_cl.cell_id, ci)][0], -ci),
+                        )
+                        best_window_cf = cell_clause_cf[(c_cl.cell_id, best_window_cl)]
+                if getattr(c_cl, "_auto_inserted_bridge", False) and upper_cl >= 0:
+                    earlier_end = min(upper_cl, lower_cl - 1)
+                    if earlier_end >= 0:
+                        earlier_cis = [
+                            ci for ci in range(0, earlier_end + 1)
+                            if cell_clause_cf.get((c_cl.cell_id, ci), (0.0, 0.0, 0.0))[0] > 0.0
+                        ]
+                        if earlier_cis:
+                            best_early_cl = max(
+                                earlier_cis,
+                                key=lambda ci: (
+                                    cell_clause_cf[(c_cl.cell_id, ci)][0],
+                                    cell_clause_cf[(c_cl.cell_id, ci)][1],
+                                    cell_clause_cf[(c_cl.cell_id, ci)][2],
+                                    -ci,
+                                ),
+                            )
+                            early_cf = cell_clause_cf[(c_cl.cell_id, best_early_cl)]
+                            early_key = (early_cf[0], early_cf[1], early_cf[2], -best_early_cl)
+                            win_key = (
+                                (best_window_cf[0], best_window_cf[1], best_window_cf[2], -(best_window_cl if best_window_cl is not None else 0))
+                                if best_window_cl is not None
+                                else (0.0, 0.0, 0.0, -n_clauses)
+                            )
+                            if early_key > win_key:
+                                c_cl.matched_clause_idx = best_early_cl
+                                prev_assigned_cl = max(prev_assigned_cl, best_early_cl)
+                                continue
+                if best_window_cl is not None:
+                    c_cl.matched_clause_idx = best_window_cl
+                    prev_assigned_cl = max(prev_assigned_cl, best_window_cl)
+                    continue
+                if next_cl is not None:
+                    c_cl.matched_clause_idx = next_cl
+                    prev_assigned_cl = next_cl
             return mat
 
         verified_plans: List[Dict[str, Any]] = []
         last_verr: Optional[str] = None
-        for rec in raw_candidates[:12]:
+        for rec in raw_candidates[:24]:
             cand_cells = _materialize_plan(rec)
             try:
                 verr = self.verify_planned_path(cand_cells, prompt, orch_ref, ctx=ctx)
@@ -3331,6 +3926,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                 verr = f"{type(_vexc).__name__}: {_vexc}"
             if verr is None:
                 verified_plans.append({**rec, "cells": cand_cells})
+                if len(verified_plans) >= 12:
+                    break
             else:
                 last_verr = str(verr)
 
@@ -3350,8 +3947,8 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
             self._trace("method_failure", requested=type(self).__name__, reason=reason)
             return []
 
-        # Collapse structurally equivalent plans (identical non-bridge operator multiset + terminal sink)
-        non_equiv_by_key: Dict[Tuple[Tuple[str, ...], str], Dict[str, Any]] = {}
+        # Collapse structurally equivalent plans (identical non-bridge operator multiset)
+        non_equiv_by_key: Dict[Tuple[str, ...], Dict[str, Any]] = {}
         for rec in verified_plans:
             op_multiset = tuple(sorted(
                 cid for cid in rec["chain_ids"]
@@ -3360,7 +3957,7 @@ class OmegaTypeDirectedAStarRouteMethod(RouteMethod):
                     and pool_by_id[cid].bridge_profile.get("is_bridge")
                 )
             ))
-            equiv_key = (op_multiset, rec["chain_ids"][-1] if rec["chain_ids"] else "")
+            equiv_key = op_multiset
             if equiv_key not in non_equiv_by_key or rec["eff_g"] < non_equiv_by_key[equiv_key]["eff_g"]:
                 non_equiv_by_key[equiv_key] = rec
 

@@ -126,6 +126,20 @@ class ScopeResolutionStage:
             )
             cell_typed_bindings[p_name] = record
         cell.typed_bindings = cell_typed_bindings
+        prop_outs: Dict[str, Any] = {}
+        for out_name, static_sig in (getattr(cell, "outputs", None) or {}).items():
+            bound_out = cell_bindings.get(out_name)
+            if isinstance(bound_out, str) and bound_out in var_sigs:
+                prop_outs[out_name] = var_sigs[bound_out]
+            else:
+                prop_outs[out_name] = static_sig
+        out_v = cell_bindings.get("output_var")
+        if isinstance(out_v, str) and out_v in var_sigs:
+            prop_outs["output_var"] = var_sigs[out_v]
+        try:
+            cell._propagated_outputs = prop_outs
+        except AttributeError:
+            pass
         return cell_typed_bindings
 
 

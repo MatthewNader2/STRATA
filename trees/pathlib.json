@@ -4971,7 +4971,9 @@
         "read_bytes",
         "binary_read",
         "load_bytes",
-        "slurp_bytes"
+        "slurp_bytes",
+        "read_file",
+        "load_file"
       ],
       "inputs": {
         "file_path": {

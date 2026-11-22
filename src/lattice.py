@@ -1721,13 +1721,21 @@ class TypeRegistry:
             return False
         if out_sk or in_sk or out_abs or in_abs:
             scalar_abs = self.get_atomic_carrier_roots()
-            is_out_scalar = (out_sk == "scalar") or (out_abs in scalar_abs)
-            is_in_scalar = (in_sk == "scalar") or (in_abs in scalar_abs)
             is_out_compound = (out_sk in STRUCTURAL_COMPOUND_KINDS) or (
-                bool(out_abs) and (self.is_composite_carrier(out_abs) or self.is_abstract_carrier(out_abs))
+                not out_sk
+                and bool(out_abs)
+                and (self.is_composite_carrier(out_abs) or self.is_abstract_carrier(out_abs))
             )
             is_in_compound = (in_sk in STRUCTURAL_COMPOUND_KINDS) or (
-                bool(in_abs) and (self.is_composite_carrier(in_abs) or self.is_abstract_carrier(in_abs))
+                not in_sk
+                and bool(in_abs)
+                and (self.is_composite_carrier(in_abs) or self.is_abstract_carrier(in_abs))
+            )
+            is_out_scalar = (not is_out_compound) and (
+                (out_sk == "scalar") or (not out_sk and out_abs in scalar_abs)
+            )
+            is_in_scalar = (not is_in_compound) and (
+                (in_sk == "scalar") or (not in_sk and in_abs in scalar_abs)
             )
             if (is_out_scalar and is_in_compound) or (is_in_scalar and is_out_compound):
                 return False
@@ -1887,7 +1895,16 @@ class TypeRegistry:
         n = max(len(docs), 1)
         for toks in docs:
             df.update(toks)
-        words = tuple(sorted(w for w, c in df.items() if c / n >= cutoff and len(w) >= 2))
+        non_ast_types = {
+            t for t in self.get_registered_types()
+            if "ast" not in {str(p).lower() for p in self._parents.get(t, ())}
+        }
+        words = tuple(
+            sorted(
+                w for w, c in df.items()
+                if c / n >= cutoff and len(w) >= 2 and w not in non_ast_types
+            )
+        )
         self._function_words = words
         return set(words)
 
@@ -3320,7 +3337,30 @@ class TypeRegistry:
         if any(self.is_declared_top_state(s) for s in (c_acc or (c_state,))) or (
             self.is_declared_top_state(c_state) and not (set(c_acc) - self._declared_top_states)
         ):
-            return True
+            # A terminal sink state (e.g. evaluated_metrics, predicted_values, written_to_disk)
+            # must NOT bypass a concrete non-terminal consumer state via a generic carrier
+            # wildcard in c_acc; it requires exact or explicitly declared compatibility.
+            if (
+                p_state
+                and c_state
+                and not self.is_declared_top_state(c_state)
+                and p_state != c_state
+                and p_state not in c_acc
+            ):
+                terminal_sink_states, terminal_sink_suffixes = self._get_terminal_sink_states()
+                pred_states = self.get_states_by_property("is_prediction", True)
+                is_p_terminal = p_state in terminal_sink_states or (
+                    bool(terminal_sink_suffixes) and p_state.endswith(terminal_sink_suffixes)
+                )
+                is_c_terminal = c_state in terminal_sink_states or (
+                    bool(terminal_sink_suffixes) and c_state.endswith(terminal_sink_suffixes)
+                )
+                is_p_pred = p_state in pred_states
+                is_c_pred = c_state in pred_states
+                if not ((is_p_terminal and not is_c_terminal) or (is_p_pred and not is_c_terminal and not is_c_pred)):
+                    return True
+            else:
+                return True
 
         # 2. Unconstrained producer state cannot satisfy constrained consumer
         if self.is_declared_top_state(p_state) and not self.is_declared_top_state(c_state):
@@ -3342,7 +3382,7 @@ class TypeRegistry:
         target_ancestors: Set[str] = set()
         if c_state and not self.is_declared_top_state(c_state):
             target_ancestors.add(c_state)
-        target_ancestors.update(c_acc)
+        target_ancestors.update(s for s in c_acc if not self.is_declared_top_state(s))
 
         if p_state and target_ancestors:
             tgt_tuple = tuple(sorted(set(target_ancestors)))
@@ -4114,6 +4154,47 @@ class PortSignature:
             self.typestate = f"{dom_low}::{st_low}" if (dom_low and "::" not in st_low and st_low not in ("any", "*", "default")) else st_low
         if self.semantics is None and st_low:
             self.semantics = "any" if st_low in ("any", "*", "default") else (f"{dom_low}.{st_low}" if (dom_low and "." not in st_low and "::" not in st_low) else st_low)
+
+    def with_signature(self, new_signature: AlgebraicSignature) -> "PortSignature":
+        """Return a copy of this PortSignature with `new_signature`, preserving all 5-axis and effect fields."""
+        return PortSignature(
+            name=self.name,
+            signature=new_signature,
+            required=self.required,
+            default_value=self.default_value,
+            doc=self.doc,
+            domain=self.domain,
+            abstract_type=self.abstract_type,
+            enum_values=self.enum_values,
+            param_kind=self.param_kind,
+            value_constraints=self.value_constraints,
+            shape_contract=self.shape_contract,
+            rejected_qualifiers=self.rejected_qualifiers,
+            accepted_states=self.accepted_states,
+            parent_state=self.parent_state,
+            port_role=self.port_role,
+            binds=self.binds,
+            structure_kind=self.structure_kind,
+            rank=self.rank,
+            element_type=self.element_type,
+            supported_formats=self.supported_formats,
+            complement_of_port=self.complement_of_port,
+            disjoint_from_port=self.disjoint_from_port,
+            key_from_upstream_role=self.key_from_upstream_role,
+            carrier=self.carrier,
+            nominal_type=self.nominal_type,
+            layout=(dict(self.layout) if isinstance(self.layout, dict) else self.layout),
+            semantics=self.semantics,
+            typestate=self.typestate,
+            invariants=self.invariants,
+            effect_suspended=self.effect_suspended,
+            mutates=self.mutates,
+            key_of=self.key_of,
+            key_effect=self.key_effect,
+            partition_index=self.partition_index,
+            partition=self.partition,
+            owner_cell=self.owner_cell,
+        )
 
     @property
     def type_name(self) -> str:
@@ -4935,21 +5016,59 @@ def compute_port_residual(
         or reg.is_subtype(p_sem, c_sem)
         or reg.state_ancestry_reaches(p_sem, (c_sem,))
     ):
+        # Rule A: Direct semantic subsumption
         semantics_delta = False
-    elif st_ok and c_sem_is_state_mirror:
+    else:
+        p_non_univ = not _is_universal_top_state(p_state_l)
+        c_non_univ = not _is_universal_top_state(c_state_l)
         p_reaches_acc = (
             bool(c_acc)
-            and (not _is_universal_top_state(p_state_l))
+            and p_non_univ
             and (p_state_l in c_acc or reg.state_ancestry_reaches(p_state_l, c_acc))
         )
-        if p_reaches_acc and (_is_top_sem(p_sem) or p_sem_is_state_mirror):
+        p_reaches_c_state = (
+            p_non_univ
+            and c_non_univ
+            and (p_state_l == c_state_l or reg.state_ancestry_reaches(p_state_l, (c_state_l,)))
+        )
+        if st_ok and p_reaches_acc:
+            # Rule B: Consumer explicitly widened port acceptance via `accepted_states`
             semantics_delta = False
-        elif p_dom and c_dom and p_dom == c_dom and p_sem_is_state_mirror:
+        elif st_ok and p_reaches_c_state and (
+            p_sem_is_state_mirror or (_is_top_sem(p_sem) and c_sem_is_state_mirror)
+        ):
+            # Rule C: Proven typestate subsumption (`s_p <= s_c`) when producer carries
+            # state-mirrored (or top-with-mirrored-consumer) semantics
             semantics_delta = False
+        elif (
+            st_ok
+            and c_sem_is_state_mirror
+            and p_sem_is_state_mirror
+            and p_dom
+            and c_dom
+            and p_dom == c_dom
+        ):
+            # Rule D: Intra-domain property-subsumed state mirrors (must hold WITHOUT
+            # wildcard top states in accepted_states so terminal sinks cannot bypass
+            # semantics via generic carrier wildcards such as ndarray_generic).
+            c_acc_non_top = tuple(s for s in c_acc if not reg.is_declared_top_state(s))
+            st_ok_non_top = (
+                st_ok
+                if len(c_acc_non_top) == len(c_acc)
+                else reg.is_state_compatible(
+                    p_state_l,
+                    c_state_l,
+                    producer_accepted=getattr(p_out, "accepted_states", ()) or getattr(p_sig, "accepted_states", ()) or (),
+                    consumer_accepted=c_acc_non_top,
+                    consumer_parent=getattr(p_in, "parent_state", None) or getattr(c_sig, "parent_state", None),
+                    producer_parent=getattr(p_out, "parent_state", None) or getattr(p_sig, "parent_state", None),
+                    producer_domain=p_dom,
+                    consumer_domain=c_dom,
+                )
+            )
+            semantics_delta = not st_ok_non_top
         else:
             semantics_delta = True
-    else:
-        semantics_delta = True
 
     # Axis 5: Mathematical Invariants / Refinements (Phi_out |= Phi_in)
     if both_path:
@@ -4997,6 +5116,141 @@ def compute_port_residual(
     )
 
 
+def apply_polymorphic_propagation(
+    out_port: Any,
+    src_port: Any,
+    pp_spec: Optional[Dict[str, Any]],
+    registry: Optional[TypeRegistry] = None,
+) -> Any:
+    """Propagate concrete typestate, semantics, and unspecified layout slots across a polymorphic functor port."""
+    if src_port is None or not isinstance(pp_spec, dict):
+        return out_port
+    reg = registry or TypeRegistry.get_instance()
+    res = out_port
+    copied = False
+
+    if pp_spec.get("preserves_typestate"):
+        src_sig_inner = getattr(src_port, "signature", src_port)
+        src_state = getattr(src_sig_inner, "state", None)
+        src_state_l = str(src_state or "").strip().lower()
+        cur_sig_inner = getattr(res, "signature", res)
+        cur_state_l = str(getattr(cur_sig_inner, "state", "") or "").strip().lower()
+        term_states = set(reg.get_terminal_states() or ()) | reg.get_states_by_property("is_terminal", True)
+        if (
+            src_state
+            and src_state_l not in ("", "any", "default")
+            and not reg.is_declared_top_state(src_state_l)
+            and cur_state_l != src_state_l
+            and cur_state_l not in term_states
+        ):
+            new_parent_st = getattr(cur_sig_inner, "parent_state", None)
+            if not new_parent_st and getattr(src_sig_inner, "parent_state", None):
+                new_parent_st = src_sig_inner.parent_state
+            new_alg = AlgebraicSignature(
+                type_name=getattr(cur_sig_inner, "type_name", "any"),
+                state=src_state,
+                qualifiers=getattr(cur_sig_inner, "qualifiers", ()),
+                abstract_type=getattr(cur_sig_inner, "abstract_type", ""),
+                accepted_states=getattr(cur_sig_inner, "accepted_states", ()),
+                parent_state=new_parent_st,
+                domain=getattr(cur_sig_inner, "domain", ""),
+            )
+            src_ts = getattr(src_port, "typestate", None)
+            src_sem_pt = getattr(src_port, "semantics", None)
+            cur_dom_l = str(getattr(res, "domain", "") or getattr(cur_sig_inner, "domain", "") or "").strip().lower()
+            cur_sem_l = str(getattr(res, "semantics", "") or "").strip().lower()
+            cur_sem_is_state_derived = (
+                not cur_sem_l
+                or cur_sem_l == "any"
+                or reg.is_declared_top(cur_sem_l)
+                or cur_sem_l == cur_state_l
+                or (cur_dom_l and cur_sem_l == f"{cur_dom_l}.{cur_state_l}")
+            )
+            if isinstance(res, PortSignature):
+                res = res.with_signature(new_alg)
+                copied = True
+                if src_ts:
+                    res.typestate = src_ts
+                if src_sem_pt and cur_sem_is_state_derived:
+                    res.semantics = src_sem_pt
+            elif hasattr(res, "signature") and res.signature is not res:
+                if not copied:
+                    res = copy.copy(res)
+                    copied = True
+                res.signature = new_alg
+                if hasattr(res, "_cached_term"):
+                    res._cached_term = None
+                if hasattr(res, "_cached_derived_role"):
+                    res._cached_derived_role = None
+                if src_ts and hasattr(res, "typestate"):
+                    res.typestate = src_ts
+                if src_sem_pt and cur_sem_is_state_derived and hasattr(res, "semantics"):
+                    res.semantics = src_sem_pt
+            else:
+                res = new_alg
+                copied = True
+
+    if pp_spec.get("preserves_semantics"):
+        cur_sem = str(getattr(res, "semantics", "") or "").strip().lower()
+        if not cur_sem or cur_sem == "any" or reg.is_declared_top(cur_sem):
+            src_sem = getattr(src_port, "semantics", None)
+            src_sem_l = str(src_sem or "").strip().lower()
+            if src_sem and src_sem_l != "any" and not reg.is_declared_top(src_sem_l):
+                if not copied:
+                    res = copy.copy(res)
+                    copied = True
+                res.semantics = src_sem
+
+    if pp_spec.get("preserves_layout") and isinstance(getattr(src_port, "layout", None), dict):
+        src_lay = src_port.layout
+        cur_lay = getattr(res, "layout", None)
+
+        def _is_uninst_dtype(dt: Any) -> bool:
+            if dt is None:
+                return True
+            dt_s = str(dt).strip()
+            return dt_s.lower() in ("", "any") or reg.is_type_variable(dt_s)
+
+        if not isinstance(cur_lay, dict):
+            if not copied:
+                res = copy.copy(res)
+                copied = True
+            res.layout = dict(src_lay)
+            if isinstance(src_lay.get("rank"), int) and not isinstance(src_lay.get("rank"), bool) and getattr(res, "rank", None) is None:
+                res.rank = src_lay["rank"]
+                for _c_attr in ("_cached_rank_cache", "_cached_ndim"):
+                    if hasattr(res, _c_attr):
+                        setattr(res, _c_attr, None)
+        else:
+            new_lay = dict(cur_lay)
+            if cur_lay.get("rank") is None or isinstance(cur_lay.get("rank"), str) or bool(cur_lay.get("rank_polymorphic")):
+                if isinstance(src_lay.get("rank"), int) and not isinstance(src_lay.get("rank"), bool):
+                    new_lay["rank"] = src_lay["rank"]
+                    new_lay["rank_polymorphic"] = False
+            if _is_uninst_dtype(cur_lay.get("dtype")) and not _is_uninst_dtype(src_lay.get("dtype")):
+                new_lay["dtype"] = src_lay["dtype"]
+            if cur_lay.get("shape") is None and src_lay.get("shape") is not None:
+                new_lay["shape"] = list(src_lay["shape"]) if isinstance(src_lay["shape"], (list, tuple)) else src_lay["shape"]
+            for _lk in ("channel_count", "channel_axis"):
+                if cur_lay.get(_lk) is None and src_lay.get(_lk) is not None:
+                    new_lay[_lk] = src_lay[_lk]
+            if cur_lay.get("shape") is None and cur_lay.get("length") is None and src_lay.get("length") is not None:
+                new_lay["length"] = src_lay["length"]
+            if str(cur_lay.get("memory_order") or "any").strip().lower() == "any" and str(src_lay.get("memory_order") or "any").strip().lower() != "any":
+                new_lay["memory_order"] = src_lay["memory_order"]
+            if new_lay != cur_lay:
+                if not copied:
+                    res = copy.copy(res)
+                res.layout = new_lay
+                if isinstance(new_lay.get("rank"), int) and not isinstance(new_lay.get("rank"), bool) and getattr(res, "rank", None) is None:
+                    res.rank = new_lay["rank"]
+                    for _c_attr in ("_cached_rank_cache", "_cached_ndim"):
+                        if hasattr(res, _c_attr):
+                            setattr(res, _c_attr, None)
+
+    return res
+
+
 class Cell(ABC):
     """
     Mathematical Lattice Node: v = (f, tau_in, tau_out).
@@ -5017,7 +5271,7 @@ class Cell(ABC):
         "relations", "bridge_profile", "polymorphic_propagation",
         "_primary_input", "_primary_output", "_token_set", "_token_count",
         "_identity_tokens", "bound_parent_ids", "matched_clause_idx",
-        "clause_literals", "fixture_needs", "projection", "typed_bindings",
+        "clause_literals", "fixture_needs", "projection", "typed_bindings", "_propagated_outputs",
         "planned_port_wires", "is_typed_hole", "task_description",
         "optic_role", "container_port", "key_port", "focus_port",
         "op_name", "_canonical_op_names", "_formal_identifiers",
@@ -5148,6 +5402,7 @@ class Cell(ABC):
         self._auto_inserted_bridge: bool = False
         self._is_prerequisite_producer: bool = False
         self.typed_bindings: Dict[str, Any] = {}
+        self._propagated_outputs: Dict[str, Any] = {}
 
         self._primary_input = None
         self._primary_output = None
@@ -5468,7 +5723,11 @@ class Cell(ABC):
                 from .tokenizer import CellTokenizer
             except (ImportError, ValueError):
                 from tokenizer import CellTokenizer
-            toks = CellTokenizer.tokenize_cell(self.cell_id, self.keywords)
+            kws = list(self.keywords or ())
+            for tag in (self.semantic_tags or ()):
+                if "_" not in str(tag) and tag not in kws:
+                    kws.append(tag)
+            toks = CellTokenizer.tokenize_cell(self.cell_id, kws)
             if getattr(self, "domain_name", None) and self.domain_name != "generic":
                 toks.update(CellTokenizer.tokenize_identifier(self.domain_name))
             if self.docstring:
@@ -5563,6 +5822,17 @@ class Cell(ABC):
                 rem_atomic = {t for t in (id_toks - dom_toks) if "_" not in t}
                 if len(rem_atomic) >= 2:
                     id_toks = id_toks - dom_toks
+            try:
+                _fw = TypeRegistry.get_instance().get_function_words()
+            except Exception:
+                _fw = set()
+            if _fw:
+                rem_non_fw = {t for t in (id_toks - _fw) if "_" not in t}
+                if len(rem_non_fw) >= 2:
+                    id_toks = id_toks - _fw
+                _strip_fw = _fw - id_toks
+                if _strip_fw and (kw_toks - _strip_fw):
+                    kw_toks = kw_toks - _strip_fw
             toks = id_toks | kw_toks
             try:
                 aliases = TypeRegistry.get_instance().get_all_aliases()
@@ -5902,6 +6172,7 @@ class Cell(ABC):
         if getattr(self, "effects", None):
             c.effects = list(self.effects)
         c.typed_bindings = dict(getattr(self, "typed_bindings", {}) or {})
+        c._propagated_outputs = dict(getattr(self, "_propagated_outputs", {}) or {})
         return c
 
     def effect_names(self) -> Set[str]:
@@ -7117,6 +7388,8 @@ class LatticeOrchestrator:
             corpus_docs = [c.docstring for c in all_cells if getattr(c, "docstring", None)]
             if corpus_docs:
                 reg.derive_function_words(corpus_docs)
+                for _c_fw in all_cells:
+                    _c_fw._identity_tokens = None
             func_words_lower = {str(w).strip().lower() for w in (reg.get_function_words() or ())}
 
             all_domain_toks: Set[str] = set()
@@ -7316,7 +7589,10 @@ class LatticeOrchestrator:
                 egress_tokens_acc = {t for t in egress_tokens_acc if t not in param_or_src}
                 if egress_tokens_acc:
                     reg.register_egress_tokens(egress_tokens_acc)
-                reg_types = reg.get_registered_types()
+                reg_types = {
+                    t for t in reg.get_registered_types()
+                    if "ast" not in {str(p).lower() for p in reg._parents.get(t, ())}
+                }
                 fw_cur = getattr(reg, "_function_words", None)
                 if fw_cur:
                     reg._function_words = tuple(w for w in fw_cur if w not in reg_types)

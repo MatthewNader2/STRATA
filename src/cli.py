@@ -696,7 +696,7 @@ class PipelineDebugger:
         sandbox_res = sandbox_res or {}
         if internal_error_msg:
             return {"stage": "engine", "kind": "INTERNAL_ERROR", "detail": internal_error_msg}
-        if not cells:
+        if not cells and not final_code:
             if isinstance(planner_refusal, dict) and str(planner_refusal.get("kind") or "").strip().upper() == "AMBIGUITY":
                 return {
                     "stage": "planning",
@@ -1232,36 +1232,63 @@ class PipelineDebugger:
                 )
 
             refusal = getattr(getattr(self.router, "planner", None), "last_refusal", None)
+            ref_kind = ""
             if refusal and isinstance(refusal, dict):
-                cov_frac = refusal.get("coverage_fraction", 0.0)
-                cov_fl = refusal.get("coverage_floor", 0.85)
-                uncovered = refusal.get("uncovered_clauses", [])
-                unc_text = ", ".join(f"[{idx}]: '{txt}'" for idx, txt in uncovered) if uncovered else "None"
-                diag_table.add_row(
-                    "Coverage Floor Check",
-                    "[red]REFUSED[/red]",
-                    f"Plan coverage {cov_frac:.1%} < floor {cov_fl:.1%}. Uncovered clauses: {unc_text}"
-                )
+                ref_kind = str(refusal.get("kind") or "").strip().upper()
+                ref_reason = str(refusal.get("reason") or "").strip()
+                if ref_kind and ref_kind != "COVERAGE":
+                    diag_table.add_row(
+                        f"Planner Refusal ({ref_kind})",
+                        "[red]REFUSED[/red]",
+                        ref_reason or "Planning refused.",
+                    )
+                else:
+                    cov_frac = refusal.get("coverage_fraction", 0.0)
+                    cov_fl = refusal.get("coverage_floor", 0.85)
+                    uncovered = refusal.get("uncovered_clauses", [])
+                    unc_text = ", ".join(f"[{idx}]: '{txt}'" for idx, txt in uncovered) if uncovered else "None"
+                    diag_table.add_row(
+                        "Coverage Floor Check",
+                        "[red]REFUSED[/red]",
+                        f"Plan coverage {cov_frac:.1%} < floor {cov_fl:.1%}. Uncovered clauses: {unc_text}"
+                    )
 
             c.print(diag_table)
             c.print("")
 
-            # Layer 5 Feedback Check for Planning Refusal
+            # Layer 5 Feedback Check for non-epistemic planning refusals
             llm_feedback = getattr(self, "llm_feedback", False)
-            if not cells and refusal and llm_feedback:
+            if (
+                not cells
+                and refusal
+                and llm_feedback
+                and ref_kind not in ("AMBIGUITY", "TYPED_HOLE", "UNINHABITED_GOAL")
+            ):
                 mm = ModelManager.get_instance()
                 if mm.profile and mm.can_feedback_check():
                     unc_list = [f"Clause {idx}: '{txt}'" for idx, txt in refusal.get("uncovered_clauses", [])]
                     err_msg = (
-                        f"Topological planning REFUSED due to coverage below floor "
-                        f"({refusal.get('coverage_fraction', 0.0):.1%} < {refusal.get('coverage_floor', 0.85):.1%}).\n"
-                        f"Missing clauses:\n" + "\n".join(f"- {u}" for u in unc_list)
+                        f"Topological planning REFUSED ({ref_kind or 'COVERAGE'}, "
+                        f"coverage {refusal.get('coverage_fraction', 0.0):.1%} < {refusal.get('coverage_floor', 0.85):.1%})."
                     )
+                    if unc_list:
+                        err_msg += "\nMissing clauses:\n" + "\n".join(f"- {u}" for u in unc_list)
+                    elif refusal.get("reason"):
+                        err_msg += f"\nReason: {refusal.get('reason')}"
                     c.print(Panel("[bold yellow]⚡ LAYER 5: Planning Refusal LLM Feedback Check[/bold yellow]", border_style="yellow"))
                     feedback_reply = mm.feedback_check(failing_code="", traceback_error=err_msg)
                     extracted = extract_code_from_llm_response(feedback_reply)
                     if extracted:
-                        final_code = extracted
+                        rep_ok, rep_lint = _validate_repaired_code(
+                            extracted,
+                            prompt,
+                            self.orchestrator,
+                            getattr(self, "allowed_capabilities", None),
+                        )
+                        if rep_ok:
+                            final_code = extracted
+                        else:
+                            c.print("  [bold red][x] Layer 5 fallback code rejected by security/preflight validator.[/bold red]\n")
 
         # LAYER 3: Type-Monadic Unification & AST Synthesis
         dest_paths = None
@@ -1274,11 +1301,12 @@ class PipelineDebugger:
         unify_fail_reason: Optional[str] = None
         lint_error_msg: Optional[str] = None
         lint_res = None
+        lint_valid = bool(final_code)
+        ctx = dbg_ctx if dbg_ctx is not None else ExecutionContext(prompt=prompt_clean)
         planner_refusal = getattr(getattr(self.router, "planner", None), "last_refusal", None)
 
         if cells:
             t_synth_0 = time.perf_counter()
-            ctx = dbg_ctx if dbg_ctx is not None else ExecutionContext(prompt=prompt_clean)
             # Profile S (Semantic Compiler): the typed IR's extracted literals
             # are injected into the execution context's declared parameters so
             # the Unification Gate binds arguments deterministically from the
@@ -1475,7 +1503,7 @@ class PipelineDebugger:
                     }
                 if pipeline_bindings and not internal_error_msg:
                     try:
-                        lint_res = PreflightLinter.lint(pipeline_bindings, prompt=prompt, code_str=final_code, orchestrator=self.orchestrator)
+                        lint_res = PreflightLinter.lint(pipeline_bindings, prompt=prompt, code_str=final_code, orchestrator=self.orchestrator, typed_proof=getattr(self.gate, "last_typed_proof", None))
                         lint_valid = lint_res.is_valid
                     except Exception as lint_err:
                         logger.warning(f"[PREFLIGHT] Linting exception: {lint_err}")
@@ -2982,7 +3010,7 @@ class NSTLInteractiveShell(cmd.Cmd):
         lint_error_msg = None
         if not query_no_lint and hasattr(self.gate, "last_pipeline_bindings") and self.gate.last_pipeline_bindings:
             try:
-                lint_res = PreflightLinter.lint(self.gate.last_pipeline_bindings, prompt=effective_prompt, code_str=final_code, orchestrator=self.orchestrator)
+                lint_res = PreflightLinter.lint(self.gate.last_pipeline_bindings, prompt=effective_prompt, code_str=final_code, orchestrator=self.orchestrator, typed_proof=getattr(self.gate, "last_typed_proof", None))
                 lint_valid = lint_res.is_valid
                 if not lint_res.is_valid:
                     console.print("\n[bold red][!] Static Pre-Flight Lint Violations:[/bold red]")

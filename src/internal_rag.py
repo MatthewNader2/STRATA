@@ -768,7 +768,7 @@ class LocalRAG:
         self,
         prompts: List[str],
         top_k: int = 25,
-        max_fanout: int = 32
+        max_fanout: int = 64
     ) -> List[List[Dict[str, Any]]]:
         """
         Batched retrieval: embeds unique query spans in a single model call with

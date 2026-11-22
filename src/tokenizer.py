@@ -8,7 +8,8 @@ Zero regular expressions and zero English-language morphological or stopword heu
 
 from __future__ import annotations
 import functools
-from typing import Set, Tuple, List
+import os
+from typing import Optional, Set, Tuple, List
 
 
 # --------------------------------------------------------------------------- #
@@ -38,9 +39,9 @@ _MM_CLS = None
 def _is_profile_zero() -> bool:
     global _MM_CLS
     try:
-        from .config import resolve_profile_spec, active_profile_spec
+        from .config import resolve_profile_spec
     except (ImportError, ValueError):
-        from config import resolve_profile_spec, active_profile_spec
+        from config import resolve_profile_spec
     if _MM_CLS is None:
         try:
             from .inference import ModelManager as _MM
@@ -59,9 +60,12 @@ def _is_profile_zero() -> bool:
         except Exception:
             pass
     try:
-        return active_profile_spec().pure_symbolic
+        env_p = os.environ.get("NSTL_PROFILE")
+        if env_p is not None and env_p.strip():
+            return resolve_profile_spec(env_p).pure_symbolic
     except Exception:
-        return False
+        pass
+    return False
 
 
 def register_aliases(mapping: dict) -> None:
@@ -178,27 +182,30 @@ class CellTokenizer:
         return "".join(chars[i:j])
 
     @classmethod
-    def tokenize_identifier(cls, identifier: str) -> Set[str]:
+    def tokenize_identifier(cls, identifier: str, expand_aliases: Optional[bool] = None) -> Set[str]:
         """
         Splits camelCase, snake_case, kebab-case, and dotted identifiers into distinct sub-tokens
         using a deterministic character-level transition scanner.
         """
         if not identifier:
             return set()
-        return set(_tokenize_identifier_cached(str(identifier), not _is_profile_zero()))
+        exp = (not _is_profile_zero()) if expand_aliases is None else bool(expand_aliases)
+        return set(_tokenize_identifier_cached(str(identifier), exp))
 
     @classmethod
-    def tokenize_identifier_frozen(cls, identifier: str) -> Tuple[str, ...]:
+    def tokenize_identifier_frozen(cls, identifier: str, expand_aliases: Optional[bool] = None) -> Tuple[str, ...]:
         """Cached immutable variant returning Tuple[str, ...]."""
         if not identifier:
             return ()
-        return _tokenize_identifier_cached(str(identifier), not _is_profile_zero())
+        exp = (not _is_profile_zero()) if expand_aliases is None else bool(expand_aliases)
+        return _tokenize_identifier_cached(str(identifier), exp)
 
     @classmethod
-    def tokenize_prompt(cls, prompt: str) -> Set[str]:
+    def tokenize_prompt(cls, prompt: str, pure_symbolic: Optional[bool] = None) -> Set[str]:
         if not prompt:
             return set()
-        return set(_tokenize_prompt_cached(prompt, _is_profile_zero(), _ALIASES_KEY))
+        p0 = _is_profile_zero() if pure_symbolic is None else bool(pure_symbolic)
+        return set(_tokenize_prompt_cached(prompt, p0, _ALIASES_KEY))
 
     @classmethod
     def tokenize_cell(cls, cell_id: str, keywords: Set[str]) -> Set[str]:
@@ -403,7 +410,7 @@ def _tokenize_prompt_cached(
     for raw in prompt.split():
         cw = raw.strip(",;.:!?()[]{}\'\"")
         if any(c.isupper() for c in cw) or '_' in cw or '.' in cw or any(c.isdigit() for c in cw):
-            tokens.update(CellTokenizer.tokenize_identifier(cw))
+            tokens.update(_tokenize_identifier_cached(cw, not profile_zero))
         if '-' in cw:
             h_parts = [p.lower() for p in cw.split('-') if p and p.isalnum()]
             if len(h_parts) >= 2 and all(any(ch.isalpha() for ch in p) for p in h_parts):

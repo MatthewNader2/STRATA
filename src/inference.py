@@ -1438,7 +1438,11 @@ class BenchmarkProfile_C(InferenceProfile):
                 },
                 "parameters": {
                     "type": "object",
-                    "description": "Key-value mapping of explicit execution parameters, hyperparameters, and file references extracted from the specification."
+                    "description": (
+                        "Key-value mapping of execution parameters, numeric values, dimension/coordinate tuples "
+                        "(as JSON arrays), booleans, thresholds, and configuration options extracted verbatim from the "
+                        "prompt, or sensible domain-standard best estimates when an implied operation omits a required parameter."
+                    ),
                 },
                 "slots": {
                     "type": "object",
@@ -1457,12 +1461,13 @@ class BenchmarkProfile_C(InferenceProfile):
             "- deliverable: the primary terminal entity, variable, model, or metric requested.\n"
             "- operations: ordered JSON array of SHORT strings (each a 2-5 word atomic step phrase, e.g. [\"load asset\", \"transform field\"]; NOT objects).\n"
             "- variables: JSON array of distinct column, feature, variable, and parameter strings mentioned verbatim in the prompt.\n"
+            "- parameters: JSON object of EVERY explicit numeric value, dimension/coordinate tuple (as JSON arrays), boolean, threshold, or configuration parameter from the prompt; if an implied operation omits a required numeric/configuration parameter, supply a sensible domain-standard best estimate rather than omitting it or returning null.\n"
             "- inputs: JSON array of explicit input file path strings mentioned in the prompt (empty list [] if none).\n"
             "- outputs: JSON array of explicit output destination file path strings mentioned in the prompt (empty list [] if deliverable is in-memory).\n\n"
             "Guidelines:\n"
             "1. Exhaustive Coverage: operations must NEVER be truncated or omitted; every sequential clause in the prompt must have its corresponding concise string in operations.\n"
             "2. Extract ALL variables, identifiers, and files that are explicitly mentioned in the user specification without omitting any identifier or target entity.\n"
-            "3. Do not invent or hallucinate placeholder names or synthetic suffixes; preserve identifier strings verbatim.\n"
+            "3. Preserve explicit variable/column/file identifiers verbatim (never invent output filenames unless saving/exporting is requested), while supplying sensible best estimates for omitted required execution parameters.\n"
             "4. Output compact single-line valid JSON only."
         )
 

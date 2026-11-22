@@ -83,6 +83,7 @@ Rules:
 - For iterative tasks or state loops (e.g. while loops, game loops, simulations), set `step_kind`: "loop" and place loop body steps into `body`.
 - For conditional branches (if/else), set `step_kind`: "branch" with `condition`, placing branches into `then_branch` and `else_branch`.
 - Extract EVERY literal into `literals`.
+- Populate each step's `params` object with explicit arguments from the prompt, and if a required configuration or numeric parameter for an implied step is omitted from the prompt, supply a sensible domain-standard estimate.
 - Return ONLY a JSON object. No prose, no markdown.
 
 User prompt:

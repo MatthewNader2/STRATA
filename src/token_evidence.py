@@ -23,8 +23,10 @@ import math
 from typing import Any, Dict, Iterable, Optional, Set, List, Tuple
 
 try:
+    from . import tokenizer as _tokenizer_mod
     from .tokenizer import CellTokenizer
 except (ImportError, ValueError):
+    import tokenizer as _tokenizer_mod
     from tokenizer import CellTokenizer
 try:
     from .config import settings
@@ -69,6 +71,7 @@ class TokenEvidence:
         self._clause_tok_cache: Dict[str, Set[str]] = {}
         self._cell_ev_cache: Dict[str, Tuple[Any, ...]] = {}
         self._clause_mass_cache: Dict[Tuple[str, ...], float] = {}
+        self._aliases_key = getattr(_tokenizer_mod, "_ALIASES_KEY", ())
 
     def idf(self, tok: str) -> float:
         """0.0 for tokens no cell can match in neural/hybrid profiles; strict OOV penalty mass in Profile 0."""
@@ -90,11 +93,16 @@ class TokenEvidence:
         if self._skip is None:
             skip: Set[str] = set()
             try:
-                from lattice import TypeRegistry
+                try:
+                    from .lattice import TypeRegistry
+                except (ImportError, ValueError):
+                    from lattice import TypeRegistry
                 reg = TypeRegistry.get_instance()
                 skip |= set(reg.get_prompt_filler_tokens())
                 skip |= set(reg.get_function_words())
                 skip |= set(reg.get_generic_prepositions())
+                skip |= set(reg.get_coordinating_conjunctions())
+                skip |= set(reg.get_sequencing_connectives())
             except Exception:
                 pass
             self._skip = skip
@@ -113,10 +121,10 @@ class TokenEvidence:
         if self._pure_symbolic:
             # Strict Profile 0: preserve every token (zero-IDF conversational prose is NOT stripped),
             # only preserving compound formal identifiers without keyword/synonym expansion.
-            return {t for t in CellTokenizer.tokenize_prompt(clause) if len(t) > 1}
+            return {t for t in CellTokenizer.tokenize_prompt(clause, pure_symbolic=self._pure_symbolic) if len(t) > 1}
         skip = self._non_evidence()
         toks: Set[str] = set()
-        for t in CellTokenizer.tokenize_prompt(clause):
+        for t in CellTokenizer.tokenize_prompt(clause, pure_symbolic=self._pure_symbolic):
             if len(t) <= 1 or t in skip:
                 continue
             if self.idf(t) > 0.0 and (not self._identity_df or self._identity_df.get(t, 0) > 0):
@@ -151,24 +159,24 @@ class TokenEvidence:
             clause_chars = list(clause)
             for lit in lits:
                 pos, kind, val = lit
-                if kind in ("quoted_str", "file_asset"):
+                if kind in ("quoted_str", "file_asset", "numeric"):
                     end_idx = min(len(clause_chars), getattr(lit, "end_pos", pos + len(val)))
                     for k in range(pos, end_idx):
                         clause_chars[k] = " "
             unquoted = "".join(clause_chars)
-            unquoted_toks = {t.lower() for t in CellTokenizer.tokenize_prompt(unquoted)}
+            unquoted_toks = {t.lower() for t in CellTokenizer.tokenize_prompt(unquoted, pure_symbolic=self._pure_symbolic)}
 
             lit_toks = set()
             for lit in lits:
                 _, kind, val = lit
                 if kind == "file_asset":
                     for part in str(val).split("."):
-                        for t in CellTokenizer.tokenize_identifier(part):
+                        for t in CellTokenizer.tokenize_identifier(part, expand_aliases=not self._pure_symbolic):
                             t_low = t.lower()
                             if t_low not in unquoted_toks:
                                 lit_toks.add(t_low)
                 elif kind in ("quoted_str", "numeric"):
-                    for t in CellTokenizer.tokenize_identifier(str(val)):
+                    for t in CellTokenizer.tokenize_identifier(str(val), expand_aliases=not self._pure_symbolic):
                         t_low = t.lower()
                         if t_low not in unquoted_toks:
                             lit_toks.add(t_low)
@@ -225,15 +233,62 @@ class TokenEvidence:
         if cell_ev is None:
             ident = set(getattr(cell, "identity_tokens", None) or ())
             i_mass = sum(idf_fn(t) for t in ident)
-            name_toks = {t for t in CellTokenizer.tokenize_identifier(cid) if idf_fn(t) > 0.0}
+            name_toks = {
+                t for t in CellTokenizer.tokenize_identifier(cid, expand_aliases=not self._pure_symbolic)
+                if idf_fn(t) > 0.0
+            }
             n_mass = sum(idf_fn(t) for t in name_toks)
-            cell_ev = (ident, i_mass, name_toks, n_mass)
+            base_ident: Set[str] = set(ident)
+            compounds: Tuple[Tuple[Tuple[Set[str], ...], Set[str]], ...] = ()
+            if not getattr(cell, "keywords", None) and getattr(cell, "semantic_tags", None):
+                skip_fw = self._non_evidence()
+                base_ident = set(CellTokenizer.tokenize_identifier(cid, expand_aliases=not self._pure_symbolic)) & ident
+                comp_list: List[Tuple[Tuple[Set[str], ...], Set[str]]] = []
+                for tag in (getattr(cell, "semantic_tags", None) or ()):
+                    tag_s = str(tag).strip().lower()
+                    if not tag_s:
+                        continue
+                    base_ident.add(tag_s)
+                    raw_segs = [s for s in tag_s.split("_") if s and s not in skip_fw]
+                    if len(raw_segs) <= 1:
+                        base_ident.update(
+                            CellTokenizer.tokenize_identifier(tag_s, expand_aliases=not self._pure_symbolic) & ident
+                        )
+                    else:
+                        seg_sets = tuple(
+                            s_set
+                            for s in raw_segs
+                            for s_set in [
+                                CellTokenizer.tokenize_identifier(s, expand_aliases=not self._pure_symbolic) & ident
+                            ]
+                            if s_set
+                        )
+                        if len(seg_sets) <= 1:
+                            for s_set in seg_sets:
+                                base_ident.update(s_set)
+                        else:
+                            comp_list.append((seg_sets, set().union(*seg_sets)))
+                compounds = tuple(comp_list)
+            cell_ev = (ident, i_mass, name_toks, n_mass, base_ident, compounds)
             if cid:
                 self._cell_ev_cache[cid] = cell_ev
         else:
-            ident, i_mass, name_toks, n_mass = cell_ev
+            ident, i_mass, name_toks, n_mass, base_ident, compounds = cell_ev
 
-        hit = clause_toks & ident
+        raw_hit = clause_toks & ident
+        if compounds and raw_hit:
+            hit = {
+                t for t in raw_hit
+                if (
+                    t in base_ident
+                    or any(
+                        t in comp_u and sum(1 for s_set in seg_sets if s_set & clause_toks) >= 2
+                        for seg_sets, comp_u in compounds
+                    )
+                )
+            }
+        else:
+            hit = raw_hit
         hit_mass = sum(idf_fn(t) for t in hit) if hit else 0.0
         recall = hit_mass / c_mass if c_mass > 0 else 0.0
         precision = hit_mass / i_mass if i_mass > 0 else 0.0
@@ -271,9 +326,15 @@ def get_evidence(orchestrator: Any) -> Optional[TokenEvidence]:
         return None
     is_p0 = _is_profile_zero()
     key = (id(orchestrator), is_p0)
+    cur_aliases = getattr(_tokenizer_mod, "_ALIASES_KEY", ())
     with _LOCK:
         ev = _CACHE.get(key)
-        if ev is None or ev.n != max(len(orchestrator.loaded_cells), 1) or ev._pure_symbolic != is_p0:
+        if (
+            ev is None
+            or ev.n != max(len(orchestrator.loaded_cells), 1)
+            or ev._pure_symbolic != is_p0
+            or getattr(ev, "_aliases_key", None) != cur_aliases
+        ):
             ev = TokenEvidence(orchestrator, pure_symbolic=is_p0)
             _CACHE[key] = ev
         return ev
@@ -342,24 +403,53 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
         if not mt_set:
             return mt_set
         id_toks = {t.lower() for t in CellTokenizer.tokenize_identifier(getattr(cell_obj, "cell_id", "") or "")}
-        id_hits = mt_set & id_toks
-        if id_hits:
-            return id_hits
+        dom_toks = {
+            t.lower()
+            for t in CellTokenizer.tokenize_identifier(
+                str(getattr(cell_obj, "domain_name", None) or getattr(cell_obj, "domain", "") or "")
+            )
+        }
+        core_id_hits = mt_set & (id_toks - dom_toks)
+        if core_id_hits:
+            return core_id_hits
         if rec >= 0.99:
             return mt_set
         morph_hits = {
             t for t in mt_set
-            if len(t) >= 3 and any(it.startswith(t) or t.startswith(it) for it in id_toks)
+            if len(t) >= 3 and any(it.startswith(t) or t.startswith(it) for it in (id_toks - dom_toks))
         }
         return morph_hits | {max(mt_set, key=lambda t: (ev.mass({t}), t))}
 
     for _, rel, c, o in scored:
         if not accepted:
             primary_f = o["f"]
+            p_dom_toks = {
+                t.lower()
+                for t in CellTokenizer.tokenize_identifier(
+                    str(getattr(c, "domain_name", None) or getattr(c, "domain", "") or "")
+                )
+            }
             covered |= _locked_tokens_for(c, o["tokens"], rec=o["recall"])
             ok, why = True, "primary (best rank: recall, name-precision, F; relevance breaks ties)"
         else:
-            residual = ev.identity_overlap(toks - covered, c)
+            c_dom_toks = {
+                t.lower()
+                for t in CellTokenizer.tokenize_identifier(
+                    str(getattr(c, "domain_name", None) or getattr(c, "domain", "") or "")
+                )
+            }
+            c_core_id_toks = {
+                t.lower()
+                for t in CellTokenizer.tokenize_identifier(getattr(c, "cell_id", "") or "")
+            } - c_dom_toks
+            is_c_macro = (
+                str(getattr(c, "node_type", "") or "").strip().lower() == "macro"
+                or str(getattr(c, "node_role", "") or "").strip().lower() == "macro"
+            )
+            if is_c_macro and len(c_core_id_toks) >= 2 and len((toks - covered) & c_core_id_toks) < 2:
+                residual = {"hit": 0.0, "recall": 0.0, "precision": 0.0, "f": 0.0, "name_precision": 0.0, "rank": (0.0, 0.0, 0.0), "tokens": []}
+            else:
+                residual = ev.identity_overlap(toks - covered, c)
             min_recall = settings.secondary_anchor_min_recall
             min_f = settings.secondary_anchor_min_f
             f_ratio = settings.secondary_anchor_f_ratio
@@ -368,6 +458,19 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                 _cell_carrier_types(c) - _generic_carrier_types(ev)
             ):
                 min_name_prec = 0.0
+            elif has_quoted_str:
+                _prim_has_str_in = any(
+                    str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "str"
+                    for p in (getattr(accepted[0][0], "inputs", {}) or {}).values()
+                )
+                _cand_has_req_str_in = any(
+                    getattr(p, "required", False)
+                    and getattr(p, "default_value", None) is None
+                    and str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "str"
+                    for p in (getattr(c, "inputs", {}) or {}).values()
+                )
+                if _cand_has_req_str_in and not _prim_has_str_in:
+                    min_name_prec = 0.0
             eff_min_recall = (
                 min(min_recall, accepted[0][1]["recall"] * 0.65)
                 if len(residual["tokens"]) >= 2
@@ -392,6 +495,21 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                     (primary_f is not None and residual["f"] >= primary_f * 0.65 and residual["name_precision"] >= min_name_prec)
                     or (primary_f is not None and residual["f"] >= primary_f * 0.70)
                     or (residual["name_precision"] >= 0.25 and residual["recall"] >= 0.50)
+                    # A quoted literal no accepted anchor can consume, matched by a candidate whose
+                    # required str port is the literal's sink: the literal itself is evidence.
+                    or (
+                        has_quoted_str
+                        and not any(
+                            str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "str"
+                            for p in (getattr(accepted[0][0], "inputs", {}) or {}).values()
+                        )
+                        and any(
+                            getattr(p, "required", False)
+                            and getattr(p, "default_value", None) is None
+                            and str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "str"
+                            for p in (getattr(c, "inputs", {}) or {}).values()
+                        )
+                    )
                 )
             if ok and accepted:
                 # Category-theoretic reachability: a secondary anchor in the same clause
@@ -472,11 +590,38 @@ def anchors_for_clause(ev: "TokenEvidence", clause: str, pool: Iterable[Any],
                     p_dom
                     and p_dom == c_dom
                     and (
-                        (bool(_cell_carrier_types(prim_cell) - generic_ct) and bool(_cell_carrier_types(c) - generic_ct))
+                        (
+                            bool(_cell_carrier_types(prim_cell) - generic_ct)
+                            and bool(_cell_carrier_types(c) - generic_ct)
+                            and (
+                                not t2
+                                or len(residual["tokens"]) >= 2
+                                or bool(set(residual["tokens"]) & {t.lower() for t in t2})
+                            )
+                        )
+                        or (
+                            not t2
+                            and (
+                                len(residual["tokens"]) >= 2
+                                or (
+                                    has_quoted_str
+                                    and any(
+                                        getattr(p, "required", False)
+                                        and getattr(p, "default_value", None) is None
+                                        and str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower() == "str"
+                                        for p in (getattr(c, "inputs", {}) or {}).values()
+                                    )
+                                )
+                            )
+                        )
                         or (
                             clause_idx == 0
                             and getattr(prim_cell, "stage", None) == 1
                             and getattr(c, "stage", None) == 1
+                        )
+                        or (
+                            getattr(prim_cell, "stage", None) == 3
+                            and getattr(c, "stage", None) == 3
                         )
                     )
                 )
@@ -548,11 +693,13 @@ def _prop_val(entry: Any, key: str, default: Any = None) -> Any:
 
 
 def _is_prerequisite_for_downstream_server(idx: int, cells: List[Any], claims: List[Set[int]]) -> bool:
-    """True when `cells[idx]` repairs a property conflict or produces a non-generic stateful/handle
-    output required by a downstream serving cell `cells[j]` (`j > idx`)."""
+    """True when `cells[idx]` repairs a property conflict, produces a non-generic stateful/handle
+    output required by a downstream serving cell `cells[j]` (`j > idx`), or is a terminal sink
+    closing an otherwise-unconsumed linear handle produced by an upstream serving cell `cells[j]` (`j < idx`)."""
     cell = cells[idx]
     downstream_servers = [cells[j] for j in range(idx + 1, len(cells)) if claims[j]]
-    if not downstream_servers:
+    upstream_servers = [(j, cells[j]) for j in range(0, idx) if claims[j]]
+    if not downstream_servers and not upstream_servers:
         return False
 
     # 1. Property-repair connector (e.g., NUMPY_ABS resolving is_complex=False after FFT)
@@ -648,6 +795,57 @@ def _is_prerequisite_for_downstream_server(idx: int, cells: List[Any], claims: L
                 ist = str(getattr(isig, "state", "") or "").strip().lower()
                 if it == ot and (not ist or ist == ost):
                     return True
+
+    # 3. Dual handle-closing sink: a terminal sink that consumes an otherwise-unconsumed
+    # linear handle produced by an upstream serving cell in the same domain.
+    is_term_sink = (
+        getattr(cell, "stage", None) == 3
+        or bool(_te_reg is not None and role and role in _te_reg.get_terminal_roles_set())
+    )
+    if is_term_sink and upstream_servers:
+        c_dom = str(getattr(cell, "domain_name", None) or getattr(cell, "domain", "") or "").strip().lower()
+        for inp in (getattr(cell, "inputs", None) or {}).values():
+            if not getattr(inp, "required", True):
+                continue
+            isig = getattr(inp, "signature", inp)
+            it = str(getattr(isig, "type_name", "") or "").strip().lower()
+            ist = str(getattr(isig, "state", "") or "").strip().lower()
+            if not it:
+                continue
+            for up_j, up_cell in upstream_servers:
+                up_dom = str(getattr(up_cell, "domain_name", None) or getattr(up_cell, "domain", "") or "").strip().lower()
+                if c_dom and up_dom and c_dom != up_dom:
+                    continue
+                for uo in (getattr(up_cell, "outputs", None) or {}).values():
+                    uosig = getattr(uo, "signature", uo)
+                    uot = str(getattr(uosig, "type_name", "") or "").strip().lower()
+                    uost = str(getattr(uosig, "state", "") or "").strip().lower()
+                    uosk = str(getattr(uosig, "structure_kind", "") or "").strip().lower()
+                    uoat = str(getattr(uosig, "abstract_type", "") or "").strip().lower()
+                    if uot != it or (ist and uost and ist != uost):
+                        continue
+                    is_up_handle = (
+                        (uosk and uosk in _handle_struct_kinds)
+                        or (uoat and uoat in _handle_struct_kinds)
+                        or bool(_te_reg is not None and _te_reg.is_subtype(uot, "handle"))
+                    )
+                    if not is_up_handle:
+                        continue
+                    consumed_elsewhere = False
+                    for k, other_c in enumerate(cells):
+                        if k <= up_j or k == idx:
+                            continue
+                        for oin in (getattr(other_c, "inputs", None) or {}).values():
+                            oisig = getattr(oin, "signature", oin)
+                            oit = str(getattr(oisig, "type_name", "") or "").strip().lower()
+                            oist = str(getattr(oisig, "state", "") or "").strip().lower()
+                            if oit == uot and (not oist or not uost or oist == uost):
+                                consumed_elsewhere = True
+                                break
+                        if consumed_elsewhere:
+                            break
+                    if not consumed_elsewhere:
+                        return True
     return False
 
 
@@ -685,11 +883,25 @@ def _generic_carrier_types(ev: Any) -> Set[str]:
     return generic
 
 
-def _composable_with(ev: Any, primary: Any, other: Any) -> bool:
+def _composable_with(ev: Any, primary: Any, other: Any, residual_tokens: Optional[Iterable[str]] = None) -> bool:
     """
     True when `other` shares at least one NON-generic carrier type with `primary`, or occupies the same
-    non-generic library domain fiber (e.g. parallel component initializers in the same domain).
+    non-generic library domain fiber when it has no unsatisfied foreign carrier requirements.
+    A single-token residual match only counts when the token names a carrier `other` consumes
+    (a bare verb homonym such as "check" does not make an event-consumer part of a rect operation).
     """
+    if residual_tokens is not None:
+        res_set = {str(t).lower() for t in residual_tokens}
+        if len(res_set) < 2:
+            req_carriers = {
+                str(getattr(getattr(p, "signature", p), "type_name", "") or "").strip().lower()
+                for p in (getattr(other, "inputs", {}) or {}).values()
+                if getattr(p, "required", False) and getattr(p, "default_value", None) is None
+                and str(getattr(p, "structure_kind", "") or "").strip().lower() not in ("scalar", "")
+            }
+            prim_carriers = {str(t).lower() for t in _cell_carrier_types(primary)}
+            if req_carriers and not (res_set & req_carriers) and not (req_carriers & prim_carriers):
+                return False
     generic = _generic_carrier_types(ev)
     a = _cell_carrier_types(primary) - generic
     b = _cell_carrier_types(other) - generic
@@ -798,7 +1010,7 @@ def audit_clause_coverage(
             _schema_is_bridge_cell(cell, _te_reg_b)
             or bool(getattr(cell, "_auto_inserted_bridge", False))
             or bool(getattr(cell, "_is_prerequisite_producer", False))
-            or getattr(cell, "stage", None) in (1, 3)
+            or getattr(cell, "stage", None) == 1
         )
         if mine:
             status = "serves"
@@ -828,19 +1040,28 @@ def audit_clause_coverage(
     # 3. a clause is SERVED only by the cells assigned to it, jointly explaining as much of it as the
     #    best single lattice cell could (incidental hits by other cells no longer count: an optimiser
     #    exploits a whole-path union immediately).
+    # The best achievable explanation of a clause is measured over the library fibers the pipeline
+    # actually inhabits: a cell from a domain absent from the path cannot serve the clause without a bridge.
+    path_domains = {
+        str(getattr(c, "domain_name", None) or getattr(c, "domain", "") or "").strip().lower() for c in cells
+    } - {""}
     for j, toks in enumerate(ctoks):
         claimed = [i for i in range(len(cells)) if j in claims[i] and table[i][j]]
         lattice_best = lattice_best_fit = lattice_joint = 0.0
         if toks:
             memo = ev.__dict__.setdefault("_lattice_best_memo", {})
-            key = tuple(sorted(toks))
+            key = (tuple(sorted(toks)), tuple(sorted(path_domains)))
             if key not in memo:
                 lb = lbf = 0.0
                 best_lc_cell = None
                 best_lc_toks: set = set()
                 best_lc_f = 0.0
                 best_lc_rank = None
-                loaded_list = list(getattr(ev.orch, "loaded_cells", {}).values())
+                loaded_list = [
+                    lc for lc in getattr(ev.orch, "loaded_cells", {}).values()
+                    if not path_domains
+                    or str(getattr(lc, "domain_name", None) or getattr(lc, "domain", "") or "").strip().lower() in path_domains
+                ]
                 for lc in loaded_list:
                     lo = ev.identity_overlap(toks, lc)
                     # fit = how much of the clause the cell explains x how completely the clause NAMES the cell
@@ -878,7 +1099,7 @@ def audit_clause_coverage(
                             r_ov = ev.identity_overlap(rem_toks, lc)
                             if r_ov["hit"] <= 0.0:
                                 continue
-                            if not _composable_with(ev, best_lc_cell, lc):
+                            if not _composable_with(ev, best_lc_cell, lc, residual_tokens=r_ov["tokens"]):
                                 continue
                             sec_ok = (
                                 r_ov["recall"] >= min_rec
@@ -921,10 +1142,16 @@ def audit_clause_coverage(
         path_best = (ev.mass(path_tokens) / c_mass) if c_mass > 0 else 0.0
         target_recall = max(lattice_best, lattice_joint)
         quality = (max(table[i][j]["recall"] * table[i][j]["name_precision"] for i in claimed) / lattice_best_fit) if (claimed and lattice_best_fit > 0) else 0.0
+        compound_unserved_gap = (lattice_joint > lattice_best + 0.15) and (path_best < 0.75 * lattice_joint)
         if not toks or lattice_best <= 0.0:
             status = "no-evidence" if not toks else "unservable"
         else:
-            status = "served" if path_best >= target_recall - 1e-9 else "UNSERVED"
+            best_fit_served = bool(
+                not compound_unserved_gap
+                and quality >= 1.0 - 1e-9
+                and path_best >= 0.90 * lattice_best
+            )
+            status = "served" if (path_best >= target_recall - 1e-9 or best_fit_served) else "UNSERVED"
         if status != "served" and clause_sem is not None and j < len(clause_sem):
             sem_map = clause_sem[j] or {}
             max_sem_j = max(sem_map.values(), default=0.0)
@@ -933,7 +1160,6 @@ def audit_clause_coverage(
             sem_floor = (0.70 if lattice_best >= 0.50 else 0.65) if path_best <= 0.0 else 0.35
             sem_rel = 0.88 if path_best <= 0.0 else 0.70
             # Never override when a compound multi-operation clause left major residual lexical operations unserved
-            compound_unserved_gap = (lattice_joint > lattice_best + 0.15) and (path_best < 0.75 * lattice_joint)
             if not compound_unserved_gap and claimed_sem >= sem_floor and max_sem_j > 0.0 and claimed_sem >= sem_rel * max_sem_j:
                 status = "served"
                 path_best = max(path_best, claimed_sem)

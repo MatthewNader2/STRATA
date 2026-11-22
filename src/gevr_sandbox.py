@@ -86,37 +86,163 @@ class _SecurityASTVisitor(_UnifiedSecurityASTVisitor):
 # Pluggable Postconditions (Domain-Agnostic)
 # ============================================================================
 
+
+def _extract_unpicklable_type(val: Any) -> Optional[str]:
+    if isinstance(val, str) and val.startswith("<unpicklable:") and val.endswith(">"):
+        return val[len("<unpicklable:"):-1].strip()
+    return None
+
+
+def _reduce_any_bool(obj: Any) -> bool:
+    cur = obj
+    for _ in range(4):
+        if isinstance(cur, bool) or getattr(cur, "ndim", 1) == 0:
+            break
+        any_fn = getattr(cur, "any", None)
+        if not callable(any_fn):
+            break
+        nxt = any_fn()
+        if nxt is cur:
+            break
+        cur = nxt
+    return bool(cur)
+
+
+def _reduce_all_bool(obj: Any) -> bool:
+    cur = obj
+    for _ in range(4):
+        if isinstance(cur, bool) or getattr(cur, "ndim", 1) == 0:
+            break
+        all_fn = getattr(cur, "all", None)
+        if not callable(all_fn):
+            break
+        nxt = all_fn()
+        if nxt is cur:
+            break
+        cur = nxt
+    return bool(cur)
+
+
+def _is_multi_elem_shaped_vs_scalar(v1: Any, v2: Any) -> bool:
+    for arr_v, scal_v in ((v1, v2), (v2, v1)):
+        if (
+            hasattr(arr_v, "ndim")
+            and getattr(arr_v, "ndim", 0) > 0
+            and getattr(arr_v, "size", 1) != 1
+            and isinstance(scal_v, (bool, int, float, str, bytes))
+        ):
+            return True
+    return False
+
+
+def _safe_equal(actual: Any, expected: Any) -> bool:
+    if actual is expected:
+        return True
+    if actual is None or expected is None:
+        return actual is expected
+    if isinstance(actual, (list, tuple)) and isinstance(expected, (list, tuple)):
+        return tuple(actual) == tuple(expected)
+    if hasattr(actual, "equals") and callable(actual.equals):
+        return bool(actual.equals(expected)) if type(actual) is type(expected) else False
+    if hasattr(expected, "equals") and callable(expected.equals):
+        return bool(expected.equals(actual)) if type(actual) is type(expected) else False
+    if _is_multi_elem_shaped_vs_scalar(actual, expected):
+        return False
+    if type(actual).__name__ == "ndarray" or type(expected).__name__ == "ndarray":
+        import numpy as _np
+        return bool(_np.array_equal(actual, expected))
+    cmp_res = (actual == expected)
+    if hasattr(cmp_res, "all") and callable(cmp_res.all):
+        return _reduce_all_bool(cmp_res)
+    return bool(cmp_res)
+
+
+def _parse_literal_or_raw(val: Any) -> Any:
+    if isinstance(val, str):
+        try:
+            return ast.literal_eval(val.strip())
+        except Exception:
+            return val
+    return val
+
+
 class PostconditionRegistry:
     """Domain-agnostic registry for evaluating postcondition constraints."""
 
+    COMPILE_TIME_PROPERTIES: Set[str] = {"state", "is_reduced", "is_scaled"}
+    UNPICKLABLE_SAFE_PROPERTIES: Set[str] = {"is_null", "is_loaded", "is_active", "carrier_type"}
+
     def __init__(self) -> None:
-        self._evaluators: Dict[str, Callable[[Any, Any], bool]] = {}
+        self._evaluators: Dict[str, Callable[..., bool]] = {}
+        self._context_evaluators: Set[str] = set()
         self._register_default_evaluators()
 
-    def register(self, property_name: str, evaluator: Callable[[Any, Any], bool]) -> None:
+    def register(
+        self,
+        property_name: str,
+        evaluator: Callable[..., bool],
+        accepts_context: bool = False,
+    ) -> None:
         self._evaluators[property_name] = evaluator
+        if accepts_context:
+            self._context_evaluators.add(property_name)
+        else:
+            self._context_evaluators.discard(property_name)
 
-    def evaluate(self, property_name: str, target_val: Any, expected_val: Any) -> bool:
+    def evaluate(
+        self,
+        property_name: str,
+        target_val: Any,
+        expected_val: Any,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         evaluator = self._evaluators.get(property_name)
         if not evaluator:
+            if "[" in property_name and property_name.endswith("]"):
+                base_prop, raw_idx = property_name[:-1].split("[", 1)
+                base_prop = base_prop.strip()
+                raw_idx = raw_idx.strip()
+                if base_prop and hasattr(target_val, base_prop):
+                    try:
+                        base_attr = getattr(target_val, base_prop)
+                        base_val = base_attr() if callable(base_attr) else base_attr
+                        idx_obj = _parse_literal_or_raw(raw_idx)
+                        elem = base_val[idx_obj]
+                        return _safe_equal(elem, expected_val)
+                    except (IndexError, KeyError, TypeError):
+                        return False
+                return False
             if hasattr(target_val, property_name):
                 try:
                     attr = getattr(target_val, property_name)
                     val = attr() if callable(attr) else attr
-                    return bool(val == expected_val)
+                    return _safe_equal(val, expected_val)
                 except Exception:
                     pass
             elif isinstance(target_val, dict) and property_name in target_val:
-                return bool(target_val[property_name] == expected_val)
+                return _safe_equal(target_val[property_name], expected_val)
             logger.warning("No postcondition evaluator registered for '%s'. Falling back to equality.", property_name)
-            return bool(target_val == expected_val)
+            return _safe_equal(target_val, expected_val)
         try:
-            return evaluator(target_val, expected_val)
+            if property_name in self._context_evaluators:
+                return bool(evaluator(target_val, expected_val, context))
+            return bool(evaluator(target_val, expected_val))
         except Exception as e:
             logger.error("Error evaluating postcondition '%s': %s", property_name, e)
             return False
 
     def _register_default_evaluators(self) -> None:
+        def _get_type_registry() -> Optional[Any]:
+            try:
+                from .lattice import TypeRegistry
+                return TypeRegistry.get_instance()
+            except (ImportError, ValueError):
+                try:
+                    from lattice import TypeRegistry
+                    return TypeRegistry.get_instance()
+                except Exception:
+                    return None
+
         def _ndim_evaluator(val: Any, expected: Any) -> bool:
             if hasattr(val, "ndim"):
                 return bool(val.ndim == expected)
@@ -130,67 +256,262 @@ class PostconditionRegistry:
 
             return _get_depth(val) == expected
 
-        def _reduce_any_bool(obj: Any) -> bool:
-            cur = obj
-            for _ in range(4):
-                if isinstance(cur, bool) or getattr(cur, "ndim", 1) == 0:
-                    break
-                any_fn = getattr(cur, "any", None)
-                if not callable(any_fn):
-                    break
-                nxt = any_fn()
-                if nxt is cur:
-                    break
-                cur = nxt
-            return bool(cur)
+        def _iter_has_nan(obj: Any, depth: int = 0) -> bool:
+            if isinstance(obj, float):
+                return math.isnan(obj)
+            if isinstance(obj, complex):
+                return math.isnan(obj.real) or math.isnan(obj.imag)
+            if depth < 4 and hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes, dict)):
+                return any(_iter_has_nan(item, depth + 1) for item in obj)
+            return False
 
         def _has_nans_evaluator(val: Any, expected: Any) -> bool:
-            try:
-                from lattice import TypeRegistry
-                nan_methods = TypeRegistry.get_instance().get_type_property_values("missing_value_methods")
-            except Exception:
-                nan_methods = set()
+            exp_bool = bool(expected)
+            if val is None:
+                return False == exp_bool
+            treg = _get_type_registry()
+            nan_methods = treg.get_type_property_values("missing_value_methods") if treg is not None else set()
             for method_name in nan_methods:
                 method = getattr(val, method_name, None)
                 if callable(method):
                     res = method()
                     has_nan = _reduce_any_bool(res)
-                    return has_nan == expected
+                    return has_nan == exp_bool
+            dtype_obj = getattr(val, "dtype", None)
+            kind = getattr(dtype_obj, "kind", None)
+            if kind in ("f", "c"):
+                import numpy as _np
+                return bool(_np.isnan(val).any()) == exp_bool
+            if kind in ("i", "u", "b", "U", "S"):
+                return False == exp_bool
+            if kind == "O":
+                items = val.flat if hasattr(val, "flat") else val
+                has_nan = any(x is None or (isinstance(x, float) and math.isnan(x)) for x in items)
+                return has_nan == exp_bool
+            if hasattr(val, "data") and hasattr(val.data, "dtype"):
+                return _has_nans_evaluator(val.data, exp_bool)
             try:
-                import math
-                if isinstance(val, float) and math.isnan(val):
-                    return True == expected
+                if isinstance(val, float) or isinstance(val, complex):
+                    return _iter_has_nan(val) == exp_bool
                 if hasattr(val, "__iter__") and not isinstance(val, (str, bytes)):
-                    has_nan = any(isinstance(x, float) and math.isnan(x) for x in val)
-                    return has_nan == expected
+                    return _iter_has_nan(val) == exp_bool
             except Exception as exc:
                 logger.debug("[SANDBOX] NaN evaluation fallback: %s", exc)
-            return False == expected
+            return False == exp_bool
 
         def _dedup_evaluator(val: Any, expected: Any) -> bool:
-            try:
-                try:
-                    from .lattice import TypeRegistry
-                except ImportError:
-                    from lattice import TypeRegistry
-                dup_methods = TypeRegistry.get_instance().get_type_property_values("duplicate_check_methods")
-            except Exception:
-                dup_methods = set()
+            exp_bool = bool(expected)
+            treg = _get_type_registry()
+            dup_methods = treg.get_type_property_values("duplicate_check_methods") if treg is not None else set()
             for method_name in dup_methods:
                 method = getattr(val, method_name, None)
                 if callable(method):
                     dups = method()
                     is_unique = not _reduce_any_bool(dups)
-                    return is_unique == expected
+                    return is_unique == exp_bool
             try:
                 seq = list(val)
-                return (len(seq) == len(set(seq))) == expected
+                return (len(seq) == len(set(seq))) == exp_bool
             except TypeError:
-                return True == expected
+                return True == exp_bool
+
+        def _is_null_evaluator(val: Any, expected: Any) -> bool:
+            return (val is None) == bool(expected)
+
+        def _is_loaded_evaluator(val: Any, expected: Any) -> bool:
+            return (val is not None) == bool(expected)
+
+        def _is_active_evaluator(val: Any, expected: Any) -> bool:
+            active = (val is not None) and not bool(getattr(val, "closed", False))
+            return active == bool(expected)
+
+        def _is_complex_evaluator(val: Any, expected: Any) -> bool:
+            if val is None:
+                is_c = False
+            elif isinstance(val, complex):
+                is_c = True
+            elif getattr(getattr(val, "dtype", None), "kind", None) is not None:
+                is_c = (val.dtype.kind == "c")
+            elif hasattr(val, "dtypes"):
+                is_c = any(getattr(dt, "kind", None) == "c" for dt in val.dtypes)
+            else:
+                try:
+                    import numpy as _np
+                    is_c = bool(_np.iscomplexobj(val))
+                except Exception:
+                    is_c = False
+            return is_c == bool(expected)
+
+        def _is_fitted_evaluator(val: Any, expected: Any) -> bool:
+            exp_bool = bool(expected)
+            if val is None:
+                return False == exp_bool
+            fitted: Optional[bool] = None
+            if hasattr(val, "fit") or callable(getattr(val, "__sklearn_is_fitted__", None)):
+                try:
+                    from sklearn.utils.validation import check_is_fitted
+                    from sklearn.exceptions import NotFittedError
+                    try:
+                        check_is_fitted(val)
+                        fitted = True
+                    except NotFittedError:
+                        fitted = False
+                    except TypeError:
+                        fitted = None
+                except ImportError:
+                    fitted = None
+            if fitted is None:
+                sk_fn = getattr(val, "__sklearn_is_fitted__", None)
+                if callable(sk_fn):
+                    fitted = bool(sk_fn())
+                elif isinstance(getattr(val, "is_fitted", None), bool):
+                    fitted = bool(val.is_fitted)
+                elif hasattr(val, "__dict__"):
+                    obj_dict = vars(val)
+                    fitted = (
+                        any(k.endswith("_") and not k.startswith("__") for k in obj_dict)
+                        or hasattr(val, "_fit_X")
+                    )
+                else:
+                    fitted = False
+            return bool(fitted) == exp_bool
+
+        def _shape_evaluator(val: Any, expected: Any) -> bool:
+            if not hasattr(val, "shape"):
+                return False
+            exp_parsed = _parse_literal_or_raw(expected)
+            if not isinstance(exp_parsed, (list, tuple)):
+                return False
+            return tuple(val.shape) == tuple(exp_parsed)
+
+        def _size_evaluator(val: Any, expected: Any) -> bool:
+            if not hasattr(val, "size"):
+                return False
+            actual = val.size
+            exp_parsed = _parse_literal_or_raw(expected)
+            if isinstance(actual, (list, tuple)) and isinstance(exp_parsed, (list, tuple)):
+                return tuple(actual) == tuple(exp_parsed)
+            return _safe_equal(actual, exp_parsed)
+
+        def _dtype_evaluator(val: Any, expected: Any) -> bool:
+            if not hasattr(val, "dtype"):
+                return False
+            actual_str = str(val.dtype)
+            exp_str = getattr(expected, "__name__", str(expected))
+            if actual_str == exp_str:
+                return True
+            try:
+                import numpy as _np
+                return bool(_np.dtype(val.dtype) == _np.dtype(expected))
+            except Exception:
+                return False
+
+        def _is_array_evaluator(val: Any, expected: Any) -> bool:
+            try:
+                import numpy as _np
+                is_arr = isinstance(val, _np.ndarray)
+            except Exception:
+                is_arr = (type(val).__name__ == "ndarray")
+            return is_arr == bool(expected)
+
+        def _is_numeric_evaluator(val: Any, expected: Any) -> bool:
+            numeric_kinds = ("i", "u", "f", "c", "b")
+            if val is None or isinstance(val, (bool, str, bytes)):
+                is_num = False
+            elif isinstance(val, (int, float, complex)):
+                is_num = True
+            elif hasattr(val, "dtypes"):
+                dtypes = list(val.dtypes)
+                is_num = bool(dtypes) and all(getattr(dt, "kind", None) in numeric_kinds for dt in dtypes)
+            elif hasattr(val, "dtype"):
+                is_num = getattr(val.dtype, "kind", None) in numeric_kinds
+            elif hasattr(val, "data") and hasattr(val.data, "dtype"):
+                is_num = getattr(val.data.dtype, "kind", None) in numeric_kinds
+            else:
+                is_num = False
+            return is_num == bool(expected)
+
+        def _is_indexed_evaluator(val: Any, expected: Any) -> bool:
+            return (hasattr(val, "index") and getattr(val, "index", None) is not None) == bool(expected)
+
+        def _is_normalized_evaluator(val: Any, expected: Any, context: Optional[Dict[str, Any]] = None) -> bool:
+            if val is None:
+                return False == bool(expected)
+            import numpy as _np
+            arr = _np.asarray(val, dtype=float)
+            if arr.size == 0:
+                return False == bool(expected)
+            axis = context.get("axis", -1) if isinstance(context, dict) else -1
+            norms = _np.linalg.norm(arr, axis=axis)
+            is_norm = bool(_np.allclose(norms, 1.0, atol=1e-5))
+            return is_norm == bool(expected)
+
+        def _is_sorted_evaluator(val: Any, expected: Any, context: Optional[Dict[str, Any]] = None) -> bool:
+            if val is None:
+                return False == bool(expected)
+            import numpy as _np
+            arr = _np.asarray(val)
+            if arr.ndim == 0 or arr.size <= 1:
+                return True == bool(expected)
+            axis = context.get("axis", -1) if isinstance(context, dict) else -1
+            if axis is None:
+                arr = arr.ravel()
+                ax = 0
+            else:
+                ax = int(axis)
+            if arr.shape[ax] <= 1:
+                is_s = True
+            else:
+                s1 = [slice(None)] * arr.ndim
+                s2 = [slice(None)] * arr.ndim
+                s1[ax] = slice(None, -1)
+                s2[ax] = slice(1, None)
+                is_s = bool(_np.all(arr[tuple(s1)] <= arr[tuple(s2)]))
+            return is_s == bool(expected)
+
+        def _carrier_type_evaluator(val: Any, expected: Any) -> bool:
+            exp_name = str(expected).strip()
+            unpick = _extract_unpicklable_type(val)
+            actual_names = {unpick} if unpick else {cls.__name__ for cls in type(val).__mro__}
+            if exp_name in actual_names or exp_name.lower() in {n.lower() for n in actual_names}:
+                return True
+            treg = _get_type_registry()
+            if treg is not None:
+                try:
+                    if any(treg.is_subtype(n, exp_name) for n in actual_names):
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        def _has_artists_evaluator(val: Any, expected: Any) -> bool:
+            artist_attrs = ("patches", "lines", "collections", "containers", "images", "texts", "artists")
+            has_any = any(hasattr(val, a) and len(getattr(val, a)) > 0 for a in artist_attrs)
+            return has_any == bool(expected)
+
+        def _value_evaluator(val: Any, expected: Any) -> bool:
+            return _safe_equal(val, expected)
 
         self.register("ndim", _ndim_evaluator)
         self.register("has_nans", _has_nans_evaluator)
+        self.register("has_nan", _has_nans_evaluator)
         self.register("is_deduped", _dedup_evaluator)
+        self.register("is_null", _is_null_evaluator)
+        self.register("is_loaded", _is_loaded_evaluator)
+        self.register("is_active", _is_active_evaluator)
+        self.register("is_complex", _is_complex_evaluator)
+        self.register("is_fitted", _is_fitted_evaluator)
+        self.register("shape", _shape_evaluator)
+        self.register("size", _size_evaluator)
+        self.register("dtype", _dtype_evaluator)
+        self.register("is_array", _is_array_evaluator)
+        self.register("is_numeric", _is_numeric_evaluator)
+        self.register("is_indexed", _is_indexed_evaluator)
+        self.register("is_normalized", _is_normalized_evaluator, accepts_context=True)
+        self.register("is_sorted", _is_sorted_evaluator, accepts_context=True)
+        self.register("carrier_type", _carrier_type_evaluator)
+        self.register("has_artists", _has_artists_evaluator)
+        self.register("value", _value_evaluator)
 
 
 # ============================================================================
@@ -1005,12 +1326,18 @@ class GEVRSandbox:
 
         post_reg = getattr(self, "postconditions", None) or PostconditionRegistry()
 
-        def _eval_prop_op(prop_name: str, target_val: Any, op: str, expected_val: Any) -> bool:
+        def _eval_prop_op(
+            prop_name: str,
+            target_val: Any,
+            op: str,
+            expected_val: Any,
+            context: Optional[Dict[str, Any]] = None,
+        ) -> bool:
             op_s = str(op or "==").strip()
             if op_s in ("==", "is"):
-                return bool(post_reg.evaluate(prop_name, target_val, expected_val))
+                return bool(post_reg.evaluate(prop_name, target_val, expected_val, context=context))
             if op_s in ("!=", "is not"):
-                return not bool(post_reg.evaluate(prop_name, target_val, expected_val))
+                return not bool(post_reg.evaluate(prop_name, target_val, expected_val, context=context))
             # Resolve attribute or dict field for inequality / membership ops
             if hasattr(target_val, prop_name):
                 attr_v = getattr(target_val, prop_name)
@@ -1020,13 +1347,13 @@ class GEVRSandbox:
             else:
                 actual = target_val
             if op_s == "<":
-                return bool(actual < expected_val)
+                return _reduce_all_bool(actual < expected_val)
             if op_s == "<=":
-                return bool(actual <= expected_val)
+                return _reduce_all_bool(actual <= expected_val)
             if op_s == ">":
-                return bool(actual > expected_val)
+                return _reduce_all_bool(actual > expected_val)
             if op_s == ">=":
-                return bool(actual >= expected_val)
+                return _reduce_all_bool(actual >= expected_val)
             if op_s == "in":
                 return bool(actual in expected_val)
             if op_s == "not in":
@@ -1034,17 +1361,7 @@ class GEVRSandbox:
             raise ValueError(f"Unsupported verification operator: {op_s}")
 
         def _values_equal(v1: Any, v2: Any) -> bool:
-            if v1 is v2:
-                return True
-            if hasattr(v1, "equals") and callable(v1.equals):
-                return bool(v1.equals(v2))
-            if type(v1).__name__ == "ndarray" or type(v2).__name__ == "ndarray":
-                import numpy as _np
-                return bool(_np.array_equal(v1, v2))
-            cmp_res = (v1 == v2)
-            if hasattr(cmp_res, "all") and callable(cmp_res.all):
-                return bool(cmp_res.all())
-            return bool(cmp_res)
+            return _safe_equal(v1, v2)
 
         if isinstance(verification_spec, dict):
             cell_checks = list(verification_spec.get("cell_checks") or [])
@@ -1057,7 +1374,8 @@ class GEVRSandbox:
             if not isinstance(ccheck, dict):
                 continue
             prop = ccheck.get("property") or ccheck.get("postcondition")
-            if prop and str(prop).strip().lower() == "state":
+            prop_l = str(prop).strip().lower() if prop else ""
+            if prop_l == "state":
                 continue
             target_var = ccheck.get("target_var") or ccheck.get("var")
             cid = ccheck.get("cell_id", "unknown_cell")
@@ -1067,10 +1385,37 @@ class GEVRSandbox:
                 )
                 continue
             if prop:
+                t_val = results[str(target_var)]
+                if prop_l in PostconditionRegistry.COMPILE_TIME_PROPERTIES:
+                    if t_val is None:
+                        violations.append(
+                            f"Cell check '{prop}' on '{target_var}' ({cid}) received None."
+                        )
+                    continue
+                if (
+                    _extract_unpicklable_type(t_val) is not None
+                    and prop_l not in PostconditionRegistry.UNPICKLABLE_SAFE_PROPERTIES
+                ):
+                    logger.debug(
+                        "[SANDBOX] Skipping postcondition '%s' on unpicklable '%s' (%s)",
+                        prop,
+                        target_var,
+                        cid,
+                    )
+                    continue
                 expected = ccheck.get("value") if "value" in ccheck else ccheck.get("expected")
+                if ccheck.get("expected_ref_var"):
+                    ref_v = str(ccheck["expected_ref_var"])
+                    if ref_v not in results:
+                        violations.append(
+                            f"Cell check '{prop}' on '{target_var}' ({cid}) missing reference variable '{ref_v}' in sandbox results."
+                        )
+                        continue
+                    expected = results[ref_v]
                 op = ccheck.get("operator", "==")
+                ctx_params = ccheck.get("context_params") if isinstance(ccheck.get("context_params"), dict) else None
                 try:
-                    ok = _eval_prop_op(str(prop), results[str(target_var)], op, expected)
+                    ok = _eval_prop_op(str(prop), t_val, op, expected, context=ctx_params)
                 except Exception as eval_err:
                     ok = False
                     violations.append(
@@ -1095,7 +1440,7 @@ class GEVRSandbox:
                     v_val = results[str(v_name)]
                     if v_val is None:
                         violations.append(f"Deliverable variable '{v_name}' produced by '{cid}' evaluated to None.")
-                    elif isinstance(v_val, str) and v_val.startswith("<unpicklable:"):
+                    elif _extract_unpicklable_type(v_val) is not None:
                         continue
                     else:
                         try:
@@ -1121,10 +1466,22 @@ class GEVRSandbox:
                         for post in check.get("postconditions", []) or []:
                             prop = getattr(post, "property", None) or (post.get("property") if isinstance(post, dict) else None)
                             if prop:
+                                prop_l = str(prop).strip().lower()
+                                if prop_l in PostconditionRegistry.COMPILE_TIME_PROPERTIES:
+                                    continue
                                 exp = getattr(post, "value", None) if not isinstance(post, dict) else post.get("value")
+                                if isinstance(post, dict) and post.get("expected_ref_var"):
+                                    ref_v = str(post["expected_ref_var"])
+                                    if ref_v not in results:
+                                        violations.append(
+                                            f"Postcondition '{prop}' on deliverable '{v_name}' ({cid}) missing reference variable '{ref_v}' in sandbox results."
+                                        )
+                                        continue
+                                    exp = results[ref_v]
                                 op = getattr(post, "operator", "==") if not isinstance(post, dict) else post.get("operator", "==")
+                                ctx_p = post.get("context_params") if isinstance(post, dict) and isinstance(post.get("context_params"), dict) else None
                                 try:
-                                    ok = _eval_prop_op(str(prop), v_val, op, exp)
+                                    ok = _eval_prop_op(str(prop), v_val, op, exp, context=ctx_p)
                                     if not ok:
                                         violations.append(f"Postcondition '{prop}' on deliverable '{v_name}' ({cid}) was not satisfied.")
                                 except Exception as eval_err:
@@ -1189,6 +1546,9 @@ class GEVRSandbox:
                 continue
 
             prop = check.get("property") or check.get("postcondition")
+            prop_l = str(prop).strip().lower() if prop else ""
+            if prop_l == "state":
+                continue
             target_var = check.get("target_var") or check.get("var")
             if prop and target_var:
                 if str(target_var) not in results:
@@ -1196,10 +1556,36 @@ class GEVRSandbox:
                         f"Postcondition '{prop}' missing target variable '{target_var}' in sandbox results."
                     )
                     continue
+                t_val = results[str(target_var)]
+                if prop_l in PostconditionRegistry.COMPILE_TIME_PROPERTIES:
+                    if t_val is None:
+                        violations.append(
+                            f"Postcondition '{prop}' on result '{target_var}' received None."
+                        )
+                    continue
+                if (
+                    _extract_unpicklable_type(t_val) is not None
+                    and prop_l not in PostconditionRegistry.UNPICKLABLE_SAFE_PROPERTIES
+                ):
+                    logger.debug(
+                        "[SANDBOX] Skipping terminal postcondition '%s' on unpicklable '%s'",
+                        prop,
+                        target_var,
+                    )
+                    continue
                 expected = check.get("expected") if "expected" in check else check.get("value")
+                if check.get("expected_ref_var"):
+                    ref_v = str(check["expected_ref_var"])
+                    if ref_v not in results:
+                        violations.append(
+                            f"Postcondition '{prop}' on result '{target_var}' missing reference variable '{ref_v}' in sandbox results."
+                        )
+                        continue
+                    expected = results[ref_v]
                 op = check.get("operator", "==")
+                ctx_p = check.get("context_params") if isinstance(check.get("context_params"), dict) else None
                 try:
-                    ok = _eval_prop_op(str(prop), results[str(target_var)], op, expected)
+                    ok = _eval_prop_op(str(prop), t_val, op, expected, context=ctx_p)
                 except Exception as eval_err:
                     ok = False
                     violations.append(

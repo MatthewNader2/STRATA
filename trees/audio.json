@@ -5524,10 +5524,20 @@
       "topology_type": "sequential",
       "docstring": "Serializes audio waveform to standard 16-bit PCM WAV file format via scipy.io.wavfile.",
       "semantic_tags": [
+        "save_audio",
+        "export_audio",
+        "audio_sink",
         "wav_write",
         "scipy_write",
         "export_wav",
         "pcm_export"
+      ],
+      "keywords": [
+        "export",
+        "save",
+        "write",
+        "audio",
+        "wav"
       ],
       "inputs": {
         "filepath": {

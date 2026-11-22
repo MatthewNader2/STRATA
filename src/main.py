@@ -464,7 +464,7 @@ def run_prompt(request: Union[RunRequest, Dict[str, Any], str]) -> RunResponse:
     lint_violations: List[str] = []
     if hasattr(local_gate, "last_pipeline_bindings") and local_gate.last_pipeline_bindings:
         try:
-            lint_res = PreflightLinter.lint(local_gate.last_pipeline_bindings, prompt=prompt, code_str=code, orchestrator=_orchestrator)
+            lint_res = PreflightLinter.lint(local_gate.last_pipeline_bindings, prompt=prompt, code_str=code, orchestrator=_orchestrator, typed_proof=getattr(local_gate, "last_typed_proof", None))
             if not lint_res.is_valid:
                 lint_violations = list(lint_res.violations)
                 logger.warning(f"Static Pre-Flight Lint Violations: {lint_violations}")

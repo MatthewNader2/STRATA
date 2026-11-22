@@ -130,6 +130,24 @@ def audit_directory(
             if not has_effects:
                 d_counts["cells_missing_effects"] += 1
 
+            stage = int(cell.get("stage") or 0)
+            ins_d = cell.get("inputs") or {}
+            outs_d = cell.get("outputs") or {}
+            if (
+                stage >= 2
+                and not ins_d
+                and role not in ("source", "ingress", "constructor", "initializer")
+                and isinstance(outs_d, dict)
+            ):
+                for _op in outs_d.values():
+                    if not isinstance(_op, dict):
+                        continue
+                    _osk = str(_op.get("structure_kind") or "").strip().lower()
+                    _oat = str(_op.get("abstract_type") or "").strip().lower()
+                    if _osk == "handle" or _oat == "handle":
+                        d_counts["zero_in_stage2_handle_fabricators"] += 1
+                        break
+
             for direction, pname, port in _iter_port_entries(cell):
                 total_ports += 1
                 st = str(port.get("state") or "").strip().lower()
@@ -172,6 +190,14 @@ def audit_directory(
                     ts_val = str(typestate_val).strip().lower()
                     if st in colliding_states and "::" not in ts_val and ts_val != "any":
                         d_counts["unnamespaced_colliding_ports"] += 1
+
+                _tn_low = str(port.get("type_name") or "").strip().lower()
+                _sk_low = str(port.get("structure_kind") or "").strip().lower()
+                if (
+                    _tn_low in ("tuple", "list", "set", "sequence", "collection")
+                    or _tn_low.startswith(("tuple[", "list[", "set[", "sequence[", "collection["))
+                ) and _sk_low == "scalar":
+                    d_counts["ports_sequence_marked_scalar"] += 1
 
         d_counts["total_cells"] = len(cells)
         d_counts["total_ports"] = total_ports
@@ -242,6 +268,8 @@ def main() -> int:
             or t.get("ports_undeclared_state", 0) > 0
             or t.get("cells_missing_effects", 0) > 0
             or t.get("bridges_missing_profile", 0) > 0
+            or t.get("ports_sequence_marked_scalar", 0) > 0
+            or t.get("zero_in_stage2_handle_fabricators", 0) > 0
         ):
             return 2
     return 0

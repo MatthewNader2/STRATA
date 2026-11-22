@@ -28,6 +28,7 @@ try:
     from ..planner import LatticePlanner
     from ..utils import tokenize_alphanumeric
     from ..dag_plan import DAGPlan, OpenPortFrontier
+    from ..type_predicates import is_linear_handle_port
 except (ImportError, ValueError):
     from lattice import Cell, MicroCell, MacroCell, LatticeOrchestrator, TypeRegistry, is_path_port, is_macro_cell
     from schema import (
@@ -45,6 +46,7 @@ except (ImportError, ValueError):
     from planner import LatticePlanner
     from utils import tokenize_alphanumeric
     from dag_plan import DAGPlan, OpenPortFrontier
+    from type_predicates import is_linear_handle_port
 
 logger = get_logger("route_methods")
 
@@ -724,7 +726,7 @@ class RouteMethod(ABC):
 
     @classmethod
     def is_handle_port(cls, sig: Any) -> bool:
-        """Category-theoretic linear handle: structure_kind == 'handle' or declared object receiver."""
+        """Category-theoretic linear handle: delegates to canonical `is_linear_handle_port`."""
         if sig is None:
             return False
         sk = str(getattr(sig, "structure_kind", "") or "").lower()
@@ -741,26 +743,7 @@ class RouteMethod(ABC):
         cached = cls._handle_port_cache.get(ck)
         if cached is not None:
             return cached
-        res = False
-        try:
-            from preflight import PreflightLinter
-            if PreflightLinter._is_object_receiver_role(pr):
-                res = True
-        except Exception:
-            pass
-        if not res:
-            try:
-                from lattice import TypeRegistry
-                reg = TypeRegistry.get_instance()
-                if reg and (
-                    reg.is_subtype(pr, "handle")
-                    or reg.is_subtype(tn, "handle")
-                    or reg.is_subtype(pr, "model")
-                    or reg.is_subtype(tn, "model")
-                ):
-                    res = True
-            except Exception:
-                pass
+        res = is_linear_handle_port(sig)
         if len(cls._handle_port_cache) >= 4096:
             cls._handle_port_cache.clear()
         cls._handle_port_cache[ck] = res
@@ -905,6 +888,28 @@ class RouteMethod(ABC):
             if id(path[idx]) in seen_ids:
                 path[idx] = path[idx].clone() if hasattr(path[idx], "clone") else copy.copy(path[idx])
             seen_ids.add(id(path[idx]))
+
+        # Preserve pre-established monotonic causal clause tags from the planner (e.g. OMEGA step_clauses)
+        existing_tags = [getattr(c, "matched_clause_idx", None) for c in path]
+        has_complete_monotonic_tags = (
+            all(isinstance(t, int) and 0 <= t < len(clauses) for t in existing_tags)
+            and all(existing_tags[k] <= existing_tags[k + 1] for k in range(len(existing_tags) - 1))
+        )
+        if has_complete_monotonic_tags:
+            try:
+                from unification import ExecutionContext as _EC
+                for cell in path:
+                    j = getattr(cell, "matched_clause_idx", None)
+                    if j is None or j >= len(clauses) or getattr(cell, "clause_literals", None):
+                        continue
+                    cell.clause_literals = [
+                        v
+                        for _, k, v in _EC._extract_universal_literals(clauses[j])
+                        if k in ("identifier", "quoted_str")
+                    ]
+            except Exception as _lit_err:
+                decisions.append({"cell": None, "error": f"clause literal attachment failed: {_lit_err}"})
+            return decisions
 
         for cell in path:
             cell.matched_clause_idx = None
@@ -1619,7 +1624,13 @@ class RouteMethod(ABC):
                                 is_valid = lint_cache[trial_sig]
                             else:
                                 emitted = gate.emit_code(probe_trial, probe_ctx, extract_llm_slots=False)
-                                lint_res = PreflightLinter.lint(gate.last_pipeline_bindings, prompt=prompt, code_str=emitted, orchestrator=self.orchestrator)
+                                lint_res = PreflightLinter.lint(
+                                    gate.last_pipeline_bindings,
+                                    prompt=prompt,
+                                    code_str=emitted,
+                                    orchestrator=self.orchestrator,
+                                    typed_proof=getattr(gate, "last_typed_proof", None),
+                                )
                                 is_valid = lint_res.is_valid
                                 lint_cache[trial_sig] = is_valid
                             if is_valid:
@@ -2046,7 +2057,13 @@ class RouteMethod(ABC):
                         if can_slots:
                             return f"verification raised UnresolvedPlaceholderError: {exc}"
                         code_str = None
-                lint = PreflightLinter.lint(ur.value, prompt=prompt, code_str=code_str, orchestrator=orch)
+                lint = PreflightLinter.lint(
+                    ur.value,
+                    prompt=prompt,
+                    code_str=code_str,
+                    orchestrator=orch,
+                    typed_proof=getattr(gate, "last_typed_proof", None),
+                )
                 if not lint.is_valid:
                     return f"failed PreflightLinter: {'; '.join(lint.violations[:2])}"
             return None

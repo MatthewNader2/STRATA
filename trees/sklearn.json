@@ -129,8 +129,7 @@
     ],
     "terminal_output": [
       "model_sink",
-      "evaluator",
-      "predicted_values"
+      "evaluator"
     ]
   },
   "typestates": {
@@ -286,8 +285,7 @@
         "carrier_type": "ndarray",
         "description": "Continuous scalar target value estimations.",
         "properties": {
-          "is_prediction": true,
-          "is_terminal": true
+          "is_prediction": true
         }
       },
       {
@@ -1510,8 +1508,7 @@
     "terminal_states": [
       "evaluated_metrics",
       "saved_model",
-      "serialized_pipeline",
-      "predicted_values"
+      "serialized_pipeline"
     ]
   },
   "cells": [
@@ -1654,7 +1651,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -1880,7 +1877,7 @@
             "shape": [
               "n_train_samples"
             ],
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -1927,7 +1924,7 @@
             "shape": [
               "n_test_samples"
             ],
-            "dtype": "float64",
+            "dtype": "D",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -1997,7 +1994,11 @@
           "source_port": "y",
           "target_port": "X"
         }
-      ]
+      ],
+      "polymorphic_propagation": {
+        "preserves_layout": true,
+        "source_port": "y"
+      }
     },
     {
       "cell_id": "sklearn.datasets.load_iris",
@@ -2117,7 +2118,7 @@
             "shape": [
               150
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -2388,7 +2389,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -4450,7 +4451,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -4751,7 +4752,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -5127,7 +5128,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -5518,7 +5519,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -5838,7 +5839,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -7804,7 +7805,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8061,7 +8062,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8291,7 +8292,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8640,7 +8641,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -8910,7 +8911,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9148,7 +9149,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9199,7 +9200,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9369,7 +9370,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9420,7 +9421,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9632,7 +9633,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9683,7 +9684,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -9867,7 +9868,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -10584,7 +10585,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11051,7 +11052,7 @@
             "shape": [
               178
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11199,7 +11200,7 @@
             "shape": [
               569
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11347,7 +11348,7 @@
             "shape": [
               1797
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -11618,7 +11619,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -12028,7 +12029,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -13552,7 +13553,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": true,
             "channel_count": null,
@@ -13600,7 +13601,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -15388,7 +15389,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -16231,7 +16232,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -16530,7 +16531,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -16850,7 +16851,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -17209,7 +17210,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -17490,7 +17491,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -17732,7 +17733,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -18096,7 +18097,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -20127,7 +20128,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -20382,7 +20383,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -20636,7 +20637,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -21235,7 +21236,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -21504,7 +21505,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "any",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -21725,7 +21726,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -21776,7 +21777,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -21996,7 +21997,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -22047,7 +22048,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -22266,7 +22267,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -22317,7 +22318,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -22751,7 +22752,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,
@@ -22970,7 +22971,7 @@
             "shape": [
               "n_samples"
             ],
-            "dtype": "float64",
+            "dtype": "int64",
             "memory_order": "any",
             "rank_polymorphic": false,
             "channel_count": null,

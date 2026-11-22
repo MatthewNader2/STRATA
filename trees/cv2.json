@@ -9041,7 +9041,8 @@
         "contourArea",
         "area",
         "size",
-        "green's theorem"
+        "contour_area",
+        "polygon_area"
       ],
       "code_template": "{output_var} = cv2.contourArea({contour}, oriented={oriented})",
       "slots": {
@@ -11565,9 +11566,8 @@
       "keywords": [
         "split",
         "channels",
-        "blue",
-        "green",
-        "red",
+        "split_channels",
+        "bgr_channels",
         "planes"
       ],
       "code_template": "{output_var} = cv2.split({src})",
