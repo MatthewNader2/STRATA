@@ -23,13 +23,11 @@ CRITICAL_PACKAGES: Tuple[str, ...] = (
     "numpy",
     "pydantic",
     "pydantic-settings",
-    "fastapi",
     "rich",
     "torch",
     "transformers",
     "sentence-transformers",
     "llama-cpp-python",
-    "faiss-cpu",
 )
 
 
@@ -39,13 +37,6 @@ def get_installed_versions() -> Dict[str, str]:
         try:
             versions[pkg] = importlib.metadata.version(pkg)
         except importlib.metadata.PackageNotFoundError:
-            # Check faiss-gpu if faiss-cpu is not installed
-            if pkg == "faiss-cpu":
-                try:
-                    versions["faiss-gpu"] = importlib.metadata.version("faiss-gpu")
-                    continue
-                except importlib.metadata.PackageNotFoundError:
-                    pass
             versions[pkg] = "MISSING"
     return versions
 
@@ -98,7 +89,7 @@ def check_lockfile(lock_path: Path) -> bool:
 
 
 def verify_database_sync(trees_dir: Path, db_path: Path, auto_compile: bool = False) -> bool:
-    from cli import compute_trees_fingerprint, get_stored_fingerprint, ensure_lattice_compiled
+    from lattice_db import compute_trees_fingerprint, get_stored_fingerprint, ensure_lattice_compiled
 
     if auto_compile:
         rebuilt = ensure_lattice_compiled(trees_dir=trees_dir, db_path=db_path)
