@@ -93,7 +93,7 @@ src/eval_runner.py
 # --- Runtime Data Fixtures & Spreadsheets ---
 output_data.csv
 data.csv
-input.csv
+/input.csv
 edges.png
 contours.png
 spec_out.png

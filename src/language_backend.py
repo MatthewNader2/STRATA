@@ -344,24 +344,63 @@ class LexicalLanguageBackend:
         if not tmpl or not placeholders:
             return []
         op = self.assignment_operator or "="
+        comment = self.line_comment
         ph_set = set(placeholders)
         lhs_phs: List[str] = []
         for raw_line in tmpl.splitlines():
-            for stmt in raw_line.split(";"):
-                search_start = 0
+            for stmt in _split_top_level(raw_line, ";"):
                 pos = -1
-                while True:
-                    cand = stmt.find(op, search_start)
-                    if cand == -1:
-                        break
-                    if op == "=" and (
-                        (cand > 0 and stmt[cand - 1] in ("=", "!", "<", ">"))
-                        or stmt[cand : cand + 2] == "=="
-                    ):
-                        search_start = cand + len(op)
+                depth_p = 0
+                depth_b = 0
+                depth_c = 0
+                in_quote: Optional[str] = None
+                escaped = False
+                i = 0
+                n = len(stmt)
+                while i < n:
+                    ch = stmt[i]
+                    if in_quote is not None:
+                        if escaped:
+                            escaped = False
+                        elif ch == "\\":
+                            escaped = True
+                        elif ch == in_quote:
+                            in_quote = None
+                        i += 1
                         continue
-                    pos = cand
-                    break
+                    if comment and stmt.startswith(comment, i):
+                        break
+                    if ch in ('"', "'"):
+                        in_quote = ch
+                        i += 1
+                        continue
+                    if ch == "(":
+                        depth_p += 1
+                    elif ch == ")" and depth_p > 0:
+                        depth_p -= 1
+                    elif ch == "[":
+                        depth_b += 1
+                    elif ch == "]" and depth_b > 0:
+                        depth_b -= 1
+                    elif ch == "{":
+                        depth_c += 1
+                    elif ch == "}" and depth_c > 0:
+                        depth_c -= 1
+                    elif (
+                        depth_p == 0
+                        and depth_b == 0
+                        and depth_c == 0
+                        and stmt.startswith(op, i)
+                    ):
+                        if op == "=" and (
+                            (i > 0 and stmt[i - 1] in ("=", "!", "<", ">"))
+                            or (i + 1 < n and stmt[i + 1] in ("=", ">"))
+                        ):
+                            i += 1
+                            continue
+                        pos = i
+                        break
+                    i += 1
                 if pos <= 0:
                     continue
                 lhs_part = stmt[:pos]

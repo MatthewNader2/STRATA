@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strata-synthesis"
+version = "2.0.0"
+description = "STRATA: Symbolic Topological Routing Architecture for Typed Automata"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.0,<3",
+    "rich>=13.0,<14",
+]
+
+[project.optional-dependencies]
+neural = [
+    "numpy>=1.24,<3",
+    "torch>=2.0,<3",
+    "transformers>=4.30,<5",
+    "sentence-transformers>=2.2,<4",
+    "llama-cpp-python>=0.2,<1",
+    "huggingface_hub>=0.23,<1",
+    "tqdm>=4.65,<5",
+]
+domains = [
+    "numpy>=1.24,<3",
+    "pandas>=2.0,<3",
+    "scipy>=1.10,<2",
+    "scikit-learn>=1.3,<2",
+    "opencv-python-headless>=4.8,<5",
+    "pillow>=10.0,<12",
+    "matplotlib>=3.7,<4",
+    "seaborn>=0.13,<1",
+    "requests>=2.28,<3",
+    "pygame>=2.5,<3",
+    "cryptography>=41.0,<46",
+    "soundfile>=0.12,<1",
+    "joblib>=1.3,<2",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-timeout>=2.3.0",
+    "pyflakes>=3.2.0",
+    "ruff>=0.4.0",
+    "numpy>=1.24.0",
+]
+
+[project.scripts]
+strata = "src.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+addopts = "-q --tb=short"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["models", "trees/lattice.db", "test_logs"]

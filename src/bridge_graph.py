@@ -325,6 +325,10 @@ class LiveBridgePath:
     def cell_ids(self) -> Tuple[str, ...]:
         return tuple(e.cell_id for e in self.edges)
 
+    @property
+    def is_tier2(self) -> bool:
+        return bool(self.lossy or any(e.lossy or e.requires_intent for e in self.edges))
+
 
 def _compute_deltas(src: CanonicalPortType, dst: CanonicalPortType) -> Tuple[str, ...]:
     deltas: List[str] = []
@@ -345,13 +349,13 @@ def _apply_edge(cur_sig: CanonicalPortType, edge: MorphismEdge) -> CanonicalPort
     return propagate_polymorphic_signature(cur_sig, edge.dst, edge.cell)
 
 
-def _allows_tier2_step(edge: MorphismEdge, dst: CanonicalPortType, *, allow_lossy: bool) -> bool:
+def _allows_tier2_step(edge: MorphismEdge, dst: CanonicalPortType, poset: Any, *, allow_lossy: bool) -> bool:
     """Coercion coherence guard for Tier-2 (lossy or intent-bearing) conversions."""
     if not (edge.lossy or edge.requires_intent):
         return True
     if not allow_lossy:
         return False
-    if "carrier" in edge.deltas and dst.carrier.lower() not in TOP_CARRIERS:
+    if "carrier" in edge.deltas and dst.carrier.lower() not in TOP_CARRIERS and not poset.is_subtype(edge.src.carrier, dst.carrier):
         return True
     if "typestate" in edge.deltas and dst.typestate != "any":
         return True
@@ -378,10 +382,6 @@ class LiveBridgeGraph:
     def __init__(self, edges: Tuple[MorphismEdge, ...], poset: Any) -> None:
         self.edges: Tuple[MorphismEdge, ...] = edges
         self.poset = poset
-        self._by_src_carrier: Dict[str, List[MorphismEdge]] = {}
-        for edge in edges:
-            key = edge.src.carrier.lower()
-            self._by_src_carrier.setdefault(key, []).append(edge)
 
     @classmethod
     def build(
@@ -528,7 +528,7 @@ class LiveBridgeGraph:
                     continue
                 if edge.cell_id in cur_cids:
                     continue
-                if not _allows_tier2_step(edge, dst, allow_lossy=allow_lossy):
+                if not _allows_tier2_step(edge, dst, self.poset, allow_lossy=allow_lossy):
                     continue
                 if not signatures_unify(cur_sig, edge.src, self.poset):
                     continue
@@ -569,7 +569,7 @@ class LiveBridgeGraph:
                         (nxt_t2, nxt_cost, nxt_hops, nxt_cids, seq, nxt_sig, nxt_edges, nxt_lossy, nxt_deltas),
                     )
 
-        results.sort(key=lambda r: (r.lossy, r.total_cost, r.hop_count, r.cell_ids))
+        results.sort(key=lambda r: (r.is_tier2, r.total_cost, r.hop_count, r.cell_ids))
         return results[:max_results]
 
 

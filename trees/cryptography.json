@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Symmetric/asymmetric encryption, SHA/HMAC cryptographic hashing, key derivation, and token verification morphisms.",
   "is_core": false,
+  "aliases": [
+    "crypto"
+  ],
   "imports": [
     "python_core"
   ],

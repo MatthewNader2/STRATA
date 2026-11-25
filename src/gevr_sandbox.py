@@ -25,7 +25,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 try:
     import resource as _resource
@@ -70,7 +70,7 @@ class _SecurityASTVisitor(_UnifiedSecurityASTVisitor):
         super().__init__(policy=policy)
 
 
-def _enforce_posix_resource_limits(max_memory_mb: int = 16384, max_cpu_seconds: int = 10) -> None:
+def _enforce_posix_resource_limits(max_memory_mb: int = 8192, max_cpu_seconds: int = 30) -> None:
     if _resource is None:
         return
     try:
@@ -348,8 +348,8 @@ def _sandbox_worker_exec(
     result_conn: Any,
     smoke_test: bool = False,
     egress_paths: Optional[List[str]] = None,
-    max_memory_mb: int = 16384,
-    max_cpu_seconds: int = 10,
+    max_memory_mb: int = 8192,
+    max_cpu_seconds: int = 30,
     allowed_capabilities: Optional[List[str]] = None,
     ingress_paths: Optional[List[str]] = None,
     capture_egress: bool = False,
@@ -468,11 +468,18 @@ def _sandbox_worker_exec(
             os.environ["TMPDIR"] = ephemeral_resolved
             os.environ["TEMP"] = ephemeral_resolved
             os.environ["TMP"] = ephemeral_resolved
-            for rel_in in ingress_paths or ():
-                rel_str = str(rel_in or "").strip()
-                if not rel_str or os.path.isabs(rel_str):
-                    continue
-                src_p = (Path(orig_cwd) / rel_str).resolve()
+            for asset_item in ingress_paths or ():
+                if isinstance(asset_item, (tuple, list)) and len(asset_item) == 2:
+                    src_abs, rel_raw = asset_item
+                    rel_str = str(rel_raw or "").strip()
+                    if not rel_str or os.path.isabs(rel_str):
+                        continue
+                    src_p = Path(str(src_abs)).resolve()
+                else:
+                    rel_str = str(asset_item or "").strip()
+                    if not rel_str or os.path.isabs(rel_str):
+                        continue
+                    src_p = (Path(orig_cwd) / rel_str).resolve()
                 dst_p = (ephemeral_root_p / rel_str).resolve()
                 if not src_p.is_file() or not dst_p.is_relative_to(ephemeral_root_p):
                     continue
@@ -634,6 +641,7 @@ class GEVRSandbox:
         max_memory_mb: Optional[int] = None,
         max_cpu_seconds: Optional[int] = None,
         allowed_capabilities: Optional[Set[str]] = None,
+        asset_dirs: Optional[List[Union[str, Path]]] = None,
     ) -> None:
         self.default_timeout = float(
             os.environ.get(
@@ -652,6 +660,14 @@ class GEVRSandbox:
             else (settings.sandbox_max_cpu_seconds if settings else 30)
         )
         self.allowed_capabilities = set(allowed_capabilities or set())
+        self.asset_dirs: List[Path] = []
+        for raw_dir in (asset_dirs or ()):
+            try:
+                resolved_dir = Path(raw_dir).resolve()
+                if resolved_dir not in self.asset_dirs:
+                    self.asset_dirs.append(resolved_dir)
+            except Exception:
+                pass
         warmup_sandbox_async()
 
     def execute(
@@ -693,7 +709,8 @@ class GEVRSandbox:
             }
 
         egress_set: Set[str] = {str(p).strip() for p in (egress_paths or []) if p}
-        staged_inputs: List[str] = []
+        staged_inputs: List[Union[str, Tuple[str, str]]] = []
+        seen_input_names: Set[str] = set()
         missing_inputs: List[str] = []
 
         for raw_asset in (input_assets or ()):
@@ -704,8 +721,20 @@ class GEVRSandbox:
             if ".." in rel_parts:
                 continue
             if os.path.isfile(s) or os.path.isfile(os.path.abspath(s)):
-                if s not in staged_inputs:
+                if s not in seen_input_names:
+                    seen_input_names.add(s)
                     staged_inputs.append(s)
+                continue
+            matched_src: Optional[Path] = None
+            for asset_dir in self.asset_dirs:
+                cand = (asset_dir / s).resolve()
+                if cand.is_file() and cand.is_relative_to(asset_dir):
+                    matched_src = cand
+                    break
+            if matched_src is not None:
+                if s not in seen_input_names:
+                    seen_input_names.add(s)
+                    staged_inputs.append((str(matched_src), s))
             elif s not in missing_inputs:
                 missing_inputs.append(s)
 

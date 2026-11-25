@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Audio waveform ingestion, sample rate conversion, spectral transforms, normalization, and audio synthesis morphisms.",
   "is_core": false,
+  "aliases": [
+    "soundfile",
+    "scipy_audio"
+  ],
   "imports": [
     "matplotlib",
     "numpy",
@@ -991,11 +995,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         }
       },
       "outputs": {
@@ -1913,11 +1917,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "fade_duration": {
           "carrier": "float",
@@ -2020,11 +2024,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "fade_duration": {
           "carrier": "float",
@@ -2211,11 +2215,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "start_sec": {
           "carrier": "float",
@@ -2555,11 +2559,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "pad_start_sec": {
           "carrier": "float",
@@ -2676,11 +2680,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Original sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "target_sr": {
           "carrier": "sample_rate",
@@ -2795,11 +2799,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "delay_sec": {
           "carrier": "float",
@@ -2916,11 +2920,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "nperseg": {
           "carrier": "int",
@@ -3010,19 +3014,7 @@
       "primary_out": "zxx",
       "effects": [],
       "mutation_type": "io",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "layout",
-          "semantics",
-          "typestate"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": true
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "AUDIO_COMPUTE_ISTFT",
@@ -3068,11 +3060,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         }
       },
       "outputs": {
@@ -3121,19 +3113,7 @@
       "primary_out": "waveform",
       "effects": [],
       "mutation_type": "io",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "layout",
-          "semantics",
-          "typestate"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": true
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "AUDIO_COMPUTE_SPECTROGRAM",
@@ -3179,11 +3159,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "nperseg": {
           "carrier": "int",
@@ -3319,11 +3299,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "n_mels": {
           "carrier": "int",
@@ -3579,11 +3559,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "cutoff_freq": {
           "carrier": "float",
@@ -3700,11 +3680,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "cutoff_freq": {
           "carrier": "float",
@@ -3821,11 +3801,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "lowcut": {
           "carrier": "float",
@@ -3963,11 +3943,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         },
         "notch_freq": {
           "carrier": "float",
@@ -4104,11 +4084,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         }
       },
       "outputs": {
@@ -4204,11 +4184,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling frequency in Hz.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         }
       },
       "outputs": {
@@ -4288,26 +4268,6 @@
           "required": true,
           "description": "Spectrogram matrix to visualize.",
           "port_role": "data_input"
-        },
-        "sample_rate": {
-          "carrier": "sample_rate",
-          "typestate": "audio::frequency_hz",
-          "accepted_states": [],
-          "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "float64",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "invariants": [],
-          "value_class": "literal",
-          "resource_mode": "value",
-          "required": true,
-          "description": "Sampling frequency in Hz for axis frequency mapping.",
-          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4403,11 +4363,11 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "literal",
+          "value_class": "data",
           "resource_mode": "value",
           "required": true,
           "description": "Sampling rate in Hz for time-axis scaling.",
-          "port_role": "configuration"
+          "port_role": "data_input"
         }
       },
       "outputs": {},

@@ -344,16 +344,20 @@ def _apply_shared_dependency_cleanup(dom: str, data: Dict[str, Any]) -> None:
         for cell in data.get("cells") or []:
             cid = str(cell.get("cell_id") or "")
             ins = cell.get("inputs") or {}
-            if cid == "PD_READ_SQL" and isinstance(ins.get("port_1"), dict):
-                ins["port_1"]["carrier"] = "db_connection"
-                ins["port_1"]["typestate"] = "python_core::db_connection"
-                ins["port_1"]["accepted_states"] = []
-                ins["port_1"]["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
-            elif cid == "PD_TO_SQL" and isinstance(ins.get("port_2"), dict):
-                ins["port_2"]["carrier"] = "db_connection"
-                ins["port_2"]["typestate"] = "python_core::db_connection"
-                ins["port_2"]["accepted_states"] = []
-                ins["port_2"]["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
+            if cid == "PD_READ_SQL":
+                con_port = ins.get("con") if isinstance(ins.get("con"), dict) else ins.get("port_1")
+                if isinstance(con_port, dict):
+                    con_port["carrier"] = "db_connection"
+                    con_port["typestate"] = "python_core::db_connection"
+                    con_port["accepted_states"] = []
+                    con_port["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
+            elif cid == "PD_TO_SQL":
+                con_port = ins.get("con") if isinstance(ins.get("con"), dict) else ins.get("port_2")
+                if isinstance(con_port, dict):
+                    con_port["carrier"] = "db_connection"
+                    con_port["typestate"] = "python_core::db_connection"
+                    con_port["accepted_states"] = []
+                    con_port["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
             for direction in ("inputs", "outputs"):
                 ports = cell.get(direction) or {}
                 if not isinstance(ports, dict):
@@ -403,6 +407,18 @@ def _apply_shared_dependency_cleanup(dom: str, data: Dict[str, Any]) -> None:
                 for pv in ports.values():
                     if isinstance(pv, dict):
                         _retarget_port_states(pv, sns_map)
+    elif dom == "sqlite3":
+        if isinstance(data.get("types"), list):
+            for entry in data["types"]:
+                if isinstance(entry, dict) and entry.get("name") == "connection":
+                    entry["parent"] = "db_connection"
+                elif isinstance(entry, dict) and entry.get("name") == "path":
+                    entry["parent"] = "object"
+        elif isinstance(data.get("types"), dict):
+            if isinstance(data["types"].get("connection"), dict):
+                data["types"]["connection"]["parent"] = "db_connection"
+            if isinstance(data["types"].get("path"), dict):
+                data["types"]["path"]["parent"] = "object"
     elif dom in ("requests", "cryptography"):
         _prune_state_decls(data, {"raw_bytes"})
         for cell in data.get("cells") or []:
@@ -692,6 +708,10 @@ def _canonicalize_tree(data: Dict[str, Any], dom: str, imports_list: List[str]) 
     ls = data.get("language_spec")
     if isinstance(ls, dict):
         clean_tree["language_spec"] = {k: ls[k] for k in _CANONICAL_LANG_KEYS if k in ls}
+
+    raw_aliases = [str(x).strip().lower() for x in (data.get("aliases") or ()) if str(x or "").strip()]
+    if raw_aliases:
+        clean_tree["aliases"] = list(dict.fromkeys(raw_aliases))
 
     # Strict schema enforcement prior to serialization
     TreeSchema(**clean_tree)

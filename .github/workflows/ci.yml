@@ -34,33 +34,39 @@ jobs:
       - name: Install CI dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-          pip install pydantic pydantic-settings rich
+          pip install -e ".[dev]" opencv-python-headless pillow pandas matplotlib
 
-      - name: Static Analysis & Undefined Names Gate
+      - name: Static Analysis, Neutrality & Undefined Names Gate
         run: |
           python scripts/check_static.py
 
-      - name: Enforce Zero frozenset in src/ and scripts/
+      - name: Enforce Zero frozenset Across Codebase
         run: |
-          python -c "import ast, pathlib, sys; hits = [f'{p}:{n.lineno}' for d in ('src', 'scripts') for p in sorted(pathlib.Path(d).rglob('*.py')) for n in ast.walk(ast.parse(p.read_text(encoding='utf-8'), str(p))) if isinstance(n, ast.Name) and n.id == 'frozenset']; print('frozenset hits:', hits) if hits else print('ZERO_FROZENSET_OK'); sys.exit(1 if hits else 0)"
+          python -c "import ast, pathlib, sys; hits = [f'{p}:{n.lineno}' for d in ('src', 'scripts', 'tools', 'benchmarks', 'tests') if pathlib.Path(d).is_dir() for p in sorted(pathlib.Path(d).rglob('*.py')) for n in ast.walk(ast.parse(p.read_text(encoding='utf-8'), str(p))) if isinstance(n, ast.Name) and n.id == 'frozenset']; print('frozenset hits:', hits) if hits else print('ZERO_FROZENSET_OK'); sys.exit(1 if hits else 0)"
 
       - name: Domain Tree Schema & Integrity Linting
         run: |
-          python scripts/lint_trees.py
+          python scripts/lint_trees.py --include-fixtures
 
-      - name: Strict Five-Axis Tree Audit
+      - name: Strict Five-Axis & Neutrality Tree Audit
         run: |
-          python scripts/audit_trees.py --strict-five-axis
+          python scripts/audit_trees.py --strict-five-axis --strict-neutral --include-fixtures
 
-      - name: Compile Domain Trees to SQLite Lattice
+      - name: Compile, Validate & Audit SQLite v4 Lattice
         run: |
-          python strata_cli.py compile
-
-      - name: Validate Compiled Lattice AST Nodes
-        run: |
+          python strata_cli.py compile --clean
           python strata_cli.py validate
-
-      - name: Audit Lattice Topological Connectivity
-        run: |
           python strata_cli.py audit
+
+      - name: Deterministic Unit & Integration Suite (pytest)
+        run: |
+          pytest tests/ -v
+
+      - name: Theory-First Pure Symbolic Matrix (Profile 0)
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          MPLBACKEND: Agg
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python test.py --profiles 0 --early-stop

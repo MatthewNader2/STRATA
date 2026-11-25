@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "description": "",
   "is_core": false,
+  "aliases": [
+    "pd"
+  ],
   "imports": [
     "numpy",
     "python_core"
@@ -2240,7 +2243,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "filepath": {
           "carrier": "File[Tabular, CSV]",
           "typestate": "pandas::valid_path",
           "accepted_states": [],
@@ -2262,7 +2265,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2284,7 +2287,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory",
         {
@@ -2309,7 +2312,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "filepath": {
           "carrier": "File[Tabular, Parquet]",
           "typestate": "pandas::valid_path",
           "accepted_states": [],
@@ -2331,7 +2334,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2353,7 +2356,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -2370,7 +2373,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "filepath": {
           "carrier": "File[Tabular, JSONFormat]",
           "typestate": "pandas::valid_path",
           "accepted_states": [],
@@ -2392,7 +2395,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2414,7 +2417,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -2431,7 +2434,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "filepath": {
           "carrier": "File[Tabular, Excel]",
           "typestate": "pandas::valid_path",
           "accepted_states": [],
@@ -2453,7 +2456,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2475,7 +2478,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -2492,7 +2495,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "sql": {
           "carrier": "str",
           "typestate": "pandas::sql_query",
           "accepted_states": [],
@@ -2513,7 +2516,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_1": {
+        "con": {
           "carrier": "db_connection",
           "typestate": "python_core::db_connection",
           "accepted_states": [],
@@ -2536,7 +2539,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2558,7 +2561,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "network_or_db_access",
         "allocates_memory"
@@ -2576,7 +2579,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "dict",
           "typestate": "pandas::in_memory_data",
           "accepted_states": [],
@@ -2598,7 +2601,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -2620,7 +2623,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -2637,7 +2640,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "list",
           "typestate": "pandas::raw_sequence",
           "accepted_states": [],
@@ -2661,7 +2664,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [],
@@ -2683,7 +2686,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -2700,7 +2703,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -2727,7 +2730,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::axis_param",
           "accepted_states": [],
@@ -2752,7 +2755,7 @@
           "description": "0 for rows, 1 for columns.",
           "domain": "pandas"
         },
-        "port_2": {
+        "how": {
           "carrier": "str",
           "typestate": "pandas::how_param",
           "accepted_states": [],
@@ -2779,7 +2782,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -2803,7 +2806,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "cleans_missing",
@@ -2835,7 +2838,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -2860,7 +2863,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "subset": {
           "carrier": "List[str]",
           "typestate": "pandas::column_list",
           "accepted_states": [],
@@ -2885,7 +2888,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -2909,7 +2912,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -2924,7 +2927,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -2949,7 +2952,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "value": {
           "carrier": "float",
           "typestate": "pandas::scalar_fill",
           "accepted_states": [],
@@ -2972,7 +2975,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -2996,7 +2999,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "cleans_missing",
@@ -3024,7 +3027,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -3051,7 +3054,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -3075,7 +3078,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3090,7 +3093,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -3117,7 +3120,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -3141,7 +3144,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3156,7 +3159,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -3181,7 +3184,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "method": {
           "carrier": "str",
           "typestate": "pandas::method_type",
           "accepted_states": [],
@@ -3210,7 +3213,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -3234,7 +3237,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3249,7 +3252,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -3274,7 +3277,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "subset": {
           "carrier": "List[str]",
           "typestate": "pandas::column_subset",
           "accepted_states": [],
@@ -3297,7 +3300,7 @@
           "description": "Column labels to consider for identifying duplicates.",
           "domain": "pandas"
         },
-        "port_2": {
+        "keep": {
           "carrier": "str",
           "typestate": "pandas::keep_strategy",
           "accepted_states": [],
@@ -3325,7 +3328,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::deduped",
           "accepted_states": [],
@@ -3347,7 +3350,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "deduplicates",
@@ -3379,7 +3382,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -3403,7 +3406,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "to_replace": {
           "carrier": "str",
           "typestate": "pandas::target_val",
           "accepted_states": [],
@@ -3424,7 +3427,7 @@
           "port_role": "literal_parameter",
           "domain": "pandas"
         },
-        "port_2": {
+        "value": {
           "carrier": "str",
           "typestate": "pandas::replacement_val",
           "accepted_states": [],
@@ -3447,7 +3450,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -3471,7 +3474,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3486,7 +3489,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -3510,7 +3513,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "dtype": {
           "carrier": "Dict[str, str]",
           "typestate": "pandas::dtype_mapping",
           "accepted_states": [],
@@ -3533,7 +3536,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -3557,7 +3560,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3572,7 +3575,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -3595,7 +3598,7 @@
           "description": "Input Series to convert.",
           "domain": "pandas"
         },
-        "port_1": {
+        "errors": {
           "carrier": "str",
           "typestate": "pandas::error_handling",
           "accepted_states": [],
@@ -3623,7 +3626,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [],
@@ -3645,7 +3648,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "transforms_column",
@@ -3665,7 +3668,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -3688,7 +3691,7 @@
           "description": "Series containing date/time strings or timestamps.",
           "domain": "pandas"
         },
-        "port_1": {
+        "format": {
           "carrier": "str",
           "typestate": "pandas::date_format",
           "accepted_states": [],
@@ -3702,16 +3705,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Strftime format string.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_cleaned",
           "accepted_states": [],
@@ -3733,7 +3737,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "transforms_column",
@@ -3753,7 +3757,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -3780,7 +3784,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::numeric_only",
           "accepted_states": [],
@@ -3802,7 +3806,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -3817,7 +3821,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -3842,7 +3846,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_cleaned",
           "accepted_states": [],
@@ -3864,7 +3868,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "transforms_column",
@@ -3884,7 +3888,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -3907,7 +3911,7 @@
           "description": "Target string Series.",
           "domain": "pandas"
         },
-        "port_1": {
+        "pat": {
           "carrier": "str",
           "typestate": "pandas::regex_pattern",
           "accepted_states": [],
@@ -3928,7 +3932,7 @@
           "port_role": "literal_parameter",
           "domain": "pandas"
         },
-        "port_2": {
+        "repl": {
           "carrier": "str",
           "typestate": "pandas::repl_text",
           "accepted_states": [],
@@ -3949,7 +3953,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_3": {
+        "regex": {
           "carrier": "bool",
           "typestate": "pandas::regex_flag",
           "accepted_states": [],
@@ -3976,7 +3980,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_cleaned",
           "accepted_states": [],
@@ -3998,7 +4002,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "transforms_column",
@@ -4018,7 +4022,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4043,7 +4047,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "keys": {
           "carrier": "str",
           "typestate": "pandas::index_column",
           "accepted_states": [],
@@ -4064,7 +4068,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "drop": {
           "carrier": "bool",
           "typestate": "pandas::drop_flag",
           "accepted_states": [],
@@ -4091,7 +4095,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [],
@@ -4113,7 +4117,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "property": "is_indexed",
@@ -4137,7 +4141,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [
@@ -4163,7 +4167,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "drop": {
           "carrier": "bool",
           "typestate": "pandas::drop_flag",
           "accepted_states": [],
@@ -4190,7 +4194,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -4214,7 +4218,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -4223,7 +4227,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -4236,7 +4240,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4262,7 +4266,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "indexer": {
           "carrier": "str",
           "typestate": "pandas::label_slice",
           "accepted_states": [],
@@ -4285,7 +4289,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -4307,7 +4311,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4322,7 +4326,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4347,7 +4351,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "indexer": {
           "carrier": "str",
           "typestate": "pandas::integer_slice",
           "accepted_states": [],
@@ -4370,7 +4374,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -4392,7 +4396,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4407,7 +4411,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4432,7 +4436,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "expr": {
           "carrier": "str",
           "typestate": "pandas::query_string",
           "accepted_states": [],
@@ -4455,7 +4459,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -4477,7 +4481,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4492,7 +4496,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4517,7 +4521,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "mask": {
           "carrier": "Series",
           "typestate": "pandas::boolean_condition",
           "accepted_states": [],
@@ -4539,7 +4543,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -4561,7 +4565,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4576,7 +4580,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4601,7 +4605,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "columns": {
           "carrier": "List[str]",
           "typestate": "pandas::column_projection",
           "accepted_states": [],
@@ -4626,7 +4630,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -4648,7 +4652,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4663,7 +4667,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4687,7 +4691,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "columns": {
           "carrier": "List[str]",
           "typestate": "pandas::column_labels",
           "accepted_states": [],
@@ -4712,7 +4716,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -4736,7 +4740,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4751,7 +4755,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4775,7 +4779,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "columns": {
           "carrier": "Dict[str, str]",
           "typestate": "pandas::column_dict",
           "accepted_states": [],
@@ -4798,7 +4802,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -4822,7 +4826,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -4837,7 +4841,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -4862,7 +4866,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "by": {
           "carrier": "str",
           "typestate": "pandas::sort_column",
           "accepted_states": [],
@@ -4883,7 +4887,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "ascending": {
           "carrier": "bool",
           "typestate": "pandas::order_flag",
           "accepted_states": [],
@@ -4910,7 +4914,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -4934,7 +4938,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -4943,7 +4947,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -4956,7 +4960,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [
@@ -4981,7 +4985,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "ascending": {
           "carrier": "bool",
           "typestate": "pandas::order_flag",
           "accepted_states": [],
@@ -5008,7 +5012,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [],
@@ -5030,7 +5034,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -5039,7 +5043,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -5052,7 +5056,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -5078,7 +5082,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "n": {
           "carrier": "int",
           "typestate": "pandas::limit_count",
           "accepted_states": [],
@@ -5092,16 +5096,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of rows to select.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -5123,7 +5128,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -5132,7 +5137,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -5145,7 +5150,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -5170,7 +5175,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "n": {
           "carrier": "int",
           "typestate": "pandas::limit_count",
           "accepted_states": [],
@@ -5184,16 +5189,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of bottom rows.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -5215,7 +5221,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -5224,7 +5230,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -5237,7 +5243,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -5262,7 +5268,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "n": {
           "carrier": "int",
           "typestate": "pandas::sample_size",
           "accepted_states": [],
@@ -5276,14 +5282,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Number of items to return.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "random_state": {
           "carrier": "int",
           "typestate": "pandas::seed",
           "accepted_states": [],
@@ -5297,16 +5304,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for random number generator.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -5328,7 +5336,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -5337,7 +5345,7 @@
         "preserves_typestate": false,
         "preserves_semantics": true,
         "preserves_nominal": false,
-        "source_port": "port_0"
+        "source_port": "df"
       }
     },
     {
@@ -5350,7 +5358,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -5374,7 +5382,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "kwargs": {
           "carrier": "dict",
           "typestate": "pandas::column_assignments",
           "accepted_states": [],
@@ -5397,7 +5405,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -5421,7 +5429,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5436,7 +5444,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -5461,7 +5469,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "by": {
           "carrier": "str",
           "typestate": "pandas::group_column",
           "accepted_states": [],
@@ -5482,7 +5490,7 @@
           "port_role": "groupby_key",
           "domain": "pandas"
         },
-        "port_2": {
+        "as_index": {
           "carrier": "bool",
           "typestate": "pandas::index_option",
           "accepted_states": [],
@@ -5509,7 +5517,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5531,7 +5539,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5546,7 +5554,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5566,7 +5574,7 @@
           "description": "Partitioned groupby object.",
           "domain": "pandas"
         },
-        "port_1": {
+        "func": {
           "carrier": "dict",
           "typestate": "pandas::agg_specification",
           "accepted_states": [],
@@ -5589,7 +5597,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -5611,7 +5619,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5626,7 +5634,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5646,7 +5654,7 @@
           "description": "Partitioned groupby object.",
           "domain": "pandas"
         },
-        "port_1": {
+        "func": {
           "carrier": "str",
           "typestate": "pandas::agg_function_name",
           "accepted_states": [],
@@ -5669,7 +5677,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -5693,7 +5701,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5708,7 +5716,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5728,7 +5736,7 @@
           "description": "Grouped DataFrame object.",
           "domain": "pandas"
         },
-        "port_1": {
+        "func": {
           "carrier": "str",
           "typestate": "pandas::lambda_expr",
           "accepted_states": [],
@@ -5751,7 +5759,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -5773,7 +5781,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5788,7 +5796,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5810,7 +5818,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -5832,7 +5840,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5847,7 +5855,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5869,7 +5877,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -5891,7 +5899,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5906,7 +5914,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5928,7 +5936,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -5950,7 +5958,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -5965,7 +5973,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "grouped": {
           "carrier": "GroupBy",
           "typestate": "pandas::grouped",
           "accepted_states": [],
@@ -5987,7 +5995,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [],
@@ -6009,7 +6017,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6024,7 +6032,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -6051,7 +6059,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -6073,7 +6081,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6088,7 +6096,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -6111,7 +6119,7 @@
           "description": "Series to inspect.",
           "domain": "pandas"
         },
-        "port_1": {
+        "normalize": {
           "carrier": "bool",
           "typestate": "pandas::norm_flag",
           "accepted_states": [],
@@ -6138,7 +6146,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [],
@@ -6160,7 +6168,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6175,7 +6183,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -6200,7 +6208,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "index": {
           "carrier": "str",
           "typestate": "pandas::row_key",
           "accepted_states": [],
@@ -6221,7 +6229,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "columns": {
           "carrier": "str",
           "typestate": "pandas::col_key",
           "accepted_states": [],
@@ -6242,7 +6250,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_3": {
+        "values": {
           "carrier": "str",
           "typestate": "pandas::val_key",
           "accepted_states": [],
@@ -6263,7 +6271,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_4": {
+        "aggfunc": {
           "carrier": "str",
           "typestate": "pandas::agg_function",
           "accepted_states": [],
@@ -6291,7 +6299,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::pivoted",
           "accepted_states": [],
@@ -6313,7 +6321,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6328,7 +6336,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::deduped",
           "accepted_states": [
@@ -6352,7 +6360,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "index": {
           "carrier": "str",
           "typestate": "pandas::row_index_key",
           "accepted_states": [],
@@ -6373,7 +6381,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "columns": {
           "carrier": "str",
           "typestate": "pandas::col_index_key",
           "accepted_states": [],
@@ -6394,7 +6402,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_3": {
+        "values": {
           "carrier": "str",
           "typestate": "pandas::val_column_key",
           "accepted_states": [],
@@ -6417,7 +6425,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::pivoted",
           "accepted_states": [],
@@ -6439,7 +6447,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6454,7 +6462,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -6479,7 +6487,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "id_vars": {
           "carrier": "List[str]",
           "typestate": "pandas::id_columns",
           "accepted_states": [],
@@ -6502,7 +6510,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "value_vars": {
           "carrier": "List[str]",
           "typestate": "pandas::value_columns",
           "accepted_states": [],
@@ -6525,7 +6533,7 @@
           "description": "Columns to unpivot.",
           "domain": "pandas"
         },
-        "port_3": {
+        "var_name": {
           "carrier": "str",
           "typestate": "pandas::var_col_name",
           "accepted_states": [],
@@ -6539,14 +6547,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'variable'",
           "description": "Name of variable column.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "value_name": {
           "carrier": "str",
           "typestate": "pandas::val_col_name",
           "accepted_states": [],
@@ -6560,16 +6569,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'value'",
           "description": "Name of value column.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::melted",
           "accepted_states": [],
@@ -6591,7 +6601,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6606,7 +6616,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -6633,7 +6643,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [],
@@ -6655,7 +6665,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6670,7 +6680,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [
@@ -6694,7 +6704,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "level": {
           "carrier": "int",
           "typestate": "pandas::unstack_level",
           "accepted_states": [],
@@ -6708,16 +6718,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "-1",
           "description": "Level(s) of index to unstack.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::pivoted",
           "accepted_states": [],
@@ -6739,7 +6750,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6754,7 +6765,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -6778,7 +6789,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "column": {
           "carrier": "str",
           "typestate": "pandas::col_to_explode",
           "accepted_states": [],
@@ -6801,7 +6812,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [],
@@ -6825,7 +6836,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6840,7 +6851,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "index": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -6863,7 +6874,7 @@
           "description": "Values to group by in rows.",
           "domain": "pandas"
         },
-        "port_1": {
+        "columns": {
           "carrier": "Series",
           "typestate": "pandas::series_raw",
           "accepted_states": [
@@ -6888,7 +6899,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::pivoted",
           "accepted_states": [],
@@ -6910,7 +6921,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -6925,7 +6936,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -6950,7 +6961,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "columns": {
           "carrier": "List[str]",
           "typestate": "pandas::columns_to_encode",
           "accepted_states": [],
@@ -6973,7 +6984,7 @@
           "description": "Column names in the DataFrame to be encoded.",
           "domain": "pandas"
         },
-        "port_2": {
+        "drop_first": {
           "carrier": "bool",
           "typestate": "pandas::drop_first_flag",
           "accepted_states": [],
@@ -7000,7 +7011,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::numeric_only",
           "accepted_states": [],
@@ -7022,12 +7033,12 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "removes_columns",
           "effect_kind": "schema_removal",
-          "from_port": "port_1"
+          "from_port": "columns"
         }
       ],
       "mutation_type": "pure",
@@ -7043,7 +7054,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "arrays": {
           "carrier": "list",
           "typestate": "pandas::level_arrays",
           "accepted_states": [],
@@ -7065,7 +7076,7 @@
           "description": "List of arrays.",
           "domain": "pandas"
         },
-        "port_1": {
+        "names": {
           "carrier": "list",
           "typestate": "pandas::index_level_names",
           "accepted_states": [],
@@ -7090,7 +7101,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Index",
           "typestate": "pandas::index_generic",
           "accepted_states": [],
@@ -7112,7 +7123,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7127,7 +7138,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "tuples": {
           "carrier": "list",
           "typestate": "pandas::tuple_list",
           "accepted_states": [],
@@ -7149,7 +7160,7 @@
           "description": "Sequence of tuples.",
           "domain": "pandas"
         },
-        "port_1": {
+        "names": {
           "carrier": "list",
           "typestate": "pandas::tuple_level_names",
           "accepted_states": [],
@@ -7174,7 +7185,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Index",
           "typestate": "pandas::index_generic",
           "accepted_states": [],
@@ -7196,7 +7207,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7211,7 +7222,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7232,7 +7243,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "i": {
           "carrier": "int",
           "typestate": "pandas::level_index_1",
           "accepted_states": [],
@@ -7246,14 +7257,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "-2",
           "description": "First level to swap.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "j": {
           "carrier": "int",
           "typestate": "pandas::level_index_2",
           "accepted_states": [],
@@ -7267,14 +7279,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "-1",
           "description": "Second level to swap.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::swap_axis",
           "accepted_states": [],
@@ -7301,7 +7314,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7323,7 +7336,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7338,7 +7351,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7359,7 +7372,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "order": {
           "carrier": "List[str]",
           "typestate": "pandas::level_order",
           "accepted_states": [],
@@ -7382,7 +7395,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::target_axis",
           "accepted_states": [],
@@ -7409,7 +7422,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7431,7 +7444,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7446,7 +7459,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7467,7 +7480,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "level": {
           "carrier": "int",
           "typestate": "pandas::target_level",
           "accepted_states": [],
@@ -7488,7 +7501,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::target_axis",
           "accepted_states": [],
@@ -7515,7 +7528,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [],
@@ -7537,7 +7550,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7552,7 +7565,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::multi_indexed",
           "accepted_states": [],
@@ -7573,7 +7586,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "key": {
           "carrier": "str",
           "typestate": "pandas::slice_key",
           "accepted_states": [],
@@ -7594,7 +7607,7 @@
           "port_role": "literal_parameter",
           "domain": "pandas"
         },
-        "port_2": {
+        "level": {
           "carrier": "str",
           "typestate": "pandas::slice_level",
           "accepted_states": [],
@@ -7608,14 +7621,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Level name or integer.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::slice_axis",
           "accepted_states": [],
@@ -7642,7 +7656,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::filtered",
           "accepted_states": [],
@@ -7664,7 +7678,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7679,7 +7693,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "left": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -7704,7 +7718,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "right": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -7729,7 +7743,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "on": {
           "carrier": "str",
           "typestate": "pandas::join_column",
           "accepted_states": [],
@@ -7750,7 +7764,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_3": {
+        "how": {
           "carrier": "str",
           "typestate": "pandas::join_method",
           "accepted_states": [],
@@ -7780,7 +7794,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -7802,7 +7816,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7817,7 +7831,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "left": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -7841,7 +7855,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "right": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -7865,7 +7879,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "left_on": {
           "carrier": "str",
           "typestate": "pandas::left_key_col",
           "accepted_states": [],
@@ -7886,7 +7900,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_3": {
+        "right_on": {
           "carrier": "str",
           "typestate": "pandas::right_key_col",
           "accepted_states": [],
@@ -7907,7 +7921,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_4": {
+        "how": {
           "carrier": "str",
           "typestate": "pandas::merge_strategy",
           "accepted_states": [],
@@ -7936,7 +7950,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -7958,7 +7972,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -7973,7 +7987,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df1": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [
@@ -7997,7 +8011,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "df2": {
           "carrier": "DataFrame",
           "typestate": "pandas::indexed",
           "accepted_states": [
@@ -8021,7 +8035,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "on": {
           "carrier": "str",
           "typestate": "pandas::join_on_key",
           "accepted_states": [],
@@ -8035,14 +8049,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Column in caller to join on index of other.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "how": {
           "carrier": "str",
           "typestate": "pandas::join_how",
           "accepted_states": [],
@@ -8069,7 +8084,7 @@
           "description": "How to handle indexes ('left', 'right', 'outer', 'inner').",
           "domain": "pandas"
         },
-        "port_4": {
+        "lsuffix": {
           "carrier": "str",
           "typestate": "pandas::left_suffix",
           "accepted_states": [],
@@ -8083,14 +8098,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "''",
           "description": "Suffix to use from left frame's overlapping columns.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "rsuffix": {
           "carrier": "str",
           "typestate": "pandas::right_suffix",
           "accepted_states": [],
@@ -8104,16 +8120,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "''",
           "description": "Suffix to use from right frame's overlapping columns.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -8135,7 +8152,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8150,7 +8167,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df1": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8174,7 +8191,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "df2": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8198,7 +8215,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "ignore_index": {
           "carrier": "bool",
           "typestate": "pandas::ignore_idx_flag",
           "accepted_states": [],
@@ -8225,7 +8242,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -8247,7 +8264,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8262,7 +8279,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df1": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8286,7 +8303,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "df2": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8310,7 +8327,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "ignore_index": {
           "carrier": "bool",
           "typestate": "pandas::ignore_idx_flag",
           "accepted_states": [],
@@ -8337,7 +8354,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -8359,7 +8376,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8374,7 +8391,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "left": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8399,7 +8416,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "right": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -8424,7 +8441,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_2": {
+        "on": {
           "carrier": "str",
           "typestate": "pandas::time_key",
           "accepted_states": [],
@@ -8445,7 +8462,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_3": {
+        "direction": {
           "carrier": "str",
           "typestate": "pandas::match_direction",
           "accepted_states": [],
@@ -8473,7 +8490,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::merged",
           "accepted_states": [],
@@ -8495,7 +8512,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8510,7 +8527,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -8536,7 +8553,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "window": {
           "carrier": "int",
           "typestate": "pandas::window_size",
           "accepted_states": [],
@@ -8557,7 +8574,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "min_periods": {
           "carrier": "int",
           "typestate": "pandas::min_observations",
           "accepted_states": [],
@@ -8571,16 +8588,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Minimum number of observations in window required to have a value.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::windowed",
           "accepted_states": [],
@@ -8602,7 +8620,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8617,7 +8635,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -8642,7 +8660,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "window": {
           "carrier": "int",
           "typestate": "pandas::window_size",
           "accepted_states": [],
@@ -8663,7 +8681,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "min_periods": {
           "carrier": "int",
           "typestate": "pandas::min_observations",
           "accepted_states": [],
@@ -8677,16 +8695,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Minimum observations in window.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::windowed",
           "accepted_states": [],
@@ -8708,7 +8727,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8723,7 +8742,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -8748,7 +8767,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "window": {
           "carrier": "int",
           "typestate": "pandas::window_size",
           "accepted_states": [],
@@ -8769,7 +8788,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "min_periods": {
           "carrier": "int",
           "typestate": "pandas::min_observations",
           "accepted_states": [],
@@ -8783,16 +8802,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Minimum observations in window required to compute std.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::windowed",
           "accepted_states": [],
@@ -8814,7 +8834,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8829,7 +8849,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -8854,7 +8874,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "span": {
           "carrier": "float",
           "typestate": "pandas::decay_span",
           "accepted_states": [],
@@ -8875,7 +8895,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "adjust": {
           "carrier": "bool",
           "typestate": "pandas::adjust_flag",
           "accepted_states": [],
@@ -8902,7 +8922,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::windowed",
           "accepted_states": [],
@@ -8924,7 +8944,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -8939,7 +8959,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::datetime_indexed",
           "accepted_states": [
@@ -8962,7 +8982,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "rule": {
           "carrier": "str",
           "typestate": "pandas::freq_rule",
           "accepted_states": [],
@@ -8991,7 +9011,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "aggfunc": {
           "carrier": "str",
           "typestate": "pandas::reduction_fn",
           "accepted_states": [],
@@ -9021,7 +9041,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::resampled",
           "accepted_states": [],
@@ -9043,7 +9063,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -9058,7 +9078,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [
@@ -9084,7 +9104,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "periods": {
           "carrier": "int",
           "typestate": "pandas::shift_periods",
           "accepted_states": [],
@@ -9098,16 +9118,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Number of periods to shift (positive for lag, negative for lead).",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -9129,7 +9150,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -9144,7 +9165,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9169,7 +9190,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "periods": {
           "carrier": "int",
           "typestate": "pandas::diff_period",
           "accepted_states": [],
@@ -9183,16 +9204,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Periods to shift for calculating difference.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -9214,7 +9236,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -9229,7 +9251,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9254,7 +9276,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "periods": {
           "carrier": "int",
           "typestate": "pandas::period_step",
           "accepted_states": [],
@@ -9268,16 +9290,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Periods to shift for calculating percent change.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::raw",
           "accepted_states": [],
@@ -9299,7 +9322,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -9314,7 +9337,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9346,7 +9369,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "ndarray",
           "typestate": "numpy::ndarray_generic",
           "accepted_states": [],
@@ -9368,7 +9391,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "zero_copy_or_allocates_buffer"
       ],
@@ -9395,7 +9418,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_cleaned",
           "accepted_states": [
@@ -9421,7 +9444,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "ndarray",
           "typestate": "numpy::ndarray_generic",
           "accepted_states": [],
@@ -9443,7 +9466,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "zero_copy_or_allocates_buffer"
       ],
@@ -9470,7 +9493,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9497,7 +9520,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "fill_value": {
           "carrier": "float",
           "typestate": "pandas::default_fill",
           "accepted_states": [],
@@ -9511,16 +9534,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.0",
           "description": "Fill value for any residual NAs.",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -9542,7 +9566,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         {
           "name": "cleans_missing",
@@ -9570,7 +9594,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9602,7 +9626,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "filepath": {
           "carrier": "File[Tabular, CSV]",
           "typestate": "pandas::destination_path",
           "accepted_states": [],
@@ -9623,7 +9647,7 @@
           "port_role": "destination",
           "domain": "pandas"
         },
-        "port_2": {
+        "index": {
           "carrier": "bool",
           "typestate": "pandas::write_index_flag",
           "accepted_states": [],
@@ -9650,7 +9674,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, CSV]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -9672,7 +9696,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "filesystem_write"
       ],
@@ -9689,7 +9713,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9718,7 +9742,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "filepath": {
           "carrier": "File[Tabular, Parquet]",
           "typestate": "pandas::destination_path",
           "accepted_states": [],
@@ -9739,7 +9763,7 @@
           "port_role": "destination",
           "domain": "pandas"
         },
-        "port_2": {
+        "index": {
           "carrier": "bool",
           "typestate": "pandas::write_index_flag",
           "accepted_states": [],
@@ -9766,7 +9790,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, Parquet]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -9788,7 +9812,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "filesystem_write"
       ],
@@ -9805,7 +9829,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9833,7 +9857,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "filepath": {
           "carrier": "File[Tabular, JSONFormat]",
           "typestate": "pandas::destination_path",
           "accepted_states": [],
@@ -9854,7 +9878,7 @@
           "port_role": "destination",
           "domain": "pandas"
         },
-        "port_2": {
+        "orient": {
           "carrier": "str",
           "typestate": "pandas::json_orient",
           "accepted_states": [],
@@ -9884,7 +9908,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, JSONFormat]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -9906,7 +9930,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "filesystem_write"
       ],
@@ -9923,7 +9947,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -9950,7 +9974,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "filepath": {
           "carrier": "File[Tabular, Excel]",
           "typestate": "pandas::destination_path",
           "accepted_states": [],
@@ -9971,7 +9995,7 @@
           "port_role": "destination",
           "domain": "pandas"
         },
-        "port_2": {
+        "index": {
           "carrier": "bool",
           "typestate": "pandas::write_index_flag",
           "accepted_states": [],
@@ -9998,7 +10022,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, Excel]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -10020,7 +10044,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "filesystem_write"
       ],
@@ -10037,7 +10061,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10063,7 +10087,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "name": {
           "carrier": "str",
           "typestate": "pandas::table_name",
           "accepted_states": [],
@@ -10084,7 +10108,7 @@
           "port_role": "configuration",
           "domain": "pandas"
         },
-        "port_2": {
+        "con": {
           "carrier": "db_connection",
           "typestate": "python_core::db_connection",
           "accepted_states": [],
@@ -10099,13 +10123,13 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Database connection object (DB-API 2.0 or SQLAlchemy connectable).",
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_3": {
+        "if_exists": {
           "carrier": "str",
           "typestate": "pandas::existence_strategy",
           "accepted_states": [],
@@ -10131,7 +10155,7 @@
           "description": "How to behave if the table already exists ('fail', 'replace', 'append').",
           "domain": "pandas"
         },
-        "port_4": {
+        "index": {
           "carrier": "bool",
           "typestate": "pandas::index_persistence",
           "accepted_states": [],
@@ -10158,7 +10182,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, Any]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -10180,7 +10204,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "network_or_db_access"
       ],
@@ -10197,7 +10221,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10225,7 +10249,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "filepath": {
           "carrier": "File[Tabular, Feather]",
           "typestate": "pandas::destination_path",
           "accepted_states": [],
@@ -10248,7 +10272,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "status": {
           "carrier": "File[Tabular, Feather]",
           "typestate": "pandas::written_to_disk",
           "accepted_states": [],
@@ -10270,7 +10294,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "status",
       "effects": [
         "filesystem_write"
       ],
@@ -10287,7 +10311,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10314,7 +10338,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "orient": {
           "carrier": "str",
           "typestate": "pandas::dict_orient",
           "accepted_states": [],
@@ -10345,7 +10369,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "dict",
           "typestate": "pandas::exported",
           "accepted_states": [],
@@ -10367,7 +10391,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [
         "allocates_memory"
       ],
@@ -10464,17 +10488,7 @@
       "primary_out": null,
       "effects": [],
       "mutation_type": "pure",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "layout"
-        ],
-        "cost_tier": 10.0,
-        "lossy": true,
-        "requires_intent": true
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "PD_CORR",
@@ -10486,7 +10500,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10513,7 +10527,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "method": {
           "carrier": "str",
           "typestate": "pandas::method_type",
           "accepted_states": [],
@@ -10539,7 +10553,7 @@
           "description": "Correlation method ('pearson', 'kendall', 'spearman')",
           "domain": "pandas"
         },
-        "port_2": {
+        "min_periods": {
           "carrier": "int",
           "typestate": "pandas::min_observations",
           "accepted_states": [],
@@ -10553,14 +10567,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Minimum observations required per pair",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "numeric_only": {
           "carrier": "bool",
           "typestate": "pandas::numeric_only_flag",
           "accepted_states": [],
@@ -10587,7 +10602,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -10609,7 +10624,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -10624,7 +10639,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10650,7 +10665,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "min_periods": {
           "carrier": "int",
           "typestate": "pandas::min_observations",
           "accepted_states": [],
@@ -10664,14 +10679,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Minimum observations required per pair",
-          "domain": "pandas"
+          "domain": "pandas",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "numeric_only": {
           "carrier": "bool",
           "typestate": "pandas::numeric_only_flag",
           "accepted_states": [],
@@ -10698,7 +10714,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::aggregated",
           "accepted_states": [],
@@ -10720,7 +10736,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -10735,7 +10751,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10761,7 +10777,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "axis": {
           "carrier": "int",
           "typestate": "pandas::axis_param",
           "accepted_states": [],
@@ -10786,7 +10802,7 @@
           "description": "0 for rows, 1 for columns",
           "domain": "pandas"
         },
-        "port_2": {
+        "numeric_only": {
           "carrier": "bool",
           "typestate": "pandas::numeric_only_flag",
           "accepted_states": [],
@@ -10813,7 +10829,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [],
@@ -10835,7 +10851,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -10946,7 +10962,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -10973,7 +10989,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "column": {
           "carrier": "str",
           "typestate": "pandas::column_name",
           "accepted_states": [
@@ -11000,7 +11016,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [
@@ -11026,21 +11042,10 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "semantics",
-          "layout"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "PD_SET_COLUMN",
@@ -11052,7 +11057,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -11079,7 +11084,7 @@
           "port_role": "data_input",
           "domain": "pandas"
         },
-        "port_1": {
+        "column": {
           "carrier": "str",
           "typestate": "pandas::column_name",
           "accepted_states": [
@@ -11104,7 +11109,7 @@
           "port_role": "column_projection",
           "domain": "pandas"
         },
-        "port_2": {
+        "value": {
           "carrier": "array-like",
           "typestate": "any",
           "accepted_states": [],
@@ -11129,7 +11134,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "DataFrame",
           "typestate": "pandas::cleaned",
           "accepted_states": [
@@ -11159,7 +11164,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -11174,7 +11179,7 @@
         "pandas as pd"
       ],
       "inputs": {
-        "port_0": {
+        "series": {
           "carrier": "Series",
           "typestate": "pandas::series_numeric",
           "accepted_states": [
@@ -11201,7 +11206,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "output_var": {
           "carrier": "float",
           "typestate": "pandas::scalar_numeric",
           "accepted_states": [
@@ -11226,7 +11231,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "output_var",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false
@@ -11477,17 +11482,7 @@
       "primary_out": null,
       "effects": [],
       "mutation_type": "pure",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "layout"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     }
   ]
 }

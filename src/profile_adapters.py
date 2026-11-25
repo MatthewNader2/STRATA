@@ -11,10 +11,12 @@ import json
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 try:
+    from .config import settings
     from .schema import derive_value_class, get_attr
     from .strata_pipeline import StrataPipeline
     from .utils import extract_json_object
 except (ImportError, ValueError):
+    from config import settings
     from schema import derive_value_class, get_attr
     from strata_pipeline import StrataPipeline
     from utils import extract_json_object
@@ -70,17 +72,18 @@ def make_generate_fn(model_manager: Any) -> Optional[Callable[..., str]]:
         system_prompt: str = "",
         few_shot: Optional[List[Dict[str, str]]] = None,
     ) -> str:
+        eff_max_tokens = int(getattr(settings, "llm_max_tokens", 1024) or 1024)
         if accepts_few_shot and few_shot is not None:
             return model_manager.generate_text(
                 user_prompt,
-                max_tokens=1024,
+                max_tokens=eff_max_tokens,
                 schema=json_schema,
                 system_prompt=system_prompt,
                 few_shot=few_shot,
             )
         return model_manager.generate_text(
             user_prompt,
-            max_tokens=1024,
+            max_tokens=eff_max_tokens,
             schema=json_schema,
             system_prompt=system_prompt,
         )

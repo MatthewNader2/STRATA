@@ -1,4 +1,3 @@
 @echo off
-echo Starting STRATA Engine...
-python src\main.py
-pause
+echo Starting STRATA CLI Studio...
+python strata_cli.py shell %*

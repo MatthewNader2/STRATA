@@ -1,49 +1,314 @@
 {
   "schema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "STRATA_DomainTreeSchema",
-    "description": "Category-theoretic domain plugin tree definition for Symbolic Topological Routing Architecture for Typed Automata (STRATA)",
+    "title": "STRATA_v2_DomainTreeSchema",
+    "description": "Canonical 5-axis Pydantic v2 domain manifest schema for STRATA (Symbolic Topological Routing Architecture for Typed Automata).",
     "tree_structure": {
-      "domain": "string (name of domain/library, e.g. cv2, pandas, torch, audio)",
-      "version": "string (semantic version, e.g. 1.0.0)",
-      "types": "object (domain plugin taxonomy declaring custom terms and their parent in the poset)",
-      "typestates": "object (declared typestate vocabulary)",
+      "domain": "string (unique domain identifier matching filename stem, e.g. cv2, pandas, audio, sqlite3)",
+      "version": "string (semantic version, default '2.0.0')",
+      "description": "string (concise technical summary of the domain plugin)",
+      "is_core": "boolean (true only for foundational language/type/control-flow trees; false for swappable domain plugins)",
+      "aliases": "array of strings (natural-language / package-name aliases recognized when scoping domains, e.g. ['opencv', 'cv'])",
+      "imports": "array of strings (domain-level default import statements)",
+      "types": "object mapping domain carrier names -> {'parent': '...', 'description': '...'} in the bounded poset",
+      "top_types": "array of top-level carrier type names declared in this tree",
+      "typestates": "object {'domain': str, 'states': [...], 'transitions': [...], 'initial_state': str|null, 'terminal_states': [...]}",
+      "runtime_setup": "optional object {'env_vars': {...}, 'pre_exec_hooks': [...], 'notes': str|null}",
+      "language_spec": "optional LanguageSpec object (declared in core language trees for backend-agnostic lowering)",
       "cells": "array of CellSchema objects"
     },
     "cell_fields": {
-      "cell_id": "string (UNIQUE screaming snake-case or dot-notation identifier, e.g. CV2_CANNY, np.linalg.svd)",
-      "stage": "integer (Morphism Stage): 1 = Ingress/Source (Env -> C), 2 = Transform/Endomorphism (C x P -> C), 3 = Egress/Sink (C -> Env), 0 = Constructor",
-      "node_type": "string ('function' | 'method' | 'constructor' | 'macro')",
-      "node_role": "string ('source' | 'transform' | 'estimator' | 'sink' | 'bridge')",
-      "topology_type": "string ('sequential' | 'monoidal_product' | 'coproduct_branch' | 'traced_loop')",
-      "inputs": "object (map of port_name -> PortSchema)",
-      "outputs": "object (map of port_name -> PortSchema)",
-      "code_template": "string (AST Python template using {port_name} placeholders, e.g. {output_var} = cv2.Canny({image}, {threshold1}, {threshold2}))",
-      "dependencies": "array of strings (exact import statements, e.g. ['import cv2', 'import numpy as np'])",
-      "semantic_tags": "array of strings (retrieval tokens for dense FAISS and BM25 router indexing)",
-      "keywords": "array of strings (lexical triggers)",
-      "docstring": "string (concise technical docstring)",
+      "cell_id": "string (UNIQUE screaming snake-case or namespaced identifier, e.g. CV2_CANNY, PD_TO_CSV)",
+      "domain_name": "string (owning domain name; matches TreeSchema.domain)",
+      "docstring": "string (concise technical docstring for semantic retrieval & developer clarity)",
+      "code_template": "string (syntax-valid Python template using {port_name} placeholders, e.g. {out} = cv2.Canny({image}, {threshold1}, {threshold2}))",
+      "code_templates": "optional object mapping language name -> template when multi-backend",
+      "dependencies": "array of strings (exact import statements required by code_template)",
+      "inputs": "object mapping input port_name -> canonical PortSchema",
+      "outputs": "object mapping output port_name -> canonical PortSchema",
+      "primary_in": "optional string naming the primary input data port",
+      "primary_out": "optional string naming the primary output data port",
+      "effects": "array of ConditionPredicate objects or strings declaring semantic postconditions / resource effects",
       "mutation_type": "string ('pure' | 'in_place')",
-      "preconditions": "array of condition objects (Phase-1 verification contracts)",
-      "postconditions": "array of condition objects (Phase-1 verification contracts)",
-      "effects": "array of strings (semantic effect tags, e.g. ['draws_annotation', 'cleans_missing'])"
+      "bridge_profile": "optional BridgeProfileSchema ({is_bridge, delta_axes, cost_tier, lossy, requires_intent, notes}) strictly for type-converting bridges",
+      "polymorphic_propagation": "optional PolymorphicPropagationSchema ({preserves_layout, preserves_dtype, preserves_typestate, preserves_semantics, preserves_nominal, source_port})",
+      "is_context_manager": "boolean (default false)"
     },
     "port_fields": {
-      "type_name": "string (Ground type, higher-kinded functor, or refined carrier: e.g. File[Image, PNG], List[Contour], Tuple[int, ...], Dict[str, Any], ndarray, DataFrame, int, float, str, bool)",
-      "state": "string (Algebraic typestate: e.g. file_path, color_bgr, binary, raw_dataset, column_projection, fitted_estimator)",
-      "required": "boolean (true for mandatory positional parameters; false for optional configuration knobs)",
-      "default_value": "any (literal Python default value, or null if required)",
-      "abstract_type": "string ('tensor' | 'table' | 'collection' | 'scalar' | 'path' | 'logical' | null)",
-      "param_kind": "string ('standard' | 'positional_only' | 'keyword_only' | 'var_positional' | 'var_keyword')",
-      "enum_values": "array of values (if port restricts values to an enum set, else null)",
-      "value_constraints": "object (optional bounds, e.g. {'min': 0, 'max': 255})",
-      "shape_contract": "object (optional tensor contract, e.g. {'ndim': 2})"
+      "carrier": "string (Axis 1 carrier / HKT: e.g. File[Image, PNG], List[Contour], Tuple[int, ...], ndarray, DataFrame, int, float, str, bool)",
+      "typestate": "string (Axis 3 canonical domain-qualified or domain typestate, e.g. cv2:color_bgr, any, written_to_disk)",
+      "accepted_states": "array of additional accepted typestate strings",
+      "layout": "optional LayoutContract ({rank, shape, dtype, rank_polymorphic, channel_count, channel_axis, length})",
+      "invariants": "array of Axis 4 refinement strings (e.g. 'gt(0)', 'odd', 'non_empty')",
+      "value_class": "enum ('data' | 'literal' | 'external_asset' | 'identifier' | 'enum') [Axis 5a]",
+      "resource_mode": "enum ('value' | 'acquire' | 'borrow' | 'release') [Axis 5b linear resource discipline]",
+      "required": "boolean (true for mandatory positional/required args; false for optional config knobs with default_value)",
+      "default_value": "any (literal Python default value, or null)",
+      "enum_values": "optional array of allowed discrete constant values",
+      "description": "optional string",
+      "port_role": "optional semantic role hint (e.g. 'source_identifier', 'destination', 'column_projection')",
+      "domain": "optional explicit domain qualifier string"
     }
   },
+  "total_trees": 15,
+  "total_cells": 1038,
   "existing_domains": {
+    "audio": {
+      "file": "audio.json",
+      "is_core": false,
+      "aliases": [
+        "soundfile",
+        "scipy_audio"
+      ],
+      "count": 45,
+      "types": [
+        {
+          "name": "audio_waveform",
+          "parent": "ndarray"
+        },
+        {
+          "name": "sample_rate",
+          "parent": "int"
+        },
+        {
+          "name": "spectrogram",
+          "parent": "ndarray"
+        },
+        {
+          "name": "stft_matrix",
+          "parent": "ndarray"
+        },
+        {
+          "name": "audio_file",
+          "parent": "File[audio_format]"
+        }
+      ],
+      "cell_ids": [
+        "AUDIO_READ_SOUNDFILE",
+        "AUDIO_READ_SCIPY_WAV",
+        "AUDIO_GENERATE_SINE_WAVE",
+        "AUDIO_GENERATE_SQUARE_WAVE",
+        "AUDIO_GENERATE_WHITE_NOISE",
+        "AUDIO_GENERATE_SILENCE",
+        "AUDIO_GENERATE_CHIRP",
+        "AUDIO_GET_DURATION",
+        "AUDIO_GET_SAMPLE_RATE",
+        "AUDIO_GET_NUM_CHANNELS",
+        "AUDIO_GET_RMS_ENERGY",
+        "AUDIO_GET_PEAK_AMPLITUDE",
+        "AUDIO_COMPUTE_ZERO_CROSSING_RATE",
+        "AUDIO_STEREO_TO_MONO",
+        "AUDIO_MONO_TO_STEREO",
+        "AUDIO_SPLIT_CHANNELS",
+        "AUDIO_MERGE_CHANNELS",
+        "AUDIO_NORMALIZE_PEAK",
+        "AUDIO_NORMALIZE_RMS",
+        "AUDIO_APPLY_GAIN_DB",
+        "AUDIO_FADE_IN",
+        "AUDIO_FADE_OUT",
+        "AUDIO_HARD_CLIP",
+        "AUDIO_TRIM_SLICE",
+        "AUDIO_TRIM_SILENCE",
+        "AUDIO_CONCATENATE",
+        "AUDIO_TIME_REVERSE",
+        "AUDIO_TIME_PAD",
+        "AUDIO_RESAMPLE_SCIPY",
+        "AUDIO_ADD_ECHO",
+        "AUDIO_COMPUTE_STFT",
+        "AUDIO_COMPUTE_ISTFT",
+        "AUDIO_COMPUTE_SPECTROGRAM",
+        "AUDIO_COMPUTE_MEL_FILTERBANK",
+        "AUDIO_SPECTROGRAM_TO_DB",
+        "AUDIO_PREEMPHASIS",
+        "AUDIO_BUTTER_LOWPASS",
+        "AUDIO_BUTTER_HIGHPASS",
+        "AUDIO_BUTTER_BANDPASS",
+        "AUDIO_NOTCH_FILTER",
+        "AUDIO_WRITE_SOUNDFILE",
+        "AUDIO_WRITE_SCIPY_WAV",
+        "AUDIO_SAVE_SPECTROGRAM_IMAGE",
+        "AUDIO_SAVE_WAVEFORM_PLOT",
+        "AUDIO_WRITE_NUMPY"
+      ]
+    },
+    "control_flow": {
+      "file": "control_flow.json",
+      "is_core": false,
+      "aliases": [],
+      "count": 33,
+      "types": {},
+      "cell_ids": [
+        "CF_FUNCTION_DEF",
+        "CF_LAMBDA",
+        "CF_CLASS_DEF",
+        "CF_RECURSIVE_FUNC",
+        "CF_DIVIDE_AND_CONQUER",
+        "CF_COND_CHAIN",
+        "CF_NESTED_FOR_EACH",
+        "CF_TOP_K",
+        "CF_BOTTOM_K",
+        "CF_MAP",
+        "CF_FILTER",
+        "CF_FLAT_MAP",
+        "CF_FOLD_REDUCE",
+        "CF_ZIP_WITH",
+        "CF_FOR_EACH_STATE",
+        "CF_FOR_RANGE_STATE",
+        "CF_FOR_ENUMERATE_MAP",
+        "CF_WHILE_LOOP",
+        "CF_WHILE_BOUNDED",
+        "CF_REPEAT_UNTIL",
+        "CF_BRANCH_IF_ELSE",
+        "CF_BRANCH_COND_ELIF",
+        "CF_MATCH_CASE",
+        "CF_TRY_EXCEPT",
+        "CF_TRY_EXCEPT_FINALLY",
+        "CF_TRY_EXCEPT_ELSE",
+        "CF_RETRY_BACKOFF",
+        "CF_FIND_FIRST",
+        "CF_ALL_SATISFY",
+        "CF_ANY_SATISFY",
+        "CF_PARTITION",
+        "CF_GUARD",
+        "CF_WITH_CONTEXT"
+      ]
+    },
+    "cryptography": {
+      "file": "cryptography.json",
+      "is_core": false,
+      "aliases": [
+        "crypto"
+      ],
+      "count": 80,
+      "types": [
+        {
+          "name": "cipher",
+          "parent": "object"
+        },
+        {
+          "name": "secret_key",
+          "parent": "bytes"
+        },
+        {
+          "name": "ciphertext",
+          "parent": "bytes"
+        },
+        {
+          "name": "plaintext",
+          "parent": "bytes"
+        },
+        {
+          "name": "hash_digest",
+          "parent": "object"
+        },
+        {
+          "name": "salt",
+          "parent": "bytes"
+        },
+        {
+          "name": "signature",
+          "parent": "bytes"
+        },
+        {
+          "name": "hasher",
+          "parent": "object"
+        },
+        {
+          "name": "hmac_signer",
+          "parent": "object"
+        }
+      ],
+      "cell_ids": [
+        "CRYPTO_FERNET_GENERATE_KEY",
+        "CRYPTO_FERNET_INIT",
+        "CRYPTO_FERNET_ENCRYPT",
+        "CRYPTO_FERNET_DECRYPT",
+        "CRYPTO_FERNET_ENCRYPT_AT_TIME",
+        "CRYPTO_FERNET_EXTRACT_TIMESTAMP",
+        "CRYPTO_FERNET_DECRYPT_AT_TIME",
+        "CRYPTO_MULTI_FERNET_INIT",
+        "CRYPTO_MULTI_FERNET_ROTATE",
+        "CRYPTO_SHA256_INIT",
+        "CRYPTO_SHA512_INIT",
+        "CRYPTO_SHA3_256_INIT",
+        "CRYPTO_BLAKE2B_INIT",
+        "CRYPTO_MD5_INIT",
+        "CRYPTO_HASHER_UPDATE",
+        "CRYPTO_HASHER_HEXDIGEST",
+        "CRYPTO_HASHER_DIGEST",
+        "CRYPTO_SHA256_ONESHOT_HEX",
+        "CRYPTO_SHA512_ONESHOT_HEX",
+        "CRYPTO_SHA256_ONESHOT_DIGEST",
+        "CRYPTO_SHA512_ONESHOT_DIGEST",
+        "CRYPTO_HMAC_INIT",
+        "CRYPTO_HMAC_UPDATE",
+        "CRYPTO_HMAC_HEXDIGEST",
+        "CRYPTO_HMAC_DIGEST",
+        "CRYPTO_COMPARE_DIGEST",
+        "CRYPTO_RANDOM_BYTES",
+        "CRYPTO_RANDOM_TOKEN_HEX",
+        "CRYPTO_RANDOM_TOKEN_URLSAFE",
+        "CRYPTO_PBKDF2_INIT",
+        "CRYPTO_PBKDF2_DERIVE",
+        "CRYPTO_PBKDF2_VERIFY",
+        "CRYPTO_HKDF_INIT",
+        "CRYPTO_HKDF_DERIVE",
+        "CRYPTO_HKDF_VERIFY",
+        "CRYPTO_B64_ENCODE",
+        "CRYPTO_B64_DECODE",
+        "CRYPTO_URLSAFE_B64_ENCODE",
+        "CRYPTO_URLSAFE_B64_DECODE",
+        "CRYPTO_HEX_TO_BYTES",
+        "CRYPTO_BYTES_TO_HEX",
+        "CRYPTO_GENERATE_SALT",
+        "CRYPTO_SCRYPT_DERIVE",
+        "CRYPTO_SAVE_KEY_TO_FILE",
+        "CRYPTO_LOAD_KEY_FROM_FILE",
+        "CRYPTO_SAVE_CIPHERTEXT_TO_FILE",
+        "CRYPTO_LOAD_CIPHERTEXT_FROM_FILE",
+        "CRYPTO_COMPARE_DIGEST_RESULT",
+        "CRYPTO_AESGCM_KEY_GEN",
+        "CRYPTO_AESGCM_INIT",
+        "CRYPTO_AESGCM_ENCRYPT",
+        "CRYPTO_AESGCM_DECRYPT",
+        "CRYPTO_CHACHA20_KEY_GEN",
+        "CRYPTO_CHACHA20_INIT",
+        "CRYPTO_CHACHA20_ENCRYPT",
+        "CRYPTO_CHACHA20_DECRYPT",
+        "CRYPTO_RSA_GENERATE_KEY",
+        "CRYPTO_RSA_GET_PUBLIC_KEY",
+        "CRYPTO_RSA_ENCRYPT_OAEP",
+        "CRYPTO_RSA_DECRYPT_OAEP",
+        "CRYPTO_RSA_SIGN_PSS",
+        "CRYPTO_RSA_VERIFY_PSS",
+        "CRYPTO_RSA_EXPORT_PRIVATE_PEM",
+        "CRYPTO_RSA_EXPORT_PUBLIC_PEM",
+        "CRYPTO_RSA_LOAD_PRIVATE_PEM",
+        "CRYPTO_RSA_LOAD_PUBLIC_PEM",
+        "CRYPTO_ED25519_GENERATE_KEY",
+        "CRYPTO_ED25519_GET_PUBLIC_KEY",
+        "CRYPTO_ED25519_SIGN",
+        "CRYPTO_ED25519_VERIFY",
+        "CRYPTO_ED25519_EXPORT_RAW_PRIVATE",
+        "CRYPTO_ED25519_EXPORT_RAW_PUBLIC",
+        "CRYPTO_ED25519_LOAD_RAW_PRIVATE",
+        "CRYPTO_ED25519_LOAD_RAW_PUBLIC",
+        "CRYPTO_X25519_GENERATE_KEY",
+        "CRYPTO_X25519_GET_PUBLIC_KEY",
+        "CRYPTO_X25519_EXCHANGE",
+        "CRYPTO_SAVE_SIGNATURE_TO_FILE",
+        "CRYPTO_SAVE_PEM_TO_FILE",
+        "CRYPTO_ASSERT_VERIFICATION"
+      ]
+    },
     "cv2": {
       "file": "cv2.json",
-      "count": 86,
+      "is_core": false,
+      "aliases": [
+        "opencv",
+        "opencv-python"
+      ],
+      "count": 87,
       "types": {
         "Contour": {
           "parent": "ndarray",
@@ -68,183 +333,250 @@
         "DMatch": {
           "parent": "object",
           "description": "cv2.DMatch descriptor match"
+        },
+        "MatLike": {
+          "parent": "tensor"
+        },
+        "Color": {
+          "parent": "scalar"
+        },
+        "imageformat": {
+          "parent": "format"
         }
       },
       "cell_ids": [
-        "CV2_ABS_DIFF",
-        "CV2_ADAPTIVE_THRESHOLD_GAUSSIAN",
-        "CV2_ADD",
-        "CV2_ADD_WEIGHTED",
-        "CV2_APPROX_POLY_DP",
-        "CV2_ARC_LENGTH",
-        "CV2_BFMATCHER_CREATE",
-        "CV2_BFMATCHER_MATCH",
-        "CV2_BILATERAL_FILTER",
-        "CV2_BITWISE_AND",
-        "CV2_BITWISE_NOT",
-        "CV2_BITWISE_OR",
-        "CV2_BOUNDING_RECT",
-        "CV2_CALC_HIST",
-        "CV2_CANNY",
-        "CV2_CIRCLE",
-        "CV2_CLAHE_APPLY",
-        "CV2_CONTOUR_AREA",
-        "CV2_CONVERT_SCALE_ABS",
-        "CV2_CONVEX_HULL",
-        "CV2_COPY_MAKE_BORDER",
-        "CV2_CORNER_HARRIS",
-        "CV2_CREATE_CLAHE",
+        "CV2_IMREAD",
+        "CV2_IMWRITE",
+        "CV2_IMSHOW",
+        "CV2_WAIT_KEY",
+        "CV2_DESTROY_ALL_WINDOWS",
         "CV2_CVT_COLOR_BGR2GRAY",
+        "CV2_CVT_COLOR_GRAY2BGR",
+        "CV2_CVT_COLOR_BGR2RGB",
         "CV2_CVT_COLOR_BGR2HSV",
         "CV2_CVT_COLOR_BGR2LAB",
-        "CV2_CVT_COLOR_BGR2RGB",
-        "CV2_CVT_COLOR_GRAY2BGR",
-        "CV2_DESTROY_ALL_WINDOWS",
-        "CV2_DILATE",
-        "CV2_DRAW_CONTOURS",
-        "CV2_DRAW_KEYPOINTS",
-        "CV2_DRAW_MATCHES",
-        "CV2_EQUALIZE_HIST",
-        "CV2_ERODE",
-        "CV2_FAST_NL_MEANS_DENOISING_COLORED",
-        "CV2_FILL_POLY",
-        "CV2_FILTER2D",
-        "CV2_FIND_CONTOURS",
+        "CV2_RESIZE",
+        "CV2_WARP_AFFINE",
+        "CV2_GET_ROTATION_MATRIX_2D",
+        "CV2_WARP_PERSPECTIVE",
+        "CV2_GET_PERSPECTIVE_TRANSFORM",
         "CV2_FLIP",
         "CV2_GAUSSIAN_BLUR",
-        "CV2_GET_PERSPECTIVE_TRANSFORM",
-        "CV2_GET_ROTATION_MATRIX_2D",
-        "CV2_GET_STRUCTURING_ELEMENT",
-        "CV2_GOOD_FEATURES_TO_TRACK",
-        "CV2_HOUGH_CIRCLES",
-        "CV2_HOUGH_LINES_P",
-        "CV2_IMDECODE",
-        "CV2_IMENCODE",
-        "CV2_IMREAD",
-        "CV2_IMSHOW",
-        "CV2_IMWRITE",
-        "CV2_INPAINT",
-        "CV2_IN_RANGE",
-        "CV2_LAPLACIAN",
-        "CV2_LINE",
         "CV2_MEDIAN_BLUR",
-        "CV2_MERGE",
-        "CV2_MIN_ENCLOSING_CIRCLE",
-        "CV2_MOMENTS",
-        "CV2_MORPHOLOGY_EX_CLOSE",
-        "CV2_MORPHOLOGY_EX_OPEN",
-        "CV2_NORMALIZE",
-        "CV2_ORB_CREATE",
-        "CV2_ORB_DETECT_AND_COMPUTE",
-        "CV2_POLY_LINES",
-        "CV2_PUT_TEXT",
-        "CV2_RECTANGLE",
-        "CV2_RESIZE",
-        "CV2_SIFT_CREATE",
-        "CV2_SIFT_DETECT_AND_COMPUTE",
+        "CV2_BILATERAL_FILTER",
+        "CV2_FILTER2D",
         "CV2_SOBEL",
-        "CV2_SPLIT",
-        "CV2_SUBTRACT",
+        "CV2_LAPLACIAN",
+        "CV2_CANNY",
         "CV2_THRESHOLD_BINARY",
         "CV2_THRESHOLD_OTSU",
+        "CV2_ADAPTIVE_THRESHOLD_GAUSSIAN",
+        "CV2_IN_RANGE",
+        "CV2_GET_STRUCTURING_ELEMENT",
+        "CV2_ERODE",
+        "CV2_DILATE",
+        "CV2_MORPHOLOGY_EX_OPEN",
+        "CV2_MORPHOLOGY_EX_CLOSE",
+        "CV2_FIND_CONTOURS",
+        "CV2_TOP_K_CONTOURS",
+        "CV2_DRAW_CONTOURS",
+        "CV2_CONTOUR_AREA",
+        "CV2_ARC_LENGTH",
+        "CV2_BOUNDING_RECT",
+        "CV2_MIN_ENCLOSING_CIRCLE",
+        "CV2_APPROX_POLY_DP",
+        "CV2_CONVEX_HULL",
+        "CV2_MOMENTS",
+        "CV2_ADD",
+        "CV2_SUBTRACT",
+        "CV2_ADD_WEIGHTED",
+        "CV2_BITWISE_AND",
+        "CV2_BITWISE_OR",
+        "CV2_BITWISE_NOT",
+        "CV2_ABS_DIFF",
+        "CV2_SPLIT",
+        "CV2_MERGE",
+        "CV2_CALC_HIST",
+        "CV2_EQUALIZE_HIST",
+        "CV2_NORMALIZE",
+        "CV2_CREATE_CLAHE",
+        "CV2_CLAHE_APPLY",
+        "CV2_LINE",
+        "CV2_RECTANGLE",
+        "CV2_CIRCLE",
+        "CV2_PUT_TEXT",
+        "CV2_POLY_LINES",
+        "CV2_FILL_POLY",
+        "CV2_HOUGH_LINES_P",
+        "CV2_HOUGH_CIRCLES",
+        "CV2_CORNER_HARRIS",
+        "CV2_GOOD_FEATURES_TO_TRACK",
+        "CV2_SIFT_CREATE",
+        "CV2_SIFT_DETECT_AND_COMPUTE",
+        "CV2_ORB_CREATE",
+        "CV2_ORB_DETECT_AND_COMPUTE",
+        "CV2_BFMATCHER_CREATE",
+        "CV2_BFMATCHER_MATCH",
+        "CV2_DRAW_KEYPOINTS",
+        "CV2_DRAW_MATCHES",
+        "CV2_COPY_MAKE_BORDER",
+        "CV2_CONVERT_SCALE_ABS",
+        "CV2_WATERSHED",
+        "CV2_INPAINT",
+        "CV2_FAST_NL_MEANS_DENOISING_COLORED",
         "CV2_VIDEOCAPTURE_INIT",
         "CV2_VIDEOCAPTURE_READ",
         "CV2_VIDEOCAPTURE_RELEASE",
         "CV2_VIDEOWRITER_INIT",
-        "CV2_VIDEOWRITER_RELEASE",
         "CV2_VIDEOWRITER_WRITE",
-        "CV2_WAIT_KEY",
-        "CV2_WARP_AFFINE",
-        "CV2_WARP_PERSPECTIVE",
-        "CV2_WATERSHED"
+        "CV2_VIDEOWRITER_RELEASE",
+        "CV2_IMENCODE",
+        "CV2_IMDECODE"
       ]
     },
     "matplotlib": {
       "file": "matplotlib.json",
+      "is_core": false,
+      "aliases": [
+        "mpl",
+        "pyplot",
+        "plt"
+      ],
       "count": 55,
       "types": {
         "Figure": {
           "parent": "Canvas",
-          "description": "matplotlib.figure.Figure instance"
+          "description": "matplotlib.figure.Figure instance",
+          "kind": "visual",
+          "properties": {
+            "is_visual": true,
+            "render_hooks": [
+              "canvas",
+              "savefig",
+              "render",
+              "show",
+              "to_image"
+            ]
+          }
         },
         "Axes": {
           "parent": "Canvas",
-          "description": "matplotlib.axes.Axes subplot instance"
+          "description": "matplotlib.axes.Axes subplot instance",
+          "kind": "visual",
+          "properties": {
+            "is_visual": true,
+            "render_hooks": [
+              "canvas",
+              "savefig",
+              "render",
+              "show",
+              "to_image"
+            ]
+          }
         },
         "Canvas": {
-          "parent": "object"
+          "parent": "object",
+          "kind": "visual",
+          "properties": {
+            "is_visual": true,
+            "render_hooks": [
+              "canvas",
+              "savefig",
+              "render",
+              "show",
+              "to_image"
+            ]
+          }
         },
         "Plot": {
-          "parent": "Modality"
+          "parent": "Modality",
+          "kind": "visual",
+          "properties": {
+            "is_visual": true,
+            "render_hooks": [
+              "canvas",
+              "savefig",
+              "render",
+              "show",
+              "to_image"
+            ]
+          }
         },
         "PDF": {
           "parent": "Format"
         },
         "SVG": {
           "parent": "Format"
+        },
+        "canvas": {
+          "parent": "object"
         }
       },
       "cell_ids": [
-        "matplotlib_ax3d_plot",
-        "matplotlib_ax3d_plot_surface",
-        "matplotlib_ax3d_scatter",
-        "matplotlib_ax3d_view_init",
-        "matplotlib_ax_annotate",
-        "matplotlib_ax_axhline",
-        "matplotlib_ax_axvline",
-        "matplotlib_ax_bar",
-        "matplotlib_ax_barh",
-        "matplotlib_ax_boxplot",
-        "matplotlib_ax_contour",
-        "matplotlib_ax_contourf",
-        "matplotlib_ax_errorbar",
-        "matplotlib_ax_fill_between",
-        "matplotlib_ax_grid",
-        "matplotlib_ax_hist",
-        "matplotlib_ax_imshow",
-        "matplotlib_ax_invert_xaxis",
-        "matplotlib_ax_invert_yaxis",
-        "matplotlib_ax_legend",
-        "matplotlib_ax_pcolormesh",
-        "matplotlib_ax_pie",
-        "matplotlib_ax_plot",
-        "matplotlib_ax_scatter",
-        "matplotlib_ax_set_facecolor",
-        "matplotlib_ax_set_title",
-        "matplotlib_ax_set_xlabel",
-        "matplotlib_ax_set_xlim",
-        "matplotlib_ax_set_xscale",
-        "matplotlib_ax_set_xticklabels",
-        "matplotlib_ax_set_xticks",
-        "matplotlib_ax_set_ylabel",
-        "matplotlib_ax_set_ylim",
-        "matplotlib_ax_set_yscale",
-        "matplotlib_ax_spine_set_visible",
-        "matplotlib_ax_stem",
-        "matplotlib_ax_text",
-        "matplotlib_ax_tick_params",
-        "matplotlib_ax_twinx",
-        "matplotlib_ax_twiny",
-        "matplotlib_ax_violinplot",
-        "matplotlib_fig_add_axes",
+        "matplotlib_plt_subplots_single",
+        "matplotlib_plt_figure",
         "matplotlib_fig_add_subplot",
         "matplotlib_fig_add_subplot_3d",
+        "matplotlib_fig_add_axes",
+        "matplotlib_ax_plot",
+        "matplotlib_ax_scatter",
+        "matplotlib_ax_bar",
+        "matplotlib_ax_barh",
+        "matplotlib_ax_hist",
+        "matplotlib_ax_boxplot",
+        "matplotlib_ax_violinplot",
+        "matplotlib_ax_pie",
+        "matplotlib_ax_imshow",
+        "matplotlib_ax_pcolormesh",
+        "matplotlib_ax_contour",
+        "matplotlib_ax_contourf",
+        "matplotlib_ax3d_plot",
+        "matplotlib_ax3d_scatter",
+        "matplotlib_ax3d_plot_surface",
+        "matplotlib_ax3d_view_init",
+        "matplotlib_ax_errorbar",
+        "matplotlib_ax_fill_between",
+        "matplotlib_ax_stem",
+        "matplotlib_ax_axhline",
+        "matplotlib_ax_axvline",
+        "matplotlib_ax_legend",
+        "matplotlib_ax_annotate",
+        "matplotlib_ax_text",
+        "matplotlib_ax_set_title",
+        "matplotlib_ax_set_xlabel",
+        "matplotlib_ax_set_ylabel",
+        "matplotlib_ax_set_xlim",
+        "matplotlib_ax_set_ylim",
+        "matplotlib_ax_set_xscale",
+        "matplotlib_ax_set_yscale",
+        "matplotlib_ax_set_xticks",
+        "matplotlib_ax_set_xticklabels",
+        "matplotlib_ax_tick_params",
         "matplotlib_fig_colorbar",
-        "matplotlib_fig_savefig",
+        "matplotlib_ax_twinx",
+        "matplotlib_ax_twiny",
+        "matplotlib_ax_invert_xaxis",
+        "matplotlib_ax_invert_yaxis",
+        "matplotlib_ax_grid",
+        "matplotlib_plt_style_use",
+        "matplotlib_ax_set_facecolor",
         "matplotlib_fig_set_facecolor",
-        "matplotlib_fig_subplots_adjust",
+        "matplotlib_ax_spine_set_visible",
         "matplotlib_fig_suptitle",
         "matplotlib_fig_tight_layout",
-        "matplotlib_plt_close",
-        "matplotlib_plt_figure",
+        "matplotlib_fig_subplots_adjust",
+        "matplotlib_fig_savefig",
         "matplotlib_plt_show",
-        "matplotlib_plt_style_use",
-        "matplotlib_plt_subplots_single"
+        "matplotlib_plt_close"
       ]
     },
     "numpy": {
       "file": "numpy.json",
-      "count": 92,
+      "is_core": false,
+      "aliases": [
+        "np"
+      ],
+      "count": 98,
       "types": {
         "Array": {
           "parent": "Modality"
@@ -254,107 +586,179 @@
         },
         "NPZ": {
           "parent": "ArrayFormat"
+        },
+        "ndarray": {
+          "parent": "array-like",
+          "kind": "array",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isnan"
+            ]
+          }
+        },
+        "matrix": {
+          "parent": "array-like",
+          "kind": "array",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isnan"
+            ]
+          }
+        },
+        "array-like": {
+          "parent": "tensor",
+          "kind": "array",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isnan"
+            ]
+          }
+        },
+        "tensor": {
+          "parent": "sequence",
+          "kind": "array",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isnan"
+            ]
+          }
+        },
+        "arrayformat": {
+          "parent": "format"
+        },
+        "buffer": {
+          "parent": "tensor",
+          "kind": "array",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isnan"
+            ]
+          }
         }
       },
       "cell_ids": [
-        "NUMPY_ABS",
-        "NUMPY_ADD",
-        "NUMPY_ARANGE",
-        "NUMPY_ARGMAX",
-        "NUMPY_ARGMIN",
-        "NUMPY_ARGSORT",
         "NUMPY_ARRAY_CREATION",
         "NUMPY_ASARRAY",
-        "NUMPY_BOOLEAN_MASK_SELECT",
-        "NUMPY_BROADCAST_TO",
-        "NUMPY_CLIP",
-        "NUMPY_CONCATENATE_AXIS0",
-        "NUMPY_CUMSUM",
-        "NUMPY_DIVIDE",
-        "NUMPY_DOT",
-        "NUMPY_EMPTY_ND",
-        "NUMPY_EXP",
-        "NUMPY_EXPAND_DIMS",
-        "NUMPY_EYE",
-        "NUMPY_FFT_FFT",
-        "NUMPY_FFT_FFT2",
-        "NUMPY_FFT_FFTN",
-        "NUMPY_FFT_FFTSHIFT",
-        "NUMPY_FFT_IFFT",
-        "NUMPY_FFT_IFFT2",
-        "NUMPY_FFT_IFFTSHIFT",
-        "NUMPY_FFT_IRFFT",
-        "NUMPY_FFT_RFFT",
-        "NUMPY_FLATTEN",
         "NUMPY_FROMBUFFER",
-        "NUMPY_FULL_ND",
-        "NUMPY_HSTACK",
-        "NUMPY_IDENTITY",
-        "NUMPY_INNER",
-        "NUMPY_LINALG_CHOLESKY",
-        "NUMPY_LINALG_DET",
-        "NUMPY_LINALG_EIG",
-        "NUMPY_LINALG_EIGH",
-        "NUMPY_LINALG_INV",
-        "NUMPY_LINALG_MATRIX_RANK",
-        "NUMPY_LINALG_NORM",
-        "NUMPY_LINALG_QR",
-        "NUMPY_LINALG_SOLVE",
-        "NUMPY_LINALG_SVD",
-        "NUMPY_LINSPACE",
-        "NUMPY_LOAD_NPY",
-        "NUMPY_LOG",
-        "NUMPY_MATMUL",
-        "NUMPY_MAX_AXIS",
-        "NUMPY_MEAN_ALL",
-        "NUMPY_MEAN_AXIS",
-        "NUMPY_MIN_AXIS",
-        "NUMPY_MULTIPLY",
-        "NUMPY_NORMALIZE_L2",
+        "NUMPY_ZEROS_1D",
+        "NUMPY_ZEROS_2D",
+        "NUMPY_ZEROS_ND",
         "NUMPY_ONES_1D",
         "NUMPY_ONES_2D",
         "NUMPY_ONES_ND",
-        "NUMPY_OUTER",
-        "NUMPY_PAD",
-        "NUMPY_RANDOM_CHOICE",
-        "NUMPY_RANDOM_NORMAL",
-        "NUMPY_RANDOM_PERMUTATION",
-        "NUMPY_RANDOM_RANDINT",
-        "NUMPY_RANDOM_STANDARD_NORMAL",
-        "NUMPY_RANDOM_UNIFORM",
-        "NUMPY_RAVEL",
+        "NUMPY_FULL_ND",
+        "NUMPY_ARANGE",
+        "NUMPY_LINSPACE",
+        "NUMPY_EYE",
+        "NUMPY_IDENTITY",
+        "NUMPY_EMPTY_ND",
+        "NUMPY_LOAD_NPY",
         "NUMPY_RESHAPE_2D",
         "NUMPY_RESHAPE_ND",
-        "NUMPY_SAVEZ_COMPRESSED",
-        "NUMPY_SAVE_NPY",
-        "NUMPY_SEARCHSORTED",
-        "NUMPY_SORT",
-        "NUMPY_SQRT",
+        "NUMPY_RAVEL",
+        "NUMPY_FLATTEN",
+        "NUMPY_TRANSPOSE_2D",
+        "NUMPY_TRANSPOSE_ND",
         "NUMPY_SQUEEZE",
+        "NUMPY_EXPAND_DIMS",
+        "NUMPY_CONCATENATE_AXIS0",
         "NUMPY_STACK",
-        "NUMPY_STD_AXIS",
+        "NUMPY_VSTACK",
+        "NUMPY_HSTACK",
+        "NUMPY_WHERE",
+        "NUMPY_BOOLEAN_MASK_SELECT",
+        "NUMPY_BROADCAST_TO",
+        "NUMPY_PAD",
+        "NUMPY_CLIP",
+        "NUMPY_ADD",
         "NUMPY_SUBTRACT",
+        "NUMPY_MULTIPLY",
+        "NUMPY_DIVIDE",
+        "NUMPY_EXP",
+        "NUMPY_LOG",
+        "NUMPY_SQRT",
+        "NUMPY_ABS",
         "NUMPY_SUM_ALL",
         "NUMPY_SUM_AXIS",
+        "NUMPY_MEAN_ALL",
+        "NUMPY_MEAN_AXIS",
+        "NUMPY_STD_AXIS",
+        "NUMPY_VAR_AXIS",
+        "NUMPY_MIN_AXIS",
+        "NUMPY_MAX_AXIS",
+        "NUMPY_ARGMIN",
+        "NUMPY_ARGMAX",
+        "NUMPY_CUMSUM",
+        "NUMPY_NORMALIZE_L2",
+        "NUMPY_DOT",
+        "NUMPY_MATMUL",
+        "NUMPY_INNER",
+        "NUMPY_OUTER",
+        "NUMPY_LINALG_INV",
+        "NUMPY_LINALG_DET",
+        "NUMPY_LINALG_EIG",
+        "NUMPY_LINALG_EIGH",
+        "NUMPY_LINALG_SVD",
+        "NUMPY_LINALG_QR",
+        "NUMPY_LINALG_CHOLESKY",
+        "NUMPY_LINALG_SOLVE",
+        "NUMPY_LINALG_NORM",
+        "NUMPY_LINALG_MATRIX_RANK",
+        "NUMPY_TRACE",
+        "NUMPY_FFT_FFT",
+        "NUMPY_FFT_IFFT",
+        "NUMPY_FFT_FFT2",
+        "NUMPY_FFT_IFFT2",
+        "NUMPY_FFT_FFTN",
+        "NUMPY_FFT_RFFT",
+        "NUMPY_FFT_IRFFT",
+        "NUMPY_FFT_FFTSHIFT",
+        "NUMPY_FFT_IFFTSHIFT",
+        "NUMPY_RANDOM_UNIFORM",
+        "NUMPY_RANDOM_NORMAL",
+        "NUMPY_RANDOM_STANDARD_NORMAL",
+        "NUMPY_RANDOM_RANDINT",
+        "NUMPY_RANDOM_CHOICE",
+        "NUMPY_RANDOM_PERMUTATION",
+        "NUMPY_SORT",
+        "NUMPY_ARGSORT",
+        "NUMPY_SEARCHSORTED",
+        "NUMPY_UNIQUE",
+        "NUMPY_SAVE_NPY",
+        "NUMPY_SAVEZ_COMPRESSED",
         "NUMPY_TOBYTES",
         "NUMPY_TOFILE",
         "NUMPY_TOLIST",
-        "NUMPY_TRACE",
-        "NUMPY_TRANSPOSE_2D",
-        "NUMPY_TRANSPOSE_ND",
-        "NUMPY_UNIQUE",
-        "NUMPY_VAR_AXIS",
-        "NUMPY_VSTACK",
-        "NUMPY_WHERE",
-        "NUMPY_ZEROS_1D",
-        "NUMPY_ZEROS_2D",
-        "NUMPY_ZEROS_ND"
+        "NUMPY_CORRCOEF",
+        "NUMPY_COV",
+        "NUMPY_MEDIAN",
+        "NUMPY_PERCENTILE",
+        "NUMPY_RESHAPE_NCOL",
+        "NP_AS_ARRAY"
       ]
     },
     "pandas": {
       "file": "pandas.json",
-      "count": 84,
+      "is_core": false,
+      "aliases": [
+        "pd"
+      ],
+      "count": 95,
       "types": {
+        "Engine": {
+          "parent": "db_connection",
+          "kind": "handle"
+        },
         "Tabular": {
           "parent": "Modality"
         },
@@ -372,105 +776,353 @@
         },
         "Feather": {
           "parent": "TabularFormat"
+        },
+        "DataFrame": {
+          "parents": [
+            "table"
+          ],
+          "kind": "composite",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isna",
+              "isnull"
+            ],
+            "duplicate_check_methods": [
+              "duplicated"
+            ]
+          }
+        },
+        "Series": {
+          "parents": [
+            "sequence",
+            "array-like"
+          ],
+          "kind": "composite",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isna",
+              "isnull"
+            ],
+            "duplicate_check_methods": [
+              "duplicated"
+            ]
+          }
+        },
+        "tabularformat": {
+          "parent": "format"
+        },
+        "table": {
+          "parent": "object",
+          "kind": "composite",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true,
+            "missing_value_methods": [
+              "isna",
+              "isnull"
+            ],
+            "duplicate_check_methods": [
+              "duplicated"
+            ]
+          }
+        },
+        "column_identifier": {
+          "parent": "str",
+          "kind": "string",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
         }
       },
       "cell_ids": [
-        "PANDAS_DATAFRAME_TO_GENERIC_2D",
-        "PANDAS_DATAFRAME_TO_NUMPY",
-        "PANDAS_SERIES_TO_NUMPY",
-        "PD_ASSIGN",
-        "PD_ASTYPE",
-        "PD_BFILL",
-        "PD_CONCAT_COLS",
-        "PD_CONCAT_ROWS",
-        "PD_CROSSTAB",
+        "PD_READ_CSV",
+        "PD_READ_PARQUET",
+        "PD_READ_JSON",
+        "PD_READ_EXCEL",
+        "PD_READ_SQL",
         "PD_DATAFRAME_INIT",
-        "PD_DESCRIBE",
-        "PD_DIFF",
-        "PD_DROPLEVEL",
+        "PD_SERIES_INIT",
         "PD_DROPNA",
         "PD_DROPNA_SUBSET",
-        "PD_DROP_COLUMNS",
-        "PD_DROP_DUPLICATES",
-        "PD_EWM_MEAN",
-        "PD_EXPLODE",
-        "PD_FFILL",
         "PD_FILLNA_CONST",
+        "PD_FFILL",
+        "PD_BFILL",
+        "PD_INTERPOLATE",
+        "PD_DROP_DUPLICATES",
+        "PD_REPLACE",
+        "PD_ASTYPE",
+        "PD_TO_NUMERIC",
+        "PD_TO_DATETIME",
+        "PD_SELECT_DTYPES_NUMERIC",
+        "PD_STR_STRIP",
+        "PD_STR_REPLACE",
+        "PD_SET_INDEX",
+        "PD_RESET_INDEX",
+        "PD_LOC",
+        "PD_ILOC",
+        "PD_QUERY",
         "PD_FILTER_BOOL",
-        "PD_GET_DUMMIES",
+        "PD_SELECT_COLUMNS",
+        "PD_DROP_COLUMNS",
+        "PD_RENAME_COLUMNS",
+        "PD_SORT_VALUES",
+        "PD_SORT_INDEX",
+        "PD_HEAD",
+        "PD_TAIL",
+        "PD_SAMPLE",
+        "PD_ASSIGN",
         "PD_GROUPBY",
         "PD_GROUPBY_AGG",
-        "PD_GROUPBY_COUNT",
-        "PD_GROUPBY_FILTER",
-        "PD_GROUPBY_MEAN",
-        "PD_GROUPBY_SIZE",
-        "PD_GROUPBY_SUM",
         "PD_GROUPBY_TRANSFORM",
-        "PD_HEAD",
-        "PD_ILOC",
-        "PD_INTERPOLATE",
-        "PD_JOIN",
-        "PD_LOC",
+        "PD_GROUPBY_FILTER",
+        "PD_GROUPBY_SUM",
+        "PD_GROUPBY_MEAN",
+        "PD_GROUPBY_COUNT",
+        "PD_GROUPBY_SIZE",
+        "PD_DESCRIBE",
+        "PD_VALUE_COUNTS",
+        "PD_PIVOT_TABLE",
+        "PD_PIVOT",
         "PD_MELT",
-        "PD_MERGE",
-        "PD_MERGE_ASOF",
-        "PD_MERGE_KEYS",
+        "PD_STACK",
+        "PD_UNSTACK",
+        "PD_EXPLODE",
+        "PD_CROSSTAB",
+        "PD_GET_DUMMIES",
         "PD_MULTIINDEX_FROM_ARRAYS",
         "PD_MULTIINDEX_FROM_TUPLES",
-        "PD_PCT_CHANGE",
-        "PD_PIVOT",
-        "PD_PIVOT_TABLE",
-        "PD_QUERY",
-        "PD_READ_CSV",
-        "PD_READ_EXCEL",
-        "PD_READ_JSON",
-        "PD_READ_PARQUET",
-        "PD_READ_SQL",
-        "PD_RENAME_COLUMNS",
-        "PD_REORDER_LEVELS",
-        "PD_REPLACE",
-        "PD_RESAMPLE",
-        "PD_RESET_INDEX",
-        "PD_ROLLING_MEAN",
-        "PD_ROLLING_STD",
-        "PD_ROLLING_SUM",
-        "PD_SAMPLE",
-        "PD_SELECT_COLUMNS",
-        "PD_SELECT_DTYPES_NUMERIC",
-        "PD_SERIES_INIT",
-        "PD_SET_INDEX",
-        "PD_SHIFT",
-        "PD_SORT_INDEX",
-        "PD_SORT_VALUES",
-        "PD_STACK",
-        "PD_STR_REPLACE",
-        "PD_STR_STRIP",
         "PD_SWAPLEVEL",
-        "PD_TAIL",
+        "PD_REORDER_LEVELS",
+        "PD_DROPLEVEL",
+        "PD_XS",
+        "PD_MERGE",
+        "PD_MERGE_KEYS",
+        "PD_JOIN",
+        "PD_CONCAT_ROWS",
+        "PD_CONCAT_COLS",
+        "PD_MERGE_ASOF",
+        "PD_ROLLING_MEAN",
+        "PD_ROLLING_SUM",
+        "PD_ROLLING_STD",
+        "PD_EWM_MEAN",
+        "PD_RESAMPLE",
+        "PD_SHIFT",
+        "PD_DIFF",
+        "PD_PCT_CHANGE",
+        "PANDAS_DATAFRAME_TO_NUMPY",
+        "PANDAS_SERIES_TO_NUMPY",
+        "PANDAS_DATAFRAME_TO_GENERIC_2D",
         "PD_TO_CSV",
-        "PD_TO_DATETIME",
-        "PD_TO_DICT",
-        "PD_TO_EXCEL",
-        "PD_TO_FEATHER",
-        "PD_TO_JSON",
-        "PD_TO_NUMERIC",
         "PD_TO_PARQUET",
+        "PD_TO_JSON",
+        "PD_TO_EXCEL",
         "PD_TO_SQL",
-        "PD_UNSTACK",
-        "PD_VALUE_COUNTS",
-        "PD_XS"
+        "PD_TO_FEATHER",
+        "PD_TO_DICT",
+        "PD_DATAFRAME_PROJECT_TO_NUMPY",
+        "PD_CORR",
+        "PD_COV",
+        "PD_MEDIAN",
+        "PANDAS_DATAFRAME_FROM_ARRAY",
+        "PD_SELECT_COLUMN",
+        "PD_SET_COLUMN",
+        "PD_SERIES_MEAN",
+        "PD_SERIES_ADD",
+        "PD_SERIES_NORMALIZE",
+        "PD_COLUMN_EXTRACT"
       ]
     },
-    "Pillow": {
+    "pathlib": {
+      "file": "pathlib.json",
+      "is_core": false,
+      "aliases": [
+        "path"
+      ],
+      "count": 65,
+      "types": [
+        {
+          "name": "object",
+          "parent": null
+        },
+        {
+          "name": "scalar",
+          "parent": "object",
+          "kind": "scalar"
+        },
+        {
+          "name": "str",
+          "parent": "scalar",
+          "kind": "string"
+        },
+        {
+          "name": "int",
+          "parent": "scalar",
+          "kind": "numeric"
+        },
+        {
+          "name": "float",
+          "parent": "scalar",
+          "kind": "numeric"
+        },
+        {
+          "name": "bool",
+          "parent": "scalar",
+          "kind": "boolean"
+        },
+        {
+          "name": "path",
+          "parent": "object",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        {
+          "name": "file_path",
+          "parent": "path",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        {
+          "name": "dir_path",
+          "parent": "path",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        {
+          "name": "path_list",
+          "parent": "object"
+        },
+        {
+          "name": "file_content_text",
+          "parent": "str",
+          "kind": "string"
+        },
+        {
+          "name": "file_content_bytes",
+          "parent": "bytes"
+        },
+        {
+          "name": "stat_result",
+          "parent": "object"
+        },
+        {
+          "name": "disk_usage",
+          "parent": "object"
+        }
+      ],
+      "cell_ids": [
+        "PATH_INIT",
+        "PATH_CWD",
+        "PATH_HOME",
+        "PATH_FROM_URI",
+        "PATH_JOIN",
+        "PATH_JOINPATH",
+        "PATH_RESOLVE",
+        "PATH_PARENT",
+        "PATH_PARENTS",
+        "PATH_PARTS",
+        "PATH_WITH_NAME",
+        "PATH_WITH_SUFFIX",
+        "PATH_WITH_STEM",
+        "PATH_RELATIVE_TO",
+        "PATH_IS_RELATIVE_TO",
+        "PATH_EXPANDUSER",
+        "PATH_AS_POSIX",
+        "PATH_AS_URI",
+        "PATH_TO_STR",
+        "PATH_EXISTS",
+        "PATH_IS_FILE",
+        "PATH_IS_DIR",
+        "PATH_IS_SYMLINK",
+        "PATH_IS_ABSOLUTE",
+        "PATH_IS_MOUNT",
+        "PATH_IS_SOCKET",
+        "PATH_IS_FIFO",
+        "PATH_IS_BLOCK_DEVICE",
+        "PATH_GET_NAME",
+        "PATH_GET_STEM",
+        "PATH_GET_SUFFIX",
+        "PATH_GET_SUFFIXES",
+        "PATH_STAT",
+        "PATH_GET_SIZE",
+        "PATH_GET_MTIME",
+        "PATH_GET_CTIME",
+        "PATH_SAMEFILE",
+        "PATH_MATCH",
+        "PATH_GLOB",
+        "PATH_RGLOB",
+        "PATH_ITERDIR",
+        "PATH_FILTER_BY_EXTENSION",
+        "PATH_FILTER_FILES",
+        "PATH_FILTER_DIRS",
+        "PATH_SORT_BY_NAME",
+        "PATH_SORT_BY_MTIME",
+        "PATH_SORT_BY_SIZE",
+        "PATH_FOR_EACH_FILE",
+        "PATH_READLINK",
+        "PATH_READ_TEXT",
+        "PATH_READ_BYTES",
+        "PATH_READ_LINES",
+        "PATH_MKDIR",
+        "PATH_RMDIR",
+        "PATH_UNLINK",
+        "PATH_RENAME",
+        "PATH_REPLACE",
+        "PATH_TOUCH",
+        "PATH_CHMOD",
+        "PATH_SYMLINK_TO",
+        "PATH_HARDLINK_TO",
+        "PATH_WRITE_TEXT",
+        "PATH_WRITE_BYTES",
+        "PATH_APPEND_TEXT",
+        "PATH_WRITE_LINES"
+      ]
+    },
+    "pillow": {
       "file": "pillow.json",
+      "is_core": false,
+      "aliases": [
+        "pil"
+      ],
       "count": 82,
       "types": {
         "PILImage": {
-          "parent": "ndarray",
-          "description": "PIL.Image.Image instance compatible with array-like"
+          "parent": "Image",
+          "description": "PIL.Image.Image instance (requires explicit bridge to/from ndarray)",
+          "kind": "array",
+          "properties": {
+            "is_visual": true,
+            "is_composite": true,
+            "render_hooks": [
+              "show",
+              "to_image"
+            ]
+          }
         },
         "Image": {
-          "parent": "Modality"
+          "parent": "Modality",
+          "kind": "array",
+          "properties": {
+            "is_visual": true,
+            "is_composite": true,
+            "render_hooks": [
+              "show",
+              "to_image"
+            ]
+          }
         },
         "PNG": {
           "parent": "ImageFormat"
@@ -483,95 +1135,828 @@
         },
         "GIF": {
           "parent": "ImageFormat"
+        },
+        "imageformat": {
+          "parent": "format"
         }
       },
       "cell_ids": [
+        "PILLOW_IMAGE_OPEN",
+        "PILLOW_IMAGE_NEW_RGB",
+        "PILLOW_IMAGE_NEW_RGBA",
+        "PILLOW_IMAGE_NEW_GRAYSCALE",
+        "PILLOW_CONVERT_TO_RGB",
+        "PILLOW_CONVERT_TO_RGBA",
+        "PILLOW_CONVERT_TO_GRAYSCALE",
+        "PILLOW_CONVERT_TO_BINARY",
+        "PILLOW_CONVERT_TO_CMYK",
+        "PILLOW_RGB_TO_NDARRAY_RGB_ORDER",
+        "PILLOW_RGB_TO_NDARRAY_BGR_ORDER",
+        "PILLOW_GRAYSCALE_TO_NDARRAY",
+        "PILLOW_FROM_NDARRAY_BGR",
+        "PILLOW_FROM_NDARRAY_GRAY",
+        "PILLOW_RESIZE_LANCZOS",
+        "PILLOW_RESIZE_BILINEAR",
+        "PILLOW_RESIZE_NEAREST",
+        "PILLOW_CROP",
+        "PILLOW_ROTATE",
+        "PILLOW_TRANSPOSE_FLIP_LEFT_RIGHT",
+        "PILLOW_TRANSPOSE_FLIP_TOP_BOTTOM",
+        "PILLOW_TRANSPOSE_ROTATE_90",
+        "PILLOW_FILTER_GAUSSIAN_BLUR",
+        "PILLOW_FILTER_BOX_BLUR",
+        "PILLOW_FILTER_FIND_EDGES",
+        "PILLOW_FILTER_CONTOUR",
+        "PILLOW_FILTER_SHARPEN",
+        "PILLOW_FILTER_UNSHARP_MASK",
+        "PILLOW_FILTER_MEDIAN",
+        "PILLOW_ENHANCE_CONTRAST",
+        "PILLOW_ENHANCE_BRIGHTNESS",
+        "PILLOW_ENHANCE_COLOR",
+        "PILLOW_ENHANCE_SHARPNESS",
+        "PILLOW_DRAW_INITIALIZE",
+        "PILLOW_DRAW_LINE",
+        "PILLOW_DRAW_RECTANGLE",
+        "PILLOW_DRAW_ELLIPSE",
+        "PILLOW_DRAW_TEXT",
         "PILLOW_ALPHA_COMPOSITE",
         "PILLOW_BLEND",
         "PILLOW_COMPOSITE",
-        "PILLOW_CONVERT_TO_BINARY",
-        "PILLOW_CONVERT_TO_CMYK",
-        "PILLOW_CONVERT_TO_FLOAT32",
-        "PILLOW_CONVERT_TO_GRAYSCALE",
-        "PILLOW_CONVERT_TO_HSV",
-        "PILLOW_CONVERT_TO_INT32",
-        "PILLOW_CONVERT_TO_LAB",
+        "PILLOW_SPLIT",
+        "PILLOW_MERGE_RGB",
+        "PILLOW_IMAGEOPS_INVERT",
+        "PILLOW_IMAGEOPS_AUTOCONTRAST",
+        "PILLOW_IMAGEOPS_PAD",
+        "PILLOW_IMAGEOPS_FIT",
+        "PILLOW_IMAGE_SAVE",
+        "PILLOW_IMAGE_SAVE_JPEG",
+        "PILLOW_IMAGE_SAVE_PNG",
+        "PILLOW_IMAGE_SHOW",
+        "PILLOW_IMAGE_FROMBYTES",
+        "PILLOW_LINEAR_GRADIENT",
+        "PILLOW_RADIAL_GRADIENT",
+        "PILLOW_IMAGEOPS_EXIF_TRANSPOSE",
         "PILLOW_CONVERT_TO_PALETTE_ADAPTIVE",
-        "PILLOW_CONVERT_TO_RGB",
-        "PILLOW_CONVERT_TO_RGBA",
-        "PILLOW_CROP",
-        "PILLOW_DRAW_ELLIPSE",
-        "PILLOW_DRAW_INITIALIZE",
-        "PILLOW_DRAW_LINE",
-        "PILLOW_DRAW_MULTILINE_TEXT",
-        "PILLOW_DRAW_RECTANGLE",
-        "PILLOW_DRAW_ROUNDED_RECTANGLE",
-        "PILLOW_DRAW_TEXT",
-        "PILLOW_ENHANCE_BRIGHTNESS",
-        "PILLOW_ENHANCE_COLOR",
-        "PILLOW_ENHANCE_CONTRAST",
-        "PILLOW_ENHANCE_SHARPNESS",
-        "PILLOW_FILTER_BOX_BLUR",
-        "PILLOW_FILTER_CONTOUR",
+        "PILLOW_CONVERT_TO_HSV",
+        "PILLOW_CONVERT_TO_LAB",
+        "PILLOW_CONVERT_TO_INT32",
+        "PILLOW_CONVERT_TO_FLOAT32",
+        "PILLOW_PILLOW_TO_NDARRAY_GENERIC",
+        "PILLOW_NDARRAY_GENERIC_TO_PILLOW",
+        "PILLOW_TRANSFORM_AFFINE",
+        "PILLOW_TRANSFORM_PERSPECTIVE",
+        "PILLOW_IMAGEOPS_CONTAIN",
+        "PILLOW_IMAGEOPS_COVER",
         "PILLOW_FILTER_CUSTOM_KERNEL",
-        "PILLOW_FILTER_FIND_EDGES",
-        "PILLOW_FILTER_GAUSSIAN_BLUR",
-        "PILLOW_FILTER_MEDIAN",
-        "PILLOW_FILTER_SHARPEN",
         "PILLOW_FILTER_SMOOTH",
-        "PILLOW_FILTER_UNSHARP_MASK",
-        "PILLOW_FROM_NDARRAY_BGR",
-        "PILLOW_FROM_NDARRAY_GRAY",
-        "PILLOW_GRAYSCALE_TO_NDARRAY",
+        "PILLOW_IMAGEOPS_COLORIZE",
+        "PILLOW_IMAGEOPS_SOLARIZE",
+        "PILLOW_DRAW_ROUNDED_RECTANGLE",
+        "PILLOW_DRAW_MULTILINE_TEXT",
+        "PILLOW_IMAGE_PASTE",
+        "PILLOW_IMAGE_GETCHANNEL",
         "PILLOW_IMAGECHOPS_ADD",
         "PILLOW_IMAGECHOPS_DIFFERENCE",
         "PILLOW_IMAGECHOPS_MULTIPLY",
-        "PILLOW_IMAGEOPS_AUTOCONTRAST",
-        "PILLOW_IMAGEOPS_COLORIZE",
-        "PILLOW_IMAGEOPS_CONTAIN",
-        "PILLOW_IMAGEOPS_COVER",
-        "PILLOW_IMAGEOPS_EXIF_TRANSPOSE",
-        "PILLOW_IMAGEOPS_FIT",
-        "PILLOW_IMAGEOPS_INVERT",
-        "PILLOW_IMAGEOPS_PAD",
-        "PILLOW_IMAGEOPS_SOLARIZE",
-        "PILLOW_IMAGE_CLOSE",
-        "PILLOW_IMAGE_FROMBYTES",
-        "PILLOW_IMAGE_GETCHANNEL",
-        "PILLOW_IMAGE_NEW_GRAYSCALE",
-        "PILLOW_IMAGE_NEW_RGB",
-        "PILLOW_IMAGE_NEW_RGBA",
-        "PILLOW_IMAGE_OPEN",
-        "PILLOW_IMAGE_PASTE",
-        "PILLOW_IMAGE_SAVE",
-        "PILLOW_IMAGE_SAVE_GIF_ANIMATED",
-        "PILLOW_IMAGE_SAVE_JPEG",
-        "PILLOW_IMAGE_SAVE_PNG",
         "PILLOW_IMAGE_SAVE_WEBP",
+        "PILLOW_IMAGE_SAVE_GIF_ANIMATED",
         "PILLOW_IMAGE_SEEK",
-        "PILLOW_IMAGE_SHOW",
         "PILLOW_IMAGE_TELL",
-        "PILLOW_LINEAR_GRADIENT",
-        "PILLOW_MERGE_RGB",
-        "PILLOW_NDARRAY_GENERIC_TO_PILLOW",
-        "PILLOW_PILLOW_TO_NDARRAY_GENERIC",
-        "PILLOW_RADIAL_GRADIENT",
-        "PILLOW_RESIZE_BILINEAR",
-        "PILLOW_RESIZE_LANCZOS",
-        "PILLOW_RESIZE_NEAREST",
-        "PILLOW_RGB_TO_NDARRAY_BGR_ORDER",
-        "PILLOW_RGB_TO_NDARRAY_RGB_ORDER",
-        "PILLOW_ROTATE",
-        "PILLOW_SPLIT",
-        "PILLOW_TRANSFORM_AFFINE",
-        "PILLOW_TRANSFORM_PERSPECTIVE",
-        "PILLOW_TRANSPOSE_FLIP_LEFT_RIGHT",
-        "PILLOW_TRANSPOSE_FLIP_TOP_BOTTOM",
-        "PILLOW_TRANSPOSE_ROTATE_90"
+        "PILLOW_IMAGE_CLOSE"
+      ]
+    },
+    "pygame": {
+      "file": "pygame.json",
+      "is_core": false,
+      "aliases": [
+        "sdl"
+      ],
+      "count": 94,
+      "types": [
+        {
+          "name": "object",
+          "parent": null
+        },
+        {
+          "name": "bool",
+          "parent": "object"
+        },
+        {
+          "name": "int",
+          "parent": "object"
+        },
+        {
+          "name": "float",
+          "parent": "object"
+        },
+        {
+          "name": "str",
+          "parent": "object"
+        },
+        {
+          "name": "tuple",
+          "parent": "object"
+        },
+        {
+          "name": "list",
+          "parent": "object"
+        },
+        {
+          "name": "dict",
+          "parent": "object"
+        },
+        {
+          "name": "surface",
+          "parent": "object"
+        },
+        {
+          "name": "rect",
+          "parent": "object"
+        },
+        {
+          "name": "clock",
+          "parent": "object"
+        },
+        {
+          "name": "event",
+          "parent": "object"
+        },
+        {
+          "name": "font",
+          "parent": "object"
+        },
+        {
+          "name": "sound",
+          "parent": "object"
+        },
+        {
+          "name": "channel",
+          "parent": "object"
+        },
+        {
+          "name": "vector2",
+          "parent": "object"
+        },
+        {
+          "name": "color",
+          "parent": "Tuple[int, int, int]"
+        },
+        {
+          "name": "sprite",
+          "parent": "object"
+        },
+        {
+          "name": "group",
+          "parent": "object"
+        },
+        {
+          "name": "mask",
+          "parent": "object"
+        },
+        {
+          "name": "State",
+          "parent": "object"
+        },
+        {
+          "name": "Tuple[int, int]",
+          "parent": "tuple"
+        },
+        {
+          "name": "Tuple[int, int, int]",
+          "parent": "tuple"
+        },
+        {
+          "name": "Tuple[int, int, int, int]",
+          "parent": "tuple"
+        },
+        {
+          "name": "Tuple[float, float]",
+          "parent": "tuple"
+        },
+        {
+          "name": "Tuple[bool, bool, bool]",
+          "parent": "tuple"
+        }
+      ],
+      "cell_ids": [
+        "PYGAME_INIT",
+        "PYGAME_QUIT",
+        "PYGAME_SET_MODE",
+        "PYGAME_SET_CAPTION",
+        "PYGAME_GET_SURFACE",
+        "PYGAME_CLOCK_INIT",
+        "PYGAME_CLOCK_TICK",
+        "PYGAME_TIME_GET_TICKS",
+        "PYGAME_TIME_DELAY",
+        "PYGAME_EVENT_GET",
+        "PYGAME_EVENT_POLL",
+        "PYGAME_KEY_GET_PRESSED",
+        "PYGAME_MOUSE_GET_POS",
+        "PYGAME_MOUSE_GET_PRESSED",
+        "PYGAME_EVENT_TYPE_CHECK",
+        "PYGAME_SURFACE_CREATE",
+        "PYGAME_SURFACE_FILL",
+        "PYGAME_SURFACE_BLIT",
+        "PYGAME_SURFACE_CONVERT_ALPHA",
+        "PYGAME_SURFACE_CONVERT",
+        "PYGAME_SURFACE_GET_RECT",
+        "PYGAME_SURFACE_GET_SIZE",
+        "PYGAME_RECT_INIT",
+        "PYGAME_RECT_MOVE",
+        "PYGAME_RECT_MOVE_IP",
+        "PYGAME_RECT_COLLIDERECT",
+        "PYGAME_RECT_COLLIDEPOINT",
+        "PYGAME_RECT_COLLIDELIST",
+        "PYGAME_RECT_CLAMP",
+        "PYGAME_RECT_CENTER_SET",
+        "PYGAME_DRAW_RECT",
+        "PYGAME_DRAW_CIRCLE",
+        "PYGAME_DRAW_LINE",
+        "PYGAME_DRAW_LINES",
+        "PYGAME_DRAW_POLYGON",
+        "PYGAME_DRAW_ELLIPSE",
+        "PYGAME_DISPLAY_FLIP",
+        "PYGAME_DISPLAY_UPDATE",
+        "PYGAME_FONT_INIT",
+        "PYGAME_FONT_QUIT",
+        "PYGAME_FONT_SYSFONT",
+        "PYGAME_FONT_RENDER",
+        "PYGAME_IMAGE_LOAD",
+        "PYGAME_IMAGE_SAVE",
+        "PYGAME_MIXER_INIT",
+        "PYGAME_MIXER_QUIT",
+        "PYGAME_SOUND_LOAD",
+        "PYGAME_SOUND_PLAY",
+        "PYGAME_SOUND_STOP",
+        "PYGAME_GAME_LOOP",
+        "PYGAME_EVENT_LOOP",
+        "PYGAME_TRANSFORM_SCALE",
+        "PYGAME_TRANSFORM_ROTOZOOM",
+        "PYGAME_TRANSFORM_ROTATE",
+        "PYGAME_TRANSFORM_FLIP",
+        "PYGAME_TRANSFORM_SMOOTHSCALE",
+        "PYGAME_TRANSFORM_SCALE_BY",
+        "PYGAME_TRANSFORM_CHOP",
+        "PYGAME_VECTOR2_INIT",
+        "PYGAME_VECTOR2_ADD",
+        "PYGAME_VECTOR2_SUB",
+        "PYGAME_VECTOR2_SCALE",
+        "PYGAME_VECTOR2_LENGTH",
+        "PYGAME_VECTOR2_NORMALIZE",
+        "PYGAME_VECTOR2_ROTATE",
+        "PYGAME_VECTOR2_DISTANCE_TO",
+        "PYGAME_COLOR_INIT",
+        "PYGAME_COLOR_LERP",
+        "PYGAME_SPRITE_INIT",
+        "PYGAME_GROUP_INIT",
+        "PYGAME_GROUP_ADD",
+        "PYGAME_GROUP_UPDATE",
+        "PYGAME_GROUP_DRAW",
+        "PYGAME_SPRITE_COLLIDE_RECT",
+        "PYGAME_GROUP_COLLIDE",
+        "PYGAME_SPRITE_KILL",
+        "PYGAME_MASK_FROM_SURFACE",
+        "PYGAME_MASK_OVERLAP",
+        "PYGAME_MUSIC_LOAD",
+        "PYGAME_MUSIC_PLAY",
+        "PYGAME_MUSIC_STOP",
+        "PYGAME_MUSIC_PAUSE",
+        "PYGAME_MUSIC_UNPAUSE",
+        "PYGAME_MUSIC_SET_VOLUME",
+        "PYGAME_SOUND_SET_VOLUME",
+        "PYGAME_MOUSE_SET_VISIBLE",
+        "PYGAME_MOUSE_SET_POS",
+        "PYGAME_DISPLAY_SET_ICON",
+        "PYGAME_DRAW_AALINE",
+        "PYGAME_DRAW_ARC",
+        "PYGAME_TIME_SET_TIMER",
+        "PYGAME_EVENT_POST",
+        "PYGAME_EVENT_CUSTOM",
+        "PYGAME_FIXED_STEP_LOOP"
+      ]
+    },
+    "python_core": {
+      "file": "python_core.json",
+      "is_core": true,
+      "aliases": [],
+      "count": 20,
+      "types": {
+        "any": {
+          "parent": null,
+          "kind": "top"
+        },
+        "object": {
+          "parent": "any"
+        },
+        "scalar": {
+          "parent": "object",
+          "kind": "scalar",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "numeric": {
+          "parent": "scalar",
+          "kind": "numeric",
+          "empty_expr": "0",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "number": {
+          "parent": "numeric",
+          "kind": "numeric",
+          "empty_expr": "0",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "int": {
+          "parent": "numeric",
+          "kind": "numeric",
+          "empty_expr": "0",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "float": {
+          "parent": "numeric",
+          "kind": "numeric",
+          "empty_expr": "0.0",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "bool": {
+          "parent": "int",
+          "kind": "boolean",
+          "empty_expr": "False",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "logical": {
+          "parent": "bool",
+          "kind": "boolean",
+          "empty_expr": "False",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "primitive": {
+          "parent": "scalar",
+          "kind": "scalar",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "str": {
+          "parent": "scalar",
+          "kind": "string",
+          "empty_expr": "''",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "bytes": {
+          "parent": "scalar",
+          "kind": "scalar",
+          "empty_expr": "b''",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "literal": {
+          "parent": "scalar",
+          "kind": "scalar",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "collection": {
+          "parent": "object",
+          "kind": "collection",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "sequence": {
+          "parent": "collection",
+          "kind": "collection",
+          "empty_expr": "[]",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "mapping": {
+          "parent": "collection",
+          "kind": "mapping",
+          "empty_expr": "{}",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "dict": {
+          "parent": "mapping",
+          "kind": "mapping",
+          "empty_expr": "{}",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "list": {
+          "parent": "sequence",
+          "kind": "collection",
+          "empty_expr": "[]",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "tuple": {
+          "parent": "sequence",
+          "kind": "collection",
+          "empty_expr": "()",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "set": {
+          "parent": "collection",
+          "kind": "collection",
+          "empty_expr": "set()",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "none": {
+          "parent": null,
+          "kind": "void",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true,
+            "is_empty_carrier": true
+          }
+        },
+        "nonetype": {
+          "parent": "none",
+          "kind": "void",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true,
+            "is_empty_carrier": true
+          }
+        },
+        "void": {
+          "parent": "none",
+          "kind": "void",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true,
+            "is_empty_carrier": true
+          }
+        },
+        "unit": {
+          "parent": "none",
+          "kind": "void",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true,
+            "is_empty_carrier": true
+          }
+        },
+        "top": {
+          "parent": null,
+          "kind": "top"
+        },
+        "unknown": {
+          "parent": null,
+          "kind": "top"
+        },
+        "generic": {
+          "parent": null,
+          "kind": "top"
+        },
+        "text": {
+          "parent": "str",
+          "kind": "string",
+          "empty_expr": "''",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "enum": {
+          "parent": "scalar",
+          "kind": "scalar",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "path": {
+          "parent": "object",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "file": {
+          "parent": "path",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "filepath": {
+          "parent": "str",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "uri": {
+          "parent": "str",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "url": {
+          "parent": "str",
+          "kind": "path",
+          "properties": {
+            "is_atomic": true,
+            "literal_compatible": true
+          }
+        },
+        "bottom": {
+          "parent": null,
+          "kind": "bottom",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true
+          }
+        },
+        "null": {
+          "parent": null,
+          "kind": "bottom",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true
+          }
+        },
+        "undefined": {
+          "parent": null,
+          "kind": "bottom",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true
+          }
+        },
+        "nil": {
+          "parent": null,
+          "kind": "bottom",
+          "empty_expr": "None",
+          "properties": {
+            "is_atomic": true
+          }
+        },
+        "format": {
+          "parent": "object",
+          "kind": "format",
+          "properties": {
+            "protocols": [
+              "file",
+              "http",
+              "https",
+              "s3",
+              "gs",
+              "ftp",
+              "sql",
+              "sqlite",
+              "memory"
+            ],
+            "generic_extensions": [
+              "dat",
+              "bin",
+              "txt",
+              "json"
+            ]
+          }
+        },
+        "iterable": {
+          "parent": "collection",
+          "kind": "collection",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "iterator": {
+          "parent": "iterable",
+          "kind": "collection",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "range": {
+          "parent": "sequence",
+          "kind": "collection",
+          "properties": {
+            "is_composite": true,
+            "is_compound_structure": true
+          }
+        },
+        "callable": {
+          "parent": "object",
+          "kind": "callable",
+          "properties": {
+            "is_atomic": false
+          }
+        },
+        "db_connection": {
+          "parent": "any",
+          "kind": "handle"
+        }
+      },
+      "cell_ids": [
+        "PYTHON_LIST_INIT",
+        "PYTHON_SET_INIT",
+        "PYTHON_TUPLE_INIT",
+        "PYTHON_SORTED",
+        "PYTHON_LEN",
+        "PYTHON_RANGE",
+        "PYTHON_ENUMERATE",
+        "PYTHON_ZIP",
+        "PYTHON_MAP",
+        "PYTHON_FILTER",
+        "PYTHON_SUM",
+        "PYTHON_MIN",
+        "PYTHON_MAX",
+        "PYTHON_HEAPQ_HEAPPUSH",
+        "PYTHON_HEAPQ_HEAPPOP",
+        "PYTHON_BISECT_LEFT",
+        "PYTHON_DICT_INIT",
+        "PYTHON_DICT_GET",
+        "PYTHON_DICT_SET",
+        "PYTHON_LIST_APPEND"
+      ]
+    },
+    "requests": {
+      "file": "requests.json",
+      "is_core": false,
+      "aliases": [
+        "http"
+      ],
+      "count": 66,
+      "types": [
+        {
+          "name": "response",
+          "parent": "object"
+        },
+        {
+          "name": "session",
+          "parent": "object"
+        },
+        {
+          "name": "url",
+          "parent": "str"
+        },
+        {
+          "name": "http_headers",
+          "parent": "dict"
+        },
+        {
+          "name": "http_params",
+          "parent": "dict"
+        },
+        {
+          "name": "http_payload",
+          "parent": "object"
+        },
+        {
+          "name": "status_code",
+          "parent": "int"
+        },
+        {
+          "name": "stream_content",
+          "parent": "iterable"
+        },
+        {
+          "name": "http_auth",
+          "parent": "object"
+        },
+        {
+          "name": "http_cookies",
+          "parent": "dict"
+        },
+        {
+          "name": "http_adapter",
+          "parent": "object"
+        },
+        {
+          "name": "prepared_request",
+          "parent": "object"
+        }
+      ],
+      "cell_ids": [
+        "REQ_GET",
+        "REQ_POST_JSON",
+        "REQ_POST_DATA",
+        "REQ_PUT",
+        "REQ_PATCH",
+        "REQ_DELETE",
+        "REQ_HEAD",
+        "REQ_OPTIONS",
+        "REQ_SESSION_INIT",
+        "REQ_SESSION_GET",
+        "REQ_SESSION_POST_JSON",
+        "REQ_SESSION_POST_DATA",
+        "REQ_SESSION_PUT",
+        "REQ_SESSION_DELETE",
+        "REQ_SESSION_CLOSE",
+        "REQ_SESSION_CONTEXT",
+        "REQ_SET_BEARER_AUTH",
+        "REQ_SET_BASIC_AUTH",
+        "REQ_SET_API_KEY_HEADER",
+        "REQ_SET_USER_AGENT",
+        "REQ_SET_COOKIES",
+        "REQ_BUILD_QUERY_PARAMS",
+        "REQ_RESP_JSON",
+        "REQ_RESP_TEXT",
+        "REQ_RESP_CONTENT",
+        "REQ_RESP_STATUS_CODE",
+        "REQ_RESP_OK",
+        "REQ_RESP_HEADERS",
+        "REQ_RESP_COOKIES",
+        "REQ_RESP_URL",
+        "REQ_RESP_ELAPSED",
+        "REQ_RESP_ENCODING",
+        "REQ_RESP_RAISE_FOR_STATUS",
+        "REQ_IS_STATUS_200",
+        "REQ_IS_CLIENT_ERROR",
+        "REQ_IS_SERVER_ERROR",
+        "REQ_GET_STREAM",
+        "REQ_STREAM_ITER_CONTENT",
+        "REQ_RESP_SAVE_TO_FILE",
+        "REQ_RESP_STREAM_SAVE_TO_FILE",
+        "REQ_POST_UPLOAD_FILE",
+        "REQ_DOWNLOAD_IMAGE",
+        "REQ_HTTP_ADAPTER_INIT",
+        "REQ_SESSION_MOUNT_ADAPTER",
+        "REQ_SESSION_SET_PROXIES",
+        "REQ_SESSION_SET_VERIFY_SSL",
+        "REQ_SESSION_SET_CLIENT_CERT",
+        "REQ_SESSION_CLEAR_COOKIES",
+        "REQ_SET_DIGEST_AUTH",
+        "REQ_SET_PROXY_AUTH",
+        "REQ_REQUEST_PREPARE",
+        "REQ_SESSION_SEND",
+        "REQ_RESP_HISTORY",
+        "REQ_RESP_IS_REDIRECT",
+        "REQ_RESP_LINKS",
+        "REQ_RESP_REASON",
+        "REQ_RESP_APPARENT_ENCODING",
+        "REQ_RESP_CONTENT_TYPE",
+        "REQ_RESP_CONTENT_LENGTH",
+        "REQ_STREAM_ITER_LINES",
+        "REQ_RESP_SAVE_JSON",
+        "REQ_RESP_SAVE_TEXT",
+        "REQ_BUILD_CUSTOM_HEADER",
+        "REQ_URL_JOIN",
+        "REQ_SET_TIMEOUT_TUPLE",
+        "REQ_RESP_CLOSE"
       ]
     },
     "seaborn": {
       "file": "seaborn.json",
+      "is_core": false,
+      "aliases": [
+        "sns"
+      ],
       "count": 58,
       "types": {
         "Figure": {
@@ -582,75 +1967,108 @@
         },
         "Plot": {
           "parent": "Modality"
+        },
+        "canvas": {
+          "parent": "object"
         }
       },
       "cell_ids": [
-        "sns_axes_savefig",
-        "sns_barplot_hue",
-        "sns_barplot_xy",
-        "sns_boxenplot_xy",
-        "sns_boxplot_hue",
-        "sns_boxplot_xy",
-        "sns_bridge_dataframe_to_axes",
-        "sns_bridge_export_figure",
-        "sns_catplot_facet",
-        "sns_clustermap_hierarchical",
-        "sns_clustermap_savefig",
+        "sns_set_theme",
+        "sns_set_style",
+        "sns_set_context",
+        "sns_set_palette",
+        "sns_load_dataset",
         "sns_color_palette",
-        "sns_countplot_x",
-        "sns_despine_axes",
-        "sns_displot_facet",
+        "sns_histplot_univariate",
+        "sns_histplot_bivariate",
+        "sns_histplot_hue",
+        "sns_kdeplot_univariate",
+        "sns_kdeplot_bivariate",
         "sns_ecdfplot_univariate",
-        "sns_facetgrid_add_legend",
+        "sns_rugplot_univariate",
+        "sns_displot_facet",
+        "sns_barplot_xy",
+        "sns_barplot_hue",
+        "sns_countplot_x",
+        "sns_boxplot_xy",
+        "sns_boxplot_hue",
+        "sns_violinplot_xy",
+        "sns_violinplot_split",
+        "sns_boxenplot_xy",
+        "sns_stripplot_xy",
+        "sns_swarmplot_xy",
+        "sns_pointplot_xy",
+        "sns_catplot_facet",
+        "sns_scatterplot_xy",
+        "sns_scatterplot_hue_size",
+        "sns_lineplot_xy",
+        "sns_lineplot_hue_style",
+        "sns_relplot_facet",
+        "sns_heatmap_annotated",
+        "sns_heatmap_masked",
+        "sns_clustermap_hierarchical",
         "sns_facetgrid_init",
         "sns_facetgrid_map",
         "sns_facetgrid_map_dataframe",
-        "sns_facetgrid_savefig",
-        "sns_heatmap_annotated",
-        "sns_heatmap_masked",
-        "sns_histplot_bivariate",
-        "sns_histplot_hue",
-        "sns_histplot_univariate",
-        "sns_jointgrid_init",
-        "sns_jointgrid_plot",
-        "sns_jointgrid_savefig",
-        "sns_jointplot_simple",
-        "sns_kdeplot_bivariate",
-        "sns_kdeplot_univariate",
-        "sns_lineplot_hue_style",
-        "sns_lineplot_xy",
-        "sns_lmplot_facet",
-        "sns_load_dataset",
-        "sns_move_legend_axes",
+        "sns_facetgrid_add_legend",
         "sns_pairgrid_init",
         "sns_pairgrid_map_diag_offdiag",
         "sns_pairgrid_map_upper_lower",
         "sns_pairplot_simple",
-        "sns_pointplot_xy",
+        "sns_jointgrid_init",
+        "sns_jointgrid_plot",
+        "sns_jointplot_simple",
         "sns_regplot_linear",
-        "sns_regplot_logistic",
         "sns_regplot_polynomial",
-        "sns_relplot_facet",
+        "sns_regplot_logistic",
         "sns_residplot_xy",
-        "sns_rugplot_univariate",
-        "sns_scatterplot_hue_size",
-        "sns_scatterplot_xy",
-        "sns_set_context",
-        "sns_set_palette",
-        "sns_set_style",
-        "sns_set_theme",
-        "sns_stripplot_xy",
-        "sns_swarmplot_xy",
-        "sns_violinplot_split",
-        "sns_violinplot_xy"
+        "sns_lmplot_facet",
+        "sns_despine_axes",
+        "sns_move_legend_axes",
+        "sns_facetgrid_savefig",
+        "sns_jointgrid_savefig",
+        "sns_clustermap_savefig",
+        "sns_axes_savefig",
+        "sns_bridge_dataframe_to_axes",
+        "sns_bridge_export_figure"
       ]
     },
     "sklearn": {
       "file": "sklearn.json",
-      "count": 87,
+      "is_core": false,
+      "aliases": [
+        "scikit-learn",
+        "scikit_learn"
+      ],
+      "count": 113,
       "types": {
         "Model": {
-          "parent": "Modality"
+          "parent": "Modality",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
         },
         "Joblib": {
           "parent": "ModelFormat"
@@ -659,132 +2077,479 @@
           "parent": "ModelFormat"
         },
         "Estimator": {
-          "parent": "object"
+          "parent": "model",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
+        },
+        "model": {
+          "parent": "object",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
         },
         "Classifier": {
-          "parent": "Estimator"
+          "parent": "Estimator",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
         },
         "Regressor": {
-          "parent": "Estimator"
+          "parent": "Estimator",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
         },
         "Transformer": {
-          "parent": "Estimator"
+          "parent": "Estimator",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
+        },
+        "Clusterer": {
+          "parent": "Estimator",
+          "kind": "model",
+          "properties": {
+            "is_stateful_instance": true,
+            "is_composite": true,
+            "state_check_methods": [
+              "is_fitted",
+              "is_ready",
+              "is_converged"
+            ],
+            "state_guard_functions": [
+              "check_is_fitted"
+            ],
+            "stateful_base_classes": [
+              "BaseEstimator",
+              "ClassifierMixin",
+              "RegressorMixin"
+            ],
+            "stateful_consumer_methods": [
+              "predict",
+              "transform"
+            ],
+            "stateful_mutator_methods": [
+              "fit"
+            ]
+          }
+        },
+        "modelformat": {
+          "parent": "format"
         }
       },
       "cell_ids": [
-        "joblib.dump",
-        "joblib.load",
-        "pickle.dump",
-        "pickle.load",
-        "sklearn.cluster.AgglomerativeClustering.fit_predict",
-        "sklearn.cluster.DBSCAN.fit_predict",
-        "sklearn.cluster.KMeans.fit",
-        "sklearn.cluster.KMeans.fit_predict",
-        "sklearn.cluster.SpectralClustering.fit_predict",
-        "sklearn.compose.ColumnTransformer.fit_transform",
-        "sklearn.datasets.load_breast_cancer",
-        "sklearn.datasets.load_digits",
+        "sklearn.model_selection.train_test_split",
         "sklearn.datasets.load_iris",
-        "sklearn.datasets.load_wine",
-        "sklearn.datasets.make_blobs",
         "sklearn.datasets.make_classification",
         "sklearn.datasets.make_regression",
-        "sklearn.decomposition.FastICA.fit_transform",
-        "sklearn.decomposition.IncrementalPCA.fit_transform",
-        "sklearn.decomposition.NMF.fit_transform",
-        "sklearn.decomposition.PCA.fit_transform",
-        "sklearn.decomposition.PCA.transform",
-        "sklearn.decomposition.TruncatedSVD.fit_transform",
-        "sklearn.discriminant_analysis.LinearDiscriminantAnalysis.fit_transform",
-        "sklearn.ensemble.GradientBoostingClassifier.fit",
-        "sklearn.ensemble.GradientBoostingRegressor.fit",
-        "sklearn.ensemble.RandomForestClassifier.fit",
-        "sklearn.ensemble.RandomForestRegressor.fit",
-        "sklearn.feature_extraction.text.TfidfVectorizer.fit_transform",
-        "sklearn.feature_selection.RFE.fit_transform",
-        "sklearn.feature_selection.SelectKBest.fit_transform",
-        "sklearn.feature_selection.VarianceThreshold.fit_transform",
-        "sklearn.impute.KNNImputer.fit_transform",
+        "sklearn.preprocessing.StandardScaler.fit_transform",
+        "sklearn.preprocessing.MinMaxScaler.fit_transform",
+        "sklearn.preprocessing.RobustScaler.fit_transform",
         "sklearn.impute.SimpleImputer.fit_transform",
-        "sklearn.linear_model.ElasticNet.fit",
-        "sklearn.linear_model.Lasso.fit",
-        "sklearn.linear_model.LinearRegression.fit",
-        "sklearn.linear_model.LinearRegression.predict",
+        "sklearn.preprocessing.OneHotEncoder.fit_transform",
+        "sklearn.preprocessing.PolynomialFeatures.fit_transform",
+        "sklearn.decomposition.PCA.fit_transform",
+        "sklearn.decomposition.TruncatedSVD.fit_transform",
+        "sklearn.feature_selection.SelectKBest.fit_transform",
         "sklearn.linear_model.LogisticRegression.fit",
         "sklearn.linear_model.LogisticRegression.predict",
         "sklearn.linear_model.LogisticRegression.predict_proba",
-        "sklearn.linear_model.Ridge.fit",
-        "sklearn.linear_model.SGDClassifier.fit",
-        "sklearn.manifold.TSNE.fit_transform",
-        "sklearn.metrics.accuracy_score",
-        "sklearn.metrics.calinski_harabasz_score",
-        "sklearn.metrics.classification_report",
-        "sklearn.metrics.confusion_matrix",
-        "sklearn.metrics.davies_bouldin_score",
-        "sklearn.metrics.f1_score",
-        "sklearn.metrics.mean_absolute_error",
-        "sklearn.metrics.mean_squared_error",
-        "sklearn.metrics.precision_score",
-        "sklearn.metrics.r2_score",
-        "sklearn.metrics.recall_score",
-        "sklearn.metrics.roc_auc_score",
-        "sklearn.metrics.silhouette_score",
-        "sklearn.mixture.GaussianMixture.fit_predict",
-        "sklearn.model_selection.GridSearchCV.fit",
-        "sklearn.model_selection.KFold.split",
-        "sklearn.model_selection.RandomizedSearchCV.fit",
-        "sklearn.model_selection.StratifiedKFold.split",
-        "sklearn.model_selection.cross_val_score",
-        "sklearn.model_selection.cross_validate",
-        "sklearn.model_selection.train_test_split",
-        "sklearn.naive_bayes.GaussianNB.fit",
-        "sklearn.neighbors.KNeighborsClassifier.fit",
-        "sklearn.neighbors.KNeighborsRegressor.fit",
-        "sklearn.neural_network.MLPClassifier.fit",
-        "sklearn.pipeline.Pipeline.fit",
-        "sklearn.preprocessing.FunctionTransformer.fit_transform",
-        "sklearn.preprocessing.LabelEncoder.fit_transform",
-        "sklearn.preprocessing.MaxAbsScaler.fit_transform",
-        "sklearn.preprocessing.MinMaxScaler.fit_transform",
-        "sklearn.preprocessing.Normalizer.fit_transform",
-        "sklearn.preprocessing.OneHotEncoder.fit_transform",
-        "sklearn.preprocessing.OrdinalEncoder.fit_transform",
-        "sklearn.preprocessing.PolynomialFeatures.fit_transform",
-        "sklearn.preprocessing.PowerTransformer.fit_transform",
-        "sklearn.preprocessing.QuantileTransformer.fit_transform",
-        "sklearn.preprocessing.RobustScaler.fit_transform",
-        "sklearn.preprocessing.StandardScaler.fit_transform",
-        "sklearn.preprocessing.StandardScaler.transform",
+        "sklearn.ensemble.RandomForestClassifier.fit",
         "sklearn.svm.SVC.fit",
-        "sklearn.svm.SVR.fit",
+        "sklearn.linear_model.LinearRegression.fit",
+        "sklearn.linear_model.LinearRegression.predict",
+        "sklearn.linear_model.Ridge.fit",
+        "sklearn.linear_model.Lasso.fit",
+        "sklearn.ensemble.RandomForestRegressor.fit",
+        "sklearn.cluster.KMeans.fit",
+        "sklearn.cluster.KMeans.fit_predict",
+        "sklearn.cluster.DBSCAN.fit_predict",
+        "sklearn.pipeline.Pipeline.fit",
+        "sklearn.model_selection.GridSearchCV.fit",
+        "sklearn.model_selection.cross_val_score",
+        "sklearn.metrics.accuracy_score",
+        "sklearn.metrics.f1_score",
+        "sklearn.metrics.confusion_matrix",
+        "sklearn.metrics.roc_auc_score",
+        "sklearn.metrics.mean_squared_error",
+        "sklearn.metrics.r2_score",
+        "sklearn.metrics.silhouette_score",
+        "joblib.dump",
+        "joblib.load",
+        "sklearn.datasets.load_wine",
+        "sklearn.datasets.load_breast_cancer",
+        "sklearn.datasets.load_digits",
+        "sklearn.datasets.make_blobs",
+        "sklearn.model_selection.KFold.split",
+        "sklearn.model_selection.StratifiedKFold.split",
+        "sklearn.preprocessing.StandardScaler.transform",
+        "sklearn.preprocessing.MaxAbsScaler.fit_transform",
+        "sklearn.preprocessing.Normalizer.fit_transform",
+        "sklearn.preprocessing.QuantileTransformer.fit_transform",
+        "sklearn.preprocessing.PowerTransformer.fit_transform",
+        "sklearn.preprocessing.OrdinalEncoder.fit_transform",
+        "sklearn.preprocessing.LabelEncoder.fit_transform",
+        "sklearn.impute.KNNImputer.fit_transform",
+        "sklearn.preprocessing.FunctionTransformer.fit_transform",
+        "sklearn.feature_extraction.text.TfidfVectorizer.fit_transform",
+        "sklearn.decomposition.PCA.transform",
+        "sklearn.decomposition.IncrementalPCA.fit_transform",
+        "sklearn.decomposition.FastICA.fit_transform",
+        "sklearn.decomposition.NMF.fit_transform",
+        "sklearn.discriminant_analysis.LinearDiscriminantAnalysis.fit_transform",
+        "sklearn.manifold.TSNE.fit_transform",
+        "sklearn.feature_selection.VarianceThreshold.fit_transform",
+        "sklearn.feature_selection.RFE.fit_transform",
         "sklearn.tree.DecisionTreeClassifier.fit",
-        "sklearn.tree.DecisionTreeRegressor.fit"
+        "sklearn.ensemble.GradientBoostingClassifier.fit",
+        "sklearn.neighbors.KNeighborsClassifier.fit",
+        "sklearn.naive_bayes.GaussianNB.fit",
+        "sklearn.linear_model.SGDClassifier.fit",
+        "sklearn.neural_network.MLPClassifier.fit",
+        "sklearn.tree.DecisionTreeRegressor.fit",
+        "sklearn.ensemble.GradientBoostingRegressor.fit",
+        "sklearn.linear_model.ElasticNet.fit",
+        "sklearn.svm.SVR.fit",
+        "sklearn.neighbors.KNeighborsRegressor.fit",
+        "sklearn.cluster.AgglomerativeClustering.fit_predict",
+        "sklearn.mixture.GaussianMixture.fit_predict",
+        "sklearn.cluster.SpectralClustering.fit_predict",
+        "sklearn.compose.ColumnTransformer.fit_transform",
+        "sklearn.model_selection.RandomizedSearchCV.fit",
+        "sklearn.model_selection.cross_validate",
+        "sklearn.metrics.precision_score",
+        "sklearn.metrics.recall_score",
+        "sklearn.metrics.classification_report",
+        "sklearn.metrics.mean_absolute_error",
+        "sklearn.metrics.calinski_harabasz_score",
+        "sklearn.metrics.davies_bouldin_score",
+        "sklearn.preprocessing.MinMaxScaler.transform",
+        "sklearn.tree.DecisionTreeClassifier.predict",
+        "sklearn.ensemble.GradientBoostingClassifier.predict",
+        "sklearn.neighbors.KNeighborsClassifier.predict",
+        "sklearn.naive_bayes.GaussianNB.predict",
+        "sklearn.linear_model.SGDClassifier.predict",
+        "sklearn.neural_network.MLPClassifier.predict",
+        "sklearn.tree.DecisionTreeRegressor.predict",
+        "sklearn.ensemble.GradientBoostingRegressor.predict",
+        "sklearn.linear_model.ElasticNet.predict",
+        "sklearn.svm.SVR.predict",
+        "sklearn.neighbors.KNeighborsRegressor.predict",
+        "sklearn.ensemble.RandomForestClassifier.predict",
+        "sklearn.ensemble.RandomForestRegressor.predict",
+        "sklearn.linear_model.Ridge.predict",
+        "sklearn.linear_model.Lasso.predict",
+        "sklearn.svm.SVC.predict",
+        "sklearn.cluster.KMeans.predict",
+        "sklearn.model_selection.GridSearchCV.predict",
+        "sklearn.model_selection.RandomizedSearchCV.predict",
+        "sklearn.pipeline.Pipeline.predict",
+        "sklearn.preprocessing.StandardScaler.fit",
+        "sklearn.preprocessing.MinMaxScaler.fit",
+        "sklearn.decomposition.PCA.fit",
+        "sklearn.ensemble.RandomForestClassifier.init",
+        "sklearn.linear_model.LogisticRegression.init",
+        "sklearn.svm.SVC.init",
+        "sklearn.linear_model.Ridge.init"
+      ]
+    },
+    "sqlite3": {
+      "file": "sqlite3.json",
+      "is_core": false,
+      "aliases": [
+        "sqlite"
+      ],
+      "count": 47,
+      "types": [
+        {
+          "name": "object",
+          "parent": null
+        },
+        {
+          "name": "handle",
+          "parent": "object"
+        },
+        {
+          "name": "connection",
+          "parent": "db_connection"
+        },
+        {
+          "name": "cursor",
+          "parent": "handle"
+        },
+        {
+          "name": "scalar",
+          "parent": "object"
+        },
+        {
+          "name": "str",
+          "parent": "scalar"
+        },
+        {
+          "name": "int",
+          "parent": "scalar"
+        },
+        {
+          "name": "float",
+          "parent": "scalar"
+        },
+        {
+          "name": "bool",
+          "parent": "scalar"
+        },
+        {
+          "name": "path",
+          "parent": "object"
+        },
+        {
+          "name": "db_path",
+          "parent": "path"
+        },
+        {
+          "name": "sql_query",
+          "parent": "str"
+        },
+        {
+          "name": "collection",
+          "parent": "object"
+        },
+        {
+          "name": "tuple",
+          "parent": "collection"
+        },
+        {
+          "name": "list",
+          "parent": "collection"
+        },
+        {
+          "name": "dict",
+          "parent": "collection"
+        },
+        {
+          "name": "row",
+          "parent": "tuple"
+        },
+        {
+          "name": "record_list",
+          "parent": "list"
+        },
+        {
+          "name": "callable",
+          "parent": "object"
+        }
+      ],
+      "cell_ids": [
+        "SQLITE_CONNECT",
+        "SQLITE_CONNECT_MEMORY",
+        "SQLITE_CONNECT_URI",
+        "SQLITE_ROW_FACTORY_DICT",
+        "SQLITE_SET_ISOLATION_LEVEL",
+        "SQLITE_SET_TIMEOUT",
+        "SQLITE_CURSOR",
+        "SQLITE_CURSOR_CLOSE",
+        "SQLITE_CREATE_TABLE",
+        "SQLITE_DROP_TABLE",
+        "SQLITE_CREATE_INDEX",
+        "SQLITE_ALTER_TABLE_ADD_COLUMN",
+        "SQLITE_GET_TABLE_NAMES",
+        "SQLITE_GET_TABLE_SCHEMA",
+        "SQLITE_EXECUTE",
+        "SQLITE_EXECUTE_PARAMS",
+        "SQLITE_EXECUTEMANY",
+        "SQLITE_EXECUTESCRIPT",
+        "SQLITE_INSERT_ROW",
+        "SQLITE_UPDATE_ROWS",
+        "SQLITE_DELETE_ROWS",
+        "SQLITE_FETCHONE",
+        "SQLITE_FETCHALL",
+        "SQLITE_FETCHMANY",
+        "SQLITE_ROWCOUNT",
+        "SQLITE_LASTROWID",
+        "SQLITE_ROWS_TO_DICTS",
+        "SQLITE_COMMIT",
+        "SQLITE_ROLLBACK",
+        "SQLITE_TRANSACTION_CONTEXT",
+        "SQLITE_PRAGMA_SET",
+        "SQLITE_PRAGMA_GET",
+        "SQLITE_CREATE_FUNCTION",
+        "SQLITE_CREATE_AGGREGATE",
+        "SQLITE_CREATE_COLLATION",
+        "SQLITE_SET_TRACE_CALLBACK",
+        "SQLITE_SET_PROGRESS_HANDLER",
+        "SQLITE_SET_AUTHORIZER",
+        "SQLITE_ENABLE_LOAD_EXTENSION",
+        "SQLITE_LOAD_EXTENSION",
+        "SQLITE_TOTAL_CHANGES",
+        "SQLITE_IN_TRANSACTION",
+        "SQLITE_DUMP_SQL",
+        "SQLITE_INTERRUPT",
+        "SQLITE_BACKUP",
+        "SQLITE_BACKUP_TO_FILE",
+        "SQLITE_CLOSE"
       ]
     }
   },
-  "exemplars": [
+  "canonical_examples": [
     {
-      "_comment": "STAGE 1: Environmental Ingress (File -> Memory Carrier)",
       "cell_id": "CV2_IMREAD",
-      "stage": 1,
-      "node_type": "function",
-      "node_role": "source",
-      "topology_type": "sequential",
+      "domain_name": "cv2",
+      "docstring": "Loads an image from a file into a numpy.ndarray.",
+      "code_template": "{output_var} = cv2.imread({image_path}, {flags})",
+      "code_templates": {},
+      "dependencies": [
+        "cv2",
+        "numpy as np"
+      ],
       "inputs": {
         "image_path": {
-          "type_name": "File[Image, Any]",
-          "state": "file_path",
+          "carrier": "File[Image, Any]",
+          "typestate": "cv2::file_path",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "external_asset",
+          "resource_mode": "value",
           "required": true,
-          "default_value": null,
-          "abstract_type": "path",
-          "param_kind": "standard"
+          "description": "Filesystem path to the image file to decode.",
+          "domain": "cv2"
         },
         "flags": {
-          "type_name": "int",
-          "state": "flag",
+          "carrier": "int",
+          "typestate": "cv2::flag",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "enum",
+          "resource_mode": "value",
           "required": false,
           "default_value": 1,
-          "abstract_type": "scalar",
           "enum_values": [
             0,
             1,
@@ -793,162 +2558,319 @@
             4,
             8
           ],
-          "param_kind": "standard"
+          "description": "Flag that can take values of cv2.ImreadModes (e.g. cv2.IMREAD_COLOR=1, cv2.IMREAD_GRAYSCALE=0).",
+          "domain": "cv2"
         }
       },
       "outputs": {
         "output_var": {
-          "type_name": "ndarray",
-          "state": "color_bgr",
-          "required": true,
-          "abstract_type": "tensor",
-          "value_constraints": {
-            "dtype": "uint8"
+          "carrier": "ndarray",
+          "typestate": "numpy::color_bgr",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "uint8",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
           },
-          "shape_contract": {
-            "ndim": 3
-          }
+          "invariants": [
+            "dtype=uint8"
+          ],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Loaded image array with shape (H, W, 3) or (H, W).",
+          "domain": "cv2"
         }
       },
-      "code_template": "{output_var} = cv2.imread({image_path}, {flags})",
-      "dependencies": [
-        "import cv2"
+      "primary_in": "image_path",
+      "primary_out": "output_var",
+      "effects": [
+        {
+          "property": "state",
+          "operator": "==",
+          "value": "color_bgr",
+          "expression": "state == 'color_bgr'",
+          "target": "output_var",
+          "description": "Output tensor state is color_bgr."
+        }
       ],
-      "semantic_tags": [
-        "read",
-        "load",
-        "image",
-        "decode",
-        "bgr",
-        "imread"
-      ]
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
-      "_comment": "STAGE 2: Endomorphism / Higher-Kinded Container Transform",
       "cell_id": "CV2_FIND_CONTOURS",
-      "stage": 2,
-      "node_type": "function",
-      "node_role": "transform",
-      "topology_type": "sequential",
+      "domain_name": "cv2",
+      "docstring": "Extracts topological contours from a binary or edge image matrix using border-following.",
+      "code_template": "{contours}, {hierarchy} = cv2.findContours({image}, {mode}, {method})",
+      "code_templates": {},
+      "dependencies": [
+        "cv2"
+      ],
       "inputs": {
         "image": {
-          "type_name": "ndarray",
-          "state": "binary",
+          "carrier": "ndarray",
+          "typestate": "cv2::binary",
           "accepted_states": [
             "edge_map"
           ],
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "uint8",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "dtype=uint8"
+          ],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "default_value": null,
-          "abstract_type": "tensor",
-          "shape_contract": {
-            "ndim": 2
-          }
+          "description": "8-bit single-channel binary or edge image matrix.",
+          "domain": "cv2"
         },
         "mode": {
-          "type_name": "int",
-          "state": "retrieval_mode",
+          "carrier": "int",
+          "typestate": "cv2::retrieval_mode",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "enum",
+          "resource_mode": "value",
           "required": false,
           "default_value": 0,
-          "abstract_type": "scalar",
           "enum_values": [
             0,
             1,
             2,
             3
-          ]
+          ],
+          "description": "Contour retrieval mode: cv2.RETR_EXTERNAL=0, cv2.RETR_LIST=1, cv2.RETR_CCOMP=2, cv2.RETR_TREE=3.",
+          "port_role": "configuration",
+          "domain": "cv2"
         },
         "method": {
-          "type_name": "int",
-          "state": "approx_method",
+          "carrier": "int",
+          "typestate": "cv2::approx_method",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "enum",
+          "resource_mode": "value",
           "required": false,
           "default_value": 2,
-          "abstract_type": "scalar",
           "enum_values": [
             1,
             2,
             3,
             4
-          ]
+          ],
+          "description": "Contour approximation algorithm: cv2.CHAIN_APPROX_NONE=1, cv2.CHAIN_APPROX_SIMPLE=2.",
+          "port_role": "configuration",
+          "domain": "cv2"
         }
       },
       "outputs": {
         "contours": {
-          "type_name": "List[Contour]",
-          "state": "contours",
+          "carrier": "List[Contour]",
+          "typestate": "cv2::contours",
+          "accepted_states": [],
+          "layout": {
+            "rank": 1,
+            "shape": [
+              "N"
+            ],
+            "dtype": "ndarray",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "abstract_type": "collection"
+          "description": "Detected contours returned as a list of numpy point coordinate arrays.",
+          "domain": "cv2"
         },
         "hierarchy": {
-          "type_name": "ndarray",
-          "state": "hierarchy",
+          "carrier": "ndarray",
+          "typestate": "cv2::hierarchy",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "int32",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "dtype=int32"
+          ],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "abstract_type": "tensor",
-          "value_constraints": {
-            "dtype": "int32"
-          }
+          "description": "Optional topology hierarchy matrix of shape (1, N, 4).",
+          "domain": "cv2"
         }
       },
-      "code_template": "{contours}, {hierarchy} = cv2.findContours({image}, {mode}, {method})",
-      "dependencies": [
-        "import cv2"
+      "primary_in": "image",
+      "primary_out": "contours",
+      "effects": [
+        {
+          "property": "state",
+          "operator": "==",
+          "value": "contours",
+          "expression": "state == 'contours'",
+          "target": "contours",
+          "description": "Output is contours list."
+        }
       ],
-      "semantic_tags": [
-        "find",
-        "contours",
-        "boundary",
-        "shapes",
-        "detect"
-      ]
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
-      "_comment": "STAGE 3: Egress / Sink (Memory Carrier -> File on Disk)",
       "cell_id": "PD_TO_CSV",
-      "stage": 3,
-      "node_type": "method",
-      "node_role": "sink",
-      "topology_type": "sequential",
+      "domain_name": "pandas",
+      "docstring": "Write DataFrame to a comma-separated values (csv) file.",
+      "code_template": "{df}.to_csv({filepath}, index={index})",
+      "code_templates": {},
+      "dependencies": [
+        "pandas as pd"
+      ],
       "inputs": {
-        "data": {
-          "type_name": "DataFrame",
-          "state": "any",
+        "df": {
+          "carrier": "DataFrame",
+          "typestate": "pandas::cleaned",
+          "accepted_states": [
+            "cleaned",
+            "raw",
+            "deduped",
+            "indexed",
+            "numeric_only",
+            "aggregated",
+            "pivoted",
+            "dataframe_2d_generic",
+            "tabular",
+            "filtered"
+          ],
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "composite_record",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "default_value": null,
-          "abstract_type": "table"
+          "description": "DataFrame to serialize.",
+          "port_role": "data_input",
+          "domain": "pandas"
         },
         "filepath": {
-          "type_name": "File[Tabular, CSV]",
-          "state": "destination_path",
+          "carrier": "File[Tabular, CSV]",
+          "typestate": "pandas::destination_path",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "external_asset",
+          "resource_mode": "value",
           "required": true,
-          "default_value": null,
-          "abstract_type": "path"
+          "description": "File path for destination CSV.",
+          "port_role": "destination",
+          "domain": "pandas"
         },
         "index": {
-          "type_name": "bool",
-          "state": "index_flag",
+          "carrier": "bool",
+          "typestate": "pandas::write_index_flag",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "bool",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "enum",
+          "resource_mode": "value",
           "required": false,
-          "default_value": false,
-          "abstract_type": "logical"
+          "default_value": "False",
+          "enum_values": [
+            "True",
+            "False"
+          ],
+          "description": "Write row names (index).",
+          "domain": "pandas"
         }
       },
       "outputs": {
-        "output_var": {
-          "type_name": "File[Tabular, CSV]",
-          "state": "written_to_disk",
+        "status": {
+          "carrier": "File[Tabular, CSV]",
+          "typestate": "pandas::written_to_disk",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "external_asset",
+          "resource_mode": "value",
           "required": true,
-          "abstract_type": "path"
+          "description": "Terminal disk-persisted state.",
+          "domain": "pandas"
         }
       },
-      "code_template": "{data}.to_csv({filepath}, index={index})",
-      "dependencies": [
-        "import pandas as pd"
+      "primary_in": "port_0",
+      "primary_out": "status",
+      "effects": [
+        "filesystem_write"
       ],
-      "semantic_tags": [
-        "save",
-        "write",
-        "csv",
-        "export",
-        "dataframe"
-      ]
+      "mutation_type": "pure",
+      "is_context_manager": false
     }
   ]
 }

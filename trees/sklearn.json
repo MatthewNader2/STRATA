@@ -1666,12 +1666,13 @@
             "max=1.0",
             "min=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.25",
           "description": "Proportion of the dataset included in the test split.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -1687,12 +1688,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Pseudo-random generator seed.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -1910,12 +1912,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1000",
           "description": "Number of sample instances to synthesize.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "n_features": {
           "carrier": "int",
@@ -1933,12 +1936,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "20",
           "description": "Total number of features to generate.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -1954,12 +1958,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for reproducible synthesis.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2051,12 +2056,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1000",
           "description": "Number of samples to synthesize.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "n_features": {
           "carrier": "int",
@@ -2074,12 +2080,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10",
           "description": "Number of features to synthesize.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -2095,12 +2102,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for deterministic generation.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2170,7 +2178,7 @@
       "cell_id": "sklearn.preprocessing.StandardScaler.fit_transform",
       "domain_name": "sklearn",
       "docstring": "Fit StandardScaler to data, then transform it by removing the mean and scaling to unit variance.",
-      "code_template": "{output_var} = StandardScaler().fit_transform(getattr({X}, 'values', {X}).reshape(-1, 1)).flatten() if getattr({X}, 'ndim', 2) == 1 else StandardScaler().fit_transform({X})",
+      "code_template": "{output_var} = StandardScaler().fit_transform({X})",
       "code_templates": {},
       "dependencies": [
         "from sklearn.preprocessing import StandardScaler"
@@ -2245,17 +2253,7 @@
         }
       ],
       "mutation_type": "stateful_allocation",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "typestate",
-          "invariants"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "sklearn.preprocessing.MinMaxScaler.fit_transform",
@@ -2336,17 +2334,7 @@
         }
       ],
       "mutation_type": "stateful_allocation",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "typestate",
-          "invariants"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "sklearn.preprocessing.RobustScaler.fit_transform",
@@ -2427,17 +2415,7 @@
         }
       ],
       "mutation_type": "stateful_allocation",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "typestate",
-          "invariants"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "sklearn.impute.SimpleImputer.fit_transform",
@@ -2543,17 +2521,7 @@
         }
       ],
       "mutation_type": "stateful_allocation",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "typestate",
-          "invariants"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": false
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "sklearn.preprocessing.OneHotEncoder.fit_transform",
@@ -2687,12 +2655,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "The degree of polynomial features to construct.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2791,12 +2760,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Number of orthogonal principal axes to preserve.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2893,12 +2863,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Desired rank of the lower dimensional decomposition.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3021,12 +2992,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10",
           "description": "Number of top features to retain.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3149,12 +3121,13 @@
           "invariants": [
             "min=0.0001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Inverse of regularization strength.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "max_iter": {
           "carrier": "int",
@@ -3172,12 +3145,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "200",
           "description": "Maximum number of solver iterations.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -3193,12 +3167,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Solver shuffling random state.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3516,12 +3491,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Number of randomized decision trees.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -3537,12 +3513,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for bootstrap aggregation.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3663,12 +3640,13 @@
           "invariants": [
             "min=0.001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Regularization penalty parameter.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "kernel": {
           "carrier": "str",
@@ -4018,12 +3996,13 @@
           "invariants": [
             "min=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Regularization strength parameter.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4144,12 +4123,13 @@
           "invariants": [
             "min=0.0001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Constant that multiplies the L1 penalty term.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4270,12 +4250,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Number of regression trees.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -4291,12 +4272,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for deterministic tree splits.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4391,12 +4373,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "8",
           "description": "Number of Voronoi centroid clusters to form.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -4412,12 +4395,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for centroid initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4512,12 +4496,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "8",
           "description": "Cluster cardinality.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -4533,12 +4518,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Centroid seed.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4634,12 +4620,13 @@
           "invariants": [
             "min=0.001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.5",
           "description": "Maximum neighborhood distance.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "min_samples": {
           "carrier": "int",
@@ -4657,12 +4644,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of core point neighbors.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4899,12 +4887,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of cross-validation folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "X": {
           "carrier": "ndarray",
@@ -5024,7 +5013,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "value",
           "required": true,
           "description": "Model to fit across CV folds.",
           "port_role": "model_input",
@@ -5099,12 +5088,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5926,7 +5916,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Trained estimator or pipeline to persist.",
           "port_role": "model_input",
@@ -6278,12 +6268,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1000",
           "description": "Total points divided among clusters.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "centers": {
           "carrier": "int",
@@ -6301,12 +6292,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "3",
           "description": "Number of isotropic Gaussian centers.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -6322,12 +6314,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random generator seed.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6446,12 +6439,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -6467,12 +6461,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for fold shuffling.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6586,12 +6581,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of stratified folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -6607,12 +6603,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for reproducible shuffling.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6990,12 +6987,13 @@
           "invariants": [
             "min=10"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1000",
           "description": "Number of quantiles to compute.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -7011,12 +7009,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for subsampling quantiles.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7377,12 +7376,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of neighboring samples to use for imputation.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7477,12 +7477,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Callable function to apply elementwise or rowwise.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7575,12 +7576,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1000",
           "description": "Maximum size of token vocabulary.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7777,12 +7779,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Target number of components.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "batch_size": {
           "carrier": "int",
@@ -7800,12 +7803,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "200",
           "description": "Number of samples per incremental batch.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7902,12 +7906,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Number of latent independent sources to reconstruct.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -7923,12 +7928,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for unmixing matrix initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8025,12 +8031,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of latent factors to extract.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -8046,12 +8053,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for deterministic initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8174,12 +8182,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Number of discriminant components (bounded by n_classes - 1).",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8277,12 +8286,13 @@
             "max=3",
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "Dimension of the embedded space (usually 2 for visualization).",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "perplexity": {
           "carrier": "float",
@@ -8300,12 +8310,13 @@
           "invariants": [
             "min=5.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "30.0",
           "description": "The perplexity is related to the number of nearest neighbors.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -8321,12 +8332,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for t-SNE gradient descent initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8423,12 +8435,13 @@
           "invariants": [
             "min=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.0",
           "description": "Features with variance lower than this threshold are removed.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8572,12 +8585,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of features to keep.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8700,12 +8714,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Maximum depth of the tree.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -8721,12 +8736,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for deterministic tree partition.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8847,12 +8863,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Number of sequential boosting stages to perform.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "learning_rate": {
           "carrier": "float",
@@ -8870,12 +8887,13 @@
           "invariants": [
             "min=0.0001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.1",
           "description": "Shrinkage factor scaling tree contributions.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -8891,12 +8909,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for subsampling.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9017,12 +9036,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of nearest neighbors to query.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9297,12 +9317,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for stochastic sample shuffle.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9444,12 +9465,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "200",
           "description": "Maximum number of optimization epochs.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -9465,12 +9487,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for weight initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9592,12 +9615,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Maximum depth of the tree.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -9613,12 +9637,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for node splits.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9739,12 +9764,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Number of sequential gradient boosting steps.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "learning_rate": {
           "carrier": "float",
@@ -9762,12 +9788,13 @@
           "invariants": [
             "min=0.0001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.1",
           "description": "Step size shrinkage parameter.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -9783,12 +9810,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for subsampling.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -9909,12 +9937,13 @@
           "invariants": [
             "min=0.0001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Constant multiplying the penalty terms.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "l1_ratio": {
           "carrier": "float",
@@ -9933,12 +9962,13 @@
             "max=1.0",
             "min=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.5",
           "description": "The ElasticNet mixing parameter (0 for L2, 1 for L1).",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -9954,12 +9984,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for coordinate descent selection.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -10080,12 +10111,13 @@
           "invariants": [
             "min=0.001"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Regularization penalty parameter.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "kernel": {
           "carrier": "str",
@@ -10233,12 +10265,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of nearest neighbors to query.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -10333,12 +10366,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "2",
           "description": "The number of clusters to find by cutting dendrogram.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -10434,12 +10468,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "3",
           "description": "Number of mixture components.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -10455,12 +10490,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Seed for component initialization.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -10556,12 +10592,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "3",
           "description": "Dimension of projection subspace and number of clusters.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -10577,12 +10614,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for k-means on spectral eigenvectors.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -10797,12 +10835,13 @@
           "invariants": [
             "min=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10",
           "description": "Number of parameter settings sampled.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "cv": {
           "carrier": "int",
@@ -10820,12 +10859,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Cross-validation folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "random_state": {
           "carrier": "int",
@@ -10841,12 +10881,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "42",
           "description": "Random seed for parameter sampling.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         },
         "X": {
           "carrier": "ndarray",
@@ -10966,7 +11007,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "value",
           "required": true,
           "description": "Model to fit across CV folds.",
           "port_role": "model_input",
@@ -11041,12 +11082,13 @@
           "invariants": [
             "min=2"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "5",
           "description": "Number of folds.",
-          "domain": "sklearn"
+          "domain": "sklearn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -11738,140 +11780,6 @@
           "expression": "score >= 0.0",
           "target": "score",
           "description": "Score is non-negative."
-        }
-      ],
-      "mutation_type": "pure",
-      "is_context_manager": false
-    },
-    {
-      "cell_id": "pickle.dump",
-      "domain_name": "sklearn",
-      "docstring": "Serialize a scikit-learn model object to an open file stream using standard pickle.",
-      "code_template": "pickle.dump({model}, {file_obj})",
-      "code_templates": {},
-      "dependencies": [
-        "import pickle"
-      ],
-      "inputs": {
-        "model": {
-          "carrier": "BaseEstimator",
-          "typestate": "sklearn::fit_estimator",
-          "accepted_states": [
-            "fitted_estimator"
-          ],
-          "layout": {
-            "rank": null,
-            "shape": null,
-            "dtype": "opaque",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "invariants": [],
-          "value_class": "data",
-          "resource_mode": "release",
-          "required": true,
-          "description": "Fitted estimator or pipeline to serialize.",
-          "port_role": "model_input",
-          "domain": "sklearn"
-        },
-        "file_obj": {
-          "carrier": "File[Model, Pickle]",
-          "typestate": "sklearn::file_path",
-          "accepted_states": [],
-          "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "string",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "invariants": [],
-          "value_class": "external_asset",
-          "resource_mode": "value",
-          "required": true,
-          "description": "Open writable binary file handle.",
-          "port_role": "destination",
-          "domain": "sklearn"
-        }
-      },
-      "outputs": {},
-      "primary_in": "model",
-      "primary_out": "void",
-      "effects": [
-        "writes_pickled_bytes_to_stream"
-      ],
-      "mutation_type": "stateful_allocation",
-      "is_context_manager": false
-    },
-    {
-      "cell_id": "pickle.load",
-      "domain_name": "sklearn",
-      "docstring": "Deserialize a scikit-learn model object hierarchy from an open file stream using pickle.",
-      "code_template": "{model} = pickle.load({file_obj})",
-      "code_templates": {},
-      "dependencies": [
-        "import pickle"
-      ],
-      "inputs": {
-        "file_obj": {
-          "carrier": "File[Model, Pickle]",
-          "typestate": "sklearn::file_path",
-          "accepted_states": [],
-          "layout": {
-            "rank": 0,
-            "shape": null,
-            "dtype": "string",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "invariants": [],
-          "value_class": "external_asset",
-          "resource_mode": "value",
-          "required": true,
-          "description": "Open readable binary file stream containing pickled estimator.",
-          "domain": "sklearn"
-        }
-      },
-      "outputs": {
-        "model": {
-          "carrier": "BaseEstimator",
-          "typestate": "sklearn::fit_estimator",
-          "accepted_states": [],
-          "layout": {
-            "rank": null,
-            "shape": null,
-            "dtype": "opaque",
-            "rank_polymorphic": false,
-            "channel_count": null,
-            "channel_axis": null,
-            "length": null
-          },
-          "invariants": [],
-          "value_class": "data",
-          "resource_mode": "acquire",
-          "required": true,
-          "description": "Reconstituted fitted estimator.",
-          "port_role": "model_sink",
-          "domain": "sklearn"
-        }
-      },
-      "primary_in": "file_obj",
-      "primary_out": "model",
-      "effects": [
-        "reads_pickled_bytes_into_estimator",
-        {
-          "property": "is_fitted",
-          "operator": "==",
-          "value": true,
-          "expression": "model is not None",
-          "target": "model",
-          "description": "Model loaded into active runtime."
         }
       ],
       "mutation_type": "pure",

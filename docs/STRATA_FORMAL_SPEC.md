@@ -28,7 +28,7 @@ Domain manifests declare type subsumption edges in `TreeSchema.types` using sing
 Reflexive-transitive closure induces the partial order $A \le_{\mathcal{C}} B$ on ground carriers, extended structurally to parametric type constructors (`CarrierType`):
 
 - **[Sub-Top / Bottom]**: $\forall \tau.\ \tau \le_{\mathcal{C}} \top$ and $\bot \le_{\mathcal{C}} \tau$.
-- **[Sub-Var]**: Universal type variables $\alpha \in \{\text{single uppercase identifier}, \texttt{State}\}$ unify polymorphically during template/combinator signature checks.
+- **[Sub-Var]**: Universal type variables $\alpha \in \{\text{single uppercase identifier}\}$ unify polymorphically during template/combinator signature checks under a substitution-consistent bound environment $\theta$ (`lo_bounds`/`hi_bounds`), rejecting inconsistent multi-occurrence instantiations (e.g., `Tuple[int, str] ≰ Tuple[T, T]`) and preventing collisions with domain carrier names.
 - **[Sub-Optional]**: $\texttt{None} \le_{\mathcal{C}} \texttt{Optional}[T]$, $A \le_{\mathcal{C}} T \implies A \le_{\mathcal{C}} \texttt{Optional}[T]$, and $A \le_{\mathcal{C}} B \implies \texttt{Optional}[A] \le_{\mathcal{C}} \texttt{Optional}[B]$.
 - **[Sub-Container (Covariant)]**: For covariant unary/binary/ternary constructors $F \in \{\texttt{list}, \texttt{tuple}, \texttt{set}, \texttt{sequence}, \texttt{iterable}, \texttt{iterator}, \texttt{file}, \texttt{contextmanager}, \texttt{type}, \texttt{collection}, \texttt{dict}, \texttt{mapping}\}$:
   $$F_1 \le_{\text{head}} F_2 \ \wedge\ \forall i.\ A_i \le_{\mathcal{C}} B_i \implies F_1[A_1,\dots,A_k] \le_{\mathcal{C}} F_2[B_1,\dots,B_k]$$
@@ -46,12 +46,12 @@ $$\rho = \langle r,\ \vec{d},\ \delta,\ c,\ a,\ \ell,\ p_{\text{poly}} \rangle$$
 
 where $r \in \mathbb{N} \cup \{\bot\}$ (`rank`), $\vec{d} \in (\mathbb{N} \cup \text{Sym} \cup \{\bot\})^*$ (`shape`), $\delta$ (`dtype`), $c$ (`channel_count`), $a$ (`channel_axis`), $\ell \in \mathbb{N} \cup \text{Sym} \cup \{\bot\}$ (`length`), and $p_{\text{poly}} \in \mathbb{B}$ (`rank_polymorphic`).
 
-Layout satisfaction $\rho_1 \sqsubseteq_{\rho} \rho_2$ holds iff:
+Layout satisfaction $\rho_1 \sqsubseteq_{\rho} \rho_2$ adopts **gradual metadata matching** on omitted `None` axes (treating missing producer metadata as unconstrained while enforcing every declared constraint):
 1. If $r_2 \in \mathbb{N}$ and $\neg p_{\text{poly},2}$, then $r_1 \in \mathbb{N} \implies r_1 = r_2$ (with concrete/wild dtype equality on $\delta$, channel count equality on $c$, channel axis equality on $a$).
 2. Symbolic length compatibility: concrete integer equality $\ell_1, \ell_2 \in \mathbb{N} \implies \ell_1 = \ell_2$.
-3. Shape vector unification `unify_shapes(d₁, d₂)` ($\neg p_{\text{poly},2}$): $|\vec{d}_1| = |\vec{d}_2|$, and there exists a single-valued environment substitution $\theta : \text{Sym}_2 \to \mathbb{N} \cup \text{Sym}_1$ such that $\forall i$:
+3. Shape vector unification `unify_shapes(d₁, d₂)` ($\neg p_{\text{poly},2}$): $|\vec{d}_1| = |\vec{d}_2|$, and there exists a single-valued environment substitution $\theta : \text{Sym}_2 \to \mathbb{N} \cup \text{Sym}_1$ (symmetric with $\text{Sym}_1$) such that $\forall i$:
    - Concrete equality: $d_{1,i}, d_{2,i} \in \mathbb{N} \implies d_{1,i} = d_{2,i}$.
-   - Non-linear symbolic variable consistency: if $d_{2,i} \in \text{Sym}_2$ is repeated at multiple axes (e.g., square constraint `["N", "N"]`), every corresponding concrete $d_{1,i}$ must bind to the exact same integer value (hence `[4, 4] ⊑ ["N", "N"]`, whereas `[3, 4] ⋢ ["N", "N"]`).
+   - Non-linear symbolic variable consistency: if a symbolic dimension $d_{2,i} \in \text{Sym}_2$ repeats at multiple axes (e.g., square constraint `["N", "N"]`), every corresponding concrete integer or symbolic dimension $d_{1,i}$ must bind to the exact same value or symbol (hence `[4, 4] ⊑ ["N", "N"]` and `["M", "M"] ⊑ ["N", "N"]`, whereas `[3, 4] ⋢ ["N", "N"]` and `["M", "K"] ⋢ ["N", "N"]`).
 
 ### 2.3 Domain-Namespaced Substructural Typestate $(\sigma, \mu)$
 
@@ -112,7 +112,7 @@ Within $\mathcal{C}_{\text{coerce}}$, edges partition cleanly into two **Coheren
 - **Tier 2 (Information-Losing or Intent-Bearing Projections)**: $\texttt{lossy} \vee \texttt{requires\_intent} \vee (r_{\text{out}} < r_{\text{in}})$ (e.g., `CV2_CVT_COLOR_BGR2GRAY`, `NUMPY_TOLIST`, `AUDIO_STEREO_TO_MONO`). Subject to **Coercion Coherence** (`LiveBridgeGraph.find_bridges`):
   1. Never constructed when `allow_lossy = False`.
   2. Permitted during planning *only* when the target consumer port explicitly constrains at least one changed axis in $\Delta(e)$ (e.g., consumer requires `typestate = "numpy::gray"` or explicit carrier conversion or concrete target rank/dtype/shape), preventing spurious rank-dropping or lossy silent downgrades on polymorphic $\top$ consumers.
-  3. Penalized with strict lexicographic priority `(tier2_flag, total_cost, hop_count)` so Tier-1 lossless paths strictly dominate any Tier-2 path.
+  3. Penalized with strict lexicographic priority `(is_tier2, total_cost, hop_count)` (`is_tier2 = lossy ∨ requires_intent`) so Tier-1 lossless paths strictly dominate any Tier-2 path.
 
 ---
 
@@ -164,10 +164,10 @@ For structured `loop(cond, iter, body)`:
 
 **Proof Sketch**: By structural induction over the derivation tree using `[T-Call]`, `[T-Mut]`, `[T-Coerce]`, `[T-Branch]`, and `[T-Loop]`. `signatures_unify` verifies poset membership $A \le_{\mathcal{C}} B$ (multi-parent BFS + variance), shape substitution `unify_shapes`, typestate DAG inheritance, and `RefinementSet.entails`. Whenever `[T-Branch]` joins divergent paths via `join_port_types`, join computes the lattice LUB $(\tau_1 \sqcup \tau_2, \sigma_1 \sqcup \sigma_2, \varphi_1 \sqcup \varphi_2)$ and drops non-invariant shape axes, ensuring any downstream consumer accepting $\mathcal{T}_1 \sqcup \mathcal{T}_2$ accepts values produced by either runtime branch. Concrete literal bindings are checked eagerly in `bind_and_emit` via `RefinementSet.check_literal`. $\square$
 
-### Theorem 2 (Substructural Linear Resource Safety)
-*For any top-level plan accepted with deliverable $d$, every handle acquired during execution is either returned as $d$ or released exactly once across all control-flow paths, and no variable in $\mathcal{R}$ is dereferenced after release.*
+### Theorem 2 (Substructural Linear Resource & Borrow-Lifetime Safety)
+*For any top-level plan accepted with deliverable $d$, every handle acquired during execution is either returned as $d$ or released exactly once across all control-flow paths, no variable in $\mathcal{R}$ is dereferenced after release, and no borrowed child handle/view whose owning resource has been released is dereferenced after owner release.*
 
-**Proof Sketch**: `[T-Var]` enforces $x \notin \mathcal{R}$ prior to wiring. In `[T-Call]`, every port with $\mu = \texttt{release}$ moves its bound handle $v$ from $\Delta$ to $\mathcal{R}$ monotonically, preventing reuse. `[T-Branch]` enforces $\Delta_{\text{then}} = \Delta_{\text{else}}$ (no path-dependent leak) and unions tombstones $\mathcal{R}_{\text{then}} \cup \mathcal{R}_{\text{else}}$, preventing post-branch use of any conditionally freed handle. `[T-Loop]` enforces $\Delta_{\text{body}} = \Delta$ and forbids releasing outer handles in $\Delta$, eliminating unbounded handle accumulation or double-free across loop iterations. At program exit (`require_all_closed = True`), top-level acceptance asserts $\Delta_{\text{exit}} \subseteq \{d\}$, guaranteeing zero leaked linear handles. $\square$
+**Proof Sketch**: `[T-Var]` and `_check_var_live` enforce both $x \notin \mathcal{R}$ and $\forall o \in \text{owners}(x).\ o \notin \mathcal{R}$ prior to variable wiring and inside `loop`/`branch` headers and `condition` tokens. In `[T-Call]`, every port with $\mu = \texttt{release}$ moves its bound handle $v$ from $\Delta$ to $\mathcal{R}$ monotonically, while any `borrow` output or child handle derived from a live borrowed/acquired owner records its transitive `borrow_owners` tuple so owner release invalidates all dependent borrows. `[T-Branch]` enforces $\Delta_{\text{then}} = \Delta_{\text{else}}$, unions tombstones $\mathcal{R}_{\text{then}} \cup \mathcal{R}_{\text{else}}$ and borrow-owner dependencies, and forbids unsafe outer releases in single-arm branches. `[T-Loop]` enforces $\Delta_{\text{body}} = \Delta$ and forbids releasing outer handles in $\Delta$. At program exit (`require_all_closed = True`), top-level acceptance asserts $\Delta_{\text{exit}} \subseteq \{d\}$, guaranteeing zero leaked linear handles. $\square$
 
 ### Theorem 3 (Refinement & External Asset Honesty)
 *No synthesis trace accepted by STRATA fabricates an external filesystem/network resource (`value_class = "external_asset"`) via LLM slot-filling or default guesswork, and no constant numeric literal violating a declared refinement bound passes Layer 3 emission.*
@@ -177,7 +177,7 @@ For structured `loop(cond, iter, body)`:
 ### Theorem 4 (Coercion Coherence)
 *Every auto-inserted bridge edge $e$ belongs strictly to $\mathcal{C}_{\text{coerce}}$ (`bridge_profile.is_bridge = True`, pure/immutable, no destructive effects, linear-neutral), and Tier-2 lossy/intent-bearing coercions are never inserted without an explicit downstream axis constraint.*
 
-**Proof Sketch**: `LiveBridgeGraph.build` filters strictly by `bp.is_bridge == True` and `mutation_type in ("pure", "immutable")` with zero destructive effects and `resource_mode in ("value", "borrow")`, ensuring domain computations never masquerade as silent type conversions. `LiveBridgeGraph.find_bridges` admits Tier-2 edges iff `allow_lossy` holds and at least one axis in `e.deltas` is explicitly constrained (non-top carrier, non-`any` typestate, or non-null layout field) on `dst`. Edge cost ordering $(\text{lossy}, \text{cost}, \text{hops})$ ensures lossless Tier-1 paths are always preferred when both exist. $\square$
+**Proof Sketch**: `LiveBridgeGraph.build` filters strictly by `bp.is_bridge == True` and `mutation_type in ("pure", "immutable")` with zero destructive effects and `resource_mode in ("value", "borrow")`, ensuring domain computations never masquerade as silent type conversions. `LiveBridgeGraph.find_bridges` admits Tier-2 edges iff `allow_lossy` holds and at least one axis in `e.deltas` is explicitly constrained (strict non-subtype target carrier when `carrier` changes, non-`any` typestate, or non-null layout/invariant constraint) on `dst`. Edge cost ordering `(is_tier2, total_cost, hop_count)` ensures lossless Tier-1 paths are always preferred when both exist. $\square$
 
 ---
 
@@ -185,12 +185,12 @@ For structured `loop(cond, iter, body)`:
 
 | Formal Construct | Authoritative Implementation Module & Symbol |
 | :--- | :--- |
-| Type AST $\tau$ & Multi-Parent DAG Poset $(\mathcal{C}, \le_{\mathcal{C}}, \sqcup, \sqcap)$ | [src/type_system.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/type_system.py): `CarrierType`, `parse_carrier`, `BoundedPoset` |
-| Layout & Symbolic Shape Unification $\rho$ | [src/type_system.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/type_system.py): `unify_shapes`, `join_shapes`; [src/bridge_graph.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/bridge_graph.py): `CanonicalPortType` |
-| Interval & Predicate Refinement Lattice $\varphi$ | [src/type_system.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/type_system.py): `RefinementSet` |
-| 4-Component Subsumption & Lattice Join | [src/bridge_graph.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/bridge_graph.py): `signatures_unify`, `join_port_types`, `propagate_polymorphic_signature` |
-| Coercion Subcategory $\mathcal{C}_{\text{coerce}}$ & Two-Tier Search | [src/bridge_graph.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/bridge_graph.py): `LiveBridgeGraph.build`, `LiveBridgeGraph.find_bridges` |
-| Tuple Destructuring Assignment Syntax | [src/frontends/formal_regex.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/frontends/formal_regex.py): `parse_formal_prompt` |
-| Substructural Linear Planner (`[T-Call]`, `[T-Mut]`, `[T-Branch]`, `[T-Loop]`) | [src/typed_planner.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/typed_planner.py): `TypedIRPlanner._plan_block`, `TypedIRPlanner._wire_data_inputs` |
-| Monoidal Emission & Literal Refinement Enforcement | [src/port_binder.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/port_binder.py): `bind_and_emit` |
-| Multi-Parent Poset Compilation & Loading | [src/lattice_db.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/lattice_db.py): `load_compiled_lattice`; [src/strata_pipeline.py](file:///media/matthew/New%20Volume/grad_test/nstl_prototype/src/strata_pipeline.py): `StrataPipeline.from_trees` |
+| Type AST $\tau$ & Multi-Parent DAG Poset $(\mathcal{C}, \le_{\mathcal{C}}, \sqcup, \sqcap)$ | [src/type_system.py](../src/type_system.py): `CarrierType`, `parse_carrier`, `BoundedPoset` |
+| Layout & Symbolic Shape Unification $\rho$ | [src/type_system.py](../src/type_system.py): `unify_shapes`, `join_shapes`; [src/bridge_graph.py](../src/bridge_graph.py): `CanonicalPortType` |
+| Interval & Predicate Refinement Lattice $\varphi$ | [src/type_system.py](../src/type_system.py): `RefinementSet` |
+| 4-Component Subsumption & Lattice Join | [src/bridge_graph.py](../src/bridge_graph.py): `signatures_unify`, `join_port_types`, `propagate_polymorphic_signature` |
+| Coercion Subcategory $\mathcal{C}_{\text{coerce}}$ & Two-Tier Search | [src/bridge_graph.py](../src/bridge_graph.py): `LiveBridgeGraph.build`, `LiveBridgeGraph.find_bridges` |
+| Tuple Destructuring Assignment Syntax | [src/frontends/formal_regex.py](../src/frontends/formal_regex.py): `parse_formal_prompt` |
+| Substructural Linear Planner (`[T-Call]`, `[T-Mut]`, `[T-Branch]`, `[T-Loop]`) | [src/typed_planner.py](../src/typed_planner.py): `TypedIRPlanner._plan_block`, `TypedIRPlanner._wire_data_inputs` |
+| Monoidal Emission & Literal Refinement Enforcement | [src/port_binder.py](../src/port_binder.py): `bind_and_emit` |
+| Multi-Parent Poset Compilation & Loading | [src/lattice_db.py](../src/lattice_db.py): `load_compiled_lattice`; [src/strata_pipeline.py](../src/strata_pipeline.py): `StrataPipeline.from_trees` |

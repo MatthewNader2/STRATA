@@ -20,7 +20,7 @@
     },
     {
       "name": "connection",
-      "parent": "Engine"
+      "parent": "db_connection"
     },
     {
       "name": "cursor",
@@ -48,7 +48,7 @@
     },
     {
       "name": "path",
-      "parent": "str"
+      "parent": "object"
     },
     {
       "name": "db_path",
@@ -3746,7 +3746,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Connection handle running queries.",
           "port_role": "data_input"
@@ -3884,7 +3884,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Source database connection (e.g. in-memory database).",
           "port_role": "data_input"

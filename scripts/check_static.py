@@ -21,7 +21,10 @@ import sys
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-TARGETS = ["src", "scripts", "tools"]
+TARGETS = [
+    d for d in ("src", "scripts", "tools", "benchmarks", "tests")
+    if (ROOT_DIR / d).is_dir()
+]
 
 UNDEFINED_NAME_RE = re.compile(r": undefined name '([^']+)'")
 

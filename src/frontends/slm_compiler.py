@@ -78,15 +78,15 @@ Convert every action in the user request into an ordered JSON pipeline of atomic
 Loaded domains: {loaded_domains}
 
 Output ONLY one valid JSON object with:
-- "assets": object mapping short key to concrete file path or URI verbatim from the user text (ONLY paths with file extensions or / : separators; NEVER put plain IDs, tags, or generic nouns in assets; use {{}} if none).
+- "assets": object mapping short key to every concrete input or output file path or URI verbatim from the user text (ONLY paths with file extensions or / : separators; NEVER put plain IDs, tags, or generic nouns in assets; use {{}} if none).
 - "required_domains": list of library/package names ONLY when the user explicitly writes "using X" or "in library X" (verbatim, even if NOT in Loaded domains); otherwise [].
-- "nodes": list with ONE node per comma-separated action clause in the user text in order (keep each action together with all its quoted tags and "at"/"with"/"on"/"for"/"over"/"into" parameters in ONE node rather than splitting an action and its parameter into two nodes; NEVER merge two separate action verbs into one node and NEVER omit the final save/export/close/vent/park/quit step). Each node has:
+- "nodes": list with ONE node per comma-separated action clause in the user text in order (keep each action together with all its quoted tags and "at"/"with"/"on"/"for"/"over"/"into" parameters in ONE node rather than splitting an action and its parameter into two nodes; NEVER merge two separate action verbs into one node and NEVER omit any final output, export, cleanup, or teardown step stated by the user). Each node has:
   - "id": "n1", "n2", ...
   - "intent": short neutral description of that single operation
   - "domain_hint": matching name from Loaded domains (or explicitly requested library name if not loaded, or null if uncertain)
   - "inputs": list of ONLY earlier node "outputs" names or "assets" keys used by this step (every "assets" key MUST be referenced in "inputs")
   - "outputs": list of 1 short output variable name produced by this step (fresh name distinct from inputs)
-  - "params": object containing EVERY explicitly stated number, quoted tag/string, or tuple from that clause (omit unit words like nm/mK/mW/GHz/ns; NEVER invent unstated parameters)
+  - "params": object containing EVERY explicitly stated number, quoted tag/string, or tuple from that clause (omit measurement unit words; NEVER invent unstated parameters)
 - "deliverable": final output variable name (or null)
 - "ambiguities": list of ambiguity reasons (or [])"""
 
@@ -113,20 +113,20 @@ SLM_FEW_SHOT_MESSAGES: List[Dict[str, str]] = [
     },
     {
         "role": "user",
-        "content": 'using mypkg, read "item.bin" tag "A1" at 4.2, convert format, and save to "out.bin"',
+        "content": 'using demo_pkg, read "input.bin" tag "K7" at 4.2, transform format, and save to "result.bin"',
     },
     {
         "role": "assistant",
         "content": json.dumps(
             {
-                "assets": {"src": "item.bin", "dst": "out.bin"},
-                "required_domains": ["mypkg"],
+                "assets": {"src": "input.bin", "dst": "result.bin"},
+                "required_domains": ["demo_pkg"],
                 "nodes": [
-                    {"id": "n1", "intent": "read item file", "domain_hint": "mypkg", "inputs": ["src"], "outputs": ["obj1"], "params": {"tag": "A1", "level": 4.2}},
-                    {"id": "n2", "intent": "convert format", "domain_hint": "mypkg", "inputs": ["obj1"], "outputs": ["obj2"], "params": {}},
-                    {"id": "n3", "intent": "save item to file", "domain_hint": "mypkg", "inputs": ["obj2", "dst"], "outputs": ["res1"], "params": {}},
+                    {"id": "n1", "intent": "read data from file", "domain_hint": "demo_pkg", "inputs": ["src"], "outputs": ["r1"], "params": {"tag": "K7", "level": 4.2}},
+                    {"id": "n2", "intent": "transform format", "domain_hint": "demo_pkg", "inputs": ["r1"], "outputs": ["r2"], "params": {}},
+                    {"id": "n3", "intent": "save data to file", "domain_hint": "demo_pkg", "inputs": ["r2", "dst"], "outputs": ["saved1"], "params": {}},
                 ],
-                "deliverable": "res1",
+                "deliverable": "saved1",
                 "ambiguities": [],
             }
         ),
@@ -164,14 +164,35 @@ def _is_explicitly_quoted(value: str, raw_prompt: str) -> bool:
     return bool(v_low) and (f'"{v_low}"' in p_low or f"'{v_low}'" in p_low)
 
 
+def _is_path_or_uri_shape(s: str) -> bool:
+    """Return True only if `s` has concrete URI, directory-path, or filename.ext shape."""
+    if not s or any(ch.isspace() for ch in s):
+        return False
+    if s.replace(".", "", 1).replace("-", "", 1).isdigit():
+        return False
+    if "://" in s:
+        scheme = s.split("://", 1)[0]
+        return bool(scheme) and scheme[0].isascii() and scheme[0].isalpha() and all(
+            ch.isalnum() or ch in "+-." for ch in scheme
+        )
+    if "/" in s or "\\" in s:
+        return True
+    if len(s) >= 3 and s[0].isascii() and s[0].isalpha() and s[1] == ":" and s[2] in ("/", "\\"):
+        return True
+    if "." in s and ":" not in s:
+        stem, ext = s.rsplit(".", 1)
+        if not stem or stem.replace(".", "").isdigit():
+            return False
+        if 1 <= len(ext) <= 6 and ext[0].isascii() and ext[0].isalpha() and ext.isalnum():
+            return True
+    return False
+
+
 def _is_concrete_external_asset(value: Any, raw_prompt: str) -> bool:
     """Return True iff `value` is a concrete file path/URI with separator/extension grounded in `raw_prompt`."""
     if not isinstance(value, str) or not _is_grounded_in_prompt(value, raw_prompt):
         return False
-    s = value.strip()
-    if not s or s.replace(".", "", 1).replace("-", "", 1).isdigit():
-        return False
-    return any(sep in s for sep in (".", "/", "\\", "://", ":")) and not any(ch.isspace() for ch in s)
+    return _is_path_or_uri_shape(value.strip())
 
 
 def _looks_like_untagged_path_param(val: Any, raw_prompt: str) -> bool:
@@ -179,11 +200,7 @@ def _looks_like_untagged_path_param(val: Any, raw_prompt: str) -> bool:
     if not isinstance(val, str):
         return False
     s = val.strip()
-    if not s or any(ch.isspace() for ch in s):
-        return False
-    if s.replace(".", "", 1).replace("-", "", 1).isdigit():
-        return False
-    return any(sep in s for sep in (".", "/", "\\", "://")) and _is_grounded_in_prompt(s, raw_prompt)
+    return _is_path_or_uri_shape(s) and _is_grounded_in_prompt(s, raw_prompt)
 
 
 def _ssa_rename_nodes(
@@ -278,6 +295,67 @@ def _ssa_rename_nodes(
     return renamed_nodes, new_deliv
 
 
+def _parse_bare_numeric(s: str) -> Optional[Any]:
+    """Parse an integer or simple decimal literal string, returning None otherwise."""
+    s_num = str(s or "").strip()
+    if not s_num:
+        return None
+    sign_body = s_num[1:] if s_num[:1] in "+-" else s_num
+    if not sign_body:
+        return None
+    if sign_body.isascii() and sign_body.isdigit():
+        return int(s_num)
+    if (
+        sign_body.count(".") == 1
+        and sign_body.replace(".", "", 1).isascii()
+        and sign_body.replace(".", "", 1).isdigit()
+        and any(ch.isdigit() for ch in sign_body)
+    ):
+        return float(s_num)
+    return None
+
+
+def _is_unit_suffix_token(tok: str) -> bool:
+    return (
+        1 <= len(tok) <= 16
+        and tok[0].isascii()
+        and (tok[0].isalpha() or tok[0] == "%")
+        and all(ch.isascii() and (ch.isalpha() or ch in "%/-^") for ch in tok)
+    )
+
+
+def _parse_numeric_with_unit_suffix(s: str) -> Optional[Any]:
+    """Parse a bare number or `<num>[ <unit> | <unit>]` literal without regex."""
+    text = str(s or "").strip()
+    if not text:
+        return None
+    direct = _parse_bare_numeric(text)
+    if direct is not None:
+        return direct
+    parts = text.split()
+    if len(parts) == 2 and _is_unit_suffix_token(parts[1]):
+        num = _parse_bare_numeric(parts[0])
+        if num is not None:
+            return num
+    if len(parts) == 1:
+        idx = 1 if text[:1] in "+-" else 0
+        saw_digit = False
+        saw_dot = False
+        while idx < len(text):
+            ch = text[idx]
+            if ch.isascii() and ch.isdigit():
+                saw_digit = True
+                idx += 1
+            elif ch == "." and not saw_dot:
+                saw_dot = True
+                idx += 1
+            else:
+                break
+        if saw_digit and idx < len(text) and _is_unit_suffix_token(text[idx:]):
+            return _parse_bare_numeric(text[:idx])
+    return None
+
+
 def _normalize_param(
     raw_val: Any,
     raw_prompt: str,
@@ -312,16 +390,9 @@ def _normalize_param(
         return IRParamValue(value=None, provenance="missing", value_class=v_cls)
 
     if v_cls == "literal" and isinstance(val, str) and not _is_explicitly_quoted(val, raw_prompt):
-        s_num = val.strip()
-        sign_body = s_num[1:] if s_num[:1] in "+-" else s_num
-        if sign_body and sign_body.isdigit():
-            val = int(s_num)
-        elif (
-            sign_body.count(".") == 1
-            and sign_body.replace(".", "", 1).isdigit()
-            and any(ch.isdigit() for ch in sign_body)
-        ):
-            val = float(s_num)
+        parsed = _parse_numeric_with_unit_suffix(val)
+        if parsed is not None:
+            val = parsed
 
     if raw_prov in valid_provs:
         prov = raw_prov
@@ -526,26 +597,148 @@ def _collect_defined_symbols(nodes: List[IRNode], seed_syms: Set[str]) -> Set[st
     return syms
 
 
+def _extract_quoted_substrings(text: str) -> List[str]:
+    """Scan `text` for non-empty substrings wrapped in matching single or double quotes."""
+    s = str(text or "")
+    out: List[str] = []
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if ch in ('"', "'") and (i == 0 or not s[i - 1].isalnum()):
+            end = s.find(ch, i + 1)
+            if end != -1:
+                inner = s[i + 1 : end].strip()
+                if inner:
+                    out.append(inner)
+                i = end + 1
+                continue
+        i += 1
+    return out
+
+
 def _sanitize_undefined_slm_inputs(
     nodes: List[IRNode],
     all_defined: Set[str],
+    raw_prompt: str,
+    assets_out: Dict[str, IRParamValue],
+    grounded_val_to_key: Dict[str, str],
     warnings: List[str],
 ) -> List[IRNode]:
-    """Drop SLM-hallucinated input names absent from all defined assets/nodes/outputs while keeping cycles intact."""
+    """Promote grounded path/literal inputs and quoted intent tokens; drop hallucinated labels."""
     out: List[IRNode] = []
     for node in nodes:
-        new_body = _sanitize_undefined_slm_inputs(node.body, all_defined, warnings) if node.body else []
-        new_else = _sanitize_undefined_slm_inputs(node.else_body, all_defined, warnings) if node.else_body else []
+        new_body = (
+            _sanitize_undefined_slm_inputs(node.body, all_defined, raw_prompt, assets_out, grounded_val_to_key, warnings)
+            if node.body
+            else []
+        )
+        new_else = (
+            _sanitize_undefined_slm_inputs(
+                node.else_body, all_defined, raw_prompt, assets_out, grounded_val_to_key, warnings
+            )
+            if node.else_body
+            else []
+        )
         new_inputs: List[str] = []
-        changed = bool(node.body or node.else_body)
+        new_params = dict(node.params)
+        existing_vals = {str(pv.value).strip() for pv in new_params.values() if pv.value is not None}
+        new_condition = None if (node.kind == "call" and node.condition is not None) else node.condition
+        changed = bool(node.body or node.else_body or new_condition != node.condition)
         for inp in node.inputs:
-            if inp not in all_defined:
-                warnings.append(f"Dropped undefined SLM input label '{inp}' on node '{node.id}'.")
-                changed = True
-            else:
+            if inp in all_defined:
                 new_inputs.append(inp)
+                continue
+            if _is_concrete_external_asset(inp, raw_prompt):
+                asset_key = grounded_val_to_key.get(inp)
+                if not asset_key:
+                    cand_key = f"{node.id}.in_asset"
+                    idx = 2
+                    while cand_key in assets_out or cand_key in all_defined:
+                        cand_key = f"{node.id}.in_asset_{idx}"
+                        idx += 1
+                    asset_key = cand_key
+                    assets_out[asset_key] = IRParamValue(value=inp, provenance="prompt", value_class="external_asset")
+                    grounded_val_to_key[inp] = asset_key
+                    all_defined.add(asset_key)
+                if asset_key not in new_inputs:
+                    new_inputs.append(asset_key)
+                warnings.append(f"Promoted grounded path input {inp!r} on node '{node.id}' to asset '{asset_key}'.")
+                changed = True
+                continue
+            if _is_explicitly_quoted(inp, raw_prompt):
+                if inp not in existing_vals:
+                    k = 1
+                    while f"lit_{k}" in new_params:
+                        k += 1
+                    new_params[f"lit_{k}"] = IRParamValue(value=inp, provenance="prompt", value_class="literal")
+                    existing_vals.add(inp)
+                warnings.append(f"Promoted grounded quoted input {inp!r} on node '{node.id}' to literal param.")
+                changed = True
+                continue
+            parsed_num = _parse_numeric_with_unit_suffix(inp)
+            if parsed_num is not None and _is_grounded_in_prompt(parsed_num, raw_prompt):
+                num_s = str(parsed_num)
+                if num_s not in existing_vals and inp.strip() not in existing_vals:
+                    k = 1
+                    while f"num_{k}" in new_params:
+                        k += 1
+                    new_params[f"num_{k}"] = IRParamValue(value=parsed_num, provenance="prompt", value_class="literal")
+                    existing_vals.add(num_s)
+                warnings.append(f"Promoted grounded numeric input {inp!r} on node '{node.id}' to literal param.")
+                changed = True
+                continue
+            warnings.append(f"Dropped undefined SLM input label '{inp}' on node '{node.id}'.")
+            changed = True
+
+        if node.kind == "call" and node.intent:
+            for q in _extract_quoted_substrings(node.intent):
+                if _is_concrete_external_asset(q, raw_prompt):
+                    already_in_inputs = any(
+                        ak in assets_out and str(assets_out[ak].value or "").strip() == q
+                        for ak in new_inputs
+                    )
+                    if not already_in_inputs and q not in existing_vals:
+                        asset_key = grounded_val_to_key.get(q)
+                        if not asset_key:
+                            cand_key = f"{node.id}.intent_asset"
+                            idx = 2
+                            while cand_key in assets_out or cand_key in all_defined:
+                                cand_key = f"{node.id}.intent_asset_{idx}"
+                                idx += 1
+                            asset_key = cand_key
+                            assets_out[asset_key] = IRParamValue(
+                                value=q, provenance="prompt", value_class="external_asset"
+                            )
+                            grounded_val_to_key[q] = asset_key
+                            all_defined.add(asset_key)
+                        if asset_key not in new_inputs:
+                            new_inputs.append(asset_key)
+                        warnings.append(
+                            f"Recovered grounded path {q!r} from node '{node.id}' intent into asset '{asset_key}'."
+                        )
+                        changed = True
+                elif _is_explicitly_quoted(q, raw_prompt) and q not in existing_vals:
+                    k = 1
+                    while f"lit_{k}" in new_params:
+                        k += 1
+                    new_params[f"lit_{k}"] = IRParamValue(value=q, provenance="prompt", value_class="literal")
+                    existing_vals.add(q)
+                    warnings.append(f"Recovered grounded quoted token {q!r} from node '{node.id}' intent.")
+                    changed = True
+
         if changed:
-            out.append(node.model_copy(update={"inputs": new_inputs, "body": new_body, "else_body": new_else}))
+            out.append(
+                node.model_copy(
+                    update={
+                        "inputs": new_inputs,
+                        "params": new_params,
+                        "condition": new_condition,
+                        "body": new_body,
+                        "else_body": new_else,
+                    }
+                )
+            )
         else:
             out.append(node)
     return out
@@ -571,14 +764,13 @@ def parse_slm_json_to_typed_ir(raw_text: str, raw_prompt: str) -> FrontendCompil
             if not ak_str:
                 continue
             raw_val = av.get("value") if isinstance(av, dict) else av
-            if (
-                isinstance(raw_val, str)
-                and not _is_concrete_external_asset(raw_val, raw_prompt)
-                and _is_grounded_in_prompt(raw_val, raw_prompt)
-                and _is_explicitly_quoted(raw_val, raw_prompt)
-            ):
-                demoted_literals[ak_str] = raw_val.strip()
-                continue
+            if isinstance(raw_val, str) and not _is_concrete_external_asset(raw_val, raw_prompt):
+                if _is_grounded_in_prompt(raw_val, raw_prompt) and _is_explicitly_quoted(raw_val, raw_prompt):
+                    demoted_literals[ak_str] = raw_val.strip()
+                    continue
+                if not _is_path_or_uri_shape(raw_val.strip()):
+                    warnings.append(f"Dropped non-path asset entry '{ak_str}'={raw_val!r}.")
+                    continue
             assets_out[ak_str] = _normalize_param(
                 av, raw_prompt, ak_str, warnings, force_class="external_asset"
             )
@@ -607,7 +799,9 @@ def parse_slm_json_to_typed_ir(raw_text: str, raw_prompt: str) -> FrontendCompil
 
     nodes, deliverable = _ssa_rename_nodes(nodes, set(assets_out.keys()), deliverable)
     all_defined_syms = _collect_defined_symbols(nodes, set(assets_out.keys()))
-    nodes = _sanitize_undefined_slm_inputs(nodes, all_defined_syms, warnings)
+    nodes = _sanitize_undefined_slm_inputs(
+        nodes, all_defined_syms, raw_prompt, assets_out, grounded_val_to_key, warnings
+    )
 
     raw_amb = data.get("ambiguities") or []
     ambiguities = [str(a).strip() for a in raw_amb if isinstance(a, str) and str(a).strip()] if isinstance(raw_amb, list) else []

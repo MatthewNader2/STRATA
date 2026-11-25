@@ -10,7 +10,7 @@ Test groups:
   - formal       : Formal-syntax synthesis, multi-hop cross-domain live bridging, semantics, and formal refusals
   - nl_core      : Detailed ("unvague") NL tasks contrasting vague/underspecified/missing-asset refusals
   - unseen       : Blind synthetic SDKs (CryoPulse, Aetheris) zero-pretraining & leak-refusal proofs
-  - haystack     : Needle-in-a-haystack isolation (11-15 target cells embedded inside 1,049 unrelated noise cells)
+  - haystack     : Needle-in-a-haystack isolation (11-15 target cells embedded inside 1,038 unrelated noise cells)
   - wrong_domain : Refusal proofs when only completely unrelated/insufficient domains are loaded
   - domain_spec  : Explicit library specification adherence & cross-library substitution refusal (Pillow vs OpenCV)
 
@@ -336,7 +336,7 @@ def _build_test_catalog() -> List[TestCase]:
     )
     p_sqlite_pd = (
         "db = sqlite3::SQLITE_CONNECT_MEMORY()\n"
-        'df = pandas::PD_READ_SQL(port_0="SELECT 1 AS a, 2 AS b", port_1=$db)\n'
+        'df = pandas::PD_READ_SQL(sql="SELECT 1 AS a, 2 AS b", con=$db)\n'
         "done = sqlite3::SQLITE_CLOSE(connection=$db)"
     )
     p_mpl = (
@@ -353,7 +353,7 @@ def _build_test_catalog() -> List[TestCase]:
     )
     p_leak = (
         "db = sqlite3::SQLITE_CONNECT_MEMORY()\n"
-        'df = pandas::PD_READ_SQL(port_0="SELECT 1 AS a", port_1=$db)'
+        'df = pandas::PD_READ_SQL(sql="SELECT 1 AS a", con=$db)'
     )
     p_ref_bad = (
         "a = numpy::NUMPY_ZEROS_1D(length=6)\n"
@@ -1239,7 +1239,11 @@ def main() -> int:
 
     domain_loader = _DomainSetLoader(ROOT_DIR)
     compiled = domain_loader.get_compiled_default()
-    sandbox = None if args.no_exec else GEVRSandbox()
+    sandbox = (
+        None
+        if args.no_exec
+        else GEVRSandbox(asset_dirs=[ROOT_DIR / "benchmarks" / "fixtures" / "media"])
+    )
     print(f"[env] loaded SQLite v{compiled.schema_version}: {len(compiled.cells)} cells, {len(compiled.state_parents)} typestates\n", flush=True)
 
     schedule: List[Tuple[str, str, TestCase, TheoryExpectation]] = []

@@ -36,10 +36,13 @@ sys.path.insert(0, str(ROOT_DIR))
 from benchmarks.evaluators import (  # noqa: E402
     evaluate_task_response,
     extract_code_clean,
-    load_sdk_docs,
     read_cpu_times,
     read_gpu_vram_mb,
     read_proc_mem_mb,
+)
+from benchmarks.skill_docs import (  # noqa: E402
+    VALID_CONTEXT_MODES,
+    build_messages_for_arm,
 )
 from benchmarks.suites import get_suite_tasks  # noqa: E402
 
@@ -106,15 +109,6 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
 }
 
-DEFAULT_PURE_SYS = (
-    "You are a concise, precise Python developer. Write ONLY clean executable Python code inside a single "
-    "```python ... ``` code block solving the user's request. Use standard/installed libraries only. "
-    "Preserve every literal value, filename, column name, and parameter specified in the prompt. "
-    "If the prompt is genuinely too underspecified to write concrete working code without guessing critical missing rules, "
-    "ask 2 concise clarifying questions instead of writing speculative code."
-)
-
-
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -160,20 +154,20 @@ def verify_llama_server(llama_server_bin: str) -> Dict[str, str]:
     return env
 
 
-def build_task_messages(task: Dict[str, Any]) -> List[Dict[str, str]]:
-    if task["kind"] == "sdk":
-        docs_md = load_sdk_docs(task["sdk"])
-        sys_msg = (
-            "You are a Python coding assistant. Use ONLY the API documented below to write a single "
-            "executable Python script inside a ```python ... ``` code block solving the user's request.\n\n"
-            + docs_md
-        )
-    else:
-        sys_msg = DEFAULT_PURE_SYS
-    return [
-        {"role": "system", "content": sys_msg},
-        {"role": "user", "content": task["prompt"]},
-    ]
+def build_task_messages(
+    task: Dict[str, Any],
+    *,
+    context_mode: str = "skill_md",
+    max_distractor_chars: int = 18000,
+    full_haystack: bool = False,
+) -> List[Dict[str, str]]:
+    messages, _ = build_messages_for_arm(
+        task,
+        context_mode=context_mode,
+        max_distractor_chars=max_distractor_chars,
+        full_haystack=full_haystack,
+    )
+    return messages
 
 
 def download_gguf(repo_id: str, filename: str, cache_dir: Path) -> Path:
@@ -334,6 +328,9 @@ def run_model_via_server(
     disable_thinking: bool = False,
     max_tokens_override: int | None = None,
     n_ctx_override: int | None = None,
+    context_mode: str = "skill_md",
+    haystack_chars: int = 18000,
+    full_haystack: bool = False,
 ) -> Path:
     eff_spec = dict(spec)
     if n_ctx_override is not None:
@@ -341,9 +338,16 @@ def run_model_via_server(
     if max_tokens_override is not None:
         eff_spec["max_tokens"] = int(max_tokens_override)
 
+    mode_tag = {
+        "pure": "Pure",
+        "skill_md": "SKILL.md",
+        "skill_md_haystack": "SKILL.md+Haystack",
+    }[context_mode]
+    display_with_mode = f"{eff_spec['display']} [{mode_tag}]"
+
     model_cache = cache_dir / model_key
     t_dl0 = time.perf_counter()
-    _log(f"\n==================== {eff_spec['display']} ====================")
+    _log(f"\n==================== {display_with_mode} ====================")
     _log(f"[COLAB] Downloading {eff_spec['repo_id']} :: {eff_spec['filename']} ...")
     model_path = download_gguf(eff_spec["repo_id"], eff_spec["filename"], model_cache)
     dl_ms = round((time.perf_counter() - t_dl0) * 1000.0, 2)
@@ -351,7 +355,7 @@ def run_model_via_server(
 
     mem_before = read_proc_mem_mb()
     gpu_before = read_gpu_vram_mb()
-    server_log = out_dir / f"{model_key}_server.log"
+    server_log = out_dir / f"{model_key}_{context_mode}_server.log"
     base_url = f"http://127.0.0.1:{port}"
 
     proc = None
@@ -365,14 +369,17 @@ def run_model_via_server(
         return json.dumps(
             {
                 "schema_version": "strata_bench_v2",
-                "arm": "pure",
-                "model_id": model_key,
-                "model_display": eff_spec["display"],
+                "arm": context_mode,
+                "model_id": f"{model_key}_{context_mode}",
+                "model_display": display_with_mode,
                 "family": eff_spec["family"],
                 "params_b": eff_spec["params_b"],
                 "active_params_b": eff_spec["active_params_b"],
                 "quant": eff_spec["quant"],
                 "init": {
+                    "context_mode": context_mode,
+                    "haystack_chars": int(haystack_chars),
+                    "full_haystack": bool(full_haystack),
                     "download_ms": dl_ms,
                     "init_ms": init_ms,
                     "used_ngl": used_ngl,
@@ -388,7 +395,7 @@ def run_model_via_server(
             indent=2,
         )
 
-    out_path = out_dir / f"results_{model_key}.json"
+    out_path = out_dir / f"results_{model_key}_{context_mode}.json"
     try:
         proc, log_fh, used_ngl, init_ms = _launch_server_with_fallback(
             llama_server_bin=llama_server_bin,
@@ -404,7 +411,12 @@ def run_model_via_server(
             out_path.write_text(_serialize_results(), encoding="utf-8")
 
         for idx, task in enumerate(tasks, 1):
-            messages = build_task_messages(task)
+            messages, ctx_meta = build_messages_for_arm(
+                task,
+                context_mode=context_mode,
+                max_distractor_chars=haystack_chars,
+                full_haystack=full_haystack,
+            )
             cpu0 = read_cpu_times()
             t0 = time.perf_counter()
             try:
@@ -419,9 +431,9 @@ def run_model_via_server(
                 wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
                 cpu1 = read_cpu_times()
                 rec = {
-                    "arm": "pure",
-                    "model_id": model_key,
-                    "model_display": eff_spec["display"],
+                    "arm": context_mode,
+                    "model_id": f"{model_key}_{context_mode}",
+                    "model_display": display_with_mode,
                     "family": eff_spec["family"],
                     "params_b": eff_spec["params_b"],
                     "active_params_b": eff_spec["active_params_b"],
@@ -429,6 +441,9 @@ def run_model_via_server(
                     "task_id": task["id"],
                     "group": task["group"],
                     "kind": task["kind"],
+                    "domain_set": ctx_meta["domain_set"],
+                    "context_mode": context_mode,
+                    "context_meta": ctx_meta,
                     "expected": task.get("expected", "synthesize"),
                     "prompt": task["prompt"],
                     "status": ev["status"],
@@ -452,9 +467,9 @@ def run_model_via_server(
                 wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
                 cpu1 = read_cpu_times()
                 rec = {
-                    "arm": "pure",
-                    "model_id": model_key,
-                    "model_display": eff_spec["display"],
+                    "arm": context_mode,
+                    "model_id": f"{model_key}_{context_mode}",
+                    "model_display": display_with_mode,
                     "family": eff_spec["family"],
                     "params_b": eff_spec["params_b"],
                     "active_params_b": eff_spec["active_params_b"],
@@ -462,6 +477,9 @@ def run_model_via_server(
                     "task_id": task["id"],
                     "group": task["group"],
                     "kind": task["kind"],
+                    "domain_set": ctx_meta["domain_set"],
+                    "context_mode": context_mode,
+                    "context_meta": ctx_meta,
                     "expected": task.get("expected", "synthesize"),
                     "prompt": task["prompt"],
                     "status": "TIMEOUT",
@@ -484,7 +502,7 @@ def run_model_via_server(
             records.append(rec)
             _flush_checkpoint()
             _log(
-                f"  [{idx:02d}/{len(tasks):02d}] {task['id']:<18} | {rec['status']:<16} "
+                f"  [{idx:02d}/{len(tasks):02d}] {task['id']:<30} | {rec['status']:<18} "
                 f"| acc={str(rec['acceptable']):<5} | {wall_ms/1000.0:5.1f}s "
                 f"| tok={rec['prompt_tokens']}+{rec['completion_tokens']}"
             )
@@ -517,8 +535,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--suite",
-        default="core9",
-        help="Suite group from benchmarks/suites.py (core8, cryopulse, core9, aetheris, stress, all)",
+        default="v2_expanded",
+        help=(
+            "Suite group from benchmarks/suites.py "
+            "(v2_expanded, v2_full, v2_nl_core, v2_unseen, v2_haystack, v2_wrong_domain, v2_domain_spec, "
+            "core8, cryopulse, core9, aetheris, stress, all)"
+        ),
+    )
+    ap.add_argument(
+        "--context-mode",
+        choices=list(VALID_CONTEXT_MODES),
+        default="skill_md",
+        help="Prompt baseline arm: pure (no .md docs), skill_md (loaded domain_set docs), skill_md_haystack (15-domain noise)",
+    )
+    ap.add_argument(
+        "--haystack-chars",
+        type=_positive_int,
+        default=18000,
+        help="Character budget for multi-domain SKILL.md catalog (positive int)",
+    )
+    ap.add_argument(
+        "--full-haystack",
+        action="store_true",
+        help="Include every cell in all loaded domain trees without truncation",
     )
     ap.add_argument("--llama-server", default="llama-server", help="Path to llama-server CUDA binary")
     ap.add_argument("--cache-dir", default="/content/hf_gguf_cache", help="Directory for GGUF downloads")
@@ -554,13 +593,13 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_dir = Path(args.cache_dir)
     tasks = get_suite_tasks(args.suite)
-    _log(f"[COLAB] Suite='{args.suite}' ({len(tasks)} tasks) | Models={args.models}")
+    _log(f"[COLAB] Suite='{args.suite}' ({len(tasks)} tasks) | Context='{args.context_mode}' | Models={args.models}")
 
     env = verify_llama_server(args.llama_server)
 
     failures: List[str] = []
     for mkey in args.models:
-        out_json = out_dir / f"results_{mkey}.json"
+        out_json = out_dir / f"results_{mkey}_{args.context_mode}.json"
         if args.resume and out_json.exists():
             _log(f"[COLAB] Skipping {mkey} (--resume, exists: {out_json})")
             continue
@@ -578,6 +617,9 @@ def main() -> None:
                 disable_thinking=args.disable_thinking,
                 max_tokens_override=args.max_tokens,
                 n_ctx_override=args.n_ctx,
+                context_mode=args.context_mode,
+                haystack_chars=args.haystack_chars,
+                full_haystack=args.full_haystack,
             )
         except Exception as exc:
             _log(f"[COLAB][ERROR] Model '{mkey}' failed: {exc}")

@@ -7,6 +7,7 @@ from __future__ import annotations
 import ast
 import csv
 import io
+import itertools
 import math
 import os
 import resource
@@ -18,15 +19,133 @@ import sys
 import tempfile
 import wave
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+MEDIA_FIXTURES_DIR = ROOT_DIR / "benchmarks" / "fixtures" / "media"
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from eval_metrics import _extract_ast_literals
-
 from .suites import SDK_SPECS
+
+
+def _const_or_neg_const(node: Optional[ast.AST]) -> Optional[Tuple[Any]]:
+    """Returns a 1-tuple (value,) when node is a literal Constant or -Constant, else None."""
+    if node is None:
+        return None
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float)) and not isinstance(node.value, bool):
+        return (node.value,)
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+        and isinstance(node.operand.value, (int, float))
+        and not isinstance(node.operand.value, bool)
+    ):
+        return (-node.operand.value,)
+    return None
+
+
+def _extract_ast_literals(tree: ast.AST) -> Tuple[List[str], List[float]]:
+    """Collects numeric/string literals from AST Constants, negated constants, and JoinedStr f-strings."""
+    str_consts: List[str] = []
+    num_consts: List[float] = []
+    var_consts: Dict[str, List[Any]] = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            c_tup = _const_or_neg_const(node.value)
+            if c_tup is not None:
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name):
+                        var_consts.setdefault(tgt.id, []).append(c_tup[0])
+        elif isinstance(node, ast.AnnAssign):
+            c_tup = _const_or_neg_const(node.value)
+            if c_tup is not None and isinstance(node.target, ast.Name):
+                var_consts.setdefault(node.target.id, []).append(c_tup[0])
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant):
+            v = node.value
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                num_consts.append(float(v))
+            elif isinstance(v, str):
+                str_consts.append(v)
+        elif (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.Constant)
+            and isinstance(node.operand.value, (int, float))
+            and not isinstance(node.operand.value, bool)
+        ):
+            num_consts.append(-float(node.operand.value))
+        elif isinstance(node, ast.JoinedStr):
+            static_parts: List[str] = []
+            template_parts: List[str] = []
+            render_choices: List[List[str]] = []
+
+            for part in node.values:
+                if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                    static_parts.append(part.value)
+                    template_parts.append(part.value)
+                    render_choices.append([part.value])
+                elif isinstance(part, ast.FormattedValue):
+                    conv_s = {115: "!s", 114: "!r", 97: "!a"}.get(part.conversion, "")
+                    fmt_spec = ""
+                    if isinstance(part.format_spec, ast.JoinedStr) and all(
+                        isinstance(fp, ast.Constant) and isinstance(fp.value, str)
+                        for fp in part.format_spec.values
+                    ):
+                        fmt_spec = "".join(fp.value for fp in part.format_spec.values)
+                    fmt_suffix = f":{fmt_spec}" if fmt_spec else ""
+                    try:
+                        expr_src = ast.unparse(part.value)
+                    except Exception:
+                        expr_src = ""
+                    placeholder = "{" + expr_src + conv_s + fmt_suffix + "}" if expr_src else "{}"
+                    template_parts.append(placeholder)
+
+                    c_vals: Optional[List[Any]] = None
+                    direct_c = _const_or_neg_const(part.value)
+                    if direct_c is not None:
+                        c_vals = [direct_c[0]]
+                    elif isinstance(part.value, ast.Name) and part.value.id in var_consts:
+                        c_vals = list(var_consts[part.value.id])
+
+                    if c_vals:
+                        rendered_opts: List[str] = []
+                        for cv in c_vals:
+                            if part.conversion == 114:
+                                cv_c: Any = repr(cv)
+                            elif part.conversion == 97:
+                                cv_c = ascii(cv)
+                            elif part.conversion == 115:
+                                cv_c = str(cv)
+                            else:
+                                cv_c = cv
+                            try:
+                                rendered_opts.append(format(cv_c, fmt_spec))
+                            except Exception:
+                                rendered_opts.append(str(cv_c))
+                        render_choices.append(rendered_opts)
+                    else:
+                        render_choices.append([placeholder])
+
+            if static_parts:
+                str_consts.append("".join(static_parts))
+            if template_parts:
+                str_consts.append("".join(template_parts))
+            if render_choices:
+                combo_count = 1
+                for opts in render_choices:
+                    combo_count *= max(1, len(opts))
+                if combo_count <= 16:
+                    for combo in itertools.product(*render_choices):
+                        str_consts.append("".join(combo))
+
+    return str_consts, num_consts
 
 
 def read_proc_mem_mb() -> Dict[str, Optional[float]]:
@@ -250,12 +369,16 @@ def verify_literals_consumed(code: str, expected_literals: List[Any]) -> List[An
 
 def provision_sandbox_fixtures(workdir: Path) -> None:
     """Ensures input.csv, input.png, and input_1.wav exist in workdir."""
-    # Reuse repo fixtures if available, otherwise synthesize minimal valid fixtures
+    workdir.mkdir(parents=True, exist_ok=True)
     for fname in ("input.csv", "input.png", "input_1.wav"):
-        src = ROOT_DIR / fname
         dst = workdir / fname
-        if src.exists() and not dst.exists():
-            shutil.copy2(src, dst)
+        if dst.exists():
+            continue
+        for cand_dir in (MEDIA_FIXTURES_DIR, ROOT_DIR):
+            src = cand_dir / fname
+            if src.exists() and src.resolve() != dst.resolve():
+                shutil.copy2(src, dst)
+                break
 
     csv_path = workdir / "input.csv"
     if not csv_path.exists():
@@ -406,6 +529,78 @@ def verify_task_artifacts(
     return None
 
 
+def _extract_imported_top_modules(tree: ast.AST) -> Set[str]:
+    mods: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = str(alias.name or "").split(".", 1)[0].strip()
+                if top:
+                    mods.add(top)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            top = str(node.module).split(".", 1)[0].strip()
+            if top:
+                mods.add(top)
+    return mods
+
+
+def _extract_called_names(tree: ast.AST) -> Set[str]:
+    called: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                called.add(str(node.func.attr))
+            elif isinstance(node.func, ast.Name):
+                called.add(str(node.func.id))
+    return called
+
+
+def _check_code_constraints(code: str, task: Dict[str, Any]) -> Optional[str]:
+    """Validate optional required/forbidden imports and attribute calls on AST."""
+    req_imports = [str(m).strip() for m in (task.get("required_imports") or ()) if str(m).strip()]
+    forb_imports = [str(m).strip() for m in (task.get("forbidden_imports") or ()) if str(m).strip()]
+    req_calls = [str(c).strip() for c in (task.get("required_calls_attr") or ()) if str(c).strip()]
+    if not (req_imports or forb_imports or req_calls):
+        return None
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        return f"SyntaxError: {exc.msg}"
+
+    imported = _extract_imported_top_modules(tree)
+    imported_low = {m.lower() for m in imported}
+    for fmod in forb_imports:
+        if fmod in imported or fmod.lower() in imported_low:
+            return f"Forbidden library imported: '{fmod}' (imported={sorted(imported)})"
+    for rmod in req_imports:
+        if rmod not in imported and rmod.lower() not in imported_low:
+            return f"Missing required library import: '{rmod}' (imported={sorted(imported)})"
+
+    if req_calls:
+        called = _extract_called_names(tree)
+        for rc in req_calls:
+            if rc not in called:
+                return f"Missing required call '{rc}' in AST"
+    return None
+
+
+def _resolve_staged_input_assets(task: Dict[str, Any], expected_egress: List[str]) -> List[str]:
+    """Collect explicit input_assets plus literal input basenames present in fixture dirs."""
+    egress_set = {str(p).strip() for p in expected_egress if str(p).strip()}
+    staged: List[str] = []
+    for item in (task.get("input_assets") or ()):
+        s = str(item or "").strip()
+        if s and s not in egress_set and s not in staged:
+            staged.append(s)
+    for lit in (task.get("expected_literals") or ()):
+        if isinstance(lit, str):
+            s = lit.strip()
+            if s and s not in egress_set and s not in staged and "/" not in s and "\\" not in s:
+                if (MEDIA_FIXTURES_DIR / s).is_file() or (ROOT_DIR / s).is_file():
+                    staged.append(s)
+    return staged
+
+
 def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
     """Executes generated Python code inside STRATA's headless GEVRSandbox and checks literal grounding."""
     ast_info = check_ast(code)
@@ -420,7 +615,19 @@ def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> 
             "stderr": "",
         }
 
-    provision_sandbox_fixtures(ROOT_DIR)
+    constraint_err = _check_code_constraints(code, task)
+    if constraint_err:
+        return {
+            "status": "DOMAIN_VIOLATION",
+            "category": "SPEC_VIOLATION",
+            "detail": constraint_err,
+            "ast_ok": True,
+            "missing_literals": verify_literals_consumed(code, task.get("expected_literals") or []),
+            "stdout": "",
+            "stderr": "",
+        }
+
+    provision_sandbox_fixtures(MEDIA_FIXTURES_DIR)
     src_str = str(ROOT_DIR / "src")
     if src_str not in sys.path:
         sys.path.insert(0, src_str)
@@ -432,10 +639,16 @@ def run_sandbox_eval(code: str, task: Dict[str, Any], timeout: float = 30.0) -> 
     from gevr_sandbox import GEVRSandbox
 
     expected_egress = _task_egress_paths(task)
-    sandbox = GEVRSandbox(default_timeout=timeout, allowed_capabilities=set())
+    staged_assets = _resolve_staged_input_assets(task, expected_egress)
+    sandbox = GEVRSandbox(
+        default_timeout=timeout,
+        allowed_capabilities=set(),
+        asset_dirs=[MEDIA_FIXTURES_DIR, ROOT_DIR],
+    )
     sb = sandbox.execute(
         code,
         timeout=timeout,
+        input_assets=staged_assets or None,
         egress_paths=expected_egress or None,
         capture_egress=bool(expected_egress),
     )
@@ -522,6 +735,7 @@ def audit_sdk_code(code: str, task: Dict[str, Any]) -> Dict[str, Any]:
         "calls_found": [],
         "hallucinated_calls": [],
         "forbidden_calls_used": [],
+        "noise_imports_used": [],
         "invalid_kwargs": [],
         "missing_required_calls": [],
         "order_violations": [],
@@ -614,11 +828,19 @@ def audit_sdk_code(code: str, task: Dict[str, Any]) -> Dict[str, Any]:
                 res["order_violations"].append(f"{pre} called AFTER {post}")
 
     res["missing_literals"] = verify_literals_consumed(code, task.get("expected_literals") or [])
+    if task.get("strict_sdk_only"):
+        stdlib_mods = set(getattr(sys, "stdlib_module_names", ()))
+        top_mods = _extract_imported_top_modules(tree)
+        res["noise_imports_used"] = sorted(
+            m for m in top_mods if m != mod_name and m not in stdlib_mods
+        )
+
     res["spec_compliant"] = (
         res["ast_ok"]
         and res["imports_sdk"]
         and not res["hallucinated_calls"]
         and not res["forbidden_calls_used"]
+        and not res["noise_imports_used"]
         and not res["invalid_kwargs"]
         and not res["missing_required_calls"]
         and not res["order_violations"]
@@ -629,9 +851,38 @@ def audit_sdk_code(code: str, task: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def evaluate_task_response(raw_text: str, code: str, task: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-    """Evaluates raw model output + extracted code for either sandbox or sdk tasks."""
+    """Evaluates raw model output + extracted code for either sandbox, refusal, or sdk tasks."""
     expected = task.get("expected", "synthesize")
     kind = task["kind"]
+
+    if expected == "refuse" or kind == "refusal":
+        if not code.strip():
+            visible_reply = strip_reasoning_traces(raw_text)
+            clean_refusal = bool(visible_reply and visible_reply.strip())
+            return {
+                "kind": kind,
+                "expected": expected,
+                "status": "REFUSED_OK" if clean_refusal else "NO_CODE",
+                "passed": False,
+                "acceptable": clean_refusal,
+                "detail": (
+                    "Clean domain/capability refusal without hallucinated code"
+                    if clean_refusal
+                    else "Empty reply after stripping reasoning traces"
+                ),
+                "ast_ok": False,
+                "missing_literals": [],
+            }
+        return {
+            "kind": kind,
+            "expected": expected,
+            "status": "DOMAIN_VIOLATION",
+            "passed": False,
+            "acceptable": False,
+            "detail": "Emitted executable code despite unavailable/wrong domain constraint",
+            "ast_ok": check_ast(code)["ast_ok"],
+            "missing_literals": [],
+        }
 
     if kind == "sdk":
         audit = audit_sdk_code(code, task)
@@ -650,6 +901,7 @@ def evaluate_task_response(raw_text: str, code: str, task: Dict[str, Any], timeo
                         f"missing={audit['missing_required_calls']}" if audit["missing_required_calls"] else "",
                         f"halluc={audit['hallucinated_calls']}" if audit["hallucinated_calls"] else "",
                         f"forbidden={audit['forbidden_calls_used']}" if audit["forbidden_calls_used"] else "",
+                        f"noise={audit['noise_imports_used']}" if audit["noise_imports_used"] else "",
                         f"order={audit['order_violations']}" if audit["order_violations"] else "",
                         f"kw={audit['invalid_kwargs']}" if audit["invalid_kwargs"] else "",
                         f"lits={audit['missing_literals']}" if audit["missing_literals"] else "",

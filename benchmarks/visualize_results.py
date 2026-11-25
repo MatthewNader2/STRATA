@@ -22,15 +22,17 @@ KNOWN_METADATA: Dict[str, Dict[str, Any]] = {
 
 
 def _normalize_legacy_record(r: Dict[str, Any], top_data: Dict[str, Any]) -> Dict[str, Any]:
+    is_v2 = top_data.get("schema_version") == "strata_bench_v2"
     arm = str(r.get("arm") or top_data.get("arm") or "unknown")
     tid = str(r.get("task_id") or r.get("preset") or "unknown")
+    group = str(r.get("group") or "other")
     model_id = str(r.get("model_id") or top_data.get("model_id") or arm)
     meta = KNOWN_METADATA.get(arm, {})
     display = str(r.get("model_display") or top_data.get("model_display") or meta.get("display") or model_id)
     params_b = float(r.get("params_b") or top_data.get("params_b") or meta.get("params_b") or 0.0)
-    if arm == "omega":
+    if not is_v2 and arm == "omega":
         display, model_id, params_b = "STRATA O+OMEGA (0.8B, No-FB)", "omega_no_fb", 0.8
-    elif "pure_md" == arm:
+    elif not is_v2 and arm == "pure_md":
         llm = str((top_data.get("init") or {}).get("resolved_llm") or "")
         if "0.8" in llm:
             display, model_id, params_b = "Pure Qwen3.5-0.8B", "pure_08b", 0.8
@@ -52,10 +54,11 @@ def _normalize_legacy_record(r: Dict[str, Any], top_data: Dict[str, Any]) -> Dic
         acceptable = passed or (expected == "clarify" and status in ("LINT_HALTED", "REFUSED_OK"))
 
     return {
-        "model_key": model_id if top_data.get("schema_version") == "strata_bench_v2" else (arm if arm in ("omega_no_fb", "omega_with_fb", "pure_08b", "pure_7b") else display),
+        "model_key": model_id if is_v2 else (arm if arm in ("omega_no_fb", "omega_with_fb", "pure_08b", "pure_7b") else display),
         "display": display,
         "params_b": params_b,
         "task_id": tid,
+        "group": group,
         "passed": passed,
         "acceptable": acceptable,
         "status": status,
@@ -86,6 +89,20 @@ def aggregate_by_model(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         by_task = {it["task_id"]: it for it in items}
         vals = list(by_task.values())
         n = max(len(vals), 1)
+        by_group: Dict[str, Dict[str, Any]] = {}
+        grp_buckets: Dict[str, List[Dict[str, Any]]] = {}
+        for v in vals:
+            grp_buckets.setdefault(v.get("group", "other"), []).append(v)
+        for gname, gvals in sorted(grp_buckets.items()):
+            gn = max(len(gvals), 1)
+            gacc = sum(1 for v in gvals if v["acceptable"])
+            gpass = sum(1 for v in gvals if v["passed"])
+            by_group[gname] = {
+                "tasks": len(gvals),
+                "passed": gpass,
+                "acceptable": gacc,
+                "acc_pct": round(100.0 * gacc / gn, 1),
+            }
         summary[disp] = {
             "display": disp,
             "params_b": max(v["params_b"] for v in vals),
@@ -99,6 +116,7 @@ def aggregate_by_model(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
             "peak_hwm_mb": round(max(v["hwm_mb"] for v in vals), 1),
             "peak_vram_mb": round(max(v["vram_mb"] for v in vals), 1),
             "by_task": by_task,
+            "by_group": by_group,
         }
     return summary
 
@@ -247,6 +265,34 @@ def write_tables(summary: Dict[str, Dict[str, Any]], out_dir: Path) -> Tuple[Pat
                 m["strict_pct"], m["acc_pct"], m["mean_wall_ms"], m["total_tokens"],
                 m["peak_hwm_mb"], m["peak_vram_mb"],
             ])
+    all_groups = sorted({g for m in models for g in (m.get("by_group") or {}).keys()})
+    if all_groups:
+        md_lines.extend([
+            "",
+            "## Per-Category Acceptable Rate Breakdown",
+            "",
+            "| Model / Architecture | " + " | ".join(all_groups) + " |",
+            "|---|" + "|".join("---:" for _ in all_groups) + "|",
+        ])
+        grp_csv_path = out_dir / "comparison_summary_by_group.csv"
+        with open(grp_csv_path, "w", newline="", encoding="utf-8") as gfh:
+            gwriter = csv.writer(gfh)
+            gwriter.writerow(["model"] + all_groups)
+            for m in models:
+                cells_md: List[str] = []
+                cells_csv: List[str] = []
+                by_g = m.get("by_group") or {}
+                for gname in all_groups:
+                    gstat = by_g.get(gname)
+                    if gstat is None:
+                        cells_md.append("—")
+                        cells_csv.append("")
+                    else:
+                        cells_md.append(f"{gstat['acceptable']}/{gstat['tasks']} ({gstat['acc_pct']}%)")
+                        cells_csv.append(str(gstat["acc_pct"]))
+                md_lines.append(f"| {m['display']} | " + " | ".join(cells_md) + " |")
+                gwriter.writerow([m["display"]] + cells_csv)
+
     md_path = out_dir / "comparison_summary.md"
     md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
     return md_path, csv_path
