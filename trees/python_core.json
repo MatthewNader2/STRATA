@@ -1787,7 +1787,7 @@
       "cell_id": "PYTHON_DICT_INIT",
       "domain_name": "python_core",
       "docstring": "Initialize a Python dictionary state container.",
-      "code_template": "{output_var} = {}",
+      "code_template": "{output_var} = dict()",
       "code_templates": {},
       "dependencies": [],
       "inputs": {},

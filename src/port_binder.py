@@ -8,8 +8,9 @@ and validating syntax purely through the active LanguageBackend.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import keyword
 import string
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 try:
     from .language_backend import LexicalLanguageBackend, get_active_language_backend
@@ -157,6 +158,71 @@ def _format_scalar_binding(
     return backend.format_literal(val)
 
 
+def _extract_imported_bindings(dep_stmt: str) -> Set[str]:
+    """Extract locally bound identifier names from formatted dependency statements without regex or ast."""
+    bindings: Set[str] = set()
+    s = str(dep_stmt or "").strip()
+    if not s:
+        return bindings
+    parts = s.split()
+    if parts[0] == "import":
+        rest = s[len("import"):].strip()
+        for item in rest.split(","):
+            toks = item.strip().split()
+            if not toks:
+                continue
+            if len(toks) >= 3 and toks[1] == "as":
+                bindings.add(toks[2].strip())
+            else:
+                bindings.add(toks[0].split(".", 1)[0].strip())
+    elif parts[0] == "from" and " import " in s:
+        rhs = s.split(" import ", 1)[1].strip()
+        for item in rhs.split(","):
+            toks = item.strip().split()
+            if not toks:
+                continue
+            if len(toks) >= 3 and toks[1] == "as":
+                bindings.add(toks[2].strip())
+            elif toks[0] != "*":
+                bindings.add(toks[0].strip())
+    return {b for b in bindings if b}
+
+
+def _collect_plan_symbols(
+    steps: Iterable[PlannedStep],
+    backend: LexicalLanguageBackend,
+) -> Tuple[Set[str], Set[str], Set[str]]:
+    """Recursively gather imported bindings, defined output variable names, and all variable names in plan."""
+    imported: Set[str] = set()
+    defined_outs: Set[str] = set()
+    all_vars: Set[str] = set()
+
+    def _visit(seq: Iterable[PlannedStep]) -> None:
+        for st in seq:
+            if st.output_var:
+                defined_outs.add(st.output_var)
+                all_vars.add(st.output_var)
+            for ov in (getattr(st, "output_vars", None) or {}).values():
+                if ov:
+                    defined_outs.add(str(ov))
+                    all_vars.add(str(ov))
+            for iv in (st.input_wiring or {}).values():
+                if iv:
+                    all_vars.add(str(iv))
+            if st.cell is not None:
+                for dep in (get_attr(st.cell, "dependencies", ()) or ()):
+                    d_stmt = backend.format_dependency_statement(str(dep or ""))
+                    if d_stmt:
+                        imported.update(_extract_imported_bindings(d_stmt))
+            if st.body_steps:
+                _visit(st.body_steps)
+            if st.else_steps:
+                _visit(st.else_steps)
+
+    _visit(steps)
+    return imported, defined_outs, all_vars
+
+
 def bind_and_emit(
     plan: CandidatePlan,
     ir: TypedIR,
@@ -167,6 +233,23 @@ def bind_and_emit(
     backend = language_backend or get_active_language_backend()
     nodes_by_id: Dict[str, IRNode] = {n.id: n for n in ir.flatten_nodes()}
     grounded_assets = ir.grounded_assets()
+
+    imported_bindings, defined_outs, all_vars = _collect_plan_symbols(plan.steps, backend)
+    reserved_syms = imported_bindings | set(keyword.kwlist)
+    var_remap: Dict[str, str] = {}
+    used_safe = set(reserved_syms) | set(all_vars)
+    for var_name in sorted(defined_outs):
+        if var_name in reserved_syms:
+            cand = f"{var_name}_val"
+            suffix = 2
+            while cand in used_safe:
+                cand = f"{var_name}_val_{suffix}"
+                suffix += 1
+            var_remap[var_name] = cand
+            used_safe.add(cand)
+
+    def _safe_v(name: str) -> str:
+        return var_remap.get(name, name)
 
     bound_steps: List[BoundStep] = []
     ordered_deps: List[str] = []
@@ -249,21 +332,23 @@ def bind_and_emit(
             for ok_str, ov_name in step_out_vars.items():
                 ok_s = str(ok_str)
                 if ok_s in raw_outs and ov_name:
-                    bindings[ok_s] = ov_name
+                    safe_ov = _safe_v(str(ov_name))
+                    bindings[ok_s] = safe_ov
                     slot_out = out_port_to_slot.get(ok_s)
                     if slot_out and slot_out not in bindings:
-                        bindings[slot_out] = ov_name
+                        bindings[slot_out] = safe_ov
 
             prim_out = get_attr(cell, "primary_out", None)
             first_out = str(prim_out) if (prim_out and str(prim_out) in raw_outs) else str(next(iter(raw_outs)))
+            safe_prim_out = _safe_v(step.output_var)
             if first_out not in bindings:
-                bindings[first_out] = step.output_var
+                bindings[first_out] = safe_prim_out
             if first_out in out_port_to_slot and out_port_to_slot[first_out] not in bindings:
                 bindings[out_port_to_slot[first_out]] = bindings[first_out]
             for out_k in raw_outs.keys():
                 ok_str = str(out_k)
                 if ok_str not in bindings:
-                    out_vname = f"{step.output_var}_{ok_str}"
+                    out_vname = _safe_v(f"{safe_prim_out}_{ok_str}")
                     bindings[ok_str] = out_vname
                     slot_out = out_port_to_slot.get(ok_str)
                     if slot_out and slot_out not in bindings:
@@ -276,6 +361,7 @@ def bind_and_emit(
                 raw_ins,
                 in_port_to_slot,
                 allow_single_fallback=(ir.source_mode == "slm_compiled"),
+                raw_prompt=ir.raw_prompt,
             )
             grounded_node_assets = [
                 pk for pk, pv in node_params.items()
@@ -287,13 +373,13 @@ def bind_and_emit(
                 p_str = str(pname)
                 slot_name = in_port_to_slot.get(p_str)
                 if p_str in step.input_wiring:
-                    wired_var = step.input_wiring[p_str]
+                    wired_var = _safe_v(step.input_wiring[p_str])
                     bindings[p_str] = wired_var
                     if slot_name:
                         bindings[slot_name] = wired_var
                     continue
                 if slot_name and slot_name in step.input_wiring:
-                    wired_var = step.input_wiring[slot_name]
+                    wired_var = _safe_v(step.input_wiring[slot_name])
                     bindings[p_str] = wired_var
                     bindings[slot_name] = wired_var
                     continue

@@ -65,6 +65,7 @@ class TypedIR(BaseModel):
     raw_prompt: str
     nodes: List[IRNode] = Field(default_factory=list)
     assets: Dict[str, IRParamValue] = Field(default_factory=dict)
+    required_domains: List[str] = Field(default_factory=list)
     deliverable: Optional[str] = None
     ambiguities: List[str] = Field(default_factory=list)
 

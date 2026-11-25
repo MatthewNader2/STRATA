@@ -1,7 +1,7 @@
 """
 src/cli.py — Clean CLI & Interactive Studio for the unified STRATA synthesis engine.
 
-Subcommands: compile, validate, run, shell.
+Subcommands: compile, validate, audit, run, shell.
 """
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 try:
+    from .bridge_graph import LiveBridgeGraph, SimpleTypePoset
     from .config import MODELS_DIR, PROFILE_SPECS, resolve_profile_spec, settings
     from .gevr_sandbox import GEVRSandbox
     from .hardware import HardwareProfiler
@@ -47,8 +48,9 @@ try:
     from .log_config import get_logger
     from .profile_adapters import build_strata_pipeline_for_profile
     from .reranker import LocalReranker, get_available_rerankers
-    from .schema import TreeSchema, get_attr
+    from .schema import TreeSchema, derive_value_class, get_attr
 except (ImportError, ValueError):
+    from bridge_graph import LiveBridgeGraph, SimpleTypePoset
     from config import MODELS_DIR, PROFILE_SPECS, resolve_profile_spec, settings
     from gevr_sandbox import GEVRSandbox
     from hardware import HardwareProfiler
@@ -66,7 +68,7 @@ except (ImportError, ValueError):
     from log_config import get_logger
     from profile_adapters import build_strata_pipeline_for_profile
     from reranker import LocalReranker, get_available_rerankers
-    from schema import TreeSchema, get_attr
+    from schema import TreeSchema, derive_value_class, get_attr
 
 logger = get_logger("cli")
 console = Console()
@@ -198,6 +200,124 @@ def cmd_validate(args: argparse.Namespace) -> None:
             print(f"  - {err}")
         sys.exit(1)
     print("\n[+] Validation passed 100% cleanly.")
+
+
+def cmd_audit(args: argparse.Namespace) -> None:
+    """Audit compiled SQLite v4 lattice topology, posets, and live bridge morphisms."""
+    db_path = Path(getattr(args, "db", None) or "trees/lattice.db")
+    trees_dir = str(getattr(args, "trees_dir", "trees") or "trees")
+    ensure_lattice_compiled(trees_dir=trees_dir, db_path=str(db_path))
+
+    try:
+        compiled = load_compiled_lattice(db_path)
+    except Exception as exc:
+        print(f"[X] Audit Load Error: {exc}")
+        sys.exit(1)
+
+    poset = SimpleTypePoset(
+        type_parents=compiled.type_parents,
+        state_parents=compiled.state_parents,
+        top_types=compiled.top_types,
+    )
+    bridge_graph = LiveBridgeGraph.build(compiled.cells, poset)
+
+    total_cells = len(compiled.cells)
+    loaded_domains = sorted(
+        {
+            str(get_attr(c, "domain_name", "") or "").strip().lower()
+            for c in compiled.cells
+            if str(get_attr(c, "domain_name", "") or "").strip()
+        }
+    )
+    loaded_set = set(loaded_domains)
+    type_edge_count = sum(len(v) for v in compiled.type_parents.values())
+    state_edge_count = sum(len(v) for v in compiled.state_parents.values())
+    tier1_bridges = sum(1 for e in bridge_graph.edges if not e.lossy and not e.requires_intent)
+    tier2_bridges = len(bridge_graph.edges) - tier1_bridges
+
+    entry_cells = 0
+    terminal_cells = 0
+    for cell in compiled.cells:
+        ins = list((get_attr(cell, "inputs", {}) or {}).values())
+        outs = list((get_attr(cell, "outputs", {}) or {}).values())
+        has_req_data = any(
+            bool(get_attr(p, "required", True)) and derive_value_class(p) == "data"
+            for p in ins
+        )
+        if not has_req_data:
+            entry_cells += 1
+
+        mut = str(get_attr(cell, "mutation_type", "pure") or "pure").strip().lower()
+        has_release = any(
+            str(get_attr(p, "resource_mode", "value") or "value").strip().lower() == "release"
+            for p in ins
+        )
+        has_non_void_out = any(
+            str(get_attr(p, "carrier", "void") or "void").strip().lower() not in ("", "void", "none")
+            for p in outs
+        )
+        if mut == "sink" or has_release or not has_non_void_out:
+            terminal_cells += 1
+
+    missing_imports = {
+        dom: missing
+        for dom, imps in sorted(compiled.domain_imports.items())
+        for missing in ([imp for imp in imps if imp.lower() not in loaded_set],)
+        if missing
+    }
+
+    summary = {
+        "schema_version": str(compiled.schema_version),
+        "total_cells": total_cells,
+        "domains_loaded": loaded_domains,
+        "domain_count": len(loaded_domains),
+        "type_poset_edges": type_edge_count,
+        "typestate_edges": state_edge_count,
+        "live_bridges_total": len(bridge_graph.edges),
+        "live_bridges_tier1": tier1_bridges,
+        "live_bridges_tier2": tier2_bridges,
+        "entry_cells": entry_cells,
+        "terminal_release_cells": terminal_cells,
+        "missing_domain_imports": missing_imports,
+    }
+
+    table = Table(
+        title=f"STRATA SQLite v{compiled.schema_version} Lattice Audit ({total_cells} Cells)",
+        box=box.ROUNDED,
+        border_style="cyan",
+    )
+    table.add_column("Metric", style="bold yellow")
+    table.add_column("Value", style="bold white")
+    table.add_column("Status", style="bold green")
+
+    table.add_row("Total Cells", str(total_cells), "[green]PASS[/green]" if total_cells > 0 else "[red]EMPTY[/red]")
+    table.add_row("Domains Loaded", f"{len(loaded_domains)} ({', '.join(loaded_domains)})", "[green]OK[/green]")
+    table.add_row("Type Poset Edges", str(type_edge_count), "[green]OK[/green]")
+    table.add_row("Typestate Edges", str(state_edge_count), "[green]OK[/green]")
+    table.add_row(
+        "Live Bridge Morphisms",
+        f"{len(bridge_graph.edges)} (Tier-1={tier1_bridges}, Tier-2={tier2_bridges})",
+        "[green]OK[/green]",
+    )
+    table.add_row("Entry Cells", str(entry_cells), "Zero required data inputs")
+    table.add_row("Terminal / Release Cells", str(terminal_cells), "Sink / release / void outputs")
+    table.add_row(
+        "Missing Domain Imports",
+        str(missing_imports) if missing_imports else "0",
+        "[green]PASS (0)[/green]" if not missing_imports else "[red]MISSING[/red]",
+    )
+    console.print(table)
+
+    out_path_str = str(getattr(args, "output", "") or "").strip()
+    if out_path_str:
+        out_path = Path(out_path_str)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        print(f"[+] Audit report saved to '{out_path}'.")
+
+    if total_cells == 0 or missing_imports:
+        print("[X] Lattice audit failed due to empty lattice or missing domain imports.")
+        sys.exit(1)
 
 
 def _scan_models(subdir: str, preferred: Tuple[str, ...] = (), *, require_dir_only: bool = False) -> List[str]:
@@ -721,6 +841,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.add_argument("--db", type=str, default=None, help="Optional explicit SQLite DB path")
     p_validate.set_defaults(func=cmd_validate)
 
+    p_audit = subparsers.add_parser("audit", help="Audit compiled SQLite v4 lattice topology, posets, and live bridges")
+    p_audit.add_argument("--db", type=str, default="trees/lattice.db", help="Path to SQLite database")
+    p_audit.add_argument("--trees-dir", type=str, default="trees", help="Directory containing domain JSON files")
+    p_audit.add_argument("--output", type=str, default="", help="Optional JSON output report path")
+    p_audit.set_defaults(func=cmd_audit)
+
     p_run = subparsers.add_parser("run", help="Synthesize code for one prompt from CLI")
     p_run.add_argument("prompt", type=str, help="Formal or natural-language specification")
     _add_runtime_flags(p_run, "Inference profile (0, A, B, C, D, E, O)")
@@ -742,7 +868,7 @@ def main() -> None:
         NSTLInteractiveShell(debug=True).cmdloop()
         return
 
-    known_cmds = {"compile", "validate", "run", "shell", "-h", "--help"}
+    known_cmds = {"compile", "validate", "audit", "run", "shell", "-h", "--help"}
     if len(sys.argv) > 1 and sys.argv[1] not in known_cmds:
         if sys.argv[1] in ("--debug", "-d") and len(sys.argv) > 2 and sys.argv[2] not in known_cmds:
             sys.argv = [sys.argv[0], "run", sys.argv[2], "--debug"] + sys.argv[3:]

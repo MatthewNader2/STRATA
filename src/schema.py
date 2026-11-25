@@ -4,7 +4,7 @@ plus single-source structural type/state helpers shared across the unified engin
 """
 from __future__ import annotations
 
-from typing import Any, Collection, Dict, List, Literal, Optional, Set, Tuple, Union
+from typing import Any, Callable, Collection, Dict, List, Literal, Optional, Set, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -163,12 +163,83 @@ def _param_tokens(name: str) -> Set[str]:
     }
 
 
+def _strict_carrier_match(val: Any, p_obj: Any) -> bool:
+    """Strictly match Python value type to declared port carrier (distinguishing int, float, str, bool, tuple/list)."""
+    car = str(get_attr(p_obj, "carrier", None) or "").strip()
+    base = car.split("[", 1)[0].strip().lower()
+    if base in TOP_CARRIERS:
+        return True
+    if isinstance(val, bool):
+        return base in ("bool", "boolean")
+    if isinstance(val, int):
+        return base in ("int", "integer")
+    if isinstance(val, float):
+        return base in ("float", "number", "scalar")
+    if isinstance(val, str):
+        return base in ("str", "string")
+    if isinstance(val, (list, tuple)):
+        return base in ("list", "tuple", "sequence", "array", "ndarray")
+    if isinstance(val, dict):
+        return base in ("dict", "mapping", "object")
+    return True
+
+
+def _run_bijective_cfg_pass(
+    cfg_subset: List[Tuple[str, Any]],
+    eligible: Dict[str, Any],
+    mapping: Dict[str, str],
+    used_pks: Set[str],
+    compat_fn: Callable[[Any, Any], bool],
+    raw_prompt: str,
+) -> None:
+    """Bind remaining config ports via unique 1-to-1 type-compatible bijection."""
+    rem_ports = [(p_str, p_obj) for p_str, p_obj in cfg_subset if p_str not in mapping]
+    rem_pks = [pk for pk in eligible if pk not in used_pks]
+    if not rem_ports or not rem_pks:
+        return
+
+    prompt_low = str(raw_prompt or "").lower()
+    port_cands: Dict[str, List[str]] = {}
+    for p_str, p_obj in rem_ports:
+        cands = [
+            pk for pk in rem_pks
+            if compat_fn(get_attr(eligible[pk], "value", None), p_obj)
+        ]
+        if len(cands) > 1 and prompt_low:
+            car_base = str(get_attr(p_obj, "carrier", None) or "").split("[", 1)[0].strip().lower()
+            if car_base in ("str", "string"):
+                quoted_cands = []
+                for pk in cands:
+                    val_s = get_attr(eligible[pk], "value", None)
+                    if isinstance(val_s, str):
+                        v_l = val_s.strip().lower()
+                        if v_l and (f'"{v_l}"' in prompt_low or f"'{v_l}'" in prompt_low):
+                            quoted_cands.append(pk)
+                if len(quoted_cands) == 1:
+                    cands = quoted_cands
+        port_cands[p_str] = cands
+
+    pk_to_ports: Dict[str, List[str]] = {pk: [] for pk in rem_pks}
+    for p_str, cands in port_cands.items():
+        for pk in cands:
+            pk_to_ports[pk].append(p_str)
+
+    for p_str, _ in rem_ports:
+        cands = port_cands.get(p_str, [])
+        if len(cands) == 1:
+            pk = cands[0]
+            if pk not in used_pks and len(pk_to_ports.get(pk, [])) == 1:
+                mapping[p_str] = pk
+                used_pks.add(pk)
+
+
 def align_node_params_to_ports(
     node_params: Dict[str, Any],
     raw_ins: Dict[str, Any],
     in_port_to_slot: Optional[Dict[str, str]] = None,
     *,
     allow_single_fallback: bool = False,
+    raw_prompt: str = "",
 ) -> Dict[str, str]:
     """Align node configuration params to cell input ports via exact name, slot, typestate, and token subset."""
     if not isinstance(node_params, dict) or not isinstance(raw_ins, dict) or not node_params or not raw_ins:
@@ -187,10 +258,27 @@ def align_node_params_to_ports(
     mapping: Dict[str, str] = {}
     used_pks: Set[str] = set()
 
-    # Pass 1: exact port name match
-    for pname in raw_ins.keys():
+    # Pass 1a: exact port name with strict carrier match
+    for pname, p_obj in raw_ins.items():
         p_str = str(pname)
         if p_str in eligible and p_str not in used_pks:
+            if _strict_carrier_match(get_attr(eligible[p_str], "value", None), p_obj):
+                mapping[p_str] = p_str
+                used_pks.add(p_str)
+
+    # Pass 1b: exact port name with relaxed carrier compatibility (unless another param strictly fits)
+    for pname, p_obj in raw_ins.items():
+        p_str = str(pname)
+        if p_str not in mapping and p_str in eligible and p_str not in used_pks:
+            if not _value_compatible_with_port(get_attr(eligible[p_str], "value", None), p_obj):
+                continue
+            if allow_single_fallback and any(
+                pk != p_str
+                and pk not in used_pks
+                and _strict_carrier_match(get_attr(pv, "value", None), p_obj)
+                for pk, pv in eligible.items()
+            ):
+                continue
             mapping[p_str] = p_str
             used_pks.add(p_str)
 
@@ -260,21 +348,12 @@ def align_node_params_to_ports(
                 used_pks.add(pk)
                 break
 
-    # Pass 5: unambiguous single required config port fallback
+    # Pass 5: type-unique bijective matching (strict carrier first, then relaxed coercion)
     if allow_single_fallback:
-        rem_req = [
-            (p_str, p_obj)
-            for p_str, p_obj in cfg_ports
-            if p_str not in mapping
-            and bool(get_attr(p_obj, "required", True))
-            and get_attr(p_obj, "default_value", None) is None
-        ]
-        rem_pks = [pk for pk in eligible if pk not in used_pks]
-        if len(rem_req) == 1 and len(rem_pks) == 1:
-            p_str, p_obj = rem_req[0]
-            pk = rem_pks[0]
-            if _value_compatible_with_port(get_attr(eligible[pk], "value", None), p_obj):
-                mapping[p_str] = pk
+        _run_bijective_cfg_pass(req_cfg, eligible, mapping, used_pks, _strict_carrier_match, raw_prompt)
+        _run_bijective_cfg_pass(opt_cfg, eligible, mapping, used_pks, _strict_carrier_match, raw_prompt)
+        _run_bijective_cfg_pass(req_cfg, eligible, mapping, used_pks, _value_compatible_with_port, raw_prompt)
+        _run_bijective_cfg_pass(opt_cfg, eligible, mapping, used_pks, _value_compatible_with_port, raw_prompt)
 
     return mapping
 
@@ -648,6 +727,7 @@ class TreeSchema(BaseModel):
     version: str = "2.0.0"
     description: str = ""
     is_core: bool = False
+    aliases: List[str] = Field(default_factory=list)
     imports: List[str] = Field(default_factory=list)
     types: Union[Dict[str, Any], List[Dict[str, Any]]] = Field(default_factory=dict)
     top_types: List[str] = Field(default_factory=list)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 try:
     from .schema import derive_value_class, get_attr
@@ -184,6 +184,37 @@ def make_sandbox_exec_fn(sandbox: Any, timeout: float = 30.0) -> Optional[Callab
     return _exec
 
 
+def _resolve_profile_callbacks(
+    profile_spec: Any,
+    model_manager: Any = None,
+    *,
+    reranker: Any = None,
+    sandbox: Any = None,
+    timeout: float = 30.0,
+    embed_fn_override: Optional[Callable[..., List[List[float]]]] = None,
+) -> Dict[str, Any]:
+    """Resolve capability-gated callbacks from a ProfileSpec."""
+    has_llm = bool(getattr(profile_spec, "uses_llm", False))
+    embed_fn = (
+        embed_fn_override
+        if (embed_fn_override is not None and getattr(profile_spec, "uses_embedder", False))
+        else (make_embed_fn(model_manager) if getattr(profile_spec, "uses_embedder", False) else None)
+    )
+    return {
+        "has_llm": has_llm,
+        "embed_fn": embed_fn,
+        "rerank_fn": make_rerank_fn(reranker) if getattr(profile_spec, "uses_reranker", False) else None,
+        "generate_fn": make_generate_fn(model_manager) if has_llm else None,
+        "slot_fill_fn": make_slot_fill_fn(model_manager) if getattr(profile_spec, "uses_slot_fill", False) else None,
+        "choice_scorer_fn": (
+            make_choice_scorer_fn(model_manager)
+            if getattr(profile_spec, "uses_choice_scorer", False)
+            else None
+        ),
+        "sandbox_exec_fn": make_sandbox_exec_fn(sandbox, timeout=timeout),
+    }
+
+
 def build_strata_pipeline_for_profile(
     compiled: Any,
     profile_spec: Any,
@@ -193,34 +224,48 @@ def build_strata_pipeline_for_profile(
     sandbox: Any = None,
     timeout: float = 30.0,
     max_bridge_hops: Optional[int] = None,
+    embed_fn_override: Optional[Callable[..., List[List[float]]]] = None,
 ) -> StrataPipeline:
     """Construct a StrataPipeline wired strictly according to ProfileSpec capability flags."""
-    has_llm = bool(getattr(profile_spec, "uses_llm", False))
-    embed_fn = make_embed_fn(model_manager) if getattr(profile_spec, "uses_embedder", False) else None
-    rerank_fn = make_rerank_fn(reranker) if getattr(profile_spec, "uses_reranker", False) else None
-    generate_fn = make_generate_fn(model_manager) if has_llm else None
-    slot_fill_fn = (
-        make_slot_fill_fn(model_manager)
-        if getattr(profile_spec, "uses_slot_fill", False)
-        else None
+    callbacks = _resolve_profile_callbacks(
+        profile_spec,
+        model_manager=model_manager,
+        reranker=reranker,
+        sandbox=sandbox,
+        timeout=timeout,
+        embed_fn_override=embed_fn_override,
     )
-    choice_scorer_fn = (
-        make_choice_scorer_fn(model_manager)
-        if getattr(profile_spec, "uses_choice_scorer", False)
-        else None
-    )
-    sandbox_exec_fn = make_sandbox_exec_fn(sandbox, timeout=timeout)
-
     return StrataPipeline.from_compiled(
         compiled,
-        has_llm=has_llm,
-        generate_fn=generate_fn,
-        embed_fn=embed_fn,
-        rerank_fn=rerank_fn,
-        choice_scorer_fn=choice_scorer_fn,
-        slot_fill_fn=slot_fill_fn,
-        sandbox_exec_fn=sandbox_exec_fn,
         max_bridge_hops=max_bridge_hops,
+        **callbacks,
+    )
+
+
+def build_strata_pipeline_from_trees(
+    trees: Iterable[Any],
+    profile_spec: Any,
+    model_manager: Any = None,
+    *,
+    reranker: Any = None,
+    sandbox: Any = None,
+    timeout: float = 30.0,
+    max_bridge_hops: Optional[int] = None,
+    embed_fn_override: Optional[Callable[..., List[List[float]]]] = None,
+) -> StrataPipeline:
+    """Construct a StrataPipeline from explicit tree manifests strictly according to ProfileSpec flags."""
+    callbacks = _resolve_profile_callbacks(
+        profile_spec,
+        model_manager=model_manager,
+        reranker=reranker,
+        sandbox=sandbox,
+        timeout=timeout,
+        embed_fn_override=embed_fn_override,
+    )
+    return StrataPipeline.from_trees(
+        trees,
+        max_bridge_hops=max_bridge_hops,
+        **callbacks,
     )
 
 
@@ -232,4 +277,5 @@ __all__ = [
     "make_slot_fill_fn",
     "make_sandbox_exec_fn",
     "build_strata_pipeline_for_profile",
+    "build_strata_pipeline_from_trees",
 ]

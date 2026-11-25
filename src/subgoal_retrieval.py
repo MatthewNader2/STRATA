@@ -10,14 +10,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 import inspect
 import math
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 try:
-    from .schema import get_attr
+    from .schema import derive_value_class, get_attr
     from .typed_ir import IRNode, TypedIR
 except (ImportError, ValueError):
-    from schema import get_attr
+    from schema import derive_value_class, get_attr
     from typed_ir import IRNode, TypedIR
+
+
+def _cell_has_external_asset_port(cell: Any) -> bool:
+    raw_ins = get_attr(cell, "inputs", {}) or {}
+    if not isinstance(raw_ins, dict):
+        return False
+    return any(derive_value_class(pv) == "external_asset" for pv in raw_ins.values())
 
 
 def _format_ports(raw_ports: Any) -> str:
@@ -131,19 +138,35 @@ class NeutralSubgoalRetriever:
         source_mode: str,
         top_k: int = 8,
         min_dense_sim: float = 1e-6,
+        *,
+        allowed_domains: Optional[Set[str]] = None,
+        strict_domain: Optional[str] = None,
+        requires_asset_port: bool = False,
     ) -> List[CandidateMatch]:
         if not self._cells or top_k <= 0 or node.kind != "call":
             return []
 
         hint_dom = (node.domain_hint or "").strip().lower()
+        strict_l = (strict_domain or "").strip().lower()
+        if not strict_l and source_mode == "formal_syntax" and hint_dom:
+            strict_l = hint_dom
+        allowed_l = {str(d).strip().lower() for d in allowed_domains} if allowed_domains is not None else None
         target_op = str(node.intent or "").strip().lower()
+
+        def _domain_permitted(dom_val: str) -> bool:
+            dom_l = dom_val.strip().lower()
+            if strict_l:
+                return dom_l == strict_l
+            if allowed_l is not None:
+                return dom_l in allowed_l
+            return True
 
         if source_mode == "formal_syntax":
             exact: List[CandidateMatch] = []
             for cell, cid, dom in zip(self._cells, self._cell_ids, self._cell_domains):
                 if cid.lower() != target_op:
                     continue
-                if hint_dom and dom.lower() != hint_dom:
+                if not _domain_permitted(dom):
                     continue
                 exact.append(
                     CandidateMatch(
@@ -178,14 +201,26 @@ class NeutralSubgoalRetriever:
             return []
         q_unit = _normalize_vec(q_vecs[0])
 
-        scored_indices: List[Tuple[float, int]] = []
-        for idx, (cid, dom, d_unit) in enumerate(zip(self._cell_ids, self._cell_domains, doc_vecs)):
-            sim = _dot_unit(q_unit, d_unit)
-            if sim <= min_dense_sim:
-                continue
-            if self.domain_hint_bonus > 0.0 and hint_dom and dom.lower() == hint_dom:
-                sim += self.domain_hint_bonus
-            scored_indices.append((sim, idx))
+        def _collect_dense_pool(asset_only: bool) -> List[Tuple[float, int]]:
+            out_scores: List[Tuple[float, int]] = []
+            for idx, (cell, cid, dom, d_unit) in enumerate(
+                zip(self._cells, self._cell_ids, self._cell_domains, doc_vecs)
+            ):
+                if not _domain_permitted(dom):
+                    continue
+                if asset_only and not _cell_has_external_asset_port(cell):
+                    continue
+                sim = _dot_unit(q_unit, d_unit)
+                if sim <= min_dense_sim:
+                    continue
+                if self.domain_hint_bonus > 0.0 and hint_dom and dom.lower() == hint_dom:
+                    sim += self.domain_hint_bonus
+                out_scores.append((sim, idx))
+            return out_scores
+
+        scored_indices: List[Tuple[float, int]] = _collect_dense_pool(asset_only=requires_asset_port)
+        if requires_asset_port and not scored_indices:
+            scored_indices = _collect_dense_pool(asset_only=False)
 
         scored_indices.sort(key=lambda item: (-item[0], self._cell_ids[item[1]]))
         pool_k = max(top_k * 2, 16)
@@ -222,12 +257,37 @@ class NeutralSubgoalRetriever:
         dense_matches.sort(key=lambda m: (-m.score, m.cell_id))
         return dense_matches
 
-    def retrieve_for_ir(self, ir: TypedIR, top_k: int = 8) -> Dict[str, List[CandidateMatch]]:
-        return {
-            node.id: self.retrieve_for_node(node, ir.source_mode, top_k=top_k)
-            for node in ir.flatten_nodes()
-            if node.kind == "call"
-        }
+    def retrieve_for_ir(
+        self,
+        ir: TypedIR,
+        top_k: int = 8,
+        *,
+        allowed_domains: Optional[Set[str]] = None,
+        strict_domains_by_node: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, List[CandidateMatch]]:
+        strict_map = strict_domains_by_node or {}
+        grounded_assets = ir.grounded_assets()
+        is_slm = ir.source_mode == "slm_compiled"
+        results: Dict[str, List[CandidateMatch]] = {}
+        for node in ir.flatten_nodes():
+            if node.kind != "call":
+                continue
+            has_asset = is_slm and (
+                any(inp in grounded_assets for inp in node.inputs)
+                or any(
+                    pv.value_class == "external_asset" and pv.provenance == "prompt" and pv.value is not None
+                    for pv in node.params.values()
+                )
+            )
+            results[node.id] = self.retrieve_for_node(
+                node,
+                ir.source_mode,
+                top_k=top_k,
+                allowed_domains=allowed_domains,
+                strict_domain=strict_map.get(node.id),
+                requires_asset_port=has_asset,
+            )
+        return results
 
 
 __all__ = [

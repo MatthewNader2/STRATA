@@ -53,6 +53,10 @@ def init_sqlite_db(db_path: Path, clean: bool = False) -> None:
                 needs_reset = True
         if not needs_reset and "domain_metadata" not in existing_tables and existing_tables:
             needs_reset = True
+        if not needs_reset and "domain_metadata" in existing_tables:
+            dm_cols = {row[1] for row in cur.execute("PRAGMA table_info(domain_metadata)").fetchall()}
+            if "aliases_json" not in dm_cols:
+                needs_reset = True
 
         if needs_reset:
             for tbl in (
@@ -111,7 +115,8 @@ def init_sqlite_db(db_path: Path, clean: bool = False) -> None:
                 imports_json       TEXT NOT NULL DEFAULT '[]',
                 top_types_json     TEXT NOT NULL DEFAULT '[]',
                 runtime_setup_json TEXT,
-                language_spec_json TEXT
+                language_spec_json TEXT,
+                aliases_json       TEXT NOT NULL DEFAULT '[]'
             )
         """)
         conn.commit()
@@ -245,6 +250,8 @@ class CompiledLattice:
     state_parents: Dict[str, Set[str]] = field(default_factory=dict)
     top_types: List[str] = field(default_factory=list)
     domain_imports: Dict[str, List[str]] = field(default_factory=dict)
+    domain_aliases: Dict[str, List[str]] = field(default_factory=dict)
+    core_domains: Set[str] = field(default_factory=set)
     domain_runtime_setups: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     language_spec: Optional[LanguageSpec] = None
     schema_version: str = COMPILER_SCHEMA_VERSION
@@ -275,6 +282,8 @@ def load_compiled_lattice(db_path: Union[str, Path]) -> CompiledLattice:
     state_parents: Dict[str, Set[str]] = {}
     top_types: List[str] = []
     domain_imports: Dict[str, List[str]] = {}
+    domain_aliases: Dict[str, List[str]] = {}
+    core_domains: Set[str] = set()
     domain_runtime_setups: Dict[str, Dict[str, Any]] = {}
     language_spec: Optional[LanguageSpec] = None
     schema_version = COMPILER_SCHEMA_VERSION
@@ -328,16 +337,25 @@ def load_compiled_lattice(db_path: Union[str, Path]) -> CompiledLattice:
                     state_parents.setdefault(sn, set()).add(sp)
 
         if "domain_metadata" in tables:
-            for dom_name, _is_core, imp_json, top_json, rs_json, ls_json in cur.execute(
-                "SELECT domain_name, is_core, imports_json, top_types_json, runtime_setup_json, language_spec_json "
-                "FROM domain_metadata ORDER BY is_core DESC, domain_name ASC"
-            ).fetchall():
+            dm_cols = {row[1] for row in cur.execute("PRAGMA table_info(domain_metadata)").fetchall()}
+            has_aliases_col = "aliases_json" in dm_cols
+            dm_sql = (
+                "SELECT domain_name, is_core, imports_json, top_types_json, runtime_setup_json, language_spec_json, aliases_json "
+                if has_aliases_col
+                else "SELECT domain_name, is_core, imports_json, top_types_json, runtime_setup_json, language_spec_json, '[]' "
+            ) + "FROM domain_metadata ORDER BY is_core DESC, domain_name ASC"
+            for dom_name, is_core_val, imp_json, top_json, rs_json, ls_json, aliases_json in cur.execute(dm_sql).fetchall():
                 dom_l = str(dom_name or "").strip().lower()
                 if not dom_l:
                     continue
+                if bool(is_core_val):
+                    core_domains.add(dom_l)
                 imps = _load_json_safe(imp_json, [])
                 if isinstance(imps, list):
                     domain_imports[dom_l] = [str(x).strip().lower() for x in imps if str(x).strip()]
+                als = _load_json_safe(aliases_json, [])
+                if isinstance(als, list):
+                    domain_aliases[dom_l] = [str(x).strip().lower() for x in als if str(x).strip()]
                 tts = _load_json_safe(top_json, [])
                 if isinstance(tts, list):
                     for tt in tts:
@@ -358,6 +376,8 @@ def load_compiled_lattice(db_path: Union[str, Path]) -> CompiledLattice:
         state_parents=state_parents,
         top_types=top_types,
         domain_imports=domain_imports,
+        domain_aliases=domain_aliases,
+        core_domains=core_domains,
         domain_runtime_setups=domain_runtime_setups,
         language_spec=language_spec,
         schema_version=schema_version,

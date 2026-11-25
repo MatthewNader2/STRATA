@@ -178,7 +178,7 @@ class NSTLSettings(BaseSettings):
         description="Optional additive similarity tie-breaker when subgoal domain_hint matches candidate domain.",
     )
     max_bridge_hops: int = Field(default=3, ge=0, le=8)
-    ambiguity_temperature: float = Field(default=0.2, gt=0.0)
+    ambiguity_temperature: float = Field(default=0.10, gt=0.0)
     ambiguity_entropy_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
     ambiguity_margin_threshold: float = Field(default=0.15, ge=0.0, le=1.0)
 

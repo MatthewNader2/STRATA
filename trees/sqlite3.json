@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Relational database operations, cursor transactions, parameterized queries, and persistence morphisms.",
   "is_core": false,
+  "aliases": [
+    "sqlite"
+  ],
   "imports": [
     "python_core"
   ],

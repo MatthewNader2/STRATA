@@ -149,8 +149,8 @@ def compile_database(
             )
             cur.execute(
                 "INSERT OR REPLACE INTO domain_metadata "
-                "(domain_name, version, is_core, imports_json, top_types_json, runtime_setup_json, language_spec_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(domain_name, version, is_core, imports_json, top_types_json, runtime_setup_json, language_spec_json, aliases_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     dom,
                     tree.version,
@@ -159,6 +159,7 @@ def compile_database(
                     json.dumps(list(tree.top_types or ()), ensure_ascii=False),
                     rs_json,
                     ls_json,
+                    json.dumps(list(tree.aliases or ()), ensure_ascii=False),
                 ),
             )
 

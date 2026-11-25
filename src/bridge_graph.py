@@ -499,6 +499,7 @@ class LiveBridgeGraph:
         max_results: int = 3,
         *,
         allow_lossy: bool = True,
+        allowed_domains: Optional[Set[str]] = None,
     ) -> List[LiveBridgePath]:
         if signatures_unify(src, dst, self.poset):
             return [LiveBridgePath(edges=(), total_cost=0.0, lossy=False, deltas=())]
@@ -523,6 +524,8 @@ class LiveBridgeGraph:
                 continue
 
             for edge in self.edges:
+                if allowed_domains is not None and edge.domain and edge.domain.lower() not in allowed_domains:
+                    continue
                 if edge.cell_id in cur_cids:
                     continue
                 if not _allows_tier2_step(edge, dst, allow_lossy=allow_lossy):

@@ -80,6 +80,17 @@ class PlanResult:
     margin: float = 1.0
 
 
+def _all_external_asset_ports(cell: Any) -> List[Tuple[str, Any]]:
+    raw_ins = get_attr(cell, "inputs", {}) or {}
+    if not isinstance(raw_ins, dict):
+        return []
+    return [
+        (str(pname), pval)
+        for pname, pval in raw_ins.items()
+        if derive_value_class(pval) == "external_asset"
+    ]
+
+
 def _required_external_asset_ports(cell: Any) -> List[Tuple[str, Any]]:
     raw_ins = get_attr(cell, "inputs", {}) or {}
     if not isinstance(raw_ins, dict):
@@ -108,6 +119,80 @@ def _required_data_ports(cell: Any) -> List[Tuple[str, Any]]:
         if derive_value_class(pval) == "data":
             out.append((str(pname), pval))
     return out
+
+
+def _file_format_mismatch_penalty(
+    node: IRNode,
+    cell: Any,
+    grounded_assets: Dict[str, Any],
+) -> float:
+    """Penalize parametric File[Modality, Format] asset extension mismatches without hardcoding format tables."""
+    avail_assets: List[str] = [
+        str(grounded_assets[inp]).strip()
+        for inp in node.inputs
+        if inp in grounded_assets and grounded_assets[inp] is not None
+    ]
+    for pv in node.params.values():
+        if pv.value_class == "external_asset" and pv.provenance == "prompt" and pv.value is not None:
+            avail_assets.append(str(pv.value).strip())
+    if not avail_assets:
+        return 0.0
+
+    penalty = 0.0
+    for pname, p_obj in _required_external_asset_ports(cell):
+        car = str(get_attr(p_obj, "carrier", None) or "").strip()
+        car_low = car.lower()
+        if not (car_low.startswith("file[") and car_low.endswith("]")):
+            continue
+        inner = car_low[5:-1]
+        parts = [pt.strip() for pt in inner.split(",") if pt.strip()]
+        if len(parts) < 2:
+            continue
+        fmt = parts[-1]
+        if fmt.endswith("format") and len(fmt) > len("format"):
+            fmt = fmt[: -len("format")].strip()
+        if not fmt or fmt in TOP_CARRIERS:
+            continue
+
+        direct_p = node.params.get(pname)
+        if (
+            direct_p is not None
+            and direct_p.value_class == "external_asset"
+            and direct_p.provenance == "prompt"
+            and direct_p.value is not None
+        ):
+            asset_str = str(direct_p.value).strip()
+        else:
+            asset_str = avail_assets[0]
+
+        if "." in asset_str:
+            ext = asset_str.rsplit(".", 1)[-1].strip().lower()
+            if ext and ext != fmt and not fmt.startswith(ext) and not ext.startswith(fmt):
+                penalty += 0.85
+    return penalty
+
+
+def _unbound_required_config_count(node: IRNode, cell: Any, raw_prompt: str = "") -> int:
+    """Count required non-data, non-asset config ports left unbound by node params."""
+    raw_ins = get_attr(cell, "inputs", {}) or {}
+    if not isinstance(raw_ins, dict) or not raw_ins:
+        return 0
+    req_cfg = [
+        str(pname)
+        for pname, p_obj in raw_ins.items()
+        if derive_value_class(p_obj) in ("literal", "enum", "identifier")
+        and bool(get_attr(p_obj, "required", True))
+        and get_attr(p_obj, "default_value", None) is None
+    ]
+    if not req_cfg:
+        return 0
+    aligned = align_node_params_to_ports(
+        node.params,
+        raw_ins,
+        allow_single_fallback=True,
+        raw_prompt=raw_prompt,
+    )
+    return sum(1 for p_str in req_cfg if p_str not in aligned)
 
 
 def _primary_output_port(cell: Any) -> Tuple[Optional[str], Any]:
@@ -304,6 +389,8 @@ class TypedIRPlanner:
         env_map: Dict[str, CanonicalPortType],
         released_res: Set[str],
         grounded_assets: Dict[str, Any],
+        *,
+        allowed_domains: Optional[Set[str]] = None,
     ) -> Tuple[bool, Dict[str, str], List[Tuple[str, LiveBridgePath]], Optional[str]]:
         dom = str(get_attr(cell, "domain_name", None) or "").strip().lower()
         cid = str(get_attr(cell, "cell_id", "") or "").strip()
@@ -374,6 +461,7 @@ class TypedIRPlanner:
                     max_hops=self.max_bridge_hops,
                     max_results=1,
                     allow_lossy=self.allow_lossy_bridges,
+                    allowed_domains=allowed_domains,
                 )
                 if found:
                     cand_bp = found[0]
@@ -418,6 +506,7 @@ class TypedIRPlanner:
                         max_hops=self.max_bridge_hops,
                         max_results=1,
                         allow_lossy=self.allow_lossy_bridges,
+                        allowed_domains=allowed_domains,
                     )
                     if found:
                         cand_bp = found[0]
@@ -450,6 +539,8 @@ class TypedIRPlanner:
         *,
         allow_deliverable_open: bool,
         require_all_closed: bool = True,
+        allowed_domains: Optional[Set[str]] = None,
+        raw_prompt: str = "",
         max_plans: int = 8,
         max_expansions: int = 400,
     ) -> PlanResult:
@@ -557,6 +648,8 @@ class TypedIRPlanner:
                         initial_released=released_res_tup,
                         allow_deliverable_open=False,
                         require_all_closed=False,
+                        allowed_domains=allowed_domains,
+                        raw_prompt=raw_prompt,
                         max_plans=max_plans,
                         max_expansions=max_expansions,
                     )
@@ -602,6 +695,8 @@ class TypedIRPlanner:
                             initial_released=released_res_tup,
                             allow_deliverable_open=False,
                             require_all_closed=False,
+                            allowed_domains=allowed_domains,
+                            raw_prompt=raw_prompt,
                             max_plans=max_plans,
                             max_expansions=max_expansions,
                         )
@@ -716,6 +811,13 @@ class TypedIRPlanner:
                 if not assets_ok:
                     step_missing_assets.setdefault(step_idx, set()).update(missing_here)
                     continue
+                node_has_grounded_asset = any(inp in grounded_assets for inp in node.inputs) or any(
+                    pv.value_class == "external_asset" and pv.provenance == "prompt" and pv.value is not None
+                    for pv in node.params.values()
+                )
+                if node_has_grounded_asset and not _all_external_asset_ports(cell):
+                    uncomposable_notes.append(f"{node.id}:{cm.cell_id}:unused_external_asset")
+                    continue
 
                 if source_mode == "formal_syntax":
                     params_ok, param_fail = _check_formal_param_names(node, cell)
@@ -731,6 +833,7 @@ class TypedIRPlanner:
                     env_map,
                     released_set,
                     grounded_assets,
+                    allowed_domains=allowed_domains,
                 )
                 if not wired_ok:
                     if fail_note:
@@ -785,11 +888,14 @@ class TypedIRPlanner:
                         raw_port_sig = CanonicalPortType.from_port(ov, dom)
                         out_sigs_by_port[ok_str] = propagate_polymorphic_signature(poly_src_sig, raw_port_sig, cell)
 
+                arity_penalty = 0.0
                 step_output_vars: Dict[str, str] = {}
                 if isinstance(raw_outs, dict) and raw_outs:
                     if len(node.outputs) > len(raw_outs):
-                        uncomposable_notes.append(f"{node.id}:{cm.cell_id}:output_arity_mismatch")
-                        continue
+                        if source_mode == "formal_syntax":
+                            uncomposable_notes.append(f"{node.id}:{cm.cell_id}:output_arity_mismatch")
+                            continue
+                        arity_penalty = 0.05
                     if len(node.outputs) > 1:
                         assigned_vars: Set[str] = set()
                         for ov_name in node.outputs:
@@ -882,11 +988,16 @@ class TypedIRPlanner:
                         unmatched_cnt = len(prompt_cfg) - len(aligned_cfg)
                         if unmatched_cnt > 0:
                             base_cost += 0.65 * unmatched_cnt
+                if source_mode == "slm_compiled":
+                    base_cost += _file_format_mismatch_penalty(node, cell, grounded_assets)
+                    unbound_cfg_cnt = _unbound_required_config_count(node, cell, raw_prompt=raw_prompt)
+                    if unbound_cfg_cnt > 0:
+                        base_cost += 0.08 * unbound_cfg_cnt
                 max_cp = max(choice_probs) if choice_probs else 0.0
                 if max_cp > 0.0:
                     rel_cp = max(0.0, min(1.0, float(choice_probs[cand_idx]) / max(max_cp, 1e-6)))
                     base_cost += 0.35 * (1.0 - rel_cp)
-                total_step_cost = base_cost + bridge_cost_sum
+                total_step_cost = base_cost + arity_penalty + bridge_cost_sum
 
                 nxt_steps.append(
                     PlannedStep(
@@ -1029,6 +1140,8 @@ class TypedIRPlanner:
         candidates_by_node: Dict[str, List[CandidateMatch]],
         max_plans: int = 8,
         max_expansions: int = 400,
+        *,
+        allowed_domains: Optional[Set[str]] = None,
     ) -> PlanResult:
         dag_errs = ir.validate_dag()
         if dag_errs:
@@ -1048,6 +1161,8 @@ class TypedIRPlanner:
             initial_open=(),
             initial_released=(),
             allow_deliverable_open=True,
+            allowed_domains=allowed_domains,
+            raw_prompt=ir.raw_prompt,
             max_plans=max_plans,
             max_expansions=max_expansions,
         )
