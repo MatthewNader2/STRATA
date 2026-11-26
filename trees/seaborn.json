@@ -8397,7 +8397,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "acquire",
+          "resource_mode": "value",
           "required": true,
           "description": "Output plotting Axes object, usable by matplotlib-style finishing functions (savefig, legend, tight_layout, annotate) afterward.",
           "domain": "seaborn"

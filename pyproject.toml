@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "STRATA: Symbolic Topological Routing Architecture for Typed Automata"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 dependencies = [
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.0,<3",

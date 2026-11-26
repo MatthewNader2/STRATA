@@ -8,8 +8,24 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+
+def wilson_ci_95(k: int, n: int, z: float = 1.959963984540054) -> Tuple[float, float]:
+    """Return asymmetric 95% Wilson score confidence interval (lo_pct, hi_pct) in [0.0, 100.0]."""
+    if n <= 0:
+        return 0.0, 0.0
+    p = min(max(float(k) / float(n), 0.0), 1.0)
+    z2 = z * z
+    n_f = float(n)
+    denom = 1.0 + z2 / n_f
+    center = (p + z2 / (2.0 * n_f)) / denom
+    half = (z * math.sqrt((p * (1.0 - p) + z2 / (4.0 * n_f)) / n_f)) / denom
+    lo = max(0.0, (center - half) * 100.0)
+    hi = min(100.0, (center + half) * 100.0)
+    return round(lo, 1), round(hi, 1)
 
 
 KNOWN_METADATA: Dict[str, Dict[str, Any]] = {
@@ -58,6 +74,7 @@ def _normalize_legacy_record(r: Dict[str, Any], top_data: Dict[str, Any]) -> Dic
         "display": display,
         "params_b": params_b,
         "task_id": tid,
+        "seed": r.get("seed", top_data.get("seed")),
         "group": group,
         "passed": passed,
         "acceptable": acceptable,
@@ -85,32 +102,62 @@ def aggregate_by_model(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
 
     summary: Dict[str, Dict[str, Any]] = {}
     for disp, items in grouped.items():
-        # De-duplicate by task_id keeping latest entry passed in
-        by_task = {it["task_id"]: it for it in items}
-        vals = list(by_task.values())
-        n = max(len(vals), 1)
-        by_group: Dict[str, Dict[str, Any]] = {}
+        has_seeds = any(it.get("seed") is not None for it in items)
+        deduped: Dict[Any, Dict[str, Any]] = {}
+        for it in items:
+            key = (it["task_id"], it.get("seed")) if has_seeds else it["task_id"]
+            deduped[key] = it
+        vals = list(deduped.values())
+        seeds_count = len({it.get("seed") for it in vals if it.get("seed") is not None}) or 1
+        total_n = len(vals)
+        n = max(total_n, 1)
+
+        task_buckets: Dict[str, List[Dict[str, Any]]] = {}
         grp_buckets: Dict[str, List[Dict[str, Any]]] = {}
         for v in vals:
+            task_buckets.setdefault(v["task_id"], []).append(v)
             grp_buckets.setdefault(v.get("group", "other"), []).append(v)
+
+        by_task: Dict[str, Dict[str, Any]] = {}
+        for tid, t_list in task_buckets.items():
+            by_task[tid] = {
+                "passed": all(r["passed"] for r in t_list),
+                "acceptable": all(r["acceptable"] for r in t_list),
+            }
+
+        by_group: Dict[str, Dict[str, Any]] = {}
         for gname, gvals in sorted(grp_buckets.items()):
             gn = max(len(gvals), 1)
             gacc = sum(1 for v in gvals if v["acceptable"])
             gpass = sum(1 for v in gvals if v["passed"])
+            ga_lo, ga_hi = wilson_ci_95(gacc, len(gvals))
             by_group[gname] = {
                 "tasks": len(gvals),
                 "passed": gpass,
                 "acceptable": gacc,
                 "acc_pct": round(100.0 * gacc / gn, 1),
+                "acc_ci_lo": ga_lo,
+                "acc_ci_hi": ga_hi,
             }
+
+        strict_k = sum(1 for v in vals if v["passed"])
+        acc_k = sum(1 for v in vals if v["acceptable"])
+        s_lo, s_hi = wilson_ci_95(strict_k, total_n)
+        a_lo, a_hi = wilson_ci_95(acc_k, total_n)
+
         summary[disp] = {
             "display": disp,
             "params_b": max(v["params_b"] for v in vals),
-            "tasks": len(vals),
-            "passed": sum(1 for v in vals if v["passed"]),
-            "acceptable": sum(1 for v in vals if v["acceptable"]),
-            "acc_pct": round(100.0 * sum(1 for v in vals if v["acceptable"]) / n, 1),
-            "strict_pct": round(100.0 * sum(1 for v in vals if v["passed"]) / n, 1),
+            "tasks": total_n,
+            "seeds": seeds_count,
+            "passed": strict_k,
+            "acceptable": acc_k,
+            "acc_pct": round(100.0 * acc_k / n, 1),
+            "acc_ci_lo": a_lo,
+            "acc_ci_hi": a_hi,
+            "strict_pct": round(100.0 * strict_k / n, 1),
+            "strict_ci_lo": s_lo,
+            "strict_ci_hi": s_hi,
             "mean_wall_ms": round(sum(v["wall_ms"] for v in vals) / n, 1),
             "total_tokens": sum(v["total_tokens"] for v in vals),
             "peak_hwm_mb": round(max(v["hwm_mb"] for v in vals), 1),
@@ -136,11 +183,39 @@ def generate_plots(summary: Dict[str, Dict[str, Any]], out_dir: Path) -> List[Pa
     labels = [m["display"] for m in models]
     x = np.arange(len(labels))
 
-    # 1. Accuracy bar chart (Strict Verified vs Acceptable)
+    # 1. Accuracy bar chart (Strict Verified vs Acceptable) with 95% Wilson CI error bars
     fig, ax = plt.subplots(figsize=(11, 5.5))
     w = 0.36
-    ax.bar(x - w / 2, [m["strict_pct"] for m in models], width=w, label="Strict Passed (%)", color="#2b6cb0")
-    ax.bar(x + w / 2, [m["acc_pct"] for m in models], width=w, label="Acceptable Outcome (%)", color="#2f855a")
+    strict_vals = [m["strict_pct"] for m in models]
+    acc_vals = [m["acc_pct"] for m in models]
+    strict_yerr = [
+        [max(0.0, m["strict_pct"] - m["strict_ci_lo"]) for m in models],
+        [max(0.0, m["strict_ci_hi"] - m["strict_pct"]) for m in models],
+    ]
+    acc_yerr = [
+        [max(0.0, m["acc_pct"] - m["acc_ci_lo"]) for m in models],
+        [max(0.0, m["acc_ci_hi"] - m["acc_pct"]) for m in models],
+    ]
+    ax.bar(
+        x - w / 2,
+        strict_vals,
+        yerr=strict_yerr,
+        capsize=3,
+        error_kw={"elinewidth": 1.1, "ecolor": "#1a202c"},
+        width=w,
+        label="Strict Passed (%, 95% Wilson CI)",
+        color="#2b6cb0",
+    )
+    ax.bar(
+        x + w / 2,
+        acc_vals,
+        yerr=acc_yerr,
+        capsize=3,
+        error_kw={"elinewidth": 1.1, "ecolor": "#1a202c"},
+        width=w,
+        label="Acceptable Outcome (%, 95% Wilson CI)",
+        color="#2f855a",
+    )
     ax.set_ylabel("Rate (%)")
     ax.set_title("STRATA (0.8B) vs Pure LLMs — Overall Benchmark Accuracy")
     ax.set_xticks(x)
@@ -246,24 +321,30 @@ def write_tables(summary: Dict[str, Dict[str, Any]], out_dir: Path) -> Tuple[Pat
     md_lines = [
         "# STRATA Cross-Model Comparison Summary",
         "",
-        "| Model / Architecture | Params (B) | Tasks | Strict Passed | Acceptable | Mean Wall (ms) | Total Tokens | Peak HWM (MB) | Peak VRAM (MB) |",
+        "| Model / Architecture | Params (B) | Tasks | Strict Passed (95% CI) | Acceptable (95% CI) | Mean Wall (ms) | Total Tokens | Peak HWM (MB) | Peak VRAM (MB) |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     csv_path = out_dir / "comparison_summary.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["model", "params_b", "tasks", "passed", "acceptable", "strict_pct", "acc_pct", "mean_wall_ms", "total_tokens", "peak_hwm_mb", "peak_vram_mb"])
+        writer.writerow([
+            "model", "params_b", "seeds", "tasks", "passed", "acceptable",
+            "strict_pct", "strict_ci_lo", "strict_ci_hi",
+            "acc_pct", "acc_ci_lo", "acc_ci_hi",
+            "mean_wall_ms", "total_tokens", "peak_hwm_mb", "peak_vram_mb",
+        ])
         for m in models:
             md_lines.append(
                 f"| {m['display']} | {m['params_b']} | {m['tasks']} | "
-                f"{m['passed']}/{m['tasks']} ({m['strict_pct']}%) | "
-                f"{m['acceptable']}/{m['tasks']} ({m['acc_pct']}%) | "
+                f"{m['passed']}/{m['tasks']} ({m['strict_pct']}%, [{m['strict_ci_lo']}-{m['strict_ci_hi']}%]) | "
+                f"{m['acceptable']}/{m['tasks']} ({m['acc_pct']}%, [{m['acc_ci_lo']}-{m['acc_ci_hi']}%]) | "
                 f"{m['mean_wall_ms']} | {m['total_tokens']} | {m['peak_hwm_mb']} | {m['peak_vram_mb']} |"
             )
             writer.writerow([
-                m["display"], m["params_b"], m["tasks"], m["passed"], m["acceptable"],
-                m["strict_pct"], m["acc_pct"], m["mean_wall_ms"], m["total_tokens"],
-                m["peak_hwm_mb"], m["peak_vram_mb"],
+                m["display"], m["params_b"], m.get("seeds", 1), m["tasks"], m["passed"], m["acceptable"],
+                m["strict_pct"], m["strict_ci_lo"], m["strict_ci_hi"],
+                m["acc_pct"], m["acc_ci_lo"], m["acc_ci_hi"],
+                m["mean_wall_ms"], m["total_tokens"], m["peak_hwm_mb"], m["peak_vram_mb"],
             ])
     all_groups = sorted({g for m in models for g in (m.get("by_group") or {}).keys()})
     if all_groups:

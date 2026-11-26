@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-scripts/check_static.py - Undefined-name gate (R6-3).
+scripts/check_static.py — STRATA Architectural Hygiene, Neutrality & Static Gate.
 
-Runs pyflakes over src/, tests/ and scripts/ and fails on any `undefined name`
-report. py_compile cannot see an undefined name; round 5 shipped a crash that
-failed all 45 sweep runs behind exactly this class of defect (R6-1/R6-3).
+Enforces:
+  1. Zero forbidden constructs (`re` outside formal_regex.py, `frozenset`, etc.).
+  2. Clean core kernel neutrality (zero hardcoded library/domain tokens in src/).
+  3. GEVRSandbox import & attribute neutrality (zero hardcoded third-party hooks).
+  4. Model-agnostic core/inference modules & backend-neutral PortBinder AST isolation.
+  5. Tooling script neutrality (scripts/ and tools/ contain zero hardcoded domain logic).
+  6. Closed-hierarchy self.<method>() resolution and pyflakes undefined-name checks.
 
 Usage:
-    python scripts/check_static.py
-
-Exit codes: 0 = clean, 1 = undefined names (or pyflakes unavailable).
+    python3 scripts/check_static.py
 """
 from __future__ import annotations
 
@@ -61,8 +63,37 @@ FORBIDDEN_SANDBOX_ATTRS = {
     "patches",
     "artists",
 }
-FORBIDDEN_MODEL_TOKENS = ("qwen", "nano", "jina")
-MODEL_CHECK_MODULES = {"src/config.py", "src/inference.py", "src/reranker.py"}
+FORBIDDEN_MODEL_TOKENS = (
+    "qwen",
+    "nano",
+    "jina",
+    "gemma",
+    "mistral",
+    "deepseek",
+    "claude",
+    "gpt-4",
+    "gpt-oss",
+    "phi-3",
+    "phi-4",
+    "bge-",
+    "e5-",
+    "minilm",
+)
+MODEL_CHECK_MODULES = {
+    "src/config.py",
+    "src/inference.py",
+    "src/reranker.py",
+    "src/cli.py",
+    "src/strata_pipeline.py",
+    "src/profile_adapters.py",
+    "src/subgoal_retrieval.py",
+}
+TOOLING_CHECK_MODULES = {
+    "scripts/lint_trees.py",
+    "scripts/audit_trees.py",
+    "scripts/neutralize_trees.py",
+    "tools/compile_trees.py",
+}
 FORBIDDEN_IDENTIFIERS = {
     "frozenset",
     "allow_fallback",
@@ -232,6 +263,44 @@ def _check_hardcoded_models_and_ast() -> list[str]:
                     and node.attr == "parse"
                 ):
                     violations.append(f"src/port_binder.py:{node.lineno}: forbidden 'ast.parse' call")
+    return violations
+
+
+def _check_tooling_neutrality() -> list[str]:
+    """Verify domain tree validators, auditors, normalizers, and compilers stay domain-neutral."""
+    forbidden_names = set(EXPLICIT_FORBIDDEN_LIBS) - {"pathlib"}
+    trees_dir = ROOT_DIR / "trees"
+    if trees_dir.is_dir():
+        for tree_path in trees_dir.glob("*.json"):
+            stem = tree_path.stem.strip().lower()
+            if stem and stem not in ("python_core", "control_flow"):
+                forbidden_names.add(stem)
+
+    violations: list[str] = []
+    for rel in sorted(TOOLING_CHECK_MODULES):
+        py_path = ROOT_DIR / rel
+        if not py_path.is_file():
+            continue
+        allowed_stdlib_imports = {"pathlib", "sqlite3"} if rel == "tools/compile_trees.py" else {"pathlib"}
+        try:
+            tree = ast.parse(py_path.read_text(encoding="utf-8"), filename=rel)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    top_mod = alias.name.split(".", 1)[0].strip().lower()
+                    if top_mod in forbidden_names and top_mod not in allowed_stdlib_imports:
+                        violations.append(f"{rel}:{node.lineno}: non-neutral tooling import '{alias.name}'")
+            elif isinstance(node, ast.ImportFrom):
+                top_mod = (node.module or "").split(".", 1)[0].strip().lower()
+                if top_mod in forbidden_names and top_mod not in allowed_stdlib_imports:
+                    violations.append(f"{rel}:{node.lineno}: non-neutral tooling from-import '{node.module}'")
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                toks = set(re.findall(r"[A-Za-z0-9_]+", node.value.lower()))
+                hits = sorted(toks & forbidden_names)
+                if hits:
+                    violations.append(f"{rel}:{node.lineno}: non-neutral tooling reference {hits}")
     return violations
 
 
@@ -423,6 +492,13 @@ def main() -> int:
     if hardcode_violations:
         print("[check_static] FAIL — hardcoded model tokens or target-AST violations:\n")
         for line in hardcode_violations:
+            print(f"  {line}")
+        return 1
+
+    tooling_violations = _check_tooling_neutrality()
+    if tooling_violations:
+        print("[check_static] FAIL — domain/library hardcodes in tooling scripts:\n")
+        for line in tooling_violations:
             print(f"  {line}")
         return 1
 

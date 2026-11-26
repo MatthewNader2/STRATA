@@ -5,11 +5,11 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Schema Pydantic v2](https://img.shields.io/badge/schema-Pydantic%20v2-E92063)](src/schema.py)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
 
 *Type-directed program synthesis via a 5-axis graded/indexed type system and resource-aware Symmetric Monoidal Category planner.*
 
-[Formal Spec](docs/STRATA_FORMAL_SPEC.md) · [Development Guide](docs/development.md) · [Models & Profiles](docs/models.md) · [Contributing](CONTRIBUTING.md)
+[Formal Spec](docs/STRATA_FORMAL_SPEC.md) · [Reproducibility](docs/REPRODUCIBILITY.md) · [Development Guide](docs/development.md) · [Models & Profiles](docs/models.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -159,12 +159,23 @@ python3 scripts/audit_trees.py --strict-five-axis --strict-neutral --include-fix
 ## Formal Documentation
 
 - [docs/STRATA_FORMAL_SPEC.md](docs/STRATA_FORMAL_SPEC.md) — Type rules, coercion coherence, linear resource discipline & soundness theorems.
+- [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) — Artifact evaluation, deterministic checks & statistical benchmark protocol.
 - [docs/development.md](docs/development.md) — Pipeline architecture, repository layout & local audit gates.
 - [docs/models.md](docs/models.md) — Profile definitions (`0, A–E, O`) and local GGUF / embedding tiers.
 - [docs/PEER_REVIEW_TASK_LIST.md](docs/PEER_REVIEW_TASK_LIST.md) — Peer-review & ICML readiness execution checklist (Waves 1–4).
 - [docs/FUTURE_ROADMAP.md](docs/FUTURE_ROADMAP.md) — Post-review roadmap (Layer 6 reactive control, tree harvester & end-to-end UI).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Kernel neutrality guidelines and plugin authoring rules.
 
-## Citation
+## License & Citation
 
-If you build upon STRATA in research, please cite this repository and inspect [docs/STRATA_FORMAL_SPEC.md](docs/STRATA_FORMAL_SPEC.md).
+STRATA is released under the **PolyForm Noncommercial License 1.0.0** (see [LICENSE](LICENSE)). If you use STRATA in academic research, benchmarks, or derivative tooling, please cite [CITATION.cff](CITATION.cff):
+
+```bibtex
+@software{strata2026,
+  author = {Nader, Matthew and Contributors},
+  title = {{STRATA}: Symbolic Topological Routing Architecture for Typed Automata},
+  year = {2026},
+  url = {https://github.com/MatthewNader2/STRATA},
+  note = {Category-theoretic neuro-symbolic program synthesis engine}
+}
+```

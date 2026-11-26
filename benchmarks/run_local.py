@@ -216,7 +216,7 @@ def _run_strata_v2_arm(
     init_ms = round((time.perf_counter() - t_init0) * 1000.0, 2)
     gpu_after_init = read_gpu_vram_mb()
 
-    resolved_llm = mm.llm_name or args.llm or "qwen3.5-0.8b-instruct"
+    resolved_llm = mm.llm_name or args.llm or "unknown"
     params_b = _infer_params_b(resolved_llm, fallback=0.8)
 
     db_path = ROOT_DIR / "trees" / "lattice.db"
@@ -295,6 +295,7 @@ def _run_strata_v2_arm(
                     "kind": task["kind"],
                     "domain_set": domain_set,
                     "expected": expected,
+                    "seed": args.seed,
                     "prompt": task["prompt"],
                     "status": ev["status"],
                     "passed": bool(ev["passed"]),
@@ -333,6 +334,7 @@ def _run_strata_v2_arm(
                 "params_b": params_b,
                 "active_params_b": params_b,
                 "quant": "Q4_K_M",
+                "seed": args.seed,
                 "init": {
                     "profile": spec.code,
                     "reranker": use_reranker,
@@ -404,12 +406,15 @@ def _run_gguf_baseline_arm(
             t0 = time.perf_counter()
 
             try:
-                resp = mm.llm.create_chat_completion(
-                    messages=messages,
-                    max_tokens=int(args.max_tokens),
-                    temperature=0.0,
-                    top_p=0.95,
-                )
+                chat_kw: Dict[str, Any] = {
+                    "messages": messages,
+                    "max_tokens": int(args.max_tokens),
+                    "temperature": 0.0,
+                    "top_p": 0.95,
+                }
+                if args.seed is not None:
+                    chat_kw["seed"] = int(args.seed)
+                resp = mm.llm.create_chat_completion(**chat_kw)
                 msg = (resp.get("choices") or [{}])[0].get("message") or {}
                 raw_reply = str(msg.get("content") or "").strip()
                 code = extract_code_clean(raw_reply)
@@ -442,6 +447,7 @@ def _run_gguf_baseline_arm(
                     "context_mode": context_mode,
                     "context_meta": ctx_meta,
                     "expected": task.get("expected", "synthesize"),
+                    "seed": args.seed,
                     "prompt": task["prompt"],
                     "status": ev["status"],
                     "passed": bool(ev["passed"]),
@@ -481,6 +487,7 @@ def _run_gguf_baseline_arm(
                 "params_b": params_b,
                 "active_params_b": params_b,
                 "quant": "Q4_K_M",
+                "seed": args.seed,
                 "init": {
                     "init_ms": init_ms,
                     "n_ctx": settings.llm_context_length,
@@ -517,6 +524,7 @@ def main() -> None:
     ap.add_argument("--n-ctx", type=int, default=None, help="Override GGUF context length")
     ap.add_argument("--max-tokens", type=int, default=2048, help="Max completion tokens for GGUF baseline arms")
     ap.add_argument("--timeout", type=float, default=45.0, help="Sandbox timeout seconds")
+    ap.add_argument("--seed", type=int, default=None, help="Optional RNG seed recorded for multi-seed reproducibility")
     ap.add_argument("--out-dir", default="test_logs/local_bench")
     args = ap.parse_args()
 

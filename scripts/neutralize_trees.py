@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-scripts/neutralize_trees.py — Normalizes domain trees to strict canonical v2 STRATA schema.
+scripts/neutralize_trees.py — Domain-neutral canonical manifest normalizer & validator.
 
-Performs an idempotent cleanup across trees/*.json and benchmarks/fixtures/*/*.json:
-  1. Infers declared `imports` automatically from each tree's dependencies & qualified typestates.
-  2. Applies neutral cross-domain dependency alignment for shared types/typestates.
-  3. Stamps explicit `value_class`, `resource_mode`, and canonical `layout` on every port before
-     stripping legacy fields (`stage`, `keywords`, `semantic_tags`, `edges`, `postconditions`, etc.).
-  4. Merges `postconditions` -> `effects` and cell `imports` -> `dependencies`, normalizes
-     `mutation_type == "immutable"` -> `"pure"`, and strips all non-canonical tree/cell/port keys.
-  5. Validates every normalized manifest strictly against `TreeSchema` (`extra="forbid"`) prior to write.
+Checks and normalizes domain plugin manifests (`trees/*.json` and optional fixtures)
+to strict canonical v2 `TreeSchema` (`extra="forbid"`) using purely schema-driven rules:
+  1. Infers `imports` deterministically from cell dependencies, qualified typestates,
+     and loaded `is_core` foundational trees.
+  2. Strips non-canonical legacy fields and dotted noise invariants generically.
+  3. Canonicalizes 5-axis ports (`layout`, `value_class`, `resource_mode`, `invariants`)
+     and validates strict `TreeSchema` conformance before writing (or under `--check`).
 """
 from __future__ import annotations
 
+import argparse
 import ast
+import copy
 import glob
 import json
 import sys
@@ -56,9 +57,15 @@ _NOISE_INVARIANTS: Set[str] = {
     "estimator",
     "collection",
     "const",
-    "os.path",
-    "cv2.mask",
 }
+
+
+def _is_dotted_type_noise_invariant(inv_l: str) -> bool:
+    """Detect dotted package/class type tags (e.g. pkg.type) mistakenly stored in invariants."""
+    if "." not in inv_l or any(ch in inv_l for ch in "=<>:()"):
+        return False
+    parts = inv_l.split(".")
+    return len(parts) >= 2 and all(seg.isidentifier() for seg in parts)
 
 
 def _clean_invariants(raw_invs: Any) -> List[str]:
@@ -69,7 +76,7 @@ def _clean_invariants(raw_invs: Any) -> List[str]:
         if not s:
             continue
         sl = s.lower()
-        if sl in _NOISE_INVARIANTS or sl.startswith("cv2."):
+        if sl in _NOISE_INVARIANTS or _is_dotted_type_noise_invariant(sl):
             continue
         out.append(s)
     return out
@@ -77,7 +84,7 @@ def _clean_invariants(raw_invs: Any) -> List[str]:
 
 def _parse_dep_roots(deps: List[Any]) -> Set[str]:
     roots: Set[str] = set()
-    for raw in deps or []:
+    for raw in deps or ():
         s = str(raw or "").strip()
         if not s:
             continue
@@ -128,307 +135,6 @@ def _derive_resource_mode(
     if stage == 1 or (t_low and t_low not in incoming_handle_types):
         return "acquire"
     return "borrow"
-
-
-def _ensure_state_decls(data: Dict[str, Any], dom: str, required_states: List[Dict[str, Any]]) -> None:
-    ts = data.get("typestates")
-    if isinstance(ts, dict):
-        states = ts.setdefault("states", [])
-    elif isinstance(ts, list):
-        data["typestates"] = {"domain": dom, "states": list(ts)}
-        states = data["typestates"]["states"]
-    else:
-        data["typestates"] = {"domain": dom, "states": []}
-        states = data["typestates"]["states"]
-
-    existing: Set[str] = set()
-    for entry in states:
-        if isinstance(entry, dict) and entry.get("name"):
-            existing.add(str(entry["name"]).strip().lower())
-        elif isinstance(entry, str) and entry.strip():
-            existing.add(entry.strip().lower())
-
-    for spec in required_states:
-        sname = str(spec["name"]).strip().lower()
-        if sname not in existing:
-            states.append(dict(spec))
-            existing.add(sname)
-
-
-def _prune_state_decls(data: Dict[str, Any], remove_names: Set[str]) -> None:
-    ts = data.get("typestates")
-    if isinstance(ts, dict) and isinstance(ts.get("states"), list):
-        ts["states"] = [
-            entry for entry in ts["states"]
-            if (
-                str(entry.get("name") if isinstance(entry, dict) else entry).strip().lower()
-                not in remove_names
-            )
-        ]
-    elif isinstance(ts, list):
-        data["typestates"] = [
-            entry for entry in ts
-            if (
-                str(entry.get("name") if isinstance(entry, dict) else entry).strip().lower()
-                not in remove_names
-            )
-        ]
-
-
-def _retarget_port_states(port: Dict[str, Any], mapping: Dict[str, str], *, require_carrier: Optional[str] = None) -> None:
-    carrier_l = str(port.get("carrier") or port.get("type_name") or "").strip().lower()
-    raw_ts = str(port.get("typestate") or port.get("state") or "").strip().lower()
-    bare_ts = raw_ts.split("::", 1)[-1] if raw_ts else ""
-    if bare_ts in mapping and (require_carrier is None or carrier_l == require_carrier.lower()):
-        port["typestate"] = mapping[bare_ts]
-
-    acc = port.get("accepted_states")
-    if isinstance(acc, list) and acc:
-        new_acc: List[str] = []
-        for s in acc:
-            s_str = str(s or "").strip()
-            if not s_str:
-                continue
-            bare = s_str.lower().split("::", 1)[-1]
-            if bare in mapping and (require_carrier is None or carrier_l == require_carrier.lower()):
-                new_acc.append(mapping[bare])
-            else:
-                new_acc.append(s_str)
-        port["accepted_states"] = new_acc
-
-
-def _retarget_parent_states(data: Dict[str, Any], mapping: Dict[str, str]) -> None:
-    ts = data.get("typestates")
-    states = ts.get("states", []) if isinstance(ts, dict) else (ts if isinstance(ts, list) else [])
-    for entry in states:
-        if not isinstance(entry, dict):
-            continue
-        ps = entry.get("parent_state")
-        if ps:
-            bare = str(ps).strip().lower().split("::", 1)[-1]
-            if bare in mapping:
-                entry["parent_state"] = mapping[bare]
-
-
-def _apply_shared_dependency_cleanup(dom: str, data: Dict[str, Any]) -> None:
-    if dom == "python_core":
-        if isinstance(data.get("types"), dict):
-            data["types"].setdefault("db_connection", {"parent": "any", "kind": "handle"})
-        _ensure_state_decls(
-            data,
-            dom,
-            [
-                {
-                    "name": "raw_bytes",
-                    "parent_state": None,
-                    "carrier_type": "bytes",
-                    "description": "Opaque raw byte sequence.",
-                    "properties": {},
-                },
-                {
-                    "name": "db_connection",
-                    "parent_state": None,
-                    "carrier_type": "db_connection",
-                    "description": "Open PEP 249 (DB-API 2.0) compatible database connection handle.",
-                    "properties": {},
-                },
-            ],
-        )
-    elif dom == "sqlite3":
-        if isinstance(data.get("types"), dict):
-            data["types"]["connection"] = {"parent": "db_connection", "kind": "handle"}
-        ts = data.get("typestates")
-        states = ts.get("states", []) if isinstance(ts, dict) else (ts if isinstance(ts, list) else [])
-        for entry in states:
-            if isinstance(entry, dict) and str(entry.get("name") or "").strip().lower() in (
-                "open",
-                "in_transaction",
-                "committed",
-                "rolled_back",
-            ):
-                entry["parent_state"] = "python_core::db_connection"
-    elif dom == "numpy":
-        _ensure_state_decls(
-            data,
-            dom,
-            [
-                {
-                    "name": "color_rgb",
-                    "parent_state": "ndarray_generic",
-                    "carrier_type": "ndarray",
-                    "description": "3-channel ndarray arranged in RGB channel order.",
-                    "properties": {"channels": 3, "color_order": "RGB"},
-                },
-                {
-                    "name": "color_bgr",
-                    "parent_state": "ndarray_generic",
-                    "carrier_type": "ndarray",
-                    "description": "3-channel ndarray arranged in BGR channel order.",
-                    "properties": {"channels": 3, "color_order": "BGR"},
-                },
-                {
-                    "name": "gray",
-                    "parent_state": "ndarray_generic",
-                    "carrier_type": "ndarray",
-                    "description": "2D single-channel grayscale ndarray.",
-                    "properties": {"channels": 1},
-                },
-            ],
-        )
-    elif dom == "pillow":
-        _prune_state_decls(data, {"color_bgr", "color_rgb", "gray", "ndarray_generic"})
-        pil_map = {
-            "color_bgr": "numpy::color_bgr",
-            "color_rgb": "numpy::color_rgb",
-            "gray": "numpy::gray",
-            "ndarray_generic": "numpy::ndarray_generic",
-        }
-        for cell in data.get("cells") or []:
-            cid = str(cell.get("cell_id") or "")
-            if cid == "PILLOW_RGB_TO_NDARRAY_BGR_ORDER":
-                cell["docstring"] = "Exports a Pillow RGB Image to a 3-channel uint8 NumPy ndarray with channels in BGR order."
-            elif cid == "PILLOW_FROM_NDARRAY_BGR":
-                cell["docstring"] = "Ingests a 3-channel uint8 BGR-ordered NumPy ndarray into a Pillow RGB Image by reversing the channel axis."
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if not isinstance(pv, dict):
-                        continue
-                    _retarget_port_states(pv, pil_map, require_carrier="ndarray")
-                    pv["invariants"] = [
-                        inv for inv in (pv.get("invariants") or [])
-                        if str(inv).strip().lower() != "cv2.image"
-                    ]
-    elif dom == "cv2":
-        cv_map = {
-            "color_bgr": "numpy::color_bgr",
-            "color_rgb": "numpy::color_rgb",
-            "gray": "numpy::gray",
-        }
-        _prune_state_decls(data, {"color_bgr", "color_rgb", "gray"})
-        _retarget_parent_states(data, {"gray": "numpy::gray"})
-        for cell in data.get("cells") or []:
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if not isinstance(pv, dict):
-                        continue
-                    _retarget_port_states(pv, cv_map)
-                    pv["invariants"] = [
-                        inv for inv in (pv.get("invariants") or [])
-                        if str(inv).strip().lower() != "cv2.image"
-                    ]
-    elif dom == "matplotlib":
-        _prune_state_decls(data, {"color_rgb"})
-        for cell in data.get("cells") or []:
-            cid = str(cell.get("cell_id") or "")
-            if cid == "matplotlib_ax_imshow":
-                x_port = (cell.get("inputs") or {}).get("X")
-                if isinstance(x_port, dict):
-                    x_port["accepted_states"] = ["numpy::color_rgb", "numpy::gray", "numpy::2d_matrix"]
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if isinstance(pv, dict):
-                        _retarget_port_states(pv, {"color_rgb": "numpy::color_rgb"}, require_carrier="ndarray")
-    elif dom == "pandas":
-        _prune_state_decls(data, {"ndarray_generic", "db_connection"})
-        if isinstance(data.get("types"), dict):
-            data["types"]["Engine"] = {"parent": "db_connection", "kind": "handle"}
-        for cell in data.get("cells") or []:
-            cid = str(cell.get("cell_id") or "")
-            ins = cell.get("inputs") or {}
-            if cid == "PD_READ_SQL":
-                con_port = ins.get("con") if isinstance(ins.get("con"), dict) else ins.get("port_1")
-                if isinstance(con_port, dict):
-                    con_port["carrier"] = "db_connection"
-                    con_port["typestate"] = "python_core::db_connection"
-                    con_port["accepted_states"] = []
-                    con_port["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
-            elif cid == "PD_TO_SQL":
-                con_port = ins.get("con") if isinstance(ins.get("con"), dict) else ins.get("port_2")
-                if isinstance(con_port, dict):
-                    con_port["carrier"] = "db_connection"
-                    con_port["typestate"] = "python_core::db_connection"
-                    con_port["accepted_states"] = []
-                    con_port["description"] = "Database connection object (DB-API 2.0 or SQLAlchemy connectable)."
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if isinstance(pv, dict):
-                        _retarget_port_states(pv, {"ndarray_generic": "numpy::ndarray_generic"})
-    elif dom == "sklearn":
-        sk_map = {
-            "ndarray_generic": "numpy::ndarray_generic",
-            "dataframe_2d_generic": "pandas::dataframe_2d_generic",
-            "pca_components": "reduced_features",
-        }
-        _prune_state_decls(data, {"ndarray_generic", "dataframe_2d_generic"})
-        _retarget_parent_states(data, sk_map)
-        for cell in data.get("cells") or []:
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if isinstance(pv, dict):
-                        _retarget_port_states(pv, sk_map)
-    elif dom == "seaborn":
-        sns_map = {
-            "axes_initialized": "matplotlib::axes_initialized",
-            "axes_with_content": "matplotlib::axes_with_content",
-            "figure_saved": "matplotlib::figure_saved",
-            "dataframe_2d_generic": "pandas::dataframe_2d_generic",
-        }
-        _prune_state_decls(
-            data,
-            {"axes_initialized", "axes_with_content", "figure_saved", "dataframe_2d_generic"},
-        )
-        _retarget_parent_states(
-            data,
-            {
-                "axes_initialized": "matplotlib::axes_initialized",
-                "axes_with_content": "matplotlib::axes_with_content",
-            },
-        )
-        for cell in data.get("cells") or []:
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if isinstance(pv, dict):
-                        _retarget_port_states(pv, sns_map)
-    elif dom == "sqlite3":
-        if isinstance(data.get("types"), list):
-            for entry in data["types"]:
-                if isinstance(entry, dict) and entry.get("name") == "connection":
-                    entry["parent"] = "db_connection"
-                elif isinstance(entry, dict) and entry.get("name") == "path":
-                    entry["parent"] = "object"
-        elif isinstance(data.get("types"), dict):
-            if isinstance(data["types"].get("connection"), dict):
-                data["types"]["connection"]["parent"] = "db_connection"
-            if isinstance(data["types"].get("path"), dict):
-                data["types"]["path"]["parent"] = "object"
-    elif dom in ("requests", "cryptography"):
-        _prune_state_decls(data, {"raw_bytes"})
-        for cell in data.get("cells") or []:
-            for direction in ("inputs", "outputs"):
-                ports = cell.get(direction) or {}
-                if not isinstance(ports, dict):
-                    continue
-                for pv in ports.values():
-                    if isinstance(pv, dict):
-                        _retarget_port_states(pv, {"raw_bytes": "python_core::raw_bytes"})
 
 
 def _canonicalize_layout(pv: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -614,7 +320,7 @@ def _canonicalize_cell(cell: Dict[str, Any], dom: str) -> Dict[str, Any]:
 
     cid_str = str(cell.get("cell_id") or "").strip()
     eff_list = _canonicalize_effects(cell.get("effects"), cell.get("postconditions"))
-    for pname, p_clean in clean_inputs.items():
+    for p_clean in clean_inputs.values():
         if p_clean.get("value_class") != "external_asset":
             continue
         cur_role = str(p_clean.get("port_role") or "").strip().lower()
@@ -646,8 +352,7 @@ def _canonicalize_cell(cell: Dict[str, Any], dom: str) -> Dict[str, Any]:
 
     bp = cell.get("bridge_profile")
     if isinstance(bp, dict) and bp:
-        clean_bp = {k: bp[k] for k in _CANONICAL_BRIDGE_KEYS if k in bp}
-        clean_cell["bridge_profile"] = clean_bp
+        clean_cell["bridge_profile"] = {k: bp[k] for k in _CANONICAL_BRIDGE_KEYS if k in bp}
 
     pp = cell.get("polymorphic_propagation")
     if isinstance(pp, dict) and pp:
@@ -675,14 +380,13 @@ def _canonicalize_typestates(raw_ts: Any, dom: str) -> Optional[Dict[str, Any]]:
         elif isinstance(entry, dict) and entry.get("name"):
             clean_states.append({k: entry[k] for k in _CANONICAL_TS_DEF_KEYS if k in entry})
 
-    out: Dict[str, Any] = {
+    return {
         "domain": str(ts_dict.get("domain") or dom).strip().lower(),
         "states": clean_states,
         "transitions": list(ts_dict.get("transitions") or []),
         "initial_state": ts_dict.get("initial_state"),
         "terminal_states": list(ts_dict.get("terminal_states") or []),
     }
-    return out
 
 
 def _canonicalize_tree(data: Dict[str, Any], dom: str, imports_list: List[str]) -> Dict[str, Any]:
@@ -713,37 +417,45 @@ def _canonicalize_tree(data: Dict[str, Any], dom: str, imports_list: List[str]) 
     if raw_aliases:
         clean_tree["aliases"] = list(dict.fromkeys(raw_aliases))
 
-    # Strict schema enforcement prior to serialization
     TreeSchema(**clean_tree)
     return clean_tree
 
 
-def neutralize_all() -> None:
+def _collect_tree_files(include_fixtures: bool) -> List[Path]:
     files = sorted(glob.glob(str(ROOT / "trees" / "*.json")))
-    fixture_files = sorted(glob.glob(str(ROOT / "benchmarks" / "fixtures" / "*" / "*.json")))
+    if include_fixtures:
+        files.extend(sorted(glob.glob(str(ROOT / "benchmarks" / "fixtures" / "*" / "*.json"))))
     seen: Set[Path] = set()
     all_files: List[Path] = []
-    for f in files + fixture_files:
+    for f in files:
         p = Path(f).resolve()
         if p not in seen:
             seen.add(p)
             all_files.append(p)
+    return all_files
 
-    parsed: List[Tuple[Path, str, Dict[str, Any]]] = []
+
+def neutralize_all(*, check: bool = False, include_fixtures: bool = True) -> int:
+    all_files = _collect_tree_files(include_fixtures=include_fixtures)
+    parsed: List[Tuple[Path, str, Dict[str, Any], Dict[str, Any]]] = []
     known_domains: Set[str] = set()
+    core_domains: List[str] = []
     dom_dep_counts: Dict[str, Dict[str, int]] = {}
 
     for p in all_files:
-        data = json.loads(p.read_text(encoding="utf-8"))
+        orig_data = json.loads(p.read_text(encoding="utf-8"))
+        data = copy.deepcopy(orig_data)
         dom = str(data.get("domain") or p.stem).strip().lower()
         known_domains.add(dom)
+        if bool(data.get("is_core", False)):
+            core_domains.append(dom)
         counts: Dict[str, int] = {}
         for c in data.get("cells") or []:
             deps = list(c.get("dependencies") or ()) + list(c.get("imports") or ())
             for r in _parse_dep_roots(deps):
                 counts[r] = counts.get(r, 0) + 1
         dom_dep_counts[dom] = counts
-        parsed.append((p, dom, data))
+        parsed.append((p, dom, orig_data, data))
 
     pkg_to_dom: Dict[str, str] = {d: d for d in known_domains}
     for dom, counts in dom_dep_counts.items():
@@ -753,29 +465,25 @@ def neutralize_all() -> None:
             if counts.get(dom, 0) == 0 and foreign_only[top_pkg] >= max(1, sum(foreign_only.values()) // 2):
                 pkg_to_dom[top_pkg] = dom
 
-    updated_count = 0
-    total_cells = 0
-    prepared: List[Tuple[Path, str, Dict[str, Any]]] = []
-    for p, dom, data in parsed:
-        _apply_shared_dependency_cleanup(dom, data)
+    prepared: List[Tuple[Path, str, Dict[str, Any], Dict[str, Any]]] = []
+    for p, dom, orig_data, data in parsed:
         is_core = bool(data.get("is_core", False))
         foreign_imports: Set[str] = set()
-        if not is_core and "python_core" in known_domains:
-            foreign_imports.add("python_core")
         if not is_core:
+            for core_dom in core_domains:
+                if core_dom != dom:
+                    foreign_imports.add(core_dom)
             for existing_imp in data.get("imports") or ():
                 imp_l = str(existing_imp or "").strip().lower()
                 if imp_l and imp_l != dom and imp_l in known_domains:
                     foreign_imports.add(imp_l)
 
-        cells = data.get("cells") or []
-        for cell in cells:
+        for cell in data.get("cells") or []:
             all_deps = list(cell.get("dependencies") or ()) + list(cell.get("imports") or ())
             for root in _parse_dep_roots(all_deps):
                 owner = pkg_to_dom.get(root)
                 if owner and owner != dom:
                     foreign_imports.add(owner)
-
             for direction in ("inputs", "outputs"):
                 ports = cell.get(direction) or {}
                 if not isinstance(ports, dict):
@@ -796,29 +504,26 @@ def neutralize_all() -> None:
                             if pref and pref != dom and pref in known_domains:
                                 foreign_imports.add(pref)
 
-        if dom == "pygame":
-            data["runtime_setup"] = {
-                "env_vars": {"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy"},
-                "pre_exec_hooks": ["pygame.sysfont.initsysfonts"],
-                "notes": "Headless SDL display/audio drivers and read-only sysfont index preload.",
-            }
-
         imports_list = [] if is_core else sorted(foreign_imports)
         clean_tree = _canonicalize_tree(data, dom, imports_list)
-        prepared.append((p, dom, clean_tree))
+        prepared.append((p, dom, orig_data, clean_tree))
 
     trees_dir = (ROOT / "trees").resolve()
     global_dom_map: Dict[str, Dict[str, Any]] = {}
     dir_dom_map: Dict[Tuple[Path, str], Dict[str, Any]] = {}
-    for p, dom, ct in prepared:
+    for p, dom, _, ct in prepared:
         dir_dom_map[(p.resolve().parent, dom)] = ct
         if p.resolve().parent == trees_dir:
             global_dom_map[dom] = ct
-    for p, dom, ct in prepared:
+    for p, dom, _, ct in prepared:
         if dom not in global_dom_map:
             global_dom_map[dom] = ct
 
-    for p, dom, clean_tree in prepared:
+    updated_count = 0
+    drift_count = 0
+    total_cells = 0
+
+    for p, dom, orig_data, clean_tree in prepared:
         closure_trees: List[Dict[str, Any]] = [clean_tree]
         seen_doms: Set[str] = {dom}
         queue: List[str] = [str(imp).strip().lower() for imp in (clean_tree.get("imports") or ()) if str(imp).strip()]
@@ -840,7 +545,10 @@ def neutralize_all() -> None:
         type_parents: Dict[str, Set[str]] = {}
         top_types: Set[str] = set()
         released_carriers: Set[str] = set()
+        state_layout_specs: Dict[str, Tuple[Optional[str], int]] = {}
+
         for ct in closure_trees:
+            ct_dom = str(ct.get("domain") or "").strip().lower()
             for t in (ct.get("top_types") or ()):
                 tl = str(t or "").strip().lower()
                 if tl:
@@ -875,6 +583,20 @@ def neutralize_all() -> None:
                         if c_l and c_l not in TOP_CARRIERS:
                             released_carriers.add(c_l)
 
+            ts_b = ct.get("typestates")
+            if isinstance(ts_b, dict):
+                ts_dom = str(ts_b.get("domain") or ct_dom).strip().lower()
+                for s_entry in ts_b.get("states") or ():
+                    if isinstance(s_entry, dict) and s_entry.get("name"):
+                        nd = (s_entry.get("properties") or {}).get("ndim")
+                        if isinstance(nd, int) and not isinstance(nd, bool):
+                            sname = str(s_entry["name"]).strip().lower()
+                            sc_raw = s_entry.get("carrier_type")
+                            sc_l = str(sc_raw).strip().lower() if sc_raw else None
+                            state_layout_specs[f"{ts_dom}::{sname}"] = (sc_l, nd)
+                            if ts_dom == dom:
+                                state_layout_specs[sname] = (sc_l, nd)
+
         poset = BoundedPoset(type_parents=type_parents, top_types=top_types)
 
         def _is_releasable(carrier_str: Any) -> bool:
@@ -887,21 +609,6 @@ def neutralize_all() -> None:
                 anc != "any" and anc not in TOP_CARRIERS and anc in released_carriers
                 for anc in poset.type_ancestors(c_l)
             )
-
-        state_ndim_map: Dict[str, int] = {}
-        for ct in closure_trees:
-            ct_dom = str(ct.get("domain") or "").strip().lower()
-            ts_b = ct.get("typestates")
-            if isinstance(ts_b, dict):
-                ts_dom = str(ts_b.get("domain") or ct_dom).strip().lower()
-                for s_entry in ts_b.get("states") or ():
-                    if isinstance(s_entry, dict) and s_entry.get("name"):
-                        nd = (s_entry.get("properties") or {}).get("ndim")
-                        if isinstance(nd, int) and not isinstance(nd, bool):
-                            sname = str(s_entry["name"]).strip().lower()
-                            state_ndim_map[f"{ts_dom}::{sname}"] = nd
-                            if ts_dom == dom:
-                                state_ndim_map[sname] = nd
 
         for cell in clean_tree.get("cells") or []:
             ins = cell.get("inputs") or {}
@@ -919,15 +626,15 @@ def neutralize_all() -> None:
             for pv in list(ins.values()) + list(outs.values()):
                 if not isinstance(pv, dict):
                     continue
-                if str(pv.get("carrier") or "").strip().lower() == "ndarray":
-                    lay = pv.get("layout")
-                    if isinstance(lay, dict) and not lay.get("rank_polymorphic"):
-                        st_raw = str(pv.get("typestate") or "").strip().lower()
-                        st_qual = st_raw if "::" in st_raw else f"{dom}::{st_raw}"
-                        exp_ndim = state_ndim_map.get(st_raw)
-                        if exp_ndim is None:
-                            exp_ndim = state_ndim_map.get(st_qual)
-                        if exp_ndim is not None:
+                carrier_l = str(pv.get("carrier") or "").strip().lower()
+                lay = pv.get("layout")
+                if isinstance(lay, dict) and not lay.get("rank_polymorphic"):
+                    st_raw = str(pv.get("typestate") or "").strip().lower()
+                    st_qual = st_raw if "::" in st_raw else f"{dom}::{st_raw}"
+                    spec = state_layout_specs.get(st_raw) or state_layout_specs.get(st_qual)
+                    if spec is not None:
+                        exp_carrier, exp_ndim = spec
+                        if exp_carrier is None or exp_carrier == carrier_l:
                             lay["rank"] = exp_ndim
             for pv in outs.values():
                 if isinstance(pv, dict) and str(pv.get("resource_mode") or "").lower() == "acquire":
@@ -935,13 +642,35 @@ def neutralize_all() -> None:
                         pv["resource_mode"] = "borrow" if (has_handle_in or has_releasable_out) else "value"
 
         TreeSchema(**clean_tree)
-        p.write_text(json.dumps(clean_tree, indent=2) + "\n", encoding="utf-8")
-        updated_count += 1
         total_cells += len(clean_tree["cells"])
-        print(f"[neutralize] {p.relative_to(ROOT)}: imports={clean_tree['imports']} cells={len(clean_tree['cells'])}")
+        rel = p.relative_to(ROOT)
+        if check:
+            if orig_data != clean_tree:
+                drift_count += 1
+                print(f"[neutralize:check] DRIFT: {rel} differs from canonical schema form.")
+        else:
+            p.write_text(json.dumps(clean_tree, indent=2) + "\n", encoding="utf-8")
+            updated_count += 1
+            print(f"[neutralize] {rel}: imports={clean_tree['imports']} cells={len(clean_tree['cells'])}")
+
+    if check:
+        if drift_count:
+            print(f"\n[neutralize:check] FAIL: {drift_count} manifest(s) need canonical normalization.")
+            return 1
+        print(f"[neutralize:check] OK: All {len(prepared)} domain tree manifests are canonical & idempotent ({total_cells} cells).")
+        return 0
 
     print(f"\n[neutralize] Completed: {updated_count} domain tree files normalized ({total_cells} total validated cells).")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Normalize or verify canonical STRATA v2 domain manifests.")
+    parser.add_argument("--check", action="store_true", help="Verify manifests are canonical & idempotent without modifying files")
+    parser.add_argument("--include-fixtures", action="store_true", help="Include benchmark fixture trees under benchmarks/fixtures/*/*.json")
+    args = parser.parse_args()
+    return neutralize_all(check=bool(args.check), include_fixtures=bool(args.include_fixtures))
 
 
 if __name__ == "__main__":
-    neutralize_all()
+    raise SystemExit(main())

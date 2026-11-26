@@ -856,7 +856,7 @@ def _build_test_catalog() -> List[TestCase]:
         ),
 
         # =====================================================================
-        # Group 4: haystack — Small Blind Domain in 1,049 Noise Cells (2 cases)
+        # Group 4: haystack — Small Blind Domain in 1,038 Noise Cells (2 cases)
         # =====================================================================
         TestCase(
             task_id="haystack_cryopulse_1049_noise",
@@ -870,7 +870,7 @@ def _build_test_catalog() -> List[TestCase]:
                 "0": formal_nl_refusal,
                 "A": formal_nl_refusal,
                 "B": formal_nl_refusal,
-                **{p: TheoryExpectation(mode="PASSABLE", rationale="Finds 11-cell CryoPulse chain inside 1,060-cell lattice with zero noise leak") for p in ("C", "D", "E", "O")},
+                **{p: TheoryExpectation(mode="PASSABLE", rationale="Finds 11-cell CryoPulse chain inside 1,049-cell lattice with zero noise leak") for p in ("C", "D", "E", "O")},
             },
         ),
         TestCase(
@@ -885,7 +885,7 @@ def _build_test_catalog() -> List[TestCase]:
                 "0": formal_nl_refusal,
                 "A": formal_nl_refusal,
                 "B": formal_nl_refusal,
-                **{p: TheoryExpectation(mode="PASSABLE", rationale="Finds 15-cell Aetheris chain inside 1,064-cell lattice avoiding traps & noise") for p in ("C", "D", "E", "O")},
+                **{p: TheoryExpectation(mode="PASSABLE", rationale="Finds 15-cell Aetheris chain inside 1,053-cell lattice avoiding traps & noise") for p in ("C", "D", "E", "O")},
             },
         ),
 
@@ -996,7 +996,7 @@ def _build_test_catalog() -> List[TestCase]:
 
 def _print_matrix(catalog: List[TestCase], profiles: List[str]) -> None:
     print("=" * 112)
-    print(" PRE-RUN THEORETICAL PASSABILITY MATRIX  (Method: unified | Legacy M0-M11/OMEGA consolidated)")
+    print(" PRE-RUN THEORETICAL PASSABILITY MATRIX  (Method: unified | STRATA v2 Unified Type-Directed Planner)")
     print("=" * 112)
     hdr = f"{'Group':<13} {'Task ID':<32} {'DomainSet':<18} " + " ".join(f"{p:^6}" for p in profiles)
     print(hdr)

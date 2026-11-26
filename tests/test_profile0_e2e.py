@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 from schema import TreeSchema
 from strata_pipeline import StrataPipeline
@@ -102,3 +104,23 @@ def test_all_domain_trees_validate_and_maintain_wave2_neutrality() -> None:
             assert not cell.cell_id.startswith("pickle.")
             for port_name in list(cell.inputs.keys()) + list(cell.outputs.keys()):
                 assert not port_name.startswith("port_"), f"Opaque port '{port_name}' in {ts.domain}:{cell.cell_id}"
+
+
+def test_repo_static_gates_and_manifest_idempotency() -> None:
+    res_static = subprocess.run(
+        [sys.executable, "scripts/check_static.py"],
+        cwd=str(ROOT_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res_static.returncode == 0, res_static.stdout + "\n" + res_static.stderr
+
+    res_norm = subprocess.run(
+        [sys.executable, "scripts/neutralize_trees.py", "--check", "--include-fixtures"],
+        cwd=str(ROOT_DIR),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res_norm.returncode == 0, res_norm.stdout + "\n" + res_norm.stderr

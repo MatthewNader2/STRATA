@@ -1,5 +1,5 @@
 name: Feature Request
-description: Propose a new feature, route method, domain tree, or engine enhancement
+description: Propose a new feature, inference profile, domain manifest, or synthesis capability
 title: "[FEAT]: "
 labels: ["enhancement"]
 body:
@@ -18,7 +18,7 @@ body:
     id: solution
     attributes:
       label: Proposed Solution & Architectural Impact
-      description: Describe what should be implemented and how it fits into the 5-layer pipeline.
+      description: Describe what should be implemented and how it fits into the 6-stage STRATA v2 pipeline.
     validations:
       required: true
   - type: textarea

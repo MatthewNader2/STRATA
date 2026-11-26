@@ -8,6 +8,7 @@ import sys
 from benchmarks.evaluators import evaluate_task_response
 from benchmarks.skill_docs import build_messages_for_arm
 from benchmarks.suites import get_suite_tasks
+from benchmarks.visualize_results import aggregate_by_model, wilson_ci_95, write_tables
 from tests.conftest import ROOT_DIR
 
 
@@ -199,3 +200,33 @@ def test_aistudio_pack_ingest_and_visualize_roundtrip(tmp_path) -> None:
     assert (viz_dir / "comparison_summary_by_group.csv").is_file()
     for fig_idx in range(1, 5):
         assert any(viz_dir.glob(f"fig{fig_idx}_*.png"))
+
+
+def test_wilson_ci_and_multiseed_aggregation(tmp_path) -> None:
+    assert wilson_ci_95(0, 0) == (0.0, 0.0)
+    lo0, hi0 = wilson_ci_95(0, 10)
+    assert lo0 == 0.0 and 20.0 < hi0 < 35.0
+    lo10, hi10 = wilson_ci_95(10, 10)
+    assert 65.0 < lo10 < 80.0 and hi10 == 100.0
+    lo19, hi19 = wilson_ci_95(19, 19)
+    assert 80.0 < lo19 < 86.0 and hi19 == 100.0
+    lo5, hi5 = wilson_ci_95(5, 10)
+    assert round(lo5 + hi5, 1) == 100.0
+
+    rows = [
+        {"display": "DemoModel", "params_b": 1.0, "task_id": "t1", "seed": 1, "group": "g", "passed": True, "acceptable": True, "wall_ms": 100.0, "total_tokens": 50, "hwm_mb": 100.0, "vram_mb": 0.0},
+        {"display": "DemoModel", "params_b": 1.0, "task_id": "t2", "seed": 1, "group": "g", "passed": False, "acceptable": True, "wall_ms": 120.0, "total_tokens": 60, "hwm_mb": 110.0, "vram_mb": 0.0},
+        {"display": "DemoModel", "params_b": 1.0, "task_id": "t1", "seed": 2, "group": "g", "passed": True, "acceptable": True, "wall_ms": 110.0, "total_tokens": 55, "hwm_mb": 105.0, "vram_mb": 0.0},
+        {"display": "DemoModel", "params_b": 1.0, "task_id": "t2", "seed": 2, "group": "g", "passed": True, "acceptable": True, "wall_ms": 130.0, "total_tokens": 65, "hwm_mb": 115.0, "vram_mb": 0.0},
+    ]
+    summary = aggregate_by_model(rows)
+    stat = summary["DemoModel"]
+    assert stat["seeds"] == 2
+    assert stat["tasks"] == 4
+    assert stat["passed"] == 3 and stat["acceptable"] == 4
+    assert stat["strict_ci_lo"] < stat["strict_pct"] < stat["strict_ci_hi"]
+
+    md_p, csv_p = write_tables(summary, tmp_path / "tables")
+    csv_hdr = csv_p.read_text(encoding="utf-8").splitlines()[0]
+    assert "strict_ci_lo" in csv_hdr and "acc_ci_hi" in csv_hdr and "seeds" in csv_hdr
+    assert "95% CI" in md_p.read_text(encoding="utf-8")

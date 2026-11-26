@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/check_env.py - STRATA Environment & Database Sync Verifier (Track 4.3 & 4.4).
+tools/check_env.py - STRATA Environment & Database Sync Verifier.
 
 Usage:
   python3 tools/check_env.py --write-lock   # Freeze current tested versions into requirements.lock
@@ -44,7 +44,7 @@ def get_installed_versions() -> Dict[str, str]:
 def write_lockfile(lock_path: Path) -> int:
     versions = get_installed_versions()
     lines = [
-        "# STRATA Pinned Environment Lockfile (Track 4.3)",
+        "# STRATA Pinned Environment Lockfile",
         f"# Python: {sys.version.split()[0]}",
     ]
     missing: List[str] = []

@@ -61,8 +61,10 @@
   - Pruned 8 unused v1 packages from `requirements.txt`, added `huggingface_hub`, and synchronized `.env.example` with actual `src/config.py` fields/defaults.
 - [x] **Fix or remove stale/broken scripts, docs & root clutter:**
   - Updated `install.sh`, `run_strata.*`, `scripts/download_model.py` (added `0.8b` tier for `unsloth/Qwen3.5-0.8B-GGUF`, cleaned unused `os`/`HfApi` & empty f-strings), and `tools/check_env.py` (`--check` flag + `strata_cli.py` hints); removed `nstl_cli.py`, `run_nstl.*`, `scripts/setup_llama_server.py`, `eval_metrics.py`, `trees/dev_unreviewed/.dev_cells.lock`, `docs/team_proposal.md`, and `docs/archive/*`.
-  - Regenerated `tools/nstl_node_spec.json` & `tools/ai_node_generation_prompt.md` from canonical v2 schema (`15` trees, `1,038` cells).
+  - Renamed & regenerated `tools/strata_node_spec.json` and updated `tools/ai_node_generation_prompt.md` from canonical v2 schema (`15` trees, `1,038` cells).
   - Moved `input.png` and `input_1.wav` + tracked `input.csv` into `benchmarks/fixtures/media/` and wired `asset_dirs` cleanly into `GEVRSandbox`, CLI, evaluators, and `test.py` (keeping repo root free of media clutter).
+  - Eliminated all remaining domain/library hardcodes across `scripts/` (`lint_trees.py`, `neutralize_trees.py --check`), enforced `_check_tooling_neutrality()` and expanded `FORBIDDEN_MODEL_TOKENS` in `scripts/check_static.py`, and fixed 3 dangling `acquire` ports in `trees/seaborn.json` & `trees/sklearn.json`.
+  - Aligned PolyForm Noncommercial 1.0.0 licensing across `LICENSE`, `pyproject.toml`, `README.md`, and `CITATION.cff`; added `docs/REPRODUCIBILITY.md`, multi-seed `--seed` support in `benchmarks/run_local.py`, and 95% Wilson CIs in `benchmarks/visualize_results.py`.
   - Updated `.github/CODEOWNERS`, PR/issue templates, `CONTRIBUTING.md`, `docs/development.md`, `docs/models.md`, verified zero dead functions in `src/`, and rewrote `README.md` for STRATA v2.
 
 ---

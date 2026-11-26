@@ -13,12 +13,12 @@ Thank you for contributing to **STRATA** (*Symbolic Topological Routing Architec
    - Do not use `frozenset` or `allow_fallback` flags in engine code.
    - Verify via `python3 scripts/check_static.py`.
 3. **Domain Manifest Neutrality & Schema Compliance**:
-   - Domain manifests use canonical `TreeSchema` / `CellSchema` / `PortSchema` (`extra="forbid"`, see [tools/nstl_node_spec.json](tools/nstl_node_spec.json)).
+   - Domain manifests use canonical `TreeSchema` / `CellSchema` / `PortSchema` (`extra="forbid"`, see [tools/strata_node_spec.json](tools/strata_node_spec.json)).
    - Never inject benchmark-specific phrasing, test filenames, or unprincipled coercion shortcuts into domain trees.
 
 ## Adding or Updating a Domain Plugin
 
-1. Read [tools/ai_node_generation_prompt.md](tools/ai_node_generation_prompt.md) and [tools/nstl_node_spec.json](tools/nstl_node_spec.json).
+1. Read [tools/ai_node_generation_prompt.md](tools/ai_node_generation_prompt.md) and [tools/strata_node_spec.json](tools/strata_node_spec.json).
 2. Add or edit `trees/<domain>.json`. Set `"is_core": false` for swappable domain libraries and declare natural-language `"aliases"` if users may refer to the library differently (e.g., `["opencv", "cv"]` for `cv2`).
 3. Validate syntax, 5-axis contracts, neutrality, SQLite v4 compilation, and static gates:
    ```bash
