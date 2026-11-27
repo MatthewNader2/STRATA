@@ -20,6 +20,9 @@ DESTRUCTIVE_OR_CLEAN_EFFECT_KINDS: Tuple[str, ...] = ("clean", "dedup", "extent_
 
 _CONFIG_PORT_ROLES: Tuple[str, ...] = ("config", "configuration", "literal_parameter", "parameter", "dim_size")
 _LITERAL_CARRIER_BASES: Tuple[str, ...] = ("int", "float", "bool", "str", "tuple")
+_ENFORCED_PRIMITIVE_CARRIER_BASES: Tuple[str, ...] = (
+    "int", "integer", "float", "number", "bool", "boolean", "str", "string", "list", "tuple", "dict"
+)
 _PRIMITIVE_TUPLE_ELEM_TOKENS: Tuple[str, ...] = ("int", "float", "bool", "str", "...", "any", "number", "scalar")
 _ALIGN_STOP_TOKENS: Tuple[str, ...] = ("port", "val", "value", "param", "arg", "str", "int", "float", "bool")
 
@@ -153,6 +156,15 @@ def _value_compatible_with_port(val: Any, p_obj: Any) -> bool:
     if isinstance(val, dict):
         return base in ("dict", "mapping", "object")
     return True
+
+
+def is_value_compatible_with_primitive_carrier(val: Any, p_obj: Any) -> bool:
+    """Enforce Python value compatibility on primitive/container carriers while permitting custom subtypes."""
+    car = str(get_attr(p_obj, "carrier", None) or "").strip()
+    base = car.split("[", 1)[0].strip().lower()
+    if base not in _ENFORCED_PRIMITIVE_CARRIER_BASES:
+        return True
+    return _value_compatible_with_port(val, p_obj)
 
 
 def _param_tokens(name: str) -> Set[str]:

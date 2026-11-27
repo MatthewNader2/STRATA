@@ -1,40 +1,39 @@
 #!/usr/bin/env bash
-# ============================================================
-#  STRATA - Installation & Setup Script
-#  Installs dependencies, provisions default local AI models,
-#  and compiles the domain knowledge lattice.
-# ============================================================
+set -euo pipefail
 
-set -e
-
-echo ""
-echo "======================================"
-echo "        STRATA Setup & Install        "
-echo "======================================"
+echo "=================================================="
+echo "  STRATA v2 Automated Setup"
+echo "=================================================="
 echo ""
 
-# --- 1. Python dependencies ---
-echo "[1/3] Installing core Python dependencies..."
-pip install -r requirements.txt
+python3 - <<'PY'
+import sys
+if sys.version_info < (3, 10):
+    raise SystemExit("Python 3.10 or higher is required.")
+PY
 
-# --- 2. Download default models ---
-echo "[2/3] Downloading default models (Jina Embedder Nano + Qwen 0.5B Coder GGUF)..."
-python scripts/download_model.py --tier default
-
-# --- 3. Compile domain lattice ---
-echo "[3/3] Compiling canonical domain trees into SQLite lattice..."
-python nstl_cli.py compile
-python nstl_cli.py validate
+echo "[1/4] Installing STRATA package and dependencies..."
+python3 -m pip install --upgrade pip
+python3 -m pip install -e ".[domains]" -r requirements.txt
 
 echo ""
-echo "======================================"
-echo "   Installation & Setup Complete!"
-echo "======================================"
-echo "   To start the REST API:"
-echo "     python src/main.py"
-echo "   To launch the interactive TUI shell:"
-echo "     python nstl_cli.py shell"
-echo "   To synthesize code directly:"
-echo "     python nstl_cli.py run \"load a csv file named input.csv and compute mean\""
-echo "======================================"
+echo "[2/4] Verifying Python environment..."
+python3 tools/check_env.py --check || true
+
+echo ""
+echo "[3/4] Downloading default local models (~880 MB)..."
+python3 scripts/download_model.py --tier default
+
+echo ""
+echo "[4/4] Compiling & auditing STRATA SQLite v4 domain lattice..."
+python3 strata_cli.py compile --clean
+python3 strata_cli.py validate
+python3 strata_cli.py audit
+
+echo ""
+echo "=================================================="
+echo "  STRATA installation complete!"
+echo "=================================================="
+echo "Run interactive CLI studio : python3 strata_cli.py shell"
+echo "Or execute via wrapper     : ./run_strata.sh"
 echo ""

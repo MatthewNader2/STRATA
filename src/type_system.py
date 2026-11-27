@@ -139,7 +139,7 @@ def parse_carrier(raw: Optional[str]) -> CarrierType:
             )
 
     low = s.lower()
-    is_var = (len(s) == 1 and s.isalpha() and s.isupper()) or (s == "State")
+    is_var = len(s) == 1 and s.isalpha() and s.isupper()
     return CarrierType(head=low, is_var=is_var)
 
 
@@ -300,27 +300,90 @@ class BoundedPoset:
             return any("::" in anc and anc.split("::", 1)[1] == p_l for anc in ancs)
         return False
 
-    def _is_carrier_subtype(self, s: CarrierType, p: CarrierType) -> bool:
-        if p.head in self.top_types or p.is_var:
+    def _bind_var_lower(
+        self,
+        var_head: str,
+        sub_ct: CarrierType,
+        lo_bounds: Dict[str, CarrierType],
+        hi_bounds: Dict[str, CarrierType],
+    ) -> bool:
+        if sub_ct.is_var or sub_ct.head in UNIVERSAL_BOTTOM_SYMBOLS:
             return True
+        if var_head in lo_bounds:
+            prev = lo_bounds[var_head]
+            if self._is_carrier_subtype(sub_ct, prev):
+                pass
+            elif self._is_carrier_subtype(prev, sub_ct):
+                lo_bounds[var_head] = sub_ct
+            else:
+                return False
+        else:
+            lo_bounds[var_head] = sub_ct
+        if var_head in hi_bounds:
+            return self._is_carrier_subtype(lo_bounds[var_head], hi_bounds[var_head])
+        return True
+
+    def _bind_var_upper(
+        self,
+        var_head: str,
+        sup_ct: CarrierType,
+        lo_bounds: Dict[str, CarrierType],
+        hi_bounds: Dict[str, CarrierType],
+    ) -> bool:
+        if sup_ct.is_var or sup_ct.head in self.top_types:
+            return True
+        if var_head in hi_bounds:
+            prev = hi_bounds[var_head]
+            if self._is_carrier_subtype(prev, sup_ct):
+                pass
+            elif self._is_carrier_subtype(sup_ct, prev):
+                hi_bounds[var_head] = sup_ct
+            else:
+                return False
+        else:
+            hi_bounds[var_head] = sup_ct
+        if var_head in lo_bounds:
+            return self._is_carrier_subtype(lo_bounds[var_head], hi_bounds[var_head])
+        return True
+
+    def _is_carrier_subtype(
+        self,
+        s: CarrierType,
+        p: CarrierType,
+        lo_bounds: Optional[Dict[str, CarrierType]] = None,
+        hi_bounds: Optional[Dict[str, CarrierType]] = None,
+    ) -> bool:
+        if p.head in self.top_types:
+            return True
+        if p.is_var:
+            return True if lo_bounds is None or hi_bounds is None else self._bind_var_lower(p.head, s, lo_bounds, hi_bounds)
         if s.head in UNIVERSAL_BOTTOM_SYMBOLS:
             return True
         if s.is_var:
-            return True
+            return True if lo_bounds is None or hi_bounds is None else self._bind_var_upper(s.head, p, lo_bounds, hi_bounds)
         if s.head in self.top_types:
             return False
 
         if p.head == "union" and p.args:
-            return any(self._is_carrier_subtype(s, pa) for pa in p.args)
+            for pa in p.args:
+                lo_c = dict(lo_bounds) if lo_bounds is not None else None
+                hi_c = dict(hi_bounds) if hi_bounds is not None else None
+                if self._is_carrier_subtype(s, pa, lo_c, hi_c):
+                    if lo_bounds is not None and lo_c is not None:
+                        lo_bounds.update(lo_c)
+                    if hi_bounds is not None and hi_c is not None:
+                        hi_bounds.update(hi_c)
+                    return True
+            return False
         if s.head == "union" and s.args:
-            return all(self._is_carrier_subtype(sa, p) for sa in s.args)
+            return all(self._is_carrier_subtype(sa, p, lo_bounds, hi_bounds) for sa in s.args)
 
         if p.head == "optional" and len(p.args) == 1:
             if s.head in ("none", "nonetype", "null", "nil"):
                 return True
             if s.head == "optional" and len(s.args) == 1:
-                return self._is_carrier_subtype(s.args[0], p.args[0])
-            return self._is_carrier_subtype(s, p.args[0])
+                return self._is_carrier_subtype(s.args[0], p.args[0], lo_bounds, hi_bounds)
+            return self._is_carrier_subtype(s, p.args[0], lo_bounds, hi_bounds)
         if s.head == "optional" and len(s.args) == 1:
             return self._is_head_subtype("optional", p.head) and not p.args
 
@@ -334,14 +397,14 @@ class BoundedPoset:
             if len(s.args) == 2 and len(p.args) == 2:
                 s_params, s_ret = s.args
                 p_params, p_ret = p.args
-                if not self._is_carrier_subtype(s_ret, p_ret):
+                if not self._is_carrier_subtype(s_ret, p_ret, lo_bounds, hi_bounds):
                     return False
                 if s_params.is_ellipsis or p_params.is_ellipsis:
                     return True
                 if s_params.is_arg_list and p_params.is_arg_list and len(s_params.args) == len(p_params.args):
                     # Contravariant on parameter types
                     return all(
-                        self._is_carrier_subtype(pa, sa)
+                        self._is_carrier_subtype(pa, sa, lo_bounds, hi_bounds)
                         for sa, pa in zip(s_params.args, p_params.args)
                     )
                 return False
@@ -359,10 +422,10 @@ class BoundedPoset:
                 return all(a.is_ellipsis or a.is_var or a.head in self.top_types for a in p.args)
             if len(p.args) == 2 and p.args[1].is_ellipsis:
                 if len(s.args) == 2 and s.args[1].is_ellipsis:
-                    return self._is_carrier_subtype(s.args[0], p.args[0])
-                return all(self._is_carrier_subtype(sa, p.args[0]) for sa in s.args)
+                    return self._is_carrier_subtype(s.args[0], p.args[0], lo_bounds, hi_bounds)
+                return all(self._is_carrier_subtype(sa, p.args[0], lo_bounds, hi_bounds) for sa in s.args)
             if len(s.args) == len(p.args):
-                return all(self._is_carrier_subtype(sa, pa) for sa, pa in zip(s.args, p.args))
+                return all(self._is_carrier_subtype(sa, pa, lo_bounds, hi_bounds) for sa, pa in zip(s.args, p.args))
             return False
 
         if s.args or p.args:
@@ -373,20 +436,20 @@ class BoundedPoset:
             if not s.args:
                 return all(a.is_ellipsis or a.is_var or a.head in self.top_types for a in p.args)
             if s.head == "file" and p.head == "file" and len(s.args) != len(p.args):
-                return self._is_carrier_subtype(s.args[-1], p.args[-1])
+                return self._is_carrier_subtype(s.args[-1], p.args[-1], lo_bounds, hi_bounds)
             if p.head in _SEQUENCE_LIKE_HEADS and len(p.args) == 1:
                 elem_sup = p.args[0]
                 elem_subs = [sa for sa in s.args if not sa.is_ellipsis]
-                return bool(elem_subs) and all(self._is_carrier_subtype(sa, elem_sup) for sa in elem_subs)
+                return bool(elem_subs) and all(self._is_carrier_subtype(sa, elem_sup, lo_bounds, hi_bounds) for sa in elem_subs)
             if len(s.args) == len(p.args):
-                return all(self._is_carrier_subtype(sa, pa) for sa, pa in zip(s.args, p.args))
+                return all(self._is_carrier_subtype(sa, pa, lo_bounds, hi_bounds) for sa, pa in zip(s.args, p.args))
             return False
 
         return self._is_head_subtype(s.head, p.head)
 
     def is_subtype(self, sub: str, sup: str) -> bool:
-        """Decide `sub <= sup` over multi-parent carrier DAG and parametric variance."""
-        return self._is_carrier_subtype(parse_carrier(sub), parse_carrier(sup))
+        """Decide `sub <= sup` over multi-parent carrier DAG, parametric variance, and variable bounds."""
+        return self._is_carrier_subtype(parse_carrier(sub), parse_carrier(sup), {}, {})
 
     def join_carriers(self, a: str, b: str) -> str:
         """Compute least upper bound (LUB) `a \\sqcup b` in the bounded carrier poset."""
@@ -699,14 +762,38 @@ class RefinementSet:
         return True
 
     def check_literal(self, val: Any) -> Tuple[bool, Optional[str]]:
-        """Validate a concrete literal value against interval, nonzero, and non_empty bounds."""
+        """Validate a concrete literal value against interval, parity, nonzero, and non_empty bounds."""
+        has_numeric = self.lo is not None or self.hi is not None or self.effective_nonzero
+        pred_set = {p.lower() for p in self.predicates}
+        req_odd = "odd" in pred_set or "odd=true" in pred_set
+        req_even = "even" in pred_set or "even=true" in pred_set
+
         if val is None:
+            if has_numeric or self.non_empty or req_odd or req_even:
+                return False, "None violates active refinement constraint"
             return True, None
 
-        if self.non_empty and isinstance(val, (str, list, tuple, dict, set)) and len(val) == 0:
+        if isinstance(val, (list, tuple)):
+            if self.non_empty and len(val) == 0:
+                return False, f"expected non_empty value, got empty {type(val).__name__}"
+            if has_numeric or req_odd or req_even:
+                if not val:
+                    return False, f"empty {type(val).__name__} violates numeric refinement"
+                for elem in val:
+                    ok_e, err_e = self.check_literal(elem)
+                    if not ok_e:
+                        return False, err_e
+            return True, None
+
+        if self.non_empty and isinstance(val, (str, dict, set)) and len(val) == 0:
             return False, f"expected non_empty value, got empty {type(val).__name__}"
 
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
+        if isinstance(val, bool):
+            if has_numeric or req_odd or req_even:
+                return False, f"boolean {val!r} violates numeric refinement"
+            return True, None
+
+        if isinstance(val, (int, float)):
             fval = float(val)
             if self.lo is not None:
                 if fval < self.lo or (self.lo_strict and fval == self.lo):
@@ -718,6 +805,14 @@ class RefinementSet:
                     return False, f"value {val} violates {op} {self.hi:g}"
             if self.effective_nonzero and fval == 0.0:
                 return False, f"value {val} violates nonzero invariant"
+            if req_odd and not (fval.is_integer() and int(fval) % 2 != 0):
+                return False, f"value {val} violates odd invariant"
+            if req_even and not (fval.is_integer() and int(fval) % 2 == 0):
+                return False, f"value {val} violates even invariant"
+            return True, None
+
+        if has_numeric or req_odd or req_even:
+            return False, f"non-numeric value {val!r} violates numeric refinement"
 
         return True, None
 
@@ -808,8 +903,8 @@ def unify_shapes(
     if len(prod_shape) != len(cons_shape):
         return False
 
-    prod_bindings: Dict[str, int] = {}
-    cons_bindings: Dict[str, int] = {}
+    prod_bindings: Dict[str, Union[int, str]] = {}
+    cons_bindings: Dict[str, Union[int, str]] = {}
     for p_dim, c_dim in zip(prod_shape, cons_shape):
         if p_dim is None or c_dim is None:
             continue
@@ -819,18 +914,28 @@ def unify_shapes(
             continue
         if isinstance(c_dim, str):
             sym = c_dim.strip()
-            if sym.lower() not in _SHAPE_WILDCARDS and _is_concrete_int(p_dim):
-                val = int(p_dim)
-                if sym in cons_bindings and cons_bindings[sym] != val:
-                    return False
-                cons_bindings[sym] = val
+            if sym.lower() not in _SHAPE_WILDCARDS:
+                c_target: Optional[Union[int, str]] = None
+                if _is_concrete_int(p_dim):
+                    c_target = int(p_dim)
+                elif isinstance(p_dim, str) and p_dim.strip().lower() not in _SHAPE_WILDCARDS:
+                    c_target = f"sym:{p_dim.strip()}"
+                if c_target is not None:
+                    if sym in cons_bindings and cons_bindings[sym] != c_target:
+                        return False
+                    cons_bindings[sym] = c_target
         if isinstance(p_dim, str):
             p_sym = p_dim.strip()
-            if p_sym.lower() not in _SHAPE_WILDCARDS and _is_concrete_int(c_dim):
-                val = int(c_dim)
-                if p_sym in prod_bindings and prod_bindings[p_sym] != val:
-                    return False
-                prod_bindings[p_sym] = val
+            if p_sym.lower() not in _SHAPE_WILDCARDS:
+                p_target: Optional[Union[int, str]] = None
+                if _is_concrete_int(c_dim):
+                    p_target = int(c_dim)
+                elif isinstance(c_dim, str) and c_dim.strip().lower() not in _SHAPE_WILDCARDS:
+                    p_target = f"sym:{c_dim.strip()}"
+                if p_target is not None:
+                    if p_sym in prod_bindings and prod_bindings[p_sym] != p_target:
+                        return False
+                    prod_bindings[p_sym] = p_target
     return True
 
 

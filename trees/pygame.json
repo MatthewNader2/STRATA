@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "description": "2D game loops, rendering surfaces, geometry, event handling, timers, sound, and collision morphisms.",
   "is_core": false,
+  "aliases": [
+    "sdl"
+  ],
   "imports": [
     "python_core"
   ],
@@ -307,12 +310,36 @@
       "cell_id": "PYGAME_QUIT",
       "domain_name": "pygame",
       "docstring": "Uninitializes all pygame modules that have been previously initialized.",
-      "code_template": "if {trigger}:\n    pygame.quit()\n{success} = True",
+      "code_template": "if {trigger} and {screen} is not None:\n    pygame.quit()\n{success} = True",
       "code_templates": {},
       "dependencies": [
         "import pygame"
       ],
       "inputs": {
+        "screen": {
+          "carrier": "surface",
+          "typestate": "pygame::display_surface",
+          "accepted_states": [
+            "pygame::active",
+            "pygame::modified"
+          ],
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "release",
+          "required": true,
+          "description": "Active display surface handle released when shutting down Pygame.",
+          "port_role": "data_input",
+          "domain": "pygame"
+        },
         "trigger": {
           "carrier": "bool",
           "typestate": "pygame::loop_condition",
@@ -327,12 +354,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
-          "description": "Boolean signal triggering shutdown.",
-          "port_role": "data_input"
+          "description": "Boolean condition controlling Pygame shutdown.",
+          "port_role": "configuration",
+          "domain": "pygame"
         }
       },
       "outputs": {
@@ -3014,7 +3042,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Surface to flush to the hardware frame buffer.",
           "port_role": "data_input"
@@ -3073,7 +3101,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Surface to flush to the hardware frame buffer.",
           "port_role": "data_input"
@@ -3191,12 +3219,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Signal triggering font cleanup.",
-          "port_role": "data_input"
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3554,7 +3582,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Surface to write to disk.",
           "port_role": "data_input"
@@ -3755,12 +3783,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Signal triggering mixer shutdown.",
-          "port_role": "data_input"
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6456,12 +6484,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Signal triggering music stop.",
-          "port_role": "data_input"
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6516,12 +6544,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Signal triggering pause.",
-          "port_role": "data_input"
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6576,12 +6604,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Signal triggering resume.",
-          "port_role": "data_input"
+          "port_role": "configuration"
         }
       },
       "outputs": {

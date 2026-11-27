@@ -66,6 +66,44 @@ class CandidatePlan:
     posterior_prob: float = 0.0
     open_resources: Tuple[str, ...] = ()
     exit_released_resources: Tuple[str, ...] = ()
+    exit_borrow_owners: Tuple[Tuple[str, Tuple[str, ...]], ...] = ()
+
+
+def _extract_ident_tokens(expr: Optional[str]) -> Set[str]:
+    """Extract identifier tokens from a condition expression without regex."""
+    s = str(expr or "")
+    if not s:
+        return set()
+    tokens: Set[str] = set()
+    cur: List[str] = []
+    for ch in s:
+        if ch.isalnum() or ch == "_":
+            cur.append(ch)
+        else:
+            if cur:
+                tok = "".join(cur)
+                if tok[0].isalpha() or tok[0] == "_":
+                    tokens.add(tok)
+                cur.clear()
+    if cur:
+        tok = "".join(cur)
+        if tok[0].isalpha() or tok[0] == "_":
+            tokens.add(tok)
+    return tokens
+
+
+def _check_var_live(
+    vname: str,
+    released_res: Set[str],
+    borrow_owners: Dict[str, Tuple[str, ...]],
+) -> Optional[str]:
+    """Verify neither `vname` nor any owning linear handle it borrows has been released."""
+    if vname in released_res:
+        return f"{vname}:use_after_release"
+    for owner in borrow_owners.get(vname, ()):
+        if owner in released_res:
+            return f"{vname}:dangling_borrow({owner})"
+    return None
 
 
 @dataclass(frozen=True)
@@ -121,6 +159,30 @@ def _required_data_ports(cell: Any) -> List[Tuple[str, Any]]:
     return out
 
 
+_FORMAT_EXT_EQUIV: Tuple[Tuple[str, ...], ...] = (
+    ("jpg", "jpeg"),
+    ("tif", "tiff"),
+    ("yml", "yaml"),
+    ("htm", "html"),
+    ("pq", "parquet"),
+    ("pkl", "pickle"),
+    ("xlsx", "xls", "excel"),
+    ("txt", "text"),
+    ("wav", "wave"),
+)
+
+
+def _ext_matches_format(ext: str, fmt: str) -> bool:
+    if not ext or not fmt:
+        return True
+    if ext == fmt or fmt.startswith(ext) or ext.startswith(fmt):
+        return True
+    for group in _FORMAT_EXT_EQUIV:
+        if ext in group and fmt in group:
+            return True
+    return False
+
+
 def _file_format_mismatch_penalty(
     node: IRNode,
     cell: Any,
@@ -167,7 +229,7 @@ def _file_format_mismatch_penalty(
 
         if "." in asset_str:
             ext = asset_str.rsplit(".", 1)[-1].strip().lower()
-            if ext and ext != fmt and not fmt.startswith(ext) and not ext.startswith(fmt):
+            if ext and not _ext_matches_format(ext, fmt):
                 penalty += 0.85
     return penalty
 
@@ -390,21 +452,28 @@ class TypedIRPlanner:
         released_res: Set[str],
         grounded_assets: Dict[str, Any],
         *,
+        borrow_owners: Optional[Dict[str, Tuple[str, ...]]] = None,
         allowed_domains: Optional[Set[str]] = None,
     ) -> Tuple[bool, Dict[str, str], List[Tuple[str, LiveBridgePath]], Optional[str]]:
         dom = str(get_attr(cell, "domain_name", None) or "").strip().lower()
         cid = str(get_attr(cell, "cell_id", "") or "").strip()
+        b_owners = borrow_owners or {}
         explicit_non_asset_refs = [inp for inp in node.inputs if inp not in grounded_assets]
         for ref in explicit_non_asset_refs:
-            if ref in released_res:
-                return False, {}, [], f"{node.id}:{ref}:use_after_release"
+            live_err = _check_var_live(ref, released_res, b_owners)
+            if live_err is not None:
+                return False, {}, [], f"{node.id}:{live_err}"
 
         if source_mode == "formal_syntax" and explicit_non_asset_refs:
             missing_refs = [ref for ref in explicit_non_asset_refs if ref not in env_map]
             if missing_refs:
                 return False, {}, [], f"{node.id}:{cid}:undefined_input({','.join(missing_refs)})"
 
-        avail_explicit = [ref for ref in explicit_non_asset_refs if ref in env_map and ref not in released_res]
+        avail_explicit = [
+            ref
+            for ref in explicit_non_asset_refs
+            if ref in env_map and _check_var_live(ref, released_res, b_owners) is None
+        ]
         req_data = [
             (pname, pval)
             for pname, pval in _required_data_ports(cell)
@@ -427,7 +496,7 @@ class TypedIRPlanner:
         else:
             cand_pool = list(avail_explicit)
             for vname in reversed(list(env_map.keys())):
-                if vname not in released_res and vname not in cand_pool:
+                if _check_var_live(vname, released_res, b_owners) is None and vname not in cand_pool:
                     cand_pool.append(vname)
 
         if req_data and not cand_pool:
@@ -465,8 +534,8 @@ class TypedIRPlanner:
                 )
                 if found:
                     cand_bp = found[0]
-                    if best_bridge is None or (cand_bp.lossy, cand_bp.total_cost, cand_bp.hop_count) < (
-                        best_bridge.lossy, best_bridge.total_cost, best_bridge.hop_count
+                    if best_bridge is None or (cand_bp.is_tier2, cand_bp.total_cost, cand_bp.hop_count) < (
+                        best_bridge.is_tier2, best_bridge.total_cost, best_bridge.hop_count
                     ):
                         best_var = vname
                         best_bridge = cand_bp
@@ -510,8 +579,8 @@ class TypedIRPlanner:
                     )
                     if found:
                         cand_bp = found[0]
-                        if best_bridge_opt is None or (cand_bp.lossy, cand_bp.total_cost, cand_bp.hop_count) < (
-                            best_bridge_opt.lossy, best_bridge_opt.total_cost, best_bridge_opt.hop_count
+                        if best_bridge_opt is None or (cand_bp.is_tier2, cand_bp.total_cost, cand_bp.hop_count) < (
+                            best_bridge_opt.is_tier2, best_bridge_opt.total_cost, best_bridge_opt.hop_count
                         ):
                             best_var_opt = vname
                             best_bridge_opt = cand_bp
@@ -537,6 +606,7 @@ class TypedIRPlanner:
         initial_open: Tuple[str, ...],
         initial_released: Tuple[str, ...],
         *,
+        initial_borrow_owners: Optional[Dict[str, Tuple[str, ...]]] = None,
         allow_deliverable_open: bool,
         require_all_closed: bool = True,
         allowed_domains: Optional[Set[str]] = None,
@@ -564,9 +634,21 @@ class TypedIRPlanner:
                 Dict[str, CanonicalPortType],
                 Tuple[str, ...],
                 Tuple[str, ...],
+                Dict[str, Tuple[str, ...]],
                 Tuple[PlannedStep, ...],
             ]
-        ] = [(0.0, 0, seq, dict(initial_env), tuple(initial_open), tuple(initial_released), ())]
+        ] = [
+            (
+                0.0,
+                0,
+                seq,
+                dict(initial_env),
+                tuple(initial_open),
+                tuple(initial_released),
+                dict(initial_borrow_owners or {}),
+                (),
+            )
+        ]
 
         def _record_subblock_failure(sub_res: PlanResult) -> None:
             if sub_res.missing_ports:
@@ -582,7 +664,7 @@ class TypedIRPlanner:
 
         expansions = 0
         while pq and expansions < max_expansions and len(raw_complete_plans) < max_plans * 3:
-            cur_cost, step_idx, _, env_map, open_res_tup, released_res_tup, steps_tup = heapq.heappop(pq)
+            cur_cost, step_idx, _, env_map, open_res_tup, released_res_tup, borrow_map, steps_tup = heapq.heappop(pq)
             expansions += 1
 
             if step_idx >= n_nodes:
@@ -600,6 +682,7 @@ class TypedIRPlanner:
                         total_cost=round(cur_cost, 6),
                         open_resources=open_res_tup,
                         exit_released_resources=released_res_tup,
+                        exit_borrow_owners=tuple(sorted(borrow_map.items())),
                     )
                 )
                 continue
@@ -608,10 +691,15 @@ class TypedIRPlanner:
             released_set = set(released_res_tup)
 
             if node.kind in ("loop", "branch"):
-                for ref in node.inputs:
-                    if ref not in grounded_assets and ref in released_set:
-                        uncomposable_notes.append(f"{node.id}:{ref}:use_after_release")
-                        break
+                block_refs = list(node.inputs) + [
+                    tok for tok in sorted(_extract_ident_tokens(node.condition)) if tok in env_map and tok not in node.inputs
+                ]
+                for ref in block_refs:
+                    if ref not in grounded_assets:
+                        live_err = _check_var_live(ref, released_set, borrow_map)
+                        if live_err is not None:
+                            uncomposable_notes.append(f"{node.id}:{live_err}")
+                            break
                 else:
                     src_iter_sig = env_map.get(node.inputs[0]) if node.inputs else None
                     body_env = dict(env_map)
@@ -646,6 +734,7 @@ class TypedIRPlanner:
                         initial_env=body_env,
                         initial_open=open_res_tup,
                         initial_released=released_res_tup,
+                        initial_borrow_owners=borrow_map,
                         allow_deliverable_open=False,
                         require_all_closed=False,
                         allowed_domains=allowed_domains,
@@ -670,6 +759,7 @@ class TypedIRPlanner:
                     else_steps_tup: Tuple[PlannedStep, ...] = ()
                     else_cost = 0.0
                     out_var = node.outputs[0] if node.outputs else node.id
+                    nxt_borrow_map = dict(body_plan.exit_borrow_owners)
 
                     if node.kind == "loop":
                         outer_open_set = set(open_res_tup)
@@ -693,6 +783,7 @@ class TypedIRPlanner:
                             initial_env=dict(env_map),
                             initial_open=open_res_tup,
                             initial_released=released_res_tup,
+                            initial_borrow_owners=borrow_map,
                             allow_deliverable_open=False,
                             require_all_closed=False,
                             allowed_domains=allowed_domains,
@@ -726,6 +817,10 @@ class TypedIRPlanner:
                                 + list(else_plan.exit_released_resources)
                             )
                         )
+                        for b_var, e_owns in else_plan.exit_borrow_owners:
+                            merged = sorted(set(nxt_borrow_map.get(b_var, ())) | set(e_owns))
+                            if merged:
+                                nxt_borrow_map[b_var] = tuple(merged)
                     else:
                         outer_open_set = set(open_res_tup)
                         released_outer = (body_rel_set - released_set) & outer_open_set
@@ -780,6 +875,7 @@ class TypedIRPlanner:
                             nxt_env,
                             nxt_open_tup,
                             nxt_released_tup,
+                            nxt_borrow_map,
                             steps_tup + (block_step,),
                         ),
                     )
@@ -833,6 +929,7 @@ class TypedIRPlanner:
                     env_map,
                     released_set,
                     grounded_assets,
+                    borrow_owners=borrow_map,
                     allowed_domains=allowed_domains,
                 )
                 if not wired_ok:
@@ -931,6 +1028,8 @@ class TypedIRPlanner:
 
                 nxt_open = list(open_res_tup)
                 nxt_released = list(released_res_tup)
+                nxt_borrow_map = dict(borrow_map)
+                step_borrow_owners: Set[str] = set()
                 raw_ins = get_attr(cell, "inputs", {}) or {}
                 if isinstance(raw_ins, dict):
                     for ip_name, wired_v in final_wiring.items():
@@ -942,12 +1041,32 @@ class TypedIRPlanner:
                                     nxt_open.remove(wired_v)
                                 if wired_v not in nxt_released:
                                     nxt_released.append(wired_v)
+                            elif ip_sig.resource_mode == "borrow":
+                                if wired_v in open_res_tup:
+                                    step_borrow_owners.add(wired_v)
+                                step_borrow_owners.update(borrow_map.get(wired_v, ()))
 
+                step_acquired: List[str] = [
+                    ov_name
+                    for ok_str, ov_name in step_output_vars.items()
+                    if out_sigs_by_port[ok_str].resource_mode == "acquire"
+                ]
                 for ok_str, ov_name in step_output_vars.items():
                     ov_sig = out_sigs_by_port[ok_str]
                     nxt_env[ov_name] = ov_sig
-                    if ov_sig.resource_mode == "acquire" and ov_name not in nxt_open:
-                        nxt_open.append(ov_name)
+                    if ov_sig.resource_mode == "acquire":
+                        if ov_name not in nxt_open:
+                            nxt_open.append(ov_name)
+                        if step_borrow_owners:
+                            nxt_borrow_map[ov_name] = tuple(sorted(step_borrow_owners))
+                        else:
+                            nxt_borrow_map.pop(ov_name, None)
+                    elif ov_sig.resource_mode == "borrow":
+                        owners = sorted(step_borrow_owners | set(step_acquired))
+                        if owners:
+                            nxt_borrow_map[ov_name] = tuple(owners)
+                    else:
+                        nxt_borrow_map.pop(ov_name, None)
                 if not out_sigs_by_port:
                     nxt_env[out_var] = out_sig
 
@@ -969,7 +1088,9 @@ class TypedIRPlanner:
                     avail_explicit = [
                         inp
                         for inp in node.inputs
-                        if inp not in grounded_assets and inp in env_map and inp not in released_set
+                        if inp not in grounded_assets
+                        and inp in env_map
+                        and _check_var_live(inp, released_set, borrow_map) is None
                     ]
                     if avail_explicit and not any(v in final_wiring.values() for v in avail_explicit):
                         base_cost += 0.85 if not final_wiring else 0.65
@@ -1024,6 +1145,7 @@ class TypedIRPlanner:
                         nxt_env,
                         tuple(nxt_open),
                         tuple(nxt_released),
+                        nxt_borrow_map,
                         tuple(nxt_steps),
                     ),
                 )
@@ -1160,6 +1282,7 @@ class TypedIRPlanner:
             initial_env={},
             initial_open=(),
             initial_released=(),
+            initial_borrow_owners={},
             allow_deliverable_open=True,
             allowed_domains=allowed_domains,
             raw_prompt=ir.raw_prompt,

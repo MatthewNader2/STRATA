@@ -19,7 +19,7 @@ import time
 import traceback
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
@@ -34,12 +34,17 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR))
 
 from benchmarks.evaluators import (  # noqa: E402
+    build_react_feedback,
     evaluate_task_response,
     extract_code_clean,
-    load_sdk_docs,
     read_cpu_times,
     read_gpu_vram_mb,
     read_proc_mem_mb,
+    strip_reasoning_traces,
+)
+from benchmarks.skill_docs import (  # noqa: E402
+    VALID_CONTEXT_MODES,
+    build_messages_for_arm,
 )
 from benchmarks.suites import get_suite_tasks  # noqa: E402
 
@@ -55,6 +60,7 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "n_gpu_layers": -1,
         "n_ctx": 8192,
         "max_tokens": 4096,
+        "thinking_mode": "qwen_toggle",
     },
     "gpt-oss-20b": {
         "display": "GPT-OSS-20B (Q4_K_M, 11.6GB)",
@@ -67,6 +73,7 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "n_gpu_layers": -1,
         "n_ctx": 8192,
         "max_tokens": 4096,
+        "thinking_mode": "harmony_effort",
     },
     "qwen3-coder-30b-a3b": {
         "display": "Qwen3-Coder-30B-A3B-Instruct (Q3_K_S, 13.3GB)",
@@ -79,6 +86,7 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "n_gpu_layers": -1,
         "n_ctx": 8192,
         "max_tokens": 4096,
+        "thinking_mode": "none",
     },
     "qwen3.5-35b-a3b": {
         "display": "Qwen3.5-35B-A3B MoE (UD-IQ3_XXS, 13.1GB)",
@@ -91,6 +99,7 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "n_gpu_layers": -1,
         "n_ctx": 8192,
         "max_tokens": 4096,
+        "thinking_mode": "qwen_toggle",
     },
     "qwen3.5-27b": {
         "display": "Qwen3.5-27B Dense (Q3_K_S, 12.3GB)",
@@ -103,17 +112,9 @@ COLAB_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "n_gpu_layers": -1,
         "n_ctx": 8192,
         "max_tokens": 4096,
+        "thinking_mode": "qwen_toggle",
     },
 }
-
-DEFAULT_PURE_SYS = (
-    "You are a concise, precise Python developer. Write ONLY clean executable Python code inside a single "
-    "```python ... ``` code block solving the user's request. Use standard/installed libraries only. "
-    "Preserve every literal value, filename, column name, and parameter specified in the prompt. "
-    "If the prompt is genuinely too underspecified to write concrete working code without guessing critical missing rules, "
-    "ask 2 concise clarifying questions instead of writing speculative code."
-)
-
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
@@ -160,20 +161,20 @@ def verify_llama_server(llama_server_bin: str) -> Dict[str, str]:
     return env
 
 
-def build_task_messages(task: Dict[str, Any]) -> List[Dict[str, str]]:
-    if task["kind"] == "sdk":
-        docs_md = load_sdk_docs(task["sdk"])
-        sys_msg = (
-            "You are a Python coding assistant. Use ONLY the API documented below to write a single "
-            "executable Python script inside a ```python ... ``` code block solving the user's request.\n\n"
-            + docs_md
-        )
-    else:
-        sys_msg = DEFAULT_PURE_SYS
-    return [
-        {"role": "system", "content": sys_msg},
-        {"role": "user", "content": task["prompt"]},
-    ]
+def build_task_messages(
+    task: Dict[str, Any],
+    *,
+    context_mode: str = "skill_md",
+    max_distractor_chars: int = 18000,
+    full_haystack: bool = False,
+) -> List[Dict[str, str]]:
+    messages, _ = build_messages_for_arm(
+        task,
+        context_mode=context_mode,
+        max_distractor_chars=max_distractor_chars,
+        full_haystack=full_haystack,
+    )
+    return messages
 
 
 def download_gguf(repo_id: str, filename: str, cache_dir: Path) -> Path:
@@ -222,19 +223,131 @@ def _positive_int(raw: str) -> int:
     return val
 
 
+def _format_temp_tag(temp: float) -> Tuple[str, str]:
+    val = float(temp)
+    if val.is_integer():
+        iv = str(int(val))
+        return iv, iv
+    s = f"{val:g}"
+    return s.replace(".", "p"), s
+
+
+def _thinking_tags(thinking_mode: str, disable_thinking: bool) -> Tuple[str, str]:
+    if thinking_mode == "harmony_effort":
+        return ("effort_low", "EffortLow") if disable_thinking else ("effort_high", "EffortHigh")
+    if thinking_mode == "none":
+        return ("instruct", "Instruct")
+    return ("nothink", "NoThink") if disable_thinking else ("think", "Think")
+
+
+def _parse_token_limits(raw_limits: List[str]) -> List[Optional[int]]:
+    parsed: List[Optional[int]] = []
+    for item in raw_limits:
+        norm = str(item).strip().lower()
+        if norm in ("unlimited", "none", "nolimit", "inf", "-1", "0"):
+            if None not in parsed:
+                parsed.append(None)
+        else:
+            val = _positive_int(norm)
+            if val not in parsed:
+                parsed.append(val)
+    return parsed
+
+
+def _build_cell_naming(
+    *,
+    model_key: str,
+    spec: Dict[str, Any],
+    context_mode: str,
+    react_turns: int,
+    temperature: float,
+    disable_thinking: bool,
+    max_tokens: Optional[int],
+    use_detailed_tags: bool,
+) -> Dict[str, Any]:
+    turns_limit = max(1, int(react_turns or 1))
+    mode_tag = {
+        "pure": "Pure",
+        "skill_md": "SKILL.md",
+        "skill_md_haystack": "SKILL.md+Haystack",
+    }[context_mode]
+    if turns_limit > 1:
+        mode_tag = f"{mode_tag}+ReAct-{turns_limit}T"
+
+    thinking_mode = str(spec.get("thinking_mode") or "qwen_toggle")
+    if not use_detailed_tags:
+        arm_tag = context_mode if turns_limit == 1 else f"{context_mode}_react{turns_limit}t"
+        return {
+            "arm_tag": arm_tag,
+            "model_id": f"{model_key}_{arm_tag}",
+            "display": f"{spec['display']} [{mode_tag}]",
+            "filename": f"results_{model_key}_{arm_tag}.json",
+        }
+
+    t_file, t_disp = _format_temp_tag(temperature)
+    th_file, th_disp = _thinking_tags(thinking_mode, disable_thinking)
+    lim_file = "unlim" if max_tokens is None else f"lim{int(max_tokens)}"
+    lim_disp = "NoLimit" if max_tokens is None else f"Max{int(max_tokens)}"
+    react_suffix = "" if turns_limit == 1 else f"_react{turns_limit}t"
+    arm_tag = f"{context_mode}_t{t_file}_{th_file}_{lim_file}{react_suffix}"
+    return {
+        "arm_tag": arm_tag,
+        "model_id": f"{model_key}_{arm_tag}",
+        "display": f"{spec['display']} [{mode_tag} | T={t_disp} | {th_disp} | {lim_disp}]",
+        "filename": f"results_{model_key}_{arm_tag}.json",
+    }
+
+
+def _dedupe_model_sweep_cells(
+    *,
+    thinking_mode: str,
+    temperatures: List[float],
+    thinking_modes: List[str],
+    token_limits: List[Optional[int]],
+) -> List[Tuple[float, bool, Optional[int]]]:
+    priority = [
+        (0.0, False, 4096),
+        (0.0, True, 4096),
+        (1.0, False, 4096),
+        (0.0, False, None),
+        (1.0, False, None),
+        (1.0, True, 4096),
+        (0.0, True, None),
+        (1.0, True, None),
+    ]
+    requested: List[Tuple[float, bool, Optional[int]]] = []
+    th_bools = [False] if thinking_mode == "none" else [m.lower() == "off" for m in thinking_modes]
+    for temp in [float(t) for t in temperatures]:
+        for dis_th in th_bools:
+            for lim in token_limits:
+                cell = (temp, dis_th, lim)
+                if cell not in requested:
+                    requested.append(cell)
+    req_set = set(requested)
+    ordered = [c for c in priority if c in req_set]
+    for c in requested:
+        if c not in ordered:
+            ordered.append(c)
+    return ordered
+
+
 def build_chat_completion_payload(
     messages: List[Dict[str, str]],
-    max_tokens: int = 4096,
+    max_tokens: Optional[int] = 4096,
     temperature: float = 0.0,
     disable_thinking: bool = False,
+    thinking_mode: str = "qwen_toggle",
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "messages": messages,
-        "max_tokens": int(max_tokens),
         "temperature": float(temperature),
         "top_p": 0.95,
     }
-    if disable_thinking:
+    if max_tokens is not None and int(max_tokens) > 0:
+        payload["max_tokens"] = int(max_tokens)
+    if thinking_mode == "harmony_effort":
+        payload["chat_template_kwargs"] = {"reasoning_effort": "low" if disable_thinking else "high"}
+    elif thinking_mode == "qwen_toggle" and disable_thinking:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
     return payload
 
@@ -242,15 +355,17 @@ def build_chat_completion_payload(
 def query_llama_server(
     base_url: str,
     messages: List[Dict[str, str]],
-    max_tokens: int = 4096,
+    max_tokens: Optional[int] = 4096,
     temperature: float = 0.0,
     disable_thinking: bool = False,
+    thinking_mode: str = "qwen_toggle",
 ) -> Dict[str, Any]:
     payload_dict = build_chat_completion_payload(
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
         disable_thinking=disable_thinking,
+        thinking_mode=thinking_mode,
     )
     payload = json.dumps(payload_dict).encode("utf-8")
     req = urllib.request.Request(
@@ -284,41 +399,434 @@ def _launch_server_with_fallback(
     env: Dict[str, str],
     server_log: Path,
     port: int,
-) -> tuple[subprocess.Popen, Any, int, float]:
+    kv_quant: bool = False,
+) -> tuple[subprocess.Popen, Any, int, int, float]:
     base_ngl = int(spec["n_gpu_layers"])
-    ngl_candidates = [base_ngl] + [v for v in (42, 32, 24, 0) if v != base_ngl]
+    req_ctx = int(spec["n_ctx"])
     base_url = f"http://127.0.0.1:{port}"
     last_err: Exception | None = None
 
-    for ngl in ngl_candidates:
+    attempts: List[Tuple[int, bool, int]] = [(req_ctx, bool(kv_quant), base_ngl)]
+    if req_ctx > 8192:
+        for ctx_cand in (12288, 8192):
+            if ctx_cand < req_ctx:
+                cand = (ctx_cand, bool(kv_quant), base_ngl)
+                if cand not in attempts:
+                    attempts.append(cand)
+        cand_no_q = (8192, False, base_ngl)
+        if cand_no_q not in attempts:
+            attempts.append(cand_no_q)
+    elif kv_quant:
+        attempts.append((req_ctx, False, base_ngl))
+
+    for ngl_val in (42, 32, 24, 0):
+        if ngl_val != base_ngl:
+            cand = (min(req_ctx, 8192), False, ngl_val)
+            if cand not in attempts:
+                attempts.append(cand)
+
+    for ctx_val, use_kvq, ngl in attempts:
         cmd = [
             str(llama_server_bin),
             "-m", str(model_path),
             "-ngl", str(ngl),
-            "-c", str(spec["n_ctx"]),
+            "-c", str(ctx_val),
+            "--jinja",
             "--port", str(port),
             "--host", "127.0.0.1",
             "--no-webui",
         ]
-        _log(f"[COLAB] Starting llama-server (ngl={ngl}, n_ctx={spec['n_ctx']}): {' '.join(cmd)}")
+        if use_kvq:
+            cmd.extend(["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"])
+        if str(spec.get("thinking_mode") or "") == "harmony_effort":
+            cmd.append("--skip-chat-parsing")
+        _log(f"[COLAB] Starting llama-server (ngl={ngl}, n_ctx={ctx_val}, kv_quant={use_kvq}): {' '.join(cmd)}")
         log_fh = open(server_log, "w", encoding="utf-8")
         t_init0 = time.perf_counter()
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=subprocess.STDOUT, env=env)
         try:
             wait_for_server(base_url, proc, server_log=server_log, timeout_s=240.0)
             init_ms = round((time.perf_counter() - t_init0) * 1000.0, 2)
-            _log(f"[COLAB] Server ready in {init_ms/1000.0:.1f}s (ngl={ngl})")
-            return proc, log_fh, ngl, init_ms
+            _log(f"[COLAB] Server ready in {init_ms/1000.0:.1f}s (ngl={ngl}, n_ctx={ctx_val})")
+            return proc, log_fh, ngl, ctx_val, init_ms
         except Exception as exc:
             last_err = exc
-            _log(f"[COLAB] Startup failed with ngl={ngl}:\n{exc}")
+            _log(f"[COLAB] Startup failed (ngl={ngl}, n_ctx={ctx_val}, kv_quant={use_kvq}):\n{exc}")
             try:
                 proc.terminate()
                 proc.wait(timeout=5)
             except Exception:
                 proc.kill()
             log_fh.close()
-    raise RuntimeError(f"All ngl attempts failed for {model_path.name}: {last_err}")
+    raise RuntimeError(f"All launch attempts failed for {model_path.name}: {last_err}")
+
+
+def _load_existing_completed(out_path: Path) -> Dict[str, Dict[str, Any]]:
+    if not out_path.is_file():
+        return {}
+    try:
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        existing: Dict[str, Dict[str, Any]] = {}
+        for rec in data.get("records") or []:
+            if not isinstance(rec, dict):
+                continue
+            tid = str(rec.get("task_id") or "")
+            if tid and str(rec.get("status") or "") != "TIMEOUT":
+                existing[tid] = rec
+        return existing
+    except Exception:
+        return {}
+
+
+def _run_cell_against_server(
+    *,
+    model_key: str,
+    eff_spec: Dict[str, Any],
+    tasks: List[Dict[str, Any]],
+    base_url: str,
+    out_dir: Path,
+    dl_ms: float,
+    init_ms: float,
+    used_ngl: int,
+    used_n_ctx: int,
+    kv_quant: bool,
+    mem_before: Dict[str, Any],
+    gpu_before: Dict[str, Any],
+    gpu_after_init: Dict[str, Any],
+    context_mode: str,
+    temperature: float,
+    disable_thinking: bool,
+    max_tokens: Optional[int],
+    haystack_chars: int,
+    full_haystack: bool,
+    react_turns: int,
+    use_detailed_tags: bool,
+    resume: bool,
+) -> Path:
+    turns_limit = max(1, int(react_turns or 1))
+    thinking_mode = str(eff_spec.get("thinking_mode") or "qwen_toggle")
+    naming = _build_cell_naming(
+        model_key=model_key,
+        spec=eff_spec,
+        context_mode=context_mode,
+        react_turns=turns_limit,
+        temperature=temperature,
+        disable_thinking=disable_thinking,
+        max_tokens=max_tokens,
+        use_detailed_tags=use_detailed_tags,
+    )
+    out_path = out_dir / naming["filename"]
+    records_by_id: Dict[str, Dict[str, Any]] = _load_existing_completed(out_path) if resume else {}
+    if resume and len(records_by_id) >= len(tasks):
+        _log(f"[COLAB] Skipping completed cell (--resume): {out_path.name} ({len(records_by_id)}/{len(tasks)})")
+        return out_path
+
+    def _serialize_results() -> str:
+        ordered = [records_by_id[t["id"]] for t in tasks if t["id"] in records_by_id]
+        return json.dumps(
+            {
+                "schema_version": "strata_bench_v2",
+                "arm": naming["arm_tag"],
+                "model_id": naming["model_id"],
+                "model_display": naming["display"],
+                "family": eff_spec["family"],
+                "params_b": eff_spec["params_b"],
+                "active_params_b": eff_spec["active_params_b"],
+                "quant": eff_spec["quant"],
+                "init": {
+                    "context_mode": context_mode,
+                    "react_turns": turns_limit,
+                    "temperature": float(temperature),
+                    "disable_thinking": bool(disable_thinking),
+                    "thinking_mode": thinking_mode,
+                    "max_tokens": max_tokens,
+                    "haystack_chars": int(haystack_chars),
+                    "full_haystack": bool(full_haystack),
+                    "download_ms": dl_ms,
+                    "init_ms": init_ms,
+                    "used_ngl": used_ngl,
+                    "n_ctx": used_n_ctx,
+                    "kv_quant": bool(kv_quant),
+                    "mem_before": mem_before,
+                    "gpu_before": gpu_before,
+                    "gpu_after_init": gpu_after_init,
+                },
+                "records": ordered,
+            },
+            indent=2,
+        )
+
+    _log(f"\n-------------------- {naming['display']} ({len(records_by_id)}/{len(tasks)} cached) --------------------")
+    for idx, task in enumerate(tasks, 1):
+        tid = task["id"]
+        if tid in records_by_id:
+            continue
+
+        messages, ctx_meta = build_messages_for_arm(
+            task,
+            context_mode=context_mode,
+            max_distractor_chars=haystack_chars,
+            full_haystack=full_haystack,
+        )
+        cpu0 = read_cpu_times()
+        t0 = time.perf_counter()
+        conv_messages = [dict(m) for m in messages]
+        turns_used = 0
+        sum_pt = 0
+        sum_ct = 0
+        sum_tt = 0
+        sum_llm_ms = 0.0
+        raw_reply = ""
+        code = ""
+        ev: Dict[str, Any] = {}
+        try:
+            for turn in range(1, turns_limit + 1):
+                turns_used = turn
+                res_llm = query_llama_server(
+                    base_url,
+                    messages=conv_messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    disable_thinking=disable_thinking,
+                    thinking_mode=thinking_mode,
+                )
+                sum_pt += res_llm["prompt_tokens"]
+                sum_ct += res_llm["completion_tokens"]
+                sum_tt += res_llm["total_tokens"]
+                sum_llm_ms += res_llm["wall_ms"]
+                raw_reply = res_llm["raw_reply"]
+                code = extract_code_clean(raw_reply)
+                ev = evaluate_task_response(raw_reply, code, task, timeout=45.0)
+                if turn >= turns_limit:
+                    break
+                fb = build_react_feedback(code, ev, task)
+                if fb is None:
+                    break
+                clean_prev = strip_reasoning_traces(raw_reply)
+                assistant_turn = clean_prev or (f"```python\n{code}\n```" if code else "(empty)")
+                conv_messages.append({"role": "assistant", "content": assistant_turn})
+                conv_messages.append({"role": "user", "content": fb})
+            wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+            cpu1 = read_cpu_times()
+            rec = {
+                "arm": naming["arm_tag"],
+                "model_id": naming["model_id"],
+                "model_display": naming["display"],
+                "family": eff_spec["family"],
+                "params_b": eff_spec["params_b"],
+                "active_params_b": eff_spec["active_params_b"],
+                "quant": eff_spec["quant"],
+                "task_id": tid,
+                "group": task["group"],
+                "kind": task["kind"],
+                "domain_set": ctx_meta["domain_set"],
+                "context_mode": context_mode,
+                "context_meta": ctx_meta,
+                "temperature": float(temperature),
+                "disable_thinking": bool(disable_thinking),
+                "max_tokens": max_tokens,
+                "expected": task.get("expected", "synthesize"),
+                "react_turns": turns_used,
+                "max_turns": turns_limit,
+                "prompt": task["prompt"],
+                "status": ev["status"],
+                "passed": ev["passed"],
+                "acceptable": ev["acceptable"],
+                "detail": ev["detail"],
+                "wall_ms": wall_ms,
+                "llm_calls": turns_used,
+                "prompt_tokens": sum_pt,
+                "completion_tokens": sum_ct,
+                "total_tokens": sum_tt,
+                "llm_wall_ms": round(sum_llm_ms, 2),
+                "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
+                "mem_mb": read_proc_mem_mb(),
+                "gpu_mb": read_gpu_vram_mb(),
+                "audit": ev.get("audit"),
+                "code": code,
+                "raw_reply_preview": raw_reply[:1200],
+            }
+        except Exception as task_exc:
+            wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+            cpu1 = read_cpu_times()
+            rec = {
+                "arm": naming["arm_tag"],
+                "model_id": naming["model_id"],
+                "model_display": naming["display"],
+                "family": eff_spec["family"],
+                "params_b": eff_spec["params_b"],
+                "active_params_b": eff_spec["active_params_b"],
+                "quant": eff_spec["quant"],
+                "task_id": tid,
+                "group": task["group"],
+                "kind": task["kind"],
+                "domain_set": ctx_meta["domain_set"],
+                "context_mode": context_mode,
+                "context_meta": ctx_meta,
+                "temperature": float(temperature),
+                "disable_thinking": bool(disable_thinking),
+                "max_tokens": max_tokens,
+                "expected": task.get("expected", "synthesize"),
+                "react_turns": turns_used,
+                "max_turns": turns_limit,
+                "prompt": task["prompt"],
+                "status": "TIMEOUT",
+                "passed": False,
+                "acceptable": False,
+                "detail": f"Request failed: {task_exc}",
+                "wall_ms": wall_ms,
+                "llm_calls": max(1, turns_used),
+                "prompt_tokens": sum_pt,
+                "completion_tokens": sum_ct,
+                "total_tokens": sum_tt,
+                "llm_wall_ms": round(sum_llm_ms, 2),
+                "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
+                "mem_mb": read_proc_mem_mb(),
+                "gpu_mb": read_gpu_vram_mb(),
+                "audit": None,
+                "code": "",
+                "raw_reply_preview": "",
+            }
+        records_by_id[tid] = rec
+        out_path.write_text(_serialize_results(), encoding="utf-8")
+        _log(
+            f"  [{idx:02d}/{len(tasks):02d}] {tid:<30} | {rec['status']:<18} "
+            f"| acc={str(rec['acceptable']):<5} | {wall_ms/1000.0:5.1f}s "
+            f"| tok={rec['prompt_tokens']}+{rec['completion_tokens']}"
+        )
+
+    out_path.write_text(_serialize_results(), encoding="utf-8")
+    _log(f"[COLAB] Saved {out_path}")
+    return out_path
+
+
+def run_model_sweep_via_server(
+    model_key: str,
+    spec: Dict[str, Any],
+    tasks: List[Dict[str, Any]],
+    llama_server_bin: str,
+    env: Dict[str, str],
+    cache_dir: Path,
+    out_dir: Path,
+    *,
+    context_modes: List[str],
+    temperatures: List[float],
+    thinking_modes: List[str],
+    token_limits: List[Optional[int]],
+    port: int = 8091,
+    cleanup_cache: bool = False,
+    n_ctx_override: int | None = None,
+    kv_quant: bool = False,
+    haystack_chars: int = 18000,
+    full_haystack: bool = False,
+    react_turns: int = 1,
+    resume: bool = False,
+    use_detailed_tags: bool = True,
+) -> List[Path]:
+    eff_spec = dict(spec)
+    if n_ctx_override is not None:
+        eff_spec["n_ctx"] = int(n_ctx_override)
+
+    thinking_mode = str(eff_spec.get("thinking_mode") or "qwen_toggle")
+    decoding_cells = _dedupe_model_sweep_cells(
+        thinking_mode=thinking_mode,
+        temperatures=temperatures,
+        thinking_modes=thinking_modes,
+        token_limits=token_limits,
+    )
+
+    pending_plan: List[Tuple[str, float, bool, Optional[int], Path]] = []
+    out_paths: List[Path] = []
+    for ctx_mode in context_modes:
+        for temp, dis_th, max_tok in decoding_cells:
+            naming = _build_cell_naming(
+                model_key=model_key,
+                spec=eff_spec,
+                context_mode=ctx_mode,
+                react_turns=react_turns,
+                temperature=temp,
+                disable_thinking=dis_th,
+                max_tokens=max_tok,
+                use_detailed_tags=use_detailed_tags,
+            )
+            p = out_dir / naming["filename"]
+            out_paths.append(p)
+            cached = _load_existing_completed(p) if resume else {}
+            if resume and len(cached) >= len(tasks):
+                _log(f"[COLAB] Pre-skip completed cell (--resume): {p.name}")
+                continue
+            pending_plan.append((ctx_mode, temp, dis_th, max_tok, p))
+
+    if not pending_plan:
+        _log(f"[COLAB] All {len(out_paths)} cells already completed for {model_key}; skipping server launch.")
+        return out_paths
+
+    model_cache = cache_dir / model_key
+    t_dl0 = time.perf_counter()
+    _log(f"\n==================== {eff_spec['display']} ({len(pending_plan)} cell(s)) ====================")
+    _log(f"[COLAB] Downloading {eff_spec['repo_id']} :: {eff_spec['filename']} ...")
+    model_path = download_gguf(eff_spec["repo_id"], eff_spec["filename"], model_cache)
+    dl_ms = round((time.perf_counter() - t_dl0) * 1000.0, 2)
+    _log(f"[COLAB] Model ready at {model_path} ({dl_ms/1000.0:.1f}s)")
+
+    mem_before = read_proc_mem_mb()
+    gpu_before = read_gpu_vram_mb()
+    server_log = out_dir / f"{model_key}_server.log"
+    base_url = f"http://127.0.0.1:{port}"
+
+    proc = None
+    log_fh = None
+    try:
+        proc, log_fh, used_ngl, used_n_ctx, init_ms = _launch_server_with_fallback(
+            llama_server_bin=llama_server_bin,
+            model_path=model_path,
+            spec=eff_spec,
+            env=env,
+            server_log=server_log,
+            port=port,
+            kv_quant=kv_quant,
+        )
+        gpu_after_init = read_gpu_vram_mb()
+
+        for ctx_mode, temp, dis_th, max_tok, _ in pending_plan:
+            _run_cell_against_server(
+                model_key=model_key,
+                eff_spec=eff_spec,
+                tasks=tasks,
+                base_url=base_url,
+                out_dir=out_dir,
+                dl_ms=dl_ms,
+                init_ms=init_ms,
+                used_ngl=used_ngl,
+                used_n_ctx=used_n_ctx,
+                kv_quant=kv_quant,
+                mem_before=mem_before,
+                gpu_before=gpu_before,
+                gpu_after_init=gpu_after_init,
+                context_mode=ctx_mode,
+                temperature=temp,
+                disable_thinking=dis_th,
+                max_tokens=max_tok,
+                haystack_chars=haystack_chars,
+                full_haystack=full_haystack,
+                react_turns=react_turns,
+                use_detailed_tags=use_detailed_tags,
+                resume=resume,
+            )
+    finally:
+        if proc is not None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except Exception:
+                proc.kill()
+        if log_fh is not None:
+            log_fh.close()
+        if cleanup_cache and model_cache.exists():
+            shutil.rmtree(model_cache, ignore_errors=True)
+            _log(f"[COLAB] Freed disk cache: {model_cache}")
+
+    return out_paths
 
 
 def run_model_via_server(
@@ -334,176 +842,47 @@ def run_model_via_server(
     disable_thinking: bool = False,
     max_tokens_override: int | None = None,
     n_ctx_override: int | None = None,
+    context_mode: str = "skill_md",
+    haystack_chars: int = 18000,
+    full_haystack: bool = False,
+    react_turns: int = 1,
+    temperature: float = 0.0,
+    no_token_limit: bool = False,
+    kv_quant: bool = False,
+    resume: bool = False,
 ) -> Path:
-    eff_spec = dict(spec)
-    if n_ctx_override is not None:
-        eff_spec["n_ctx"] = int(n_ctx_override)
-    if max_tokens_override is not None:
-        eff_spec["max_tokens"] = int(max_tokens_override)
-
-    model_cache = cache_dir / model_key
-    t_dl0 = time.perf_counter()
-    _log(f"\n==================== {eff_spec['display']} ====================")
-    _log(f"[COLAB] Downloading {eff_spec['repo_id']} :: {eff_spec['filename']} ...")
-    model_path = download_gguf(eff_spec["repo_id"], eff_spec["filename"], model_cache)
-    dl_ms = round((time.perf_counter() - t_dl0) * 1000.0, 2)
-    _log(f"[COLAB] Model ready at {model_path} ({dl_ms/1000.0:.1f}s)")
-
-    mem_before = read_proc_mem_mb()
-    gpu_before = read_gpu_vram_mb()
-    server_log = out_dir / f"{model_key}_server.log"
-    base_url = f"http://127.0.0.1:{port}"
-
-    proc = None
-    log_fh = None
-    records: List[Dict[str, Any]] = []
-    init_ms = 0.0
-    used_ngl = eff_spec["n_gpu_layers"]
-    gpu_after_init: Dict[str, Any] = {}
-
-    def _serialize_results() -> str:
-        return json.dumps(
-            {
-                "schema_version": "strata_bench_v2",
-                "arm": "pure",
-                "model_id": model_key,
-                "model_display": eff_spec["display"],
-                "family": eff_spec["family"],
-                "params_b": eff_spec["params_b"],
-                "active_params_b": eff_spec["active_params_b"],
-                "quant": eff_spec["quant"],
-                "init": {
-                    "download_ms": dl_ms,
-                    "init_ms": init_ms,
-                    "used_ngl": used_ngl,
-                    "n_ctx": eff_spec["n_ctx"],
-                    "max_tokens": eff_spec["max_tokens"],
-                    "disable_thinking": bool(disable_thinking),
-                    "mem_before": mem_before,
-                    "gpu_before": gpu_before,
-                    "gpu_after_init": gpu_after_init,
-                },
-                "records": records,
-            },
-            indent=2,
-        )
-
-    out_path = out_dir / f"results_{model_key}.json"
-    try:
-        proc, log_fh, used_ngl, init_ms = _launch_server_with_fallback(
-            llama_server_bin=llama_server_bin,
-            model_path=model_path,
-            spec=eff_spec,
-            env=env,
-            server_log=server_log,
-            port=port,
-        )
-        gpu_after_init = read_gpu_vram_mb()
-
-        def _flush_checkpoint() -> None:
-            out_path.write_text(_serialize_results(), encoding="utf-8")
-
-        for idx, task in enumerate(tasks, 1):
-            messages = build_task_messages(task)
-            cpu0 = read_cpu_times()
-            t0 = time.perf_counter()
-            try:
-                res_llm = query_llama_server(
-                    base_url,
-                    messages=messages,
-                    max_tokens=eff_spec.get("max_tokens", 4096),
-                    disable_thinking=disable_thinking,
-                )
-                code = extract_code_clean(res_llm["raw_reply"])
-                ev = evaluate_task_response(res_llm["raw_reply"], code, task, timeout=45.0)
-                wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-                cpu1 = read_cpu_times()
-                rec = {
-                    "arm": "pure",
-                    "model_id": model_key,
-                    "model_display": eff_spec["display"],
-                    "family": eff_spec["family"],
-                    "params_b": eff_spec["params_b"],
-                    "active_params_b": eff_spec["active_params_b"],
-                    "quant": eff_spec["quant"],
-                    "task_id": task["id"],
-                    "group": task["group"],
-                    "kind": task["kind"],
-                    "expected": task.get("expected", "synthesize"),
-                    "prompt": task["prompt"],
-                    "status": ev["status"],
-                    "passed": ev["passed"],
-                    "acceptable": ev["acceptable"],
-                    "detail": ev["detail"],
-                    "wall_ms": wall_ms,
-                    "llm_calls": 1,
-                    "prompt_tokens": res_llm["prompt_tokens"],
-                    "completion_tokens": res_llm["completion_tokens"],
-                    "total_tokens": res_llm["total_tokens"],
-                    "llm_wall_ms": res_llm["wall_ms"],
-                    "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
-                    "mem_mb": read_proc_mem_mb(),
-                    "gpu_mb": read_gpu_vram_mb(),
-                    "audit": ev.get("audit"),
-                    "code": code,
-                    "raw_reply_preview": res_llm["raw_reply"][:1200],
-                }
-            except Exception as task_exc:
-                wall_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-                cpu1 = read_cpu_times()
-                rec = {
-                    "arm": "pure",
-                    "model_id": model_key,
-                    "model_display": eff_spec["display"],
-                    "family": eff_spec["family"],
-                    "params_b": eff_spec["params_b"],
-                    "active_params_b": eff_spec["active_params_b"],
-                    "quant": eff_spec["quant"],
-                    "task_id": task["id"],
-                    "group": task["group"],
-                    "kind": task["kind"],
-                    "expected": task.get("expected", "synthesize"),
-                    "prompt": task["prompt"],
-                    "status": "TIMEOUT",
-                    "passed": False,
-                    "acceptable": False,
-                    "detail": f"Request failed: {task_exc}",
-                    "wall_ms": wall_ms,
-                    "llm_calls": 1,
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0,
-                    "llm_wall_ms": wall_ms,
-                    "cpu_delta": {k: round(cpu1[k] - cpu0[k], 4) for k in cpu0},
-                    "mem_mb": read_proc_mem_mb(),
-                    "gpu_mb": read_gpu_vram_mb(),
-                    "audit": None,
-                    "code": "",
-                    "raw_reply_preview": "",
-                }
-            records.append(rec)
-            _flush_checkpoint()
-            _log(
-                f"  [{idx:02d}/{len(tasks):02d}] {task['id']:<18} | {rec['status']:<16} "
-                f"| acc={str(rec['acceptable']):<5} | {wall_ms/1000.0:5.1f}s "
-                f"| tok={rec['prompt_tokens']}+{rec['completion_tokens']}"
-            )
-    finally:
-        if proc is not None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10)
-            except Exception:
-                proc.kill()
-        if log_fh is not None:
-            log_fh.close()
-        if cleanup_cache and model_cache.exists():
-            shutil.rmtree(model_cache, ignore_errors=True)
-            _log(f"[COLAB] Freed disk cache: {model_cache}")
-
-    out_path.write_text(_serialize_results(), encoding="utf-8")
-    _log(f"[COLAB] Saved {out_path}")
-    return out_path
+    max_tok: Optional[int] = None if no_token_limit else int(
+        max_tokens_override if max_tokens_override is not None else spec.get("max_tokens", 4096)
+    )
+    use_detailed = bool(
+        float(temperature) != 0.0
+        or disable_thinking
+        or no_token_limit
+        or max_tokens_override is not None
+    )
+    paths = run_model_sweep_via_server(
+        model_key=model_key,
+        spec=spec,
+        tasks=tasks,
+        llama_server_bin=llama_server_bin,
+        env=env,
+        cache_dir=cache_dir,
+        out_dir=out_dir,
+        context_modes=[context_mode],
+        temperatures=[float(temperature)],
+        thinking_modes=["off" if disable_thinking else "on"],
+        token_limits=[max_tok],
+        port=port,
+        cleanup_cache=cleanup_cache,
+        n_ctx_override=n_ctx_override,
+        kv_quant=kv_quant,
+        haystack_chars=haystack_chars,
+        full_haystack=full_haystack,
+        react_turns=react_turns,
+        resume=resume,
+        use_detailed_tags=use_detailed,
+    )
+    return paths[0]
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -517,19 +896,77 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--suite",
-        default="core9",
-        help="Suite group from benchmarks/suites.py (core8, cryopulse, core9, aetheris, stress, all)",
+        default="v2_expanded",
+        help=(
+            "Suite group from benchmarks/suites.py "
+            "(v2_expanded, v2_full, v2_nl_core, v2_unseen, v2_haystack, v2_wrong_domain, v2_domain_spec, "
+            "core8, cryopulse, core9, aetheris, stress, all)"
+        ),
+    )
+    ap.add_argument(
+        "--context-mode",
+        choices=list(VALID_CONTEXT_MODES),
+        default="skill_md",
+        help="Prompt baseline arm: pure (no .md docs), skill_md (loaded domain_set docs), skill_md_haystack (15-domain noise)",
+    )
+    ap.add_argument(
+        "--context-modes",
+        nargs="+",
+        choices=list(VALID_CONTEXT_MODES),
+        default=None,
+        help="Multiple context arms for --sweep-grid (defaults to --context-mode)",
+    )
+    ap.add_argument(
+        "--haystack-chars",
+        type=_positive_int,
+        default=18000,
+        help="Character budget for multi-domain SKILL.md catalog (positive int)",
+    )
+    ap.add_argument(
+        "--full-haystack",
+        action="store_true",
+        help="Include every cell in all loaded domain trees without truncation",
     )
     ap.add_argument("--llama-server", default="llama-server", help="Path to llama-server CUDA binary")
     ap.add_argument("--cache-dir", default="/content/hf_gguf_cache", help="Directory for GGUF downloads")
     ap.add_argument("--out-dir", default="test_logs/colab_bench", help="Output directory for result JSONs")
     ap.add_argument("--port", type=_positive_int, default=8091)
     ap.add_argument("--cleanup-cache", action="store_true", help="Delete GGUF file after each model finishes")
-    ap.add_argument("--resume", action="store_true", help="Skip models whose output JSON already exists")
+    ap.add_argument("--resume", action="store_true", help="Skip completed tasks/cells whose output JSON already exists")
+    ap.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature for single-arm runs")
     ap.add_argument(
         "--disable-thinking",
         action="store_true",
-        help="Pass chat_template_kwargs={'enable_thinking': False} to llama-server chat completions",
+        help="Disable thinking/set low reasoning effort for single-arm runs",
+    )
+    ap.add_argument(
+        "--no-token-limit",
+        action="store_true",
+        help="Omit max_tokens from llama-server requests (generate up to n_ctx)",
+    )
+    ap.add_argument(
+        "--kv-quant",
+        action="store_true",
+        help="Enable -fa on -ctk q8_0 -ctv q8_0 when launching llama-server",
+    )
+    ap.add_argument(
+        "--sweep-grid",
+        action="store_true",
+        help="Evaluate a decoding factorial grid per loaded model before unloading",
+    )
+    ap.add_argument("--temperatures", nargs="+", type=float, default=[0.0, 1.0], help="Temperatures for --sweep-grid")
+    ap.add_argument(
+        "--thinking-modes",
+        nargs="+",
+        choices=["on", "off"],
+        default=["on", "off"],
+        help="Thinking toggles for --sweep-grid",
+    )
+    ap.add_argument(
+        "--token-limits",
+        nargs="+",
+        default=["4096", "unlimited"],
+        help="Token limits for --sweep-grid (int or 'unlimited')",
     )
     ap.add_argument(
         "--n-ctx",
@@ -543,6 +980,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override per-request max completion tokens (positive int)",
     )
+    ap.add_argument(
+        "--react-turns",
+        type=_positive_int,
+        default=1,
+        help="Max zero-oracle execution/compiler feedback turns per synthesis task (1 = single-shot)",
+    )
     return ap
 
 
@@ -554,35 +997,74 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_dir = Path(args.cache_dir)
     tasks = get_suite_tasks(args.suite)
-    _log(f"[COLAB] Suite='{args.suite}' ({len(tasks)} tasks) | Models={args.models}")
+    ctx_modes = list(args.context_modes) if args.context_modes else [args.context_mode]
+    _log(
+        f"[COLAB] Suite='{args.suite}' ({len(tasks)} tasks) | Contexts={ctx_modes} "
+        f"| Turns={args.react_turns} | Sweep={args.sweep_grid} | Models={args.models}"
+    )
 
     env = verify_llama_server(args.llama_server)
-
     failures: List[str] = []
-    for mkey in args.models:
-        out_json = out_dir / f"results_{mkey}.json"
-        if args.resume and out_json.exists():
-            _log(f"[COLAB] Skipping {mkey} (--resume, exists: {out_json})")
-            continue
-        try:
-            run_model_via_server(
-                model_key=mkey,
-                spec=COLAB_MODEL_REGISTRY[mkey],
-                tasks=tasks,
-                llama_server_bin=args.llama_server,
-                env=env,
-                cache_dir=cache_dir,
-                out_dir=out_dir,
-                port=args.port,
-                cleanup_cache=args.cleanup_cache,
-                disable_thinking=args.disable_thinking,
-                max_tokens_override=args.max_tokens,
-                n_ctx_override=args.n_ctx,
-            )
-        except Exception as exc:
-            _log(f"[COLAB][ERROR] Model '{mkey}' failed: {exc}")
-            traceback.print_exc()
-            failures.append(mkey)
+
+    if args.sweep_grid:
+        parsed_limits = _parse_token_limits(args.token_limits)
+        for mkey in args.models:
+            try:
+                run_model_sweep_via_server(
+                    model_key=mkey,
+                    spec=COLAB_MODEL_REGISTRY[mkey],
+                    tasks=tasks,
+                    llama_server_bin=args.llama_server,
+                    env=env,
+                    cache_dir=cache_dir,
+                    out_dir=out_dir,
+                    context_modes=ctx_modes,
+                    temperatures=list(args.temperatures),
+                    thinking_modes=list(args.thinking_modes),
+                    token_limits=parsed_limits,
+                    port=args.port,
+                    cleanup_cache=args.cleanup_cache,
+                    n_ctx_override=args.n_ctx,
+                    kv_quant=args.kv_quant,
+                    haystack_chars=args.haystack_chars,
+                    full_haystack=args.full_haystack,
+                    react_turns=args.react_turns,
+                    resume=args.resume,
+                    use_detailed_tags=True,
+                )
+            except Exception as exc:
+                _log(f"[COLAB][ERROR] Model '{mkey}' sweep failed: {exc}")
+                traceback.print_exc()
+                failures.append(mkey)
+    else:
+        for mkey in args.models:
+            try:
+                run_model_via_server(
+                    model_key=mkey,
+                    spec=COLAB_MODEL_REGISTRY[mkey],
+                    tasks=tasks,
+                    llama_server_bin=args.llama_server,
+                    env=env,
+                    cache_dir=cache_dir,
+                    out_dir=out_dir,
+                    port=args.port,
+                    cleanup_cache=args.cleanup_cache,
+                    disable_thinking=args.disable_thinking,
+                    max_tokens_override=args.max_tokens,
+                    n_ctx_override=args.n_ctx,
+                    context_mode=ctx_modes[0],
+                    haystack_chars=args.haystack_chars,
+                    full_haystack=args.full_haystack,
+                    react_turns=args.react_turns,
+                    temperature=args.temperature,
+                    no_token_limit=args.no_token_limit,
+                    kv_quant=args.kv_quant,
+                    resume=args.resume,
+                )
+            except Exception as exc:
+                _log(f"[COLAB][ERROR] Model '{mkey}' failed: {exc}")
+                traceback.print_exc()
+                failures.append(mkey)
 
     if failures:
         _log(f"\n[COLAB] Completed with failures on: {failures}")

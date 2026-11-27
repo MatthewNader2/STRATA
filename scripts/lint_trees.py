@@ -47,9 +47,15 @@ FORBIDDEN_NOISE_INVARIANTS: Set[str] = {
     "estimator",
     "collection",
     "const",
-    "os.path",
-    "cv2.mask",
 }
+
+
+def _is_dotted_type_noise_invariant(inv_l: str) -> bool:
+    """Detect dotted package/class type tags (e.g. pkg.type) mistakenly stored in invariants."""
+    if "." not in inv_l or any(ch in inv_l for ch in "=<>:()"):
+        return False
+    parts = inv_l.split(".")
+    return len(parts) >= 2 and all(seg.isidentifier() for seg in parts)
 
 
 def _check_raw_canonical_keys(raw_data: Any, rel_path: str) -> List[str]:
@@ -535,7 +541,7 @@ def lint_tree_file(path: str) -> List[str]:
 
                 for inv in (port.invariants or ()):
                     inv_l = str(inv or "").strip().lower()
-                    if inv_l in FORBIDDEN_NOISE_INVARIANTS or inv_l.startswith("cv2."):
+                    if inv_l in FORBIDDEN_NOISE_INVARIANTS or _is_dotted_type_noise_invariant(inv_l):
                         violations.append(f"{p_loc}: forbidden noise/legacy invariant {inv!r}")
 
     return violations

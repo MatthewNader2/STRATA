@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "description": "",
   "is_core": false,
+  "aliases": [
+    "sns"
+  ],
   "imports": [
     "matplotlib",
     "pandas",
@@ -456,7 +459,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "context": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -483,7 +486,7 @@
           "description": "Base scaling context preset.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "style": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -511,7 +514,7 @@
           "description": "Axes background and grid style.",
           "domain": "seaborn"
         },
-        "port_2": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -540,7 +543,7 @@
           "description": "Default categorical color palette name.",
           "domain": "seaborn"
         },
-        "port_3": {
+        "font_scale": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -556,12 +559,13 @@
           "invariants": [
             "gt=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1.0,
           "description": "Scaling factor to scale font size relative to context.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -584,7 +588,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "style": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -633,7 +637,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "context": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -660,7 +664,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_1": {
+        "font_scale": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -676,12 +680,13 @@
           "invariants": [
             "gt=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1.0,
           "description": "Multiplier scaling font size elements.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -704,7 +709,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -735,7 +740,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_1": {
+        "n_colors": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -751,11 +756,12 @@
           "invariants": [
             "gte=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Number of distinct colors in the discrete cycle.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -904,11 +910,12 @@
           "invariants": [
             "gte=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Number of colors in palette.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -952,7 +959,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -973,7 +980,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -994,7 +1001,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "bins": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -1010,14 +1017,15 @@
           "invariants": [
             "gte=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 30,
           "description": "Number of equal-width bins for histogram aggregation.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "kde": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -1031,14 +1039,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to overlay a kernel density estimate curve.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1062,7 +1071,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1084,7 +1093,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_to_axes",
         {
@@ -1110,7 +1119,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1131,7 +1140,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1152,7 +1161,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1173,7 +1182,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "cbar": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -1187,14 +1196,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to render a colorbar indicating 2D bin counts.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1218,7 +1228,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1240,7 +1250,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -1258,7 +1268,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1279,7 +1289,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1300,7 +1310,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1321,7 +1331,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "multiple": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1348,7 +1358,7 @@
           "description": "Method for resolving overlapping bars.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1372,7 +1382,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1394,7 +1404,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_to_axes",
         "creates_legend"
@@ -1413,7 +1423,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1434,7 +1444,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1455,7 +1465,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "bw_adjust": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -1471,14 +1481,15 @@
           "invariants": [
             "gt=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1.0,
           "description": "Bandwidth adjustment factor modifying kernel smoothing degree.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "fill": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -1492,14 +1503,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to fill area beneath the KDE curve.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1523,7 +1535,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1545,7 +1557,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_lines_to_axes"
       ],
@@ -1563,7 +1575,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1584,7 +1596,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1605,7 +1617,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1626,7 +1638,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "fill": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -1640,14 +1652,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to color fill contour regions.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "thresh": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -1664,14 +1677,15 @@
             "gte=0.0",
             "lte=1.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 0.05,
           "description": "Lowest contour level threshold.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1695,7 +1709,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1717,7 +1731,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -1735,7 +1749,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1756,7 +1770,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1777,7 +1791,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1791,13 +1805,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Optional grouping variable for color hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "stat": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1823,7 +1838,7 @@
           "description": "Distribution statistic to compute.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1847,7 +1862,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1869,7 +1884,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_lines_to_axes"
       ],
@@ -1887,7 +1902,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -1908,7 +1923,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -1929,7 +1944,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "height": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -1946,14 +1961,15 @@
             "gt=0.0",
             "lte=1.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 0.025,
           "description": "Proportion of axis spanned by each rug tick.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -1977,7 +1993,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::distribution_plotted",
           "accepted_states": [],
@@ -1999,7 +2015,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_line_collections_to_axes"
       ],
@@ -2017,7 +2033,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2038,7 +2054,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2059,7 +2075,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "col": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2073,13 +2089,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Categorical column defining subplots across grid columns.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2093,13 +2110,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Grouping variable mapped to color hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "kind": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2127,7 +2145,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -2149,7 +2167,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_facetgrid"
       ],
@@ -2167,7 +2185,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2188,7 +2206,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2209,7 +2227,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2230,7 +2248,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "estimator": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2256,7 +2274,7 @@
           "description": "Statistical estimation function string name.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "errorbar": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2283,7 +2301,7 @@
           "description": "Error bar representation method.",
           "domain": "seaborn"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -2307,7 +2325,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -2329,7 +2347,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_and_lines_to_axes"
       ],
@@ -2347,7 +2365,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2368,7 +2386,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2389,7 +2407,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2410,7 +2428,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2431,7 +2449,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_4": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2445,14 +2463,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "deep",
           "description": "Color palette specification.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -2476,7 +2495,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -2498,7 +2517,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_and_lines_to_axes",
         "creates_legend"
@@ -2517,7 +2536,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2538,7 +2557,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2559,7 +2578,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2573,13 +2592,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Optional grouping variable for color hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2593,14 +2613,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "muted",
           "description": "Palette name.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -2624,7 +2645,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -2646,7 +2667,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_to_axes"
       ],
@@ -2664,7 +2685,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2685,7 +2706,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2706,7 +2727,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2727,7 +2748,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "notch": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -2741,14 +2762,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to notch the boxes to represent confidence interval around median.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2762,14 +2784,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "pastel",
           "description": "Palette name.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -2793,7 +2816,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -2815,7 +2838,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_and_lines_to_axes"
       ],
@@ -2833,7 +2856,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -2854,7 +2877,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2875,7 +2898,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2896,7 +2919,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -2917,7 +2940,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_4": {
+        "dodge": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -2931,14 +2954,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether elements should be shifted along the categorical axis.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -2962,7 +2986,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -2984,7 +3008,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_patches_and_lines_to_axes",
         "creates_legend"
@@ -3003,7 +3027,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3024,7 +3048,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3045,7 +3069,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3066,7 +3090,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "split": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -3080,14 +3104,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to draw half of the violin for each hue level.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "inner": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3115,7 +3140,7 @@
           "description": "Representation of data points in the violin interior.",
           "domain": "seaborn"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3139,7 +3164,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -3161,7 +3186,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -3179,7 +3204,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3200,7 +3225,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3221,7 +3246,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3242,7 +3267,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3263,7 +3288,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_4": {
+        "inner": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3290,7 +3315,7 @@
           "description": "Interior marker mode.",
           "domain": "seaborn"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3314,7 +3339,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -3336,7 +3361,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes",
         "creates_legend"
@@ -3355,7 +3380,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3376,7 +3401,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3397,7 +3422,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3418,7 +3443,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "k_depth": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3445,7 +3470,7 @@
           "description": "Strategy for calculating depth of letter values.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3469,7 +3494,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -3491,7 +3516,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -3509,7 +3534,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3530,7 +3555,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3551,7 +3576,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3572,7 +3597,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "jitter": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -3586,14 +3611,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to displace points with uniform jitter.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "alpha": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -3610,14 +3636,15 @@
             "gt=0.0",
             "lte=1.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 0.7,
           "description": "Opacity of markers.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3641,7 +3668,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -3663,7 +3690,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -3681,7 +3708,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3702,7 +3729,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3723,7 +3750,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3744,7 +3771,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "size": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -3760,14 +3787,15 @@
           "invariants": [
             "gt=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 5.0,
           "description": "Radius of the markers in points.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3781,14 +3809,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "dark",
           "description": "Color palette name.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3812,7 +3841,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -3834,7 +3863,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -3852,7 +3881,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -3873,7 +3902,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3894,7 +3923,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3915,7 +3944,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3929,13 +3958,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Secondary categorical grouping variable.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "linestyles": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -3962,7 +3992,7 @@
           "description": "Line style connecting points across categories.",
           "domain": "seaborn"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -3986,7 +4016,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::categorical_plotted",
           "accepted_states": [],
@@ -4008,7 +4038,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_lines_and_collections_to_axes"
       ],
@@ -4026,7 +4056,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4047,7 +4077,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4068,7 +4098,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4089,7 +4119,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "col": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4103,13 +4133,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Column variable for faceting across subplots.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "kind": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4142,7 +4173,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -4164,7 +4195,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_facetgrid"
       ],
@@ -4182,7 +4213,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4203,7 +4234,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4224,7 +4255,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4245,7 +4276,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "alpha": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -4262,14 +4293,15 @@
             "gt=0.0",
             "lte=1.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1.0,
           "description": "Alpha transparency value.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -4293,7 +4325,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::relational_plotted",
           "accepted_states": [],
@@ -4315,7 +4347,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -4333,7 +4365,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4354,7 +4386,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4375,7 +4407,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4396,7 +4428,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4417,7 +4449,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_4": {
+        "size": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4438,7 +4470,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_5": {
+        "sizes": {
           "carrier": "List[str]",
           "typestate": "any",
           "accepted_states": [],
@@ -4464,7 +4496,7 @@
           "description": "Range of marker sizes [min, max].",
           "domain": "seaborn"
         },
-        "port_6": {
+        "palette": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4478,14 +4510,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "viridis",
           "description": "Palette name.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_7": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -4509,7 +4542,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::relational_plotted",
           "accepted_states": [],
@@ -4531,7 +4564,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes",
         "creates_legend"
@@ -4550,7 +4583,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4571,7 +4604,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4592,7 +4625,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4613,7 +4646,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "errorbar": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4641,7 +4674,7 @@
           "description": "Method for calculating uncertainty band around line.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -4665,7 +4698,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::relational_plotted",
           "accepted_states": [],
@@ -4687,7 +4720,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_lines_and_polycollections_to_axes"
       ],
@@ -4705,7 +4738,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4726,7 +4759,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4747,7 +4780,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4768,7 +4801,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4789,7 +4822,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_4": {
+        "style": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4810,7 +4843,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_5": {
+        "markers": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -4824,14 +4857,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to draw glyph markers at observation points.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_6": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -4855,7 +4889,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::relational_plotted",
           "accepted_states": [],
@@ -4877,7 +4911,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_lines_and_legend_to_axes"
       ],
@@ -4895,7 +4929,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -4916,7 +4950,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4937,7 +4971,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4958,7 +4992,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "col": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4972,13 +5006,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Column faceting variable.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -4992,13 +5027,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Color hue variable.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "kind": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5025,7 +5061,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -5047,7 +5083,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_facetgrid"
       ],
@@ -5065,7 +5101,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -5086,7 +5122,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "annot": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -5100,14 +5136,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "If True, write the data value in each cell.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "fmt": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5121,14 +5158,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": ".2f",
           "description": "String formatting code when annot is True.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "cmap": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5157,7 +5195,7 @@
           "description": "Colormap name.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "cbar": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -5171,14 +5209,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to draw a colormap colorbar.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -5202,7 +5241,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::matrix_plotted",
           "accepted_states": [],
@@ -5224,7 +5263,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_and_text_to_axes"
       ],
@@ -5242,7 +5281,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -5263,7 +5302,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "mask": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -5284,7 +5323,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_2": {
+        "cmap": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5311,7 +5350,7 @@
           "description": "Diverging colormap name.",
           "domain": "seaborn"
         },
-        "port_3": {
+        "square": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -5325,14 +5364,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to force aspect ratio of each cell to 1:1 square.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "linewidths": {
           "carrier": "float",
           "typestate": "any",
           "accepted_states": [],
@@ -5348,14 +5388,15 @@
           "invariants": [
             "gte=0.0"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 0.5,
           "description": "Width of lines dividing each cell.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -5379,7 +5420,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::matrix_plotted",
           "accepted_states": [],
@@ -5401,7 +5442,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "adds_collections_to_axes"
       ],
@@ -5419,7 +5460,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -5440,7 +5481,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "cmap": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5467,7 +5508,7 @@
           "description": "Colormap name.",
           "domain": "seaborn"
         },
-        "port_2": {
+        "standard_scale": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -5492,7 +5533,7 @@
           "description": "Axis to standardize (0 for rows, 1 for columns).",
           "domain": "seaborn"
         },
-        "port_3": {
+        "metric": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5519,7 +5560,7 @@
           "description": "Distance metric for linkage computation.",
           "domain": "seaborn"
         },
-        "port_4": {
+        "method": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5548,7 +5589,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::clustergrid_plotted",
           "accepted_states": [],
@@ -5570,7 +5611,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "performs_scipy_linkage",
         "renders_dendrograms_and_matrix"
@@ -5589,7 +5630,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -5610,7 +5651,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "col": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5624,13 +5665,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Variable that defines subsets across the columns of the grid.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "row": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5644,13 +5686,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Variable that defines subsets across the rows of the grid.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5664,15 +5707,16 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Variable that defines subsets mapped to different color levels.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_initialized",
           "accepted_states": [],
@@ -5694,7 +5738,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_facetgrid"
       ],
@@ -5712,7 +5756,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_initialized",
           "accepted_states": [],
@@ -5732,7 +5776,7 @@
           "description": "FacetGrid instance to map over.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5753,7 +5797,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_2": {
+        "args": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5776,7 +5820,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -5798,7 +5842,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "populates_facet_axes"
       ],
@@ -5816,7 +5860,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_initialized",
           "accepted_states": [],
@@ -5836,7 +5880,7 @@
           "description": "FacetGrid instance.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5859,7 +5903,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -5881,7 +5925,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "populates_facet_axes"
       ],
@@ -5899,7 +5943,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -5919,7 +5963,7 @@
           "description": "Populated FacetGrid instance.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "title": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -5933,15 +5977,16 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Optional title for the legend.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -5963,7 +6008,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "appends_legend_to_grid"
       ],
@@ -5981,7 +6026,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6002,7 +6047,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6016,13 +6061,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Grouping variable mapped to color hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "vars": {
           "carrier": "List[str]",
           "typestate": "any",
           "accepted_states": [],
@@ -6046,7 +6092,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_initialized",
           "accepted_states": [],
@@ -6068,7 +6114,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_pairwise_axes_matrix"
       ],
@@ -6086,7 +6132,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_initialized",
           "accepted_states": [],
@@ -6106,7 +6152,7 @@
           "description": "Initialized PairGrid instance.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "diag_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6127,7 +6173,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_2": {
+        "offdiag_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6150,7 +6196,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_mapped",
           "accepted_states": [],
@@ -6172,7 +6218,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "populates_pairgrid_axes"
       ],
@@ -6190,7 +6236,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_initialized",
           "accepted_states": [],
@@ -6210,7 +6256,7 @@
           "description": "Initialized PairGrid instance.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "diag_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6231,7 +6277,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_2": {
+        "upper_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6252,7 +6298,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_3": {
+        "lower_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6275,7 +6321,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_mapped",
           "accepted_states": [],
@@ -6297,7 +6343,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "populates_pairgrid_axes"
       ],
@@ -6315,7 +6361,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6336,7 +6382,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6350,13 +6396,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Categorical variable mapped to hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "diag_kind": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6382,7 +6429,7 @@
           "description": "Plot kind for diagonal subplots.",
           "domain": "seaborn"
         },
-        "port_3": {
+        "corner": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -6396,16 +6443,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "If True, only plot lower triangle of pairwise grid.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "PairGrid",
           "typestate": "seaborn::pairgrid_mapped",
           "accepted_states": [],
@@ -6427,7 +6475,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_pairgrid"
       ],
@@ -6445,7 +6493,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6466,7 +6514,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6487,7 +6535,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6510,7 +6558,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "JointGrid",
           "typestate": "seaborn::jointgrid_initialized",
           "accepted_states": [],
@@ -6532,7 +6580,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_joint_and_marginal_axes"
       ],
@@ -6550,7 +6598,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "JointGrid",
           "typestate": "seaborn::jointgrid_initialized",
           "accepted_states": [],
@@ -6570,7 +6618,7 @@
           "description": "Initialized JointGrid.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "joint_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6591,7 +6639,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_2": {
+        "marginal_func": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6614,7 +6662,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "JointGrid",
           "typestate": "seaborn::jointgrid_plotted",
           "accepted_states": [],
@@ -6636,7 +6684,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "populates_joint_and_marginal_axes"
       ],
@@ -6654,7 +6702,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6675,7 +6723,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6696,7 +6744,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6717,7 +6765,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "kind": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6748,7 +6796,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "JointGrid",
           "typestate": "seaborn::jointgrid_plotted",
           "accepted_states": [],
@@ -6770,7 +6818,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_jointgrid"
       ],
@@ -6788,7 +6836,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6809,7 +6857,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6830,7 +6878,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -6851,7 +6899,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "ci": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -6868,14 +6916,15 @@
             "gte=0",
             "lte=100"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 95,
           "description": "Size of the confidence interval for the regression estimate.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "scatter": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -6889,14 +6938,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "If True, draw a scatterplot with the underlying observations.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -6920,7 +6970,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::regression_plotted",
           "accepted_states": [],
@@ -6942,7 +6992,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "fits_linear_model",
         "adds_lines_and_collections_to_axes"
@@ -6961,7 +7011,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -6982,7 +7032,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7003,7 +7053,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7024,7 +7074,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "order": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -7040,14 +7090,15 @@
           "invariants": [
             "gte=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 2,
           "description": "Order of the polynomial regression fit.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -7071,7 +7122,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::regression_plotted",
           "accepted_states": [],
@@ -7093,7 +7144,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "fits_polynomial_model",
         "adds_lines_and_collections_to_axes"
@@ -7112,7 +7163,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -7133,7 +7184,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7154,7 +7205,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7175,7 +7226,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "logistic": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7189,14 +7240,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "If True, estimate a logistic regression model.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "n_boot": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -7212,14 +7264,15 @@
           "invariants": [
             "gte=100"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1000,
           "description": "Number of bootstrap resamples for confidence interval.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -7243,7 +7296,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::regression_plotted",
           "accepted_states": [],
@@ -7265,7 +7318,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "fits_logistic_model",
         "adds_sigmoid_to_axes"
@@ -7284,7 +7337,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -7305,7 +7358,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7326,7 +7379,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7347,7 +7400,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "lowess": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7361,14 +7414,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Fit a lowess smooth to the residual scatter.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -7392,7 +7446,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::regression_plotted",
           "accepted_states": [],
@@ -7414,7 +7468,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "computes_residuals",
         "adds_collections_and_baseline_to_axes"
@@ -7433,7 +7487,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "data": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -7454,7 +7508,7 @@
           "port_role": "data_input",
           "domain": "seaborn"
         },
-        "port_1": {
+        "x": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7475,7 +7529,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_2": {
+        "y": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7496,7 +7550,7 @@
           "port_role": "column_projection",
           "domain": "seaborn"
         },
-        "port_3": {
+        "col": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7510,13 +7564,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Column variable for faceting.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "hue": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7530,13 +7585,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Grouping variable mapped to color hue.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "scatter": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7550,16 +7606,17 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to render scatter points.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "grid_out": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -7581,7 +7638,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "grid_out",
       "effects": [
         "creates_figure_and_facetgrid"
       ],
@@ -7599,7 +7656,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [
@@ -7621,7 +7678,7 @@
           "description": "Target Axes instance.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "top": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7635,14 +7692,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to strip top spine.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_2": {
+        "right": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7656,14 +7714,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": true,
           "description": "Whether to strip right spine.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "left": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7677,14 +7736,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to strip left spine.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "bottom": {
           "carrier": "bool",
           "typestate": "any",
           "accepted_states": [],
@@ -7698,14 +7758,15 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": false,
           "description": "Whether to strip bottom spine.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_5": {
+        "offset": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -7719,15 +7780,16 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Absolute offset in points to displace remaining spines away from data.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::despined_canvas",
           "accepted_states": [],
@@ -7749,7 +7811,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "hides_axes_spines"
       ],
@@ -7767,7 +7829,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [],
@@ -7787,7 +7849,7 @@
           "description": "Axes instance holding legend.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "loc": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7819,7 +7881,7 @@
           "port_role": "configuration",
           "domain": "seaborn"
         },
-        "port_2": {
+        "bbox_to_anchor": {
           "carrier": "list",
           "typestate": "any",
           "accepted_states": [],
@@ -7841,7 +7903,7 @@
           "description": "Bounding box anchor coordinates [x, y].",
           "domain": "seaborn"
         },
-        "port_3": {
+        "ncol": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -7857,14 +7919,15 @@
           "invariants": [
             "gte=1"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 1,
           "description": "Number of columns for legend entries.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_4": {
+        "title": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -7878,15 +7941,16 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "description": "Title for the legend.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "seaborn::legend_configured",
           "accepted_states": [],
@@ -7908,7 +7972,7 @@
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "repositions_legend"
       ],
@@ -7926,7 +7990,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::facetgrid_mapped",
           "accepted_states": [],
@@ -7946,7 +8010,7 @@
           "description": "Mapped FacetGrid or PairGrid object to persist.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "output_filepath": {
           "carrier": "File[Plot, Any]",
           "typestate": "any",
           "accepted_states": [],
@@ -7967,7 +8031,7 @@
           "port_role": "destination",
           "domain": "seaborn"
         },
-        "port_2": {
+        "dpi": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -7983,12 +8047,13 @@
           "invariants": [
             "gte=72"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 300,
           "description": "Resolution in dots per inch.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -8011,7 +8076,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "JointGrid",
           "typestate": "seaborn::jointgrid_plotted",
           "accepted_states": [],
@@ -8031,7 +8096,7 @@
           "description": "Plotted JointGrid object.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "output_filepath": {
           "carrier": "File[Plot, Any]",
           "typestate": "any",
           "accepted_states": [],
@@ -8052,7 +8117,7 @@
           "port_role": "destination",
           "domain": "seaborn"
         },
-        "port_2": {
+        "dpi": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -8068,12 +8133,13 @@
           "invariants": [
             "gte=72"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 300,
           "description": "Dots per inch resolution.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -8096,7 +8162,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "grid": {
           "carrier": "FacetGrid",
           "typestate": "seaborn::clustergrid_plotted",
           "accepted_states": [],
@@ -8116,7 +8182,7 @@
           "description": "ClusterGrid object holding dendrograms and heatmap.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "output_filepath": {
           "carrier": "File[Plot, Any]",
           "typestate": "any",
           "accepted_states": [],
@@ -8137,7 +8203,7 @@
           "port_role": "destination",
           "domain": "seaborn"
         },
-        "port_2": {
+        "dpi": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -8153,12 +8219,13 @@
           "invariants": [
             "gte=72"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 300,
           "description": "Export resolution in DPI.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         }
       },
       "outputs": {},
@@ -8181,7 +8248,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [],
@@ -8196,12 +8263,12 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Source Axes containing statistical visualization to export.",
           "domain": "seaborn"
         },
-        "port_1": {
+        "output_filepath": {
           "carrier": "File[Plot, Any]",
           "typestate": "any",
           "accepted_states": [],
@@ -8222,7 +8289,7 @@
           "port_role": "destination",
           "domain": "seaborn"
         },
-        "port_2": {
+        "dpi": {
           "carrier": "int",
           "typestate": "any",
           "accepted_states": [],
@@ -8238,14 +8305,15 @@
           "invariants": [
             "gte=72"
           ],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": 300,
           "description": "Resolution in dots per inch.",
-          "domain": "seaborn"
+          "domain": "seaborn",
+          "port_role": "configuration"
         },
-        "port_3": {
+        "bbox_inches": {
           "carrier": "str",
           "typestate": "any",
           "accepted_states": [],
@@ -8291,7 +8359,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "df": {
           "carrier": "DataFrame",
           "typestate": "pandas::dataframe_2d_generic",
           "accepted_states": [],
@@ -8314,7 +8382,7 @@
         }
       },
       "outputs": {
-        "port_0": {
+        "ax_out": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_initialized",
           "accepted_states": [],
@@ -8329,30 +8397,19 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "acquire",
+          "resource_mode": "value",
           "required": true,
           "description": "Output plotting Axes object, usable by matplotlib-style finishing functions (savefig, legend, tight_layout, annotate) afterward.",
           "domain": "seaborn"
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "ax_out",
       "effects": [
         "initializes_blank_axes"
       ],
       "mutation_type": "pure",
-      "is_context_manager": false,
-      "bridge_profile": {
-        "is_bridge": true,
-        "delta_axes": [
-          "carrier",
-          "semantics",
-          "layout"
-        ],
-        "cost_tier": 1.0,
-        "lossy": false,
-        "requires_intent": true
-      }
+      "is_context_manager": false
     },
     {
       "cell_id": "sns_bridge_export_figure",
@@ -8365,7 +8422,7 @@
         "matplotlib.pyplot as plt"
       ],
       "inputs": {
-        "port_0": {
+        "ax": {
           "carrier": "Axes",
           "typestate": "matplotlib::axes_with_content",
           "accepted_states": [],
@@ -8380,14 +8437,14 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Axes instance containing finalized plotting content.",
           "domain": "seaborn"
         }
       },
       "outputs": {
-        "port_0": {
+        "fig_out": {
           "carrier": "Figure",
           "typestate": "matplotlib::figure_saved",
           "accepted_states": [],
@@ -8402,14 +8459,14 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "acquire",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Output plotting Axes object, usable by matplotlib-style finishing functions (savefig, legend, tight_layout, annotate) afterward.",
           "domain": "seaborn"
         }
       },
       "primary_in": "port_0",
-      "primary_out": "port_0",
+      "primary_out": "fig_out",
       "effects": [],
       "mutation_type": "pure",
       "is_context_manager": false,
@@ -8424,5 +8481,12 @@
         "requires_intent": true
       }
     }
-  ]
+  ],
+  "runtime_setup": {
+    "env_vars": {
+      "MPLBACKEND": "Agg"
+    },
+    "pre_exec_hooks": [],
+    "notes": "Headless Agg backend for non-interactive Seaborn/Matplotlib rendering."
+  }
 }

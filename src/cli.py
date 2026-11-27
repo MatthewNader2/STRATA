@@ -537,7 +537,12 @@ class NSTLInteractiveShell(cmd.Cmd):
         t0 = time.perf_counter()
         ensure_lattice_compiled(trees_dir=self.trees_dir, db_path=db_path)
         self.compiled_lattice: CompiledLattice = load_compiled_lattice(db_path)
-        self.sandbox = GEVRSandbox(allowed_capabilities=self.allowed_capabilities)
+        fixtures_dir = Path(__file__).resolve().parent.parent / "benchmarks" / "fixtures" / "media"
+        asset_dirs = [fixtures_dir] if fixtures_dir.is_dir() else []
+        self.sandbox = GEVRSandbox(
+            allowed_capabilities=self.allowed_capabilities,
+            asset_dirs=asset_dirs,
+        )
         load_ms = (time.perf_counter() - t0) * 1000.0
         if self.interactive:
             console.print(f"[bold green][+] Loaded {len(self.compiled_lattice.cells):,} cells ({load_ms:.1f}ms)[/bold green]\n")

@@ -3,6 +3,11 @@
   "version": "1.1.0",
   "description": "",
   "is_core": false,
+  "aliases": [
+    "mpl",
+    "pyplot",
+    "plt"
+  ],
   "imports": [
     "numpy",
     "python_core"
@@ -967,12 +972,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "100",
           "description": "Dots per inch screen resolution.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -1061,12 +1067,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Number of rows in the subplot grid.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "ncols": {
           "carrier": "int",
@@ -1082,12 +1089,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Number of columns in the subplot grid.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "index": {
           "carrier": "int",
@@ -1103,12 +1111,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "1-based index position of the subplot in the grid.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -1196,12 +1205,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Subplot row count.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "ncols": {
           "carrier": "int",
@@ -1217,12 +1227,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Subplot column count.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "index": {
           "carrier": "int",
@@ -1238,12 +1249,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1",
           "description": "Subplot index.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -1565,12 +1577,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "20.0",
           "description": "Marker size in points^2.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "c": {
           "carrier": "str",
@@ -1586,12 +1599,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#2ca02c'",
           "description": "Marker color specification.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "marker": {
           "carrier": "str",
@@ -1635,12 +1649,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.8",
           "description": "Opacity blending factor.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -1773,12 +1788,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.8",
           "description": "Relative bar width.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "color": {
           "carrier": "str",
@@ -1794,12 +1810,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#1f77b4'",
           "description": "Bar face color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "align": {
           "carrier": "str",
@@ -1957,12 +1974,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.8",
           "description": "Bar thickness in vertical dimension.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "color": {
           "carrier": "str",
@@ -1978,12 +1996,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#ff7f0e'",
           "description": "Bar fill color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "align": {
           "carrier": "str",
@@ -2119,12 +2138,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "30",
           "description": "Number of equal-width bins.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "density": {
           "carrier": "bool",
@@ -2140,12 +2160,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "False",
           "description": "Normalize bin counts into probability density.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "color": {
           "carrier": "str",
@@ -2161,12 +2182,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#3470a3'",
           "description": "Histogram bar color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "alpha": {
           "carrier": "float",
@@ -2182,12 +2204,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.7",
           "description": "Alpha transparency.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2296,12 +2319,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Draw boxes vertically if True, horizontal if False.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "patch_artist": {
           "carrier": "bool",
@@ -2317,12 +2341,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Fill boxes with Patch artists rather than Line2D.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2430,12 +2455,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Render lines for means.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "showmedians": {
           "carrier": "bool",
@@ -2451,12 +2477,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Render lines for medians.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2590,12 +2617,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'%1.1f%%'",
           "description": "String formatting format for numeric percentage labels.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "startangle": {
           "carrier": "float",
@@ -2611,12 +2639,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "90.0",
           "description": "Counterclockwise rotation angle of first wedge.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -2973,12 +3002,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'viridis'",
           "description": "Colormap name.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "shading": {
           "carrier": "str",
@@ -3184,12 +3214,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10",
           "description": "Number of contour intervals.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "cmap": {
           "carrier": "str",
@@ -3205,12 +3236,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'viridis'",
           "description": "Colormap identifier.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3389,12 +3421,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "12",
           "description": "Number of filled contour slices.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "cmap": {
           "carrier": "str",
@@ -3410,12 +3443,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'viridis'",
           "description": "Colormap identifier.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3590,12 +3624,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#1f77b4'",
           "description": "Line color hex code or name.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3750,12 +3785,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "20.0",
           "description": "Scatter marker size.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "c": {
           "carrier": "str",
@@ -3771,12 +3807,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#d62728'",
           "description": "Marker color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -3936,12 +3973,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'viridis'",
           "description": "Colormap identifier.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4050,12 +4088,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "30.0",
           "description": "Elevation camera angle in degrees above ground plane.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "azim": {
           "carrier": "float",
@@ -4071,12 +4110,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "-60.0",
           "description": "Azimuth camera angle in degrees around z-axis.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4252,12 +4292,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'o'",
           "description": "Point and line format string.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4412,12 +4453,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#1f77b4'",
           "description": "Shade fill color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "alpha": {
           "carrier": "float",
@@ -4433,12 +4475,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.3",
           "description": "Transparency level.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4572,12 +4615,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'-'",
           "description": "Stem line format string.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "markerfmt": {
           "carrier": "str",
@@ -4593,12 +4637,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'o'",
           "description": "Stem head marker format string.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4686,12 +4731,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.0",
           "description": "Y position of horizontal line.",
-          "port_role": "data_input",
+          "port_role": "configuration",
           "domain": "matplotlib"
         },
         "color": {
@@ -4708,12 +4753,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#7f7f7f'",
           "description": "Line color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "linestyle": {
           "carrier": "str",
@@ -4729,12 +4775,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'--'",
           "description": "Line dash style.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "linewidth": {
           "carrier": "float",
@@ -4750,12 +4797,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Stroke width.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -4843,12 +4891,12 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.0",
           "description": "X position of vertical line.",
-          "port_role": "data_input",
+          "port_role": "configuration",
           "domain": "matplotlib"
         },
         "color": {
@@ -4865,12 +4913,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'#d62728'",
           "description": "Line color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "linestyle": {
           "carrier": "str",
@@ -4886,12 +4935,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "':'",
           "description": "Line dash style.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "linewidth": {
           "carrier": "float",
@@ -4907,12 +4957,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.0",
           "description": "Stroke width.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5028,12 +5079,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10.0",
           "description": "Text point size.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "frameon": {
           "carrier": "bool",
@@ -5049,12 +5101,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Draw bounding background box.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5227,10 +5280,14 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
-          "default_value": "dict(arrowstyle='->', lw=1.2, color='black')",
+          "default_value": {
+            "arrowstyle": "->",
+            "lw": 1.2,
+            "color": "black"
+          },
           "description": "Dictionary configuring arrow geometry and style.",
           "domain": "matplotlib"
         }
@@ -5383,12 +5440,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "11.0",
           "description": "Font size in points.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "color": {
           "carrier": "str",
@@ -5404,12 +5462,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "'black'",
           "description": "Text font color.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5518,12 +5577,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "12.0",
           "description": "Font size in points.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "pad": {
           "carrier": "float",
@@ -5539,12 +5599,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "6.0",
           "description": "Offset padding between title and top of axes.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5653,12 +5714,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "11.0",
           "description": "Label font size in points.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "labelpad": {
           "carrier": "float",
@@ -5674,12 +5736,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "4.0",
           "description": "Spacing between label and tick markers.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5788,12 +5851,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "11.0",
           "description": "Label font size in points.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "labelpad": {
           "carrier": "float",
@@ -5809,12 +5873,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "4.0",
           "description": "Spacing between label and tick markers.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -5902,12 +5967,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Minimum horizontal limit.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "right": {
           "carrier": "float",
@@ -5923,12 +5989,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Maximum horizontal limit.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6016,12 +6083,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Minimum vertical limit.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "top": {
           "carrier": "float",
@@ -6037,12 +6105,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "None",
           "description": "Maximum vertical limit.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6444,12 +6513,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "45.0",
           "description": "Tick label rotation in degrees.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -6589,12 +6659,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "10.0",
           "description": "Tick label font size.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "rotation": {
           "carrier": "float",
@@ -6610,12 +6681,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.0",
           "description": "Rotation angle in degrees.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7151,12 +7223,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "True",
           "description": "Show or hide gridlines.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "which": {
           "carrier": "str",
@@ -7225,12 +7298,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.6",
           "description": "Gridline opacity.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7696,12 +7770,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "16.0",
           "description": "Super-title font point size.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7790,12 +7865,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "1.08",
           "description": "Padding between figure edge and edges of subplots.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -7884,12 +7960,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.125",
           "description": "Left margin fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "right": {
           "carrier": "float",
@@ -7905,12 +7982,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.9",
           "description": "Right margin fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "bottom": {
           "carrier": "float",
@@ -7926,12 +8004,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.11",
           "description": "Bottom margin fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "top": {
           "carrier": "float",
@@ -7947,12 +8026,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.88",
           "description": "Top margin fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "wspace": {
           "carrier": "float",
@@ -7968,12 +8048,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.2",
           "description": "Width padding between subplots fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "hspace": {
           "carrier": "float",
@@ -7989,12 +8070,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "0.2",
           "description": "Height padding between subplots fraction.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         }
       },
       "outputs": {
@@ -8065,7 +8147,7 @@
           },
           "invariants": [],
           "value_class": "data",
-          "resource_mode": "release",
+          "resource_mode": "borrow",
           "required": true,
           "description": "Figure to serialize to file.",
           "domain": "matplotlib"
@@ -8105,12 +8187,13 @@
             "length": null
           },
           "invariants": [],
-          "value_class": "data",
+          "value_class": "literal",
           "resource_mode": "value",
           "required": false,
           "default_value": "300",
           "description": "Render resolution in dots per inch.",
-          "domain": "matplotlib"
+          "domain": "matplotlib",
+          "port_role": "configuration"
         },
         "bbox_inches": {
           "carrier": "str",
@@ -8240,5 +8323,12 @@
       "mutation_type": "in_place",
       "is_context_manager": false
     }
-  ]
+  ],
+  "runtime_setup": {
+    "env_vars": {
+      "MPLBACKEND": "Agg"
+    },
+    "pre_exec_hooks": [],
+    "notes": "Headless Agg backend for non-interactive Matplotlib rendering."
+  }
 }

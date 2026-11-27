@@ -168,6 +168,7 @@ class NSTLSettings(BaseSettings):
     llm_repeat_penalty: float = Field(default=1.1, ge=0.5, le=2.0)
     llm_max_tokens: int = Field(default=1024, ge=64)
     llm_stop_tokens: List[str] = Field(default_factory=list, description="Optional extra stop sequences for LLM generation.")
+    llm_seed: Optional[int] = Field(default=None, description="Optional deterministic RNG seed passed to GGUF chat completions.")
     max_embedding_cache_size: int = Field(default=16384, ge=128)
 
     # Retrieval & Type-Directed Planning

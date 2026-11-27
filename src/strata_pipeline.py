@@ -151,6 +151,10 @@ class StrataPipeline:
         max_bridge_hops: Optional[int] = None,
     ) -> None:
         self.cells: List[Any] = list(cells)
+        if poset is not None and hasattr(poset, "validate_acyclic"):
+            cycles = poset.validate_acyclic()
+            if cycles:
+                raise ValueError("; ".join(cycles))
         self.poset = poset
         self.has_llm = bool(has_llm)
         self.generate_fn = generate_fn

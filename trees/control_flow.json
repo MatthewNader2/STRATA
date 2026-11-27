@@ -776,7 +776,7 @@
           "port_role": "functional_operator"
         },
         "body_fn": {
-          "carrier": "Callable[[T, U, State], State]",
+          "carrier": "Callable[[T, U, S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -795,7 +795,7 @@
           "port_role": "functional_operator"
         },
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -816,7 +816,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1297,7 +1297,7 @@
           "port_role": "data_input"
         },
         "accumulator": {
-          "carrier": "Callable[[State, T], State]",
+          "carrier": "Callable[[S, T], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1316,7 +1316,7 @@
           "port_role": "functional_operator"
         },
         "initial": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1337,7 +1337,7 @@
       },
       "outputs": {
         "accumulated_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1489,7 +1489,7 @@
           "port_role": "data_input"
         },
         "body_fn": {
-          "carrier": "Callable[[T, State], State]",
+          "carrier": "Callable[[T, S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1509,7 +1509,7 @@
           "port_role": "functional_operator"
         },
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1530,7 +1530,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1625,7 +1625,7 @@
           "port_role": "literal_parameter"
         },
         "body_fn": {
-          "carrier": "Callable[[int, State], State]",
+          "carrier": "Callable[[int, S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1644,7 +1644,7 @@
           "port_role": "functional_operator"
         },
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1665,7 +1665,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1799,7 +1799,7 @@
       "dependencies": [],
       "inputs": {
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1818,7 +1818,7 @@
           "port_role": "data_input"
         },
         "cond_fn": {
-          "carrier": "Callable[[State], bool]",
+          "carrier": "Callable[[S], bool]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1837,7 +1837,7 @@
           "port_role": "functional_operator"
         },
         "body_fn": {
-          "carrier": "Callable[[State], State]",
+          "carrier": "Callable[[S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1859,7 +1859,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1896,7 +1896,7 @@
       "dependencies": [],
       "inputs": {
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1915,7 +1915,7 @@
           "port_role": "data_input"
         },
         "cond_fn": {
-          "carrier": "Callable[[State], bool]",
+          "carrier": "Callable[[S], bool]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1934,7 +1934,7 @@
           "port_role": "functional_operator"
         },
         "body_fn": {
-          "carrier": "Callable[[State], State]",
+          "carrier": "Callable[[S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -1975,7 +1975,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -2012,7 +2012,7 @@
       "dependencies": [],
       "inputs": {
         "init_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -2031,7 +2031,7 @@
           "port_role": "data_input"
         },
         "body_fn": {
-          "carrier": "Callable[[State], State]",
+          "carrier": "Callable[[S], S]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -2051,7 +2051,7 @@
           "port_role": "functional_operator"
         },
         "until_cond_fn": {
-          "carrier": "Callable[[State], bool]",
+          "carrier": "Callable[[S], bool]",
           "typestate": "any",
           "accepted_states": [],
           "layout": {
@@ -2072,7 +2072,7 @@
       },
       "outputs": {
         "final_state": {
-          "carrier": "State",
+          "carrier": "S",
           "typestate": "any",
           "accepted_states": [],
           "layout": {

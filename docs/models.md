@@ -1,114 +1,46 @@
-# STRATA Model Provisioning & Specifications
+# STRATA v2 Local Model & Profile Reference
 
-This document details the recommended, tested, and supported AI models for the **STRATA** (**S**ymbolic **T**opological **R**outing **A**rchitecture for **T**yped **A**utomata) synthesis engine, where each model belongs in the directory layout, and how to download and configure them.
+STRATA v2 discovers local embedding, GGUF language, and cross-encoder reranking models dynamically from `models/` (configurable via `NSTL_MODELS_DIR` and `.env`) without hardcoded model paths in inference kernels.
 
----
+## Inference Profiles (`0, A, B, C, D, E, O`)
 
-## 1. Architecture: The Neuro-Symbolic Duality
+| Profile | Label | Pure Symbolic | Dense Embedder | Cross-Encoder Reranker | Local GGUF SLM Compiler | Notes |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **`0`** | Pure Symbolic | Yes | No | No | No | Deterministic formal frontend + lexical retrieval + full 5-axis planner |
+| **`A`** | Dense Embedder Only | No | Yes | No | No | Lexical + dense embedding retrieval (no LLM IR compilation) |
+| **`B`** | Dense Embedder + Neural Reranker | No | Yes | Optional | No | Dense retrieval + CrossEncoder candidate reranking (`--use-reranker`) |
+| **`C`** | SLM Compiler + Dense Embedder | No | Yes | No | Yes | Constrained JSON-Schema NL -> `TypedIR` compilation + dense retrieval |
+| **`D`** | SLM Compiler + Dense + Slot-Fill | No | Yes | No | Yes | Adds neural/lexical slot-fill extraction |
+| **`E`** | SLM Compiler + Dense + Reranker + Slot-Fill | No | Yes | Optional | Yes | Enables cross-encoder reranking when `--use-reranker` is active |
+| **`O`** | Unified Flagship (`Profile Omega`) | No | Yes | Optional | Yes | Full v2 synthesis pipeline (reranker off by default per `settings.use_reranker=False`) |
 
-STRATA uses a dual-engine architecture:
-- **Neural Layer (Semantic Extraction & Intent Translation)**: Uses local dense embedding models and GGUF quantized language models to parse natural language, embed user intent, and guide topological beam searches.
-- **Symbolic Layer (Constructive Category Theory)**: Deterministically handles all lattice routing, monadic typestate unification, AST code synthesis, and sandboxed execution without relying on stochastic token generation for code correctness.
+## Supported Local Models (`scripts/download_model.py`)
 
-Because the symbolic engine guarantees 100% type soundness, you do not need a massive 70B parameter model. Lightweight 0.5B–1.5B models work exceptionally well for semantic intent translation while remaining fast on consumer laptops and development machines.
+### Recommended Default Bundle (`--tier default` / `--tier 0.8b`)
 
----
-
-## 2. Recommended & Tested Models
-
-| Model Role | Identifier / Hugging Face Source | Format | Local Directory Path | Footprint | Recommended Use |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Default Embedder** | [`jinaai/jina-embeddings-v5-text-nano`](https://huggingface.co/jinaai/jina-embeddings-v5-text-nano) | Safetensors / ST | `models/embeddings/jina-embeddings-v5-text-nano/` | ~350 MB | Default retrieval & semantic similarity scoring across all platforms |
-| **Default LLM** *(Recommended)* | [`Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF) | GGUF (`q4_k_m`) | `models/llms/qwen2.5-coder-0.5b-instruct/` | ~398 MB | Fast local execution, CI/CD, development laptops, CPU-friendly |
-| **Medium LLM** | [`Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF) | GGUF (`q4_k_m`) | `models/llms/qwen2.5-coder-1.5b-instruct/` | ~986 MB | Higher semantic reasoning capacity for ambiguous multi-clause prompts |
-| **Heavy LLM** | [`Qwen/Qwen2.5-Coder-7B-Instruct-GGUF`](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF) | GGUF (`q4_k_m`) | `models/llms/Qwen2.5-Coder-7B-Instruct-GGUF/` | ~4.68 GB | Full production benchmark evaluation (requires GPU or >=8 GB RAM) |
-| **Optional Reranker** | [`jinaai/jina-reranker-v3.5`](https://huggingface.co/jinaai/jina-reranker-v3.5) | Safetensors / ST | `models/rerankers/jina-reranker-v3.5/` | ~500 MB | Deep cross-encoder candidate reranking (`NSTL_USE_RERANKER=1`) |
-
----
-
-## 3. Directory Layout Expected by the Engine
-
-The engine resolves paths automatically relative to `models/` (configured in `src/config.py`):
-
-```
-models/
-├── embeddings/
-│   └── jina-embeddings-v5-text-nano/
-│       ├── config.json
-│       ├── model.safetensors
-│       ├── tokenizer.json
-│       └── ...
-├── llms/
-│   ├── qwen2.5-coder-0.5b-instruct/
-│   │   └── qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
-│   ├── qwen2.5-coder-1.5b-instruct/            # Optional
-│   │   └── qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
-│   └── Qwen2.5-Coder-7B-Instruct-GGUF/          # Optional
-│       └── qwen2.5-coder-7b-instruct-q4_k_m.gguf
-└── rerankers/                                   # Optional
-    └── jina-reranker-v3.5/
-        ├── config.json
-        ├── model.safetensors
-        └── ...
-```
-
----
-
-## 4. Downloading the Models
-
-### Automated Download (Recommended)
-
-Run the bundled download utility from the repository root:
-
-```bash
-# 1. Download default tested models (~750 MB total; 0.5B LLM + Nano Embedder)
-python scripts/download_model.py
-
-# 2. (Optional) Download 1.5B medium tier model
-python scripts/download_model.py --tier medium
-
-# 3. (Optional) Download 7B heavy tier model
-python scripts/download_model.py --tier heavy
-
-# 4. (Optional) Download neural cross-encoder reranker
-python scripts/download_model.py --tier reranker
-
-# 5. Download all tested variants
-python scripts/download_model.py --tier all
-```
-
-### Manual Download via Hugging Face CLI
-
-If you prefer using `huggingface-cli` directly:
-
-```bash
-# Install Hugging Face Hub CLI
-pip install "huggingface_hub[cli]>=0.23"
-
-# Download Default Embedder
-huggingface-cli download jinaai/jina-embeddings-v5-text-nano \
-  --local-dir models/embeddings/jina-embeddings-v5-text-nano \
-  --local-dir-use-symlinks False
-
-# Download Default LLM (0.5B Coder Q4_K_M)
-huggingface-cli download Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF \
-  qwen2.5-coder-0.5b-instruct-q4_k_m.gguf \
-  --local-dir models/llms/qwen2.5-coder-0.5b-instruct \
-  --local-dir-use-symlinks False
-```
-
----
-
-## 5. Hardware & Environment Recommendations
-
-| Workload | Recommended Model Tier | Minimum RAM | Recommended Hardware | Execution Speed |
+| Component | Source Repository | Format | Target Directory (`models/...`) | Approx Size |
 | :--- | :--- | :--- | :--- | :--- |
-| **Development & Testing** | `default` (0.5B + Nano) | 4 GB | Any modern CPU or integrated GPU | Real-time (< 1.5s / query) |
-| **Extended Pipeline Synthesis** | `medium` (1.5B + Nano) | 8 GB | CPU with 4 cores or 2GB VRAM GPU | Fast (~ 2–3s / query) |
-| **Benchmark Suite & Full Sweeps** | `heavy` (7B + Nano) | 16 GB | NVIDIA GPU with >= 6GB VRAM (CUDA) | Near real-time on GPU (~ 4s on CPU) |
+| **Embedder** | [`jinaai/jina-embeddings-v5-text-nano`](https://huggingface.co/jinaai/jina-embeddings-v5-text-nano) | Safetensors | `models/embeddings/jina-embeddings-v5-text-nano/` | ~350 MB |
+| **Default SLM** | [`unsloth/Qwen3.5-0.8B-GGUF`](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF) | GGUF (`Q4_K_M`) | `models/llms/qwen3.5-0.8b-instruct/` | ~533 MB |
 
-To customize which model is loaded at runtime, copy `.env.example` to `.env` and set:
+### Additional Tiers
+
+| Tier Flag | Model | Target Directory (`models/...`) | Notes |
+| :--- | :--- | :--- | :--- |
+| `--tier 0.5b` | `Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF` (`q4_k_m`) | `models/llms/qwen2.5-coder-0.5b-instruct/` | Ultra-light legacy CPU tier |
+| `--tier medium` | `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF` (`q4_k_m`) | `models/llms/qwen2.5-coder-1.5b-instruct/` | 1.5B coder GGUF tier |
+| `--tier heavy` | `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF` (`q4_k_m`) | `models/llms/Qwen2.5-Coder-7B-Instruct-GGUF/` | 7B baseline / heavy GPU tier |
+| `--tier reranker` | `jinaai/jina-reranker-v3.5` | `models/rerankers/jina-reranker-v3.5/` | Optional CrossEncoder reranker (`--use-reranker`) |
+
+Run `python3 scripts/download_model.py --tier default` to provision the flagship local models cleanly.
+
+## Selecting Models at Runtime
+
+Use `.env` (see [.env.example](../.env.example)) or pass flags directly to `strata_cli.py` / `test.py`:
+
 ```bash
-NSTL_EMBEDDER_MODEL=jina-embeddings-v5-text-nano
-NSTL_LLM_MODEL=qwen2.5-coder-0.5b-instruct
+python3 strata_cli.py run --profile O --llm qwen3.5-0.8b-instruct --exec 'load csv file "input.csv", drop missing rows, and save to "clean_out.csv"'
+python3 test.py --profiles O --llm qwen3.5-0.8b-instruct --early-stop
 ```
+
+For frontier GGUF comparisons on Google Colab T4 GPUs (Pure vs `SKILL.md` vs `SKILL.md+Haystack`), see [../benchmarks/colab_eval.py](../benchmarks/colab_eval.py) and [../benchmarks/STRATA_Colab_Benchmark.ipynb](../benchmarks/STRATA_Colab_Benchmark.ipynb).

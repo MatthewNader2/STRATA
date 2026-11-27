@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/check_env.py - STRATA Environment & Database Sync Verifier (Track 4.3 & 4.4).
+tools/check_env.py - STRATA Environment & Database Sync Verifier.
 
 Usage:
   python3 tools/check_env.py --write-lock   # Freeze current tested versions into requirements.lock
@@ -44,7 +44,7 @@ def get_installed_versions() -> Dict[str, str]:
 def write_lockfile(lock_path: Path) -> int:
     versions = get_installed_versions()
     lines = [
-        "# STRATA Pinned Environment Lockfile (Track 4.3)",
+        "# STRATA Pinned Environment Lockfile",
         f"# Python: {sys.version.split()[0]}",
     ]
     missing: List[str] = []
@@ -107,7 +107,7 @@ def verify_database_sync(trees_dir: Path, db_path: Path, auto_compile: bool = Fa
             f"[X] Database out of sync! '{db_path}' fingerprint={stored_fp}, "
             f"'{trees_dir}' fingerprint={current_fp}."
         )
-        print("    Run: python3 -m src.cli compile --clean")
+        print("    Run: python3 strata_cli.py compile --clean")
         return False
 
     print(f"[✓] Database '{db_path}' is strictly synchronized with '{trees_dir}' (sha256={current_fp[:12]}...).")
@@ -119,6 +119,7 @@ def main() -> int:
     parser.add_argument("--lockfile", type=Path, default=PROJECT_ROOT / "requirements.lock")
     parser.add_argument("--trees-dir", type=Path, default=PROJECT_ROOT / "trees")
     parser.add_argument("--db-path", type=Path, default=PROJECT_ROOT / "trees" / "lattice.db")
+    parser.add_argument("--check", action="store_true", help="Verify lockfile and lattice DB synchronization (default)")
     parser.add_argument("--write-lock", action="store_true", help="Generate requirements.lock from current environment")
     parser.add_argument("--auto-compile", action="store_true", help="Auto-compile lattice.db if out of sync")
     args = parser.parse_args()

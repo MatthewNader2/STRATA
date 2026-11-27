@@ -4,11 +4,19 @@
 # Global repository ownership
 * @MatthewNader2
 
-# Critical category-theoretic engine components
-/src/lattice.py @MatthewNader2
-/src/planner.py @MatthewNader2
-/src/unification.py @MatthewNader2
-/src/algebraic_effects.py @MatthewNader2
+# Core category-theoretic kernel, planner, type system & sandbox
+/src/type_system.py @MatthewNader2
+/src/typed_ir.py @MatthewNader2
+/src/typed_planner.py @MatthewNader2
+/src/bridge_graph.py @MatthewNader2
+/src/strata_pipeline.py @MatthewNader2
+/src/port_binder.py @MatthewNader2
+/src/lattice_db.py @MatthewNader2
+/src/gevr_sandbox.py @MatthewNader2
+/src/security_policy.py @MatthewNader2
+/src/frontends/ @MatthewNader2
 
-# GitHub workflows and project governance
+# Hot-swappable domain manifests, CI workflows & validation gates
+/trees/ @MatthewNader2
+/scripts/check_static.py @MatthewNader2
 /.github/ @MatthewNader2

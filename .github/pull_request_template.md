@@ -1,26 +1,18 @@
-## Description
-<!-- Provide a concise summary of the changes and motivation. -->
+## Pull Request Summary
+- Describe the architectural or domain-tree change cleanly and explain **why** it preserves STRATA's type soundness and domain-neutrality invariants.
 
-## Related Issue
-<!-- Link the issue here, e.g., Closes #123 -->
+## Domain & Kernel Checklist
+- [ ] Core modules (`CLEAN_CORE_MODULES` in `scripts/check_static.py`) contain zero hardcoded domain/library names, zero `re` outside `src/frontends/formal_regex.py`, and zero `frozenset`.
+- [ ] `src/gevr_sandbox.py` contains zero third-party library imports or duck-typed library attributes.
+- [ ] Any domain tree changes conform strictly to canonical `TreeSchema` / `CellSchema` / `PortSchema` (`extra="forbid"`) without leaked benchmark strings.
+- [ ] New files/fixtures do not clutter repo root (media/evaluation fixtures belong under `benchmarks/fixtures/`).
 
-## Type of Change
-- [ ] `feat`: New feature or engine capability
-- [ ] `fix`: Bug fix
-- [ ] `tree`: Domain knowledge tree addition or modification
-- [ ] `docs`: Documentation update
-- [ ] `refactor`: Code refactoring without behavior change
-- [ ] `test`: New or updated tests
-
-## Verification & Testing
-<!-- Describe the tests and verification commands you ran to verify your changes. -->
-- [ ] `python scripts/lint_trees.py` passed cleanly
-- [ ] `python scripts/check_static.py` passed cleanly
-- [ ] `python nstl_cli.py compile` and `validate` passed (100% success rate)
-- [ ] Automated tests passed (`pytest tests/...`)
-
-## Checklist
-- [ ] My branch is rebased/merged with the latest `dev` branch
-- [ ] My code follows the project's conventions and does not introduce hardcoded constants
-- [ ] I have updated documentation if applicable
-- [ ] No temporary files, diff patches, or local databases are committed
+## Verification Run Locally
+```bash
+python3 scripts/check_static.py
+python3 scripts/lint_trees.py --include-fixtures
+python3 scripts/audit_trees.py --strict-five-axis --strict-neutral --include-fixtures
+python3 strata_cli.py compile --clean && python3 strata_cli.py validate && python3 strata_cli.py audit
+python3 test.py --profiles 0 --early-stop
+```
+- Paste exact pass counts observed after the final edit.
