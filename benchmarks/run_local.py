@@ -2,15 +2,18 @@
 """
 benchmarks/run_local.py - Unified v2 local benchmark runner for STRATA and local GGUF baselines.
 
-Supports apples-to-apples local benchmarking across four arms:
+Supports apples-to-apples local benchmarking across six arms:
   - strata_v2             : Unified StrataPipeline (Profile C/D/E/O) over v2 domain trees
   - pure_gguf             : Local GGUF model, prompt-only (zero SKILL.md docs)
   - skill_md_gguf         : Local GGUF model with domain-scoped SKILL.md loaded in system prompt
   - skill_md_haystack_gguf: Local GGUF model with 15-domain catalog noise + target SDK docs
+  - react_pure_gguf       : Zero-oracle multi-turn execution-feedback ReAct loop (pure)
+  - react_skill_md_gguf   : Zero-oracle multi-turn execution-feedback ReAct loop (SKILL.md)
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -31,12 +34,14 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR))
 
 from benchmarks.evaluators import (  # noqa: E402
+    build_react_feedback,
     evaluate_task_response,
     extract_code_clean,
     provision_sandbox_fixtures,
     read_cpu_times,
     read_gpu_vram_mb,
     read_proc_mem_mb,
+    strip_reasoning_traces,
 )
 from benchmarks.skill_docs import (  # noqa: E402
     DOMAIN_SET_TREE_PATHS,
@@ -83,12 +88,14 @@ class LlamaTelemetry:
                 hook.completion_tokens += ct
                 hook.total_tokens += int(usage.get("total_tokens") or (pt + ct))
 
+        @functools.wraps(orig_chat)
         def wrapped_chat(self_l, *args, **kwargs):
             t0 = time.perf_counter()
             r = orig_chat(self_l, *args, **kwargs)
             _rec(r, (time.perf_counter() - t0) * 1000.0)
             return r
 
+        @functools.wraps(orig_call)
         def wrapped_call(self_l, *args, **kwargs):
             t0 = time.perf_counter()
             r = orig_call(self_l, *args, **kwargs)
@@ -203,9 +210,13 @@ def _run_strata_v2_arm(
         settings.llm_context_length = int(args.n_ctx)
     if args.reranker is not None:
         settings.use_reranker = bool(args.reranker)
+    if args.seed is not None:
+        settings.llm_seed = int(args.seed)
 
     spec = resolve_profile_spec(args.profile)
     use_reranker = bool(spec.uses_reranker and settings.use_reranker)
+    rr_tag = ("_rr" if use_reranker else "_norr") if spec.uses_reranker else ""
+    rr_disp = (" [RR]" if use_reranker else " [No-RR]") if spec.uses_reranker else ""
     mm = ModelManager.get_instance()
 
     mem_before = read_proc_mem_mb()
@@ -218,6 +229,9 @@ def _run_strata_v2_arm(
 
     resolved_llm = mm.llm_name or args.llm or "unknown"
     params_b = _infer_params_b(resolved_llm, fallback=0.8)
+    arm_id = f"strata_v2_{spec.code}{rr_tag}"
+    model_id = f"strata_v2_{spec.code.lower()}{rr_tag}_{resolved_llm}"
+    model_display = f"STRATA v2 Profile {spec.code}{rr_disp} ({resolved_llm})"
 
     db_path = ROOT_DIR / "trees" / "lattice.db"
     ensure_lattice_compiled(trees_dir=str(ROOT_DIR / "trees"), db_path=str(db_path))
@@ -283,9 +297,9 @@ def _run_strata_v2_arm(
             cpu1 = read_cpu_times()
             records.append(
                 {
-                    "arm": f"strata_v2_{spec.code}",
-                    "model_id": f"strata_v2_{spec.code.lower()}_{resolved_llm}",
-                    "model_display": f"STRATA v2 Profile {spec.code} ({resolved_llm})",
+                    "arm": arm_id,
+                    "model_id": model_id,
+                    "model_display": model_display,
                     "family": "STRATA-v2",
                     "params_b": params_b,
                     "active_params_b": params_b,
@@ -315,21 +329,22 @@ def _run_strata_v2_arm(
                 }
             )
             print(
-                f"[STRATA-{spec.code}] {task['id']:<30} -> {ev['status']:<18} "
+                f"[STRATA-{spec.code}{rr_disp}] {task['id']:<30} -> {ev['status']:<18} "
                 f"| acc={str(ev['acceptable']):<5} | {wall_ms:7.1f} ms | calls={hook.calls}"
             )
     finally:
         mm.cleanup(release_reranker=True)
 
     safe_llm = resolved_llm.replace("/", "_")
-    out_path = out_dir / f"results_strata_v2_{spec.code}_{safe_llm}.json"
+    seed_tag = f"_s{args.seed}" if args.seed is not None else ""
+    out_path = out_dir / f"results_strata_v2_{spec.code}{rr_tag}_{safe_llm}{seed_tag}.json"
     out_path.write_text(
         json.dumps(
             {
                 "schema_version": "strata_bench_v2",
-                "arm": f"strata_v2_{spec.code}",
-                "model_id": f"strata_v2_{spec.code.lower()}_{resolved_llm}",
-                "model_display": f"STRATA v2 Profile {spec.code} ({resolved_llm})",
+                "arm": arm_id,
+                "model_id": model_id,
+                "model_display": model_display,
                 "family": "STRATA-v2",
                 "params_b": params_b,
                 "active_params_b": params_b,
@@ -363,20 +378,19 @@ def _run_gguf_baseline_arm(
     from hardware import HardwareProfiler
     from inference import ModelManager, select_optimal_llm
 
-    context_mode = {
-        "pure_gguf": "pure",
-        "skill_md_gguf": "skill_md",
-        "skill_md_haystack_gguf": "skill_md_haystack",
+    max_turns = max(1, int(getattr(args, "max_turns", 3) or 3))
+    arm_cfg = {
+        "pure_gguf": ("pure", False, "Pure", "pure"),
+        "skill_md_gguf": ("skill_md", False, "SKILL.md", "skill_md"),
+        "skill_md_haystack_gguf": ("skill_md_haystack", False, "SKILL.md+Haystack", "skill_md_haystack"),
+        "react_pure_gguf": ("pure", True, f"ReAct-Pure-{max_turns}T", "react_pure"),
+        "react_skill_md_gguf": ("skill_md", True, f"ReAct-SKILL.md-{max_turns}T", "react_skill_md"),
     }[args.arm]
-    mode_tag = {
-        "pure": "Pure",
-        "skill_md": "SKILL.md",
-        "skill_md_haystack": "SKILL.md+Haystack",
-    }[context_mode]
+    context_mode, is_react, mode_tag, arm_tag = arm_cfg
 
     if args.n_ctx is not None:
         settings.llm_context_length = int(args.n_ctx)
-    elif context_mode in ("skill_md", "skill_md_haystack") and settings.llm_context_length < 8192:
+    elif (context_mode in ("skill_md", "skill_md_haystack") or is_react) and settings.llm_context_length < 8192:
         settings.llm_context_length = 8192
 
     mm = ModelManager.get_instance()
@@ -405,20 +419,42 @@ def _run_gguf_baseline_arm(
             cpu0 = read_cpu_times()
             t0 = time.perf_counter()
 
+            conv_messages = [dict(m) for m in messages]
+            turns_limit = max_turns if is_react else 1
+            turns_used = 0
+            raw_reply = ""
+            code = ""
+            ev: Dict[str, Any] = {
+                "status": "LLM_ERROR",
+                "passed": False,
+                "acceptable": False,
+                "detail": "Not executed",
+            }
             try:
-                chat_kw: Dict[str, Any] = {
-                    "messages": messages,
-                    "max_tokens": int(args.max_tokens),
-                    "temperature": 0.0,
-                    "top_p": 0.95,
-                }
-                if args.seed is not None:
-                    chat_kw["seed"] = int(args.seed)
-                resp = mm.llm.create_chat_completion(**chat_kw)
-                msg = (resp.get("choices") or [{}])[0].get("message") or {}
-                raw_reply = str(msg.get("content") or "").strip()
-                code = extract_code_clean(raw_reply)
-                ev = evaluate_task_response(raw_reply, code, task, timeout=float(args.timeout))
+                for turn in range(1, turns_limit + 1):
+                    turns_used = turn
+                    chat_kw: Dict[str, Any] = {
+                        "messages": conv_messages,
+                        "max_tokens": int(args.max_tokens),
+                        "temperature": float(args.temperature),
+                        "top_p": 0.95,
+                    }
+                    if args.seed is not None:
+                        chat_kw["seed"] = int(args.seed)
+                    resp = mm.llm.create_chat_completion(**chat_kw)
+                    msg = (resp.get("choices") or [{}])[0].get("message") or {}
+                    raw_reply = str(msg.get("content") or "").strip()
+                    code = extract_code_clean(raw_reply)
+                    ev = evaluate_task_response(raw_reply, code, task, timeout=float(args.timeout))
+                    if not is_react or turn >= turns_limit:
+                        break
+                    fb = build_react_feedback(code, ev, task)
+                    if fb is None:
+                        break
+                    clean_prev = strip_reasoning_traces(raw_reply)
+                    assistant_turn = clean_prev or (f"```python\n{code}\n```" if code else "(empty)")
+                    conv_messages.append({"role": "assistant", "content": assistant_turn})
+                    conv_messages.append({"role": "user", "content": fb})
             except Exception as exc:
                 raw_reply = ""
                 code = ""
@@ -433,8 +469,8 @@ def _run_gguf_baseline_arm(
             cpu1 = read_cpu_times()
             records.append(
                 {
-                    "arm": context_mode,
-                    "model_id": f"{resolved_llm}_{context_mode}",
+                    "arm": arm_tag,
+                    "model_id": f"{resolved_llm}_{arm_tag}",
                     "model_display": display_name,
                     "family": "Local-GGUF",
                     "params_b": params_b,
@@ -448,6 +484,8 @@ def _run_gguf_baseline_arm(
                     "context_meta": ctx_meta,
                     "expected": task.get("expected", "synthesize"),
                     "seed": args.seed,
+                    "react_turns": turns_used,
+                    "max_turns": turns_limit,
                     "prompt": task["prompt"],
                     "status": ev["status"],
                     "passed": bool(ev["passed"]),
@@ -469,19 +507,20 @@ def _run_gguf_baseline_arm(
             )
             print(
                 f"[{mode_tag}:{resolved_llm}] {task['id']:<30} -> {ev['status']:<18} "
-                f"| acc={str(ev['acceptable']):<5} | {wall_ms:7.1f} ms | tok={hook.prompt_tokens}+{hook.completion_tokens}"
+                f"| acc={str(ev['acceptable']):<5} | t={turns_used} | {wall_ms:7.1f} ms | tok={hook.prompt_tokens}+{hook.completion_tokens}"
             )
     finally:
         mm.cleanup(release_reranker=True)
 
     safe_llm = resolved_llm.replace("/", "_")
-    out_path = out_dir / f"results_{args.arm}_{safe_llm}.json"
+    seed_tag = f"_s{args.seed}" if args.seed is not None else ""
+    out_path = out_dir / f"results_{args.arm}_{safe_llm}{seed_tag}.json"
     out_path.write_text(
         json.dumps(
             {
                 "schema_version": "strata_bench_v2",
-                "arm": context_mode,
-                "model_id": f"{resolved_llm}_{context_mode}",
+                "arm": arm_tag,
+                "model_id": f"{resolved_llm}_{arm_tag}",
                 "model_display": display_name,
                 "family": "Local-GGUF",
                 "params_b": params_b,
@@ -491,6 +530,8 @@ def _run_gguf_baseline_arm(
                 "init": {
                     "init_ms": init_ms,
                     "n_ctx": settings.llm_context_length,
+                    "max_turns": max_turns if is_react else 1,
+                    "temperature": float(args.temperature),
                     "mem_before": mem_before,
                     "gpu_before": gpu_before,
                     "gpu_after_init": gpu_after_init,
@@ -509,7 +550,14 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="STRATA v2 Standardized Local Benchmark Runner")
     ap.add_argument(
         "--arm",
-        choices=["strata_v2", "pure_gguf", "skill_md_gguf", "skill_md_haystack_gguf"],
+        choices=[
+            "strata_v2",
+            "pure_gguf",
+            "skill_md_gguf",
+            "skill_md_haystack_gguf",
+            "react_pure_gguf",
+            "react_skill_md_gguf",
+        ],
         default="strata_v2",
         help="Synthesis / baseline arm to benchmark",
     )
@@ -523,8 +571,10 @@ def main() -> None:
     ap.add_argument("--full-haystack", action="store_true", help="Include every cell across all loaded trees without truncation")
     ap.add_argument("--n-ctx", type=int, default=None, help="Override GGUF context length")
     ap.add_argument("--max-tokens", type=int, default=2048, help="Max completion tokens for GGUF baseline arms")
+    ap.add_argument("--max-turns", type=int, default=3, help="Max zero-oracle repair turns for react_*_gguf arms")
+    ap.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature for GGUF baseline arms")
     ap.add_argument("--timeout", type=float, default=45.0, help="Sandbox timeout seconds")
-    ap.add_argument("--seed", type=int, default=None, help="Optional RNG seed recorded for multi-seed reproducibility")
+    ap.add_argument("--seed", type=int, default=None, help="Optional RNG seed forwarded to GGUF completions & recorded")
     ap.add_argument("--out-dir", default="test_logs/local_bench")
     args = ap.parse_args()
 

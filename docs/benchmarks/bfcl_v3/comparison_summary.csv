@@ -1,0 +1,7 @@
+model,params_b,seeds,tasks,trials,passed,acceptable,strict_pct,strict_ci_lo,strict_ci_hi,acc_pct,seed_std_pct,acc_ci_lo,acc_ci_hi,mean_wall_ms,total_tokens,peak_hwm_mb,peak_vram_mb
+STRATA v2 Profile C (qwen3.5-0.8b-instruct),0.8,1,120,120,2,42,1.7,0.5,5.9,35.0,0.0,27.1,43.9,2741.0,152846,2397.0,1785.0
+STRATA v2 Profile O [No-RR] (qwen3.5-0.8b-instruct),0.8,1,120,120,16,18,13.3,8.4,20.6,15.0,0.0,9.7,22.5,5485.3,219933,4885.7,1791.0
+qwen3.5-0.8b-instruct [ReAct-SKILL.md-3T],0.8,1,120,120,30,39,25.0,18.1,33.4,32.5,0.0,24.8,41.3,1338.5,84874,1198.7,1265.0
+qwen3.5-0.8b-instruct [SKILL.md],0.8,1,120,120,30,39,25.0,18.1,33.4,32.5,0.0,24.8,41.3,1085.3,66061,1198.9,1265.0
+Qwen2.5-Coder-7B-Instruct-GGUF [ReAct-SKILL.md-3T],7.6,1,120,120,76,104,63.3,54.4,71.4,86.7,0.0,79.4,91.6,520.9,40371,5118.7,4911.0
+Qwen2.5-Coder-7B-Instruct-GGUF [SKILL.md],7.6,1,120,120,76,104,63.3,54.4,71.4,86.7,0.0,79.4,91.6,523.7,40371,5117.0,4911.0

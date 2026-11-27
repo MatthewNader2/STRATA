@@ -20,6 +20,7 @@ try:
         derive_value_class,
         get_attr,
         is_egress_asset_port,
+        is_value_compatible_with_primitive_carrier,
     )
     from .type_system import RefinementSet
     from .typed_ir import IRNode, TypedIR
@@ -32,6 +33,7 @@ except (ImportError, ValueError):
         derive_value_class,
         get_attr,
         is_egress_asset_port,
+        is_value_compatible_with_primitive_carrier,
     )
     from type_system import RefinementSet
     from typed_ir import IRNode, TypedIR
@@ -469,6 +471,15 @@ def bind_and_emit(
                     continue
 
                 param_val = coerce_literal_for_port(param_val, p_obj)
+                if param_val is not None and not is_value_compatible_with_primitive_carrier(param_val, p_obj):
+                    return BindEmitResult(
+                        ok=False,
+                        refusal_kind="TYPE_MISMATCH",
+                        error=(
+                            f"Value {param_val!r} is incompatible with port '{cid}.{p_str}' "
+                            f"carrier '{get_attr(p_obj, 'carrier', 'any')}'"
+                        ),
+                    )
 
                 if vc == "enum":
                     enum_vals = get_attr(p_obj, "enum_values", None) or ()

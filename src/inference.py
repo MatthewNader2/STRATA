@@ -250,7 +250,7 @@ def _llm_supports_kwarg(llm: Any, method_name: str, kwarg_name: str) -> bool:
     if not callable(fn):
         return False
     try:
-        sig = inspect.signature(fn)
+        sig = inspect.signature(fn, follow_wrapped=True)
     except (TypeError, ValueError):
         return False
     if kwarg_name in sig.parameters:
@@ -1100,6 +1100,8 @@ class ModelManager:
         }
         if settings.llm_stop_tokens:
             kwargs["stop"] = list(settings.llm_stop_tokens)
+        if settings.llm_seed is not None:
+            kwargs["seed"] = int(settings.llm_seed)
         return _generate_llama_with_optional_schema(self.llm, self._llm_lock, messages, kwargs, schema)
 
     def score_choices(self, prompt: str, candidates: List[str], context_desc: str = "") -> Dict[str, float]:
@@ -1133,6 +1135,8 @@ class ModelManager:
             "logprobs": True,
             "top_logprobs": max(20, len(capped) * 2),
         }
+        if settings.llm_seed is not None:
+            call_kwargs["seed"] = int(settings.llm_seed)
         try:
             resp = _call_llama_chat_no_think(self.llm, self._llm_lock, call_kwargs)
             token_lps = _extract_first_token_top_logprobs(resp)

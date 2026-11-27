@@ -8,7 +8,7 @@ This document provides exact instructions for reproducing STRATA v2's static neu
 
 | Tier | Capabilities Tested | Hardware Requirements | Neural Models Required |
 | :--- | :--- | :--- | :--- |
-| **Core / Profile 0** | Static gates, tree linter/auditor, SQLite v4 compilation, 36 pytest tests, Profile 0 synthesis & sandbox execution | Any Linux/macOS Python 3.10+ CPU (`>= 4 GB` RAM) | **None** |
+| **Core / Profile 0** | Static gates, tree linter/auditor, SQLite v4 compilation, 41 pytest tests, Profile 0 synthesis & sandbox execution | Any Linux/macOS Python 3.10+ CPU (`>= 4 GB` RAM) | **None** |
 | **Local SLM (Profiles A–O)** | 7-profile `test.py --early-stop` (`178` assertions) & `benchmarks/run_local.py --arm strata_v2` | Linux x86_64 with NVIDIA GPU (`>= 4 GB` VRAM) or modern CPU (`>= 8 GB` RAM) | Nano embedder + `0.8B` GGUF SLM (`scripts/download_model.py --tier default`) |
 | **Colab T4 / AI Studio** | Frontier 20B–35B comparative baselines (`Pure`, `SKILL.md`, `SKILL.md+Haystack`) | Google Colab T4 (`16 GB` VRAM) or Google AI Studio API | Auto-downloaded in `benchmarks/colab_eval.py` |
 
@@ -72,26 +72,44 @@ This evaluates **178** theoretical expectations (`73` Passable + `105` Expected 
 
 ---
 
-## 4. Controlled Cross-Model Comparative Evaluation (`v2_expanded` / `v2_full`)
+## 4. Controlled Cross-Model Comparative Evaluation (`v2_expanded` / `v2_full` / `BFCL v3`)
 
-### Local Arms (with Optional Multi-Seed `--seed`)
+### Local Arms (Including Reranker Ablations, ReAct-3T & Multi-Seed `--seed`)
 
 ```bash
-python3 benchmarks/run_local.py --arm strata_v2 --profile O --suite v2_expanded --seed 1 --out-dir test_logs/bench_s1
-python3 benchmarks/run_local.py --arm skill_md_gguf --suite v2_expanded --seed 1 --out-dir test_logs/bench_s1
-python3 benchmarks/run_local.py --arm pure_gguf --suite v2_expanded --seed 1 --out-dir test_logs/bench_s1
+# STRATA v2 Profiles & Reranker Ablations
+python3 benchmarks/run_local.py --arm strata_v2 --profile C --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm strata_v2 --profile D --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm strata_v2 --profile E --no-reranker --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm strata_v2 --profile O --no-reranker --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm strata_v2 --profile O --reranker --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+
+# Matched Pure, SKILL.md, Haystack, and Zero-Oracle 3-Turn ReAct Baselines
+python3 benchmarks/run_local.py --arm pure_gguf --suite v2_expanded --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm skill_md_gguf --suite v2_expanded --n-ctx 8192 --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm skill_md_haystack_gguf --suite v2_expanded --n-ctx 8192 --seed 42 --out-dir test_logs/wave4_v2_expanded
+python3 benchmarks/run_local.py --arm react_skill_md_gguf --suite v2_expanded --n-ctx 8192 --max-turns 3 --seed 42 --out-dir test_logs/wave4_v2_expanded
+```
+
+### External Public Benchmark: BFCL v3 (`N = 120`: 40 Simple, 40 Multiple, 40 Irrelevance)
+
+```bash
+python3 benchmarks/external_bfcl.py --arm strata_v2 --profile C --llm qwen3.5-0.8b-instruct --per-split 40 --seed 42 --out-dir test_logs/wave4_bfcl_v3
+python3 benchmarks/external_bfcl.py --arm strata_v2 --profile O --no-reranker --llm qwen3.5-0.8b-instruct --per-split 40 --seed 42 --out-dir test_logs/wave4_bfcl_v3
+python3 benchmarks/external_bfcl.py --arm skill_md_gguf --llm qwen3.5-0.8b-instruct --per-split 40 --seed 42 --out-dir test_logs/wave4_bfcl_v3
+python3 benchmarks/external_bfcl.py --arm react_skill_md_gguf --llm qwen3.5-0.8b-instruct --per-split 40 --max-turns 3 --seed 42 --out-dir test_logs/wave4_bfcl_v3
 ```
 
 ### Colab T4 & AI Studio Arms
 
-- **Colab T4:** Open [../benchmarks/STRATA_Colab_Benchmark.ipynb](../benchmarks/STRATA_Colab_Benchmark.ipynb) or invoke `benchmarks/colab_eval.py`.
+- **Colab T4:** Open [../benchmarks/STRATA_Colab_Benchmark.ipynb](../benchmarks/STRATA_Colab_Benchmark.ipynb) or invoke `benchmarks/colab_eval.py` (with optional `--react-turns 3`).
 - **AI Studio:** Follow [../benchmarks/AI_STUDIO_GEMMA4_GUIDE.md](../benchmarks/AI_STUDIO_GEMMA4_GUIDE.md) and ingest outputs with `benchmarks/ingest_aistudio.py`.
 
 ### Aggregation, Multi-Seed Tables & 95% Wilson Confidence Intervals
 
 ```bash
-python3 benchmarks/visualize_results.py test_logs/bench_s1 test_logs/bench_s2 test_logs/bench_s3 \
-  --out-dir docs/benchmarks
+python3 benchmarks/visualize_results.py test_logs/wave4_v2_expanded --out-dir docs/benchmarks --title-prefix "v2_expanded (N=19) — "
+python3 benchmarks/visualize_results.py test_logs/wave4_bfcl_v3 --out-dir docs/benchmarks/bfcl_v3 --title-prefix "BFCL v3 (N=120) — "
 ```
 
-`benchmarks/visualize_results.py` aggregates multi-seed records `(task_id, seed)` per model, computes 95% Wilson score confidence intervals (`strict_ci_lo/hi`, `acc_ci_lo/hi`) in Markdown/CSV tables, and plots error bars on comparative figures.
+`benchmarks/visualize_results.py` aggregates multi-seed records `(task_id, seed)` per model, computes 95% Wilson score confidence intervals (`strict_ci_lo/hi`, `acc_ci_lo/hi`) over independent unique tasks alongside per-seed `seed_std_pct` in Markdown/CSV tables, and plots error bars on comparative figures.

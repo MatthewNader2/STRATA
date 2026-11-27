@@ -69,12 +69,16 @@
 
 ---
 
-## Wave 4 — Empirical Evaluation & Final README Benchmark Update *(Up Next — Pending User Colab & AI Studio Runs)*
+## Wave 4 — Empirical Evaluation & Benchmark Update *(Completed & Verified)*
 
-- [ ] **Run controlled 3-arm cross-model sweeps:**
-  - User runs Google Colab T4 (`pure`, `skill_md`, `skill_md_haystack`) & Google AI Studio Gemma 4 31B using the upgraded `benchmarks/` suite (`v2_expanded` / `v2_full`).
-  - Run local `benchmarks/run_local.py --arm strata_v2` (across Profiles `C/D/E/O`, including reranker-on ablation `B/E/O` vs reranker-off) and local GGUF arms.
-- [ ] **Evaluate external public benchmark (recommended for ICML):**
-  - Add a standardized subset from DS-1000 / BigCodeBench / Gorilla APIBench (`N >= 100`) plus ReAct / execution-feedback baselines and Wilson 95% CIs across multi-seed runs.
-- [ ] **Update `docs/benchmarks/*` & `README.md`:**
-  - Generate final tables/figures with `benchmarks/visualize_results.py`, match denominators cleanly across all models/arms, and update `README.md` benchmark tables & plots.
+- [x] **Run controlled local `v2_expanded` (`N = 19`) cross-model & ablation sweeps (`14` arms, `--seed 42`):**
+  - Ran local `benchmarks/run_local.py --arm strata_v2` across Profiles `C` (`18/19`), `D` (`19/19`), `E [No-RR/RR]` (`19/19`), and `O [No-RR/RR]` (`19/19`), plus `LlamaTelemetry` wrapper `@functools.wraps` fix, typed slot-fill JSON Schema fix ([profile_adapters.py](../src/profile_adapters.py)), and primitive carrier `TYPE_MISMATCH` guard ([port_binder.py](../src/port_binder.py), [schema.py](../src/schema.py)) verified cleanly against all `178/178` cases in `test.py --early-stop` and `41/41` pytest tests.
+  - Ran matched `qwen3.5-0.8b-instruct` (`Pure` `5/19`, `SKILL.md` `8/19`, `SKILL.md+Haystack` `9/19`, `ReAct-SKILL.md-3T` `8/19`) and `Qwen2.5-Coder-7B-Instruct-GGUF` (`Pure` `11/19`, `SKILL.md` `13/19`, `SKILL.md+Haystack` `11/19`, `ReAct-SKILL.md-3T` `13/19`) baselines.
+- [x] **Run remote Google Colab T4 & API frontier sweeps (`94` clean `N = 19` cells across 8 models):**
+  - Executed all `72/72` Colab T4 cells via [benchmarks/colab_eval.py](../benchmarks/colab_eval.py) across `GPT-OSS-20B` (`16` cells), `Qwen3.5-27B Dense` (`16` cells), `Qwen3.8-27B` (`16` cells), `Qwen3-Coder-30B-A3B` (`8` cells), and `Qwen3.5-35B-A3B` (`16` cells) over `T ∈ {0, 1}` × thinking/effort toggle × `{Max4096, NoLimit}` × `{Pure, SKILL.md}` (`--skip-chat-parsing` Harmony fix in `colab_eval.py` and `<|constrain|>` parser fix in `evaluators.py`).
+  - Added multi-gateway free-tier support in [benchmarks/openrouter_eval.py](../benchmarks/openrouter_eval.py) and [benchmarks/gemini_api_eval.py](../benchmarks/gemini_api_eval.py): completed all `16/16` clean SandBase cells for `DeepSeek-V4.1-Flash 552B-A16B` (`19/19 = 100.0%` at `SKILL.md | T=1 | Think | Max4096` vs `11–13/19` on `Pure`/`NoThink`), `2` clean OpenRouter `Nemotron 3.5 Super VL 120B-A12B` cells (`SKILL.md` `18/19`, `Pure` `12/19`, plus `16/17` partial `NoThink` halted by quota/401), and `4` clean Gemini API `Gemma 4 31B IT` `Pure` cells (`12/19–13/19`, `SKILL.md` halted at `4/19` by upstream HTTP 503s); documented account-level blocks on TeamoRouter (`$0` balance) and OrcaRouter (`err_free_access_denied` / exhausted `orcarouter/free`).
+- [x] **Evaluate external public benchmark (`BFCL v3`, `N = 120`) + ReAct baseline + 95% Wilson CIs:**
+  - Implemented [benchmarks/external_bfcl.py](../benchmarks/external_bfcl.py) (40 `simple`, 40 `multiple`, 40 `irrelevance` from `gorilla-llm/Berkeley-Function-Calling-Leaderboard`), zero-oracle `build_react_feedback` in [evaluators.py](../benchmarks/evaluators.py), and unique-task Wilson CI aggregation in [visualize_results.py](../benchmarks/visualize_results.py).
+  - Ran 6 local arms on BFCL v3 `N = 120`: `STRATA v2 Profile C (0.8B)` `42/120` (`40/40 = 100.0%` irrelevance refusal vs `9/40 = 22.5%` on matched `0.8B` `SKILL.md`/`ReAct-3T`), `Profile O [No-RR]` `18/120`, and `Qwen2.5-Coder-7B` `104/120` (`86.7%`), documenting honest multi-step vs. 1-step boundary tradeoffs.
+- [x] **Update `docs/benchmarks/*` & `README.md` with local + frontier + BFCL v3 results:**
+  - Archived historical v1 assets into [docs/benchmarks/v1_archive/](benchmarks/v1_archive/), generated matched-denominator `v2_expanded` (`docs/benchmarks/`), `frontier_ablations` (`docs/benchmarks/frontier_ablations/`), and `BFCL v3` (`docs/benchmarks/bfcl_v3/`) CSV/MD tables and collision-free figures via [benchmarks/visualize_results.py](../benchmarks/visualize_results.py), and updated [README.md](../README.md) & [REPRODUCIBILITY.md](REPRODUCIBILITY.md).

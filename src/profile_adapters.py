@@ -7,17 +7,26 @@ Maps ProfileSpec orthogonal capability flags (`uses_embedder`, `uses_reranker`,
 from __future__ import annotations
 
 import inspect
-import json
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 try:
     from .config import settings
-    from .schema import derive_value_class, get_attr
+    from .schema import (
+        coerce_literal_for_port,
+        derive_value_class,
+        get_attr,
+        is_value_compatible_with_primitive_carrier,
+    )
     from .strata_pipeline import StrataPipeline
     from .utils import extract_json_object
 except (ImportError, ValueError):
     from config import settings
-    from schema import derive_value_class, get_attr
+    from schema import (
+        coerce_literal_for_port,
+        derive_value_class,
+        get_attr,
+        is_value_compatible_with_primitive_carrier,
+    )
     from strata_pipeline import StrataPipeline
     from utils import extract_json_object
 
@@ -104,6 +113,26 @@ def make_choice_scorer_fn(model_manager: Any) -> Optional[Callable[[str, List[st
     return _score_choices
 
 
+def _carrier_to_json_schema(carrier: Any, enum_vals: Any = None) -> Dict[str, Any]:
+    """Map an abstract STRATA port carrier and optional enum choices to JSON Schema constraints."""
+    if enum_vals:
+        return {"enum": list(enum_vals)}
+    base = str(carrier or "").split("[", 1)[0].strip().lower()
+    if base in ("int", "integer"):
+        return {"type": "integer"}
+    if base in ("float", "number", "scalar"):
+        return {"type": "number"}
+    if base in ("bool", "boolean"):
+        return {"type": "boolean"}
+    if base in ("str", "string"):
+        return {"type": "string"}
+    if base in ("list", "tuple", "sequence", "array"):
+        return {"type": "array", "items": {"type": ["string", "number", "integer", "boolean"]}}
+    if base in ("dict", "mapping"):
+        return {"type": "object"}
+    return {}
+
+
 def make_slot_fill_fn(model_manager: Any) -> Optional[Callable[[Any, List[str], Optional[Any]], Dict[str, Any]]]:
     """Build a schema-constrained slot filler strictly restricted to non-asset configuration ports."""
     if model_manager is None or not getattr(model_manager, "has_llm", lambda: False)():
@@ -115,40 +144,37 @@ def make_slot_fill_fn(model_manager: Any) -> Optional[Callable[[Any, List[str], 
             return {}
 
         eligible_props: Dict[str, Dict[str, Any]] = {}
-        eligible_desc: Dict[str, Any] = {}
+        prompt_lines: List[str] = []
         for port_name in (missing_ports or ()):
             p_key = str(port_name)
             p_obj = raw_ins.get(p_key)
             if p_obj is None or derive_value_class(p_obj) == "external_asset":
                 continue
-            prop_schema: Dict[str, Any] = {}
+            carrier = get_attr(p_obj, "carrier", None) or get_attr(p_obj, "type_name", "any")
             enum_vals = get_attr(p_obj, "enum_values", None)
+            eligible_props[p_key] = _carrier_to_json_schema(carrier, enum_vals)
+            desc = str(get_attr(p_obj, "description", "") or "").strip()
+            line = f"- {p_key} ({carrier}): {desc}" if desc else f"- {p_key} ({carrier})"
             if enum_vals:
-                prop_schema["enum"] = list(enum_vals)
-            eligible_props[p_key] = prop_schema
-            eligible_desc[p_key] = {
-                "type": get_attr(p_obj, "carrier", None) or get_attr(p_obj, "type_name", "any"),
-                "description": get_attr(p_obj, "description", "") or "",
-                "enum_values": list(enum_vals) if enum_vals else None,
-            }
+                line += f" [allowed: {list(enum_vals)}]"
+            prompt_lines.append(line)
 
         if not eligible_props:
             return {}
 
         slot_schema: Dict[str, Any] = {
             "type": "object",
+            "additionalProperties": False,
             "properties": eligible_props,
             "required": sorted(eligible_props.keys()),
         }
         cid = str(get_attr(cell, "cell_id", "") or "").strip()
         intent_str = str(getattr(ir_node, "intent", "") or "")
-        slot_prompt = json.dumps(
-            {
-                "operation": cid,
-                "intent": intent_str,
-                "missing_ports": eligible_desc,
-            },
-            ensure_ascii=False,
+        slot_prompt = (
+            f"Operation: {cid}\n"
+            f"Intent: {intent_str}\n"
+            "Fill concrete JSON literal values for missing parameters (do NOT echo type metadata objects):\n"
+            + "\n".join(prompt_lines)
         )
         raw_text = model_manager.generate_text(
             slot_prompt,
@@ -159,7 +185,20 @@ def make_slot_fill_fn(model_manager: Any) -> Optional[Callable[[Any, List[str], 
         parsed = extract_json_object(str(raw_text or ""))
         if not isinstance(parsed, dict):
             return {}
-        return {k: parsed[k] for k in eligible_props if k in parsed and parsed[k] is not None}
+        parsed_clean: Dict[str, Any] = {}
+        for k in eligible_props:
+            if k not in parsed or parsed[k] is None:
+                continue
+            val = parsed[k]
+            p_obj = raw_ins[k]
+            coerced = coerce_literal_for_port(val, p_obj)
+            c_base = str(get_attr(p_obj, "carrier", None) or "").split("[", 1)[0].strip().lower()
+            if isinstance(coerced, dict) and c_base not in ("dict", "mapping", "object", "any", ""):
+                continue
+            if not is_value_compatible_with_primitive_carrier(coerced, p_obj):
+                continue
+            parsed_clean[k] = val
+        return parsed_clean
 
     return _fill_slots
 

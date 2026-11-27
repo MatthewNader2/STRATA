@@ -162,3 +162,98 @@ def test_non_python_language_spec_lowering_and_restoration() -> None:
     )
     bound = bind_and_emit(plan, ir_lit)
     assert bound.ok and "y = 42" in bound.code
+
+
+def test_port_binder_carrier_type_guard_and_slot_fill_schema_enforcement() -> None:
+    from bridge_graph import CanonicalPortType
+    from profile_adapters import make_slot_fill_fn
+    from schema import CellSchema, PortSchema
+    from typed_ir import IRNode, IRParamValue, TypedIR
+    from typed_planner import CandidatePlan, PlannedStep
+
+    cell = CellSchema(
+        cell_id="COMPUTE_PAIR",
+        domain_name="demo",
+        code_template="{out} = compute_pair(n={n}, flag={flag})",
+        inputs={
+            "n": PortSchema(carrier="int", typestate="any", value_class="literal", description="Integer count"),
+            "flag": PortSchema(carrier="bool", typestate="any", value_class="literal", required=False, default_value=True),
+        },
+        outputs={"out": PortSchema(carrier="int", typestate="any", value_class="data")},
+    )
+    plan = CandidatePlan(
+        steps=(
+            PlannedStep(
+                ir_node_id="n1",
+                cell=cell,
+                cell_id="COMPUTE_PAIR",
+                is_live_bridge=False,
+                input_wiring={},
+                output_var="res",
+                output_sig=CanonicalPortType(carrier="int"),
+                step_cost=0.01,
+                output_vars={"out": "res"},
+            ),
+        ),
+        total_cost=0.01,
+        posterior_prob=1.0,
+        open_resources=(),
+    )
+
+    bad_dict_ir = TypedIR(
+        source_mode="formal_syntax",
+        raw_prompt="res = compute_pair",
+        nodes=[
+            IRNode(
+                id="n1",
+                kind="call",
+                intent="COMPUTE_PAIR",
+                outputs=["res"],
+                params={"n": IRParamValue(value={"type": "int", "description": "Integer count"}, provenance="estimated", value_class="literal")},
+            )
+        ],
+    )
+    bound_dict = bind_and_emit(plan, bad_dict_ir)
+    assert not bound_dict.ok and bound_dict.refusal_kind == "TYPE_MISMATCH"
+
+    bad_str_ir = TypedIR(
+        source_mode="formal_syntax",
+        raw_prompt="res = compute_pair",
+        nodes=[
+            IRNode(
+                id="n1",
+                kind="call",
+                intent="COMPUTE_PAIR",
+                outputs=["res"],
+                params={"n": IRParamValue(value="not_an_int", provenance="prompt", value_class="literal")},
+            )
+        ],
+    )
+    bound_str = bind_and_emit(plan, bad_str_ir)
+    assert not bound_str.ok and bound_str.refusal_kind == "TYPE_MISMATCH"
+
+    seen_schemas = []
+    seen_prompts = []
+
+    class _MockMM:
+        def __init__(self, reply_obj):
+            self._reply_obj = reply_obj
+
+        def has_llm(self) -> bool:
+            return True
+
+        def generate_text(self, prompt, *, max_tokens=256, schema=None, system_prompt=None):
+            seen_prompts.append(prompt)
+            seen_schemas.append(schema)
+            return json.dumps(self._reply_obj)
+
+    filler_echo = make_slot_fill_fn(_MockMM({"n": {"type": "int", "description": "Integer count"}}))
+    assert filler_echo is not None
+    assert filler_echo(cell, ["n"], bad_dict_ir.nodes[0]) == {}
+    assert seen_schemas[0]["additionalProperties"] is False
+    assert seen_schemas[0]["properties"]["n"] == {"type": "integer"}
+    assert "do NOT echo type metadata objects" in seen_prompts[0]
+
+    filler_ok = make_slot_fill_fn(_MockMM({"n": 7}))
+    assert filler_ok is not None
+    assert filler_ok(cell, ["n"], bad_dict_ir.nodes[0]) == {"n": 7}

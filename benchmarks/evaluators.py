@@ -240,9 +240,11 @@ def strip_reasoning_traces(raw_text: str) -> str:
     if close_idx != -1:
         cleaned = cleaned[close_idx + len("</think>") :]
 
-    final_marker = "<|channel|>final<|message|>"
-    if final_marker in cleaned:
-        cleaned = cleaned.split(final_marker)[-1]
+    final_chan = "<|channel|>final"
+    if final_chan in cleaned:
+        tail = cleaned.split(final_chan)[-1]
+        msg_idx = tail.find("<|message|>")
+        cleaned = tail[msg_idx + len("<|message|>") :] if msg_idx != -1 else tail
     else:
         open_markers = ("<|channel|>analysis<|message|>", "<|channel|>commentary<|message|>")
         stop_markers = ("<|channel|>", "<|end|>", "<|return|>")
@@ -947,6 +949,62 @@ def evaluate_task_response(raw_text: str, code: str, task: Dict[str, Any], timeo
         "missing_literals": sb["missing_literals"],
         "stderr": sb.get("stderr", ""),
     }
+
+
+def build_react_feedback(code: str, ev: Dict[str, Any], task: Dict[str, Any]) -> Optional[str]:
+    """
+    Build strict zero-oracle execution/compiler feedback for iterative ReAct baselines.
+
+    Never reveals hidden test assertions (expected literals, required calls, semantic artifact
+    validators, or refusal expectations). Only surfaces runtime sandbox crashes or syntax/undefined-name
+    static compiler errors on synthesis tasks.
+    """
+    if str(task.get("expected") or "synthesize") != "synthesize":
+        return None
+    kind = str(task.get("kind") or "")
+    if kind == "refusal":
+        return None
+
+    if kind == "sandbox":
+        status = str(ev.get("status") or "")
+        if status not in ("NO_CODE", "SANDBOX_FAILED", "SECURITY_BLOCKED"):
+            return None
+        if status == "NO_CODE" or not str(code or "").strip():
+            return (
+                "No executable Python code block was found in your response. "
+                "Emit ONLY a single valid ```python ... ``` code block solving the request."
+            )
+        err_excerpt = str(ev.get("stderr") or ev.get("detail") or "Execution failed").strip()[-1200:]
+        return (
+            "Execution failed in the sandbox:\n"
+            f"{err_excerpt}\n"
+            "Fix the error and reply with ONLY a single corrected ```python ... ``` code block."
+        )
+
+    if kind == "sdk":
+        if not str(code or "").strip():
+            return (
+                "No executable Python code block was found in your response. "
+                "Emit ONLY a single valid ```python ... ``` code block solving the request."
+            )
+        audit = ev.get("audit") or {}
+        if not audit.get("ast_ok", False):
+            issues = [str(p) for p in (audit.get("pyflakes_issues") or ()) if "SyntaxError" in str(p)]
+            err_msg = issues[0] if issues else "Python SyntaxError in generated code."
+            return (
+                f"Static compilation failed: {err_msg}\n"
+                "Fix the syntax error and reply with ONLY a single corrected ```python ... ``` code block."
+            )
+        undef = [str(p) for p in (audit.get("pyflakes_issues") or ()) if "undefined name" in str(p)]
+        if undef:
+            err_msg = "; ".join(undef[:5])
+            return (
+                f"Static compiler check reported undefined identifier(s): {err_msg}\n"
+                "Fix the undefined name(s) and reply with ONLY a single corrected ```python ... ``` code block."
+            )
+        return None
+
+    return None
 
 
 def load_sdk_docs(sdk_name: str) -> str:
