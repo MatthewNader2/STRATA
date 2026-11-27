@@ -2,564 +2,1403 @@
   "domain": "aetheris",
   "version": "1.0.0",
   "description": "Aetheris photonic phase-array interferometry SDK: optical bench initialization, cavity locking, phase modulator arming, fringe sweep capture, branch-cut residue unwrapping, Zernike wavefront solving, and .ael LUT export.",
-  "supported_formats": [
-    "ael"
+  "is_core": false,
+  "imports": [
+    "python_core"
   ],
   "types": [
-    { "name": "OpticalBench", "parent": "object" },
-    { "name": "LockedCavity", "parent": "object" },
-    { "name": "ModulatorBank", "parent": "object" },
-    { "name": "FringeStack", "parent": "object" },
-    { "name": "PhaseField", "parent": "object" },
-    { "name": "WavefrontModel", "parent": "object" },
-    { "name": "ContrastAudit", "parent": "dict" }
+    {
+      "name": "OpticalBench",
+      "parent": "object"
+    },
+    {
+      "name": "LockedCavity",
+      "parent": "object"
+    },
+    {
+      "name": "ModulatorBank",
+      "parent": "object"
+    },
+    {
+      "name": "FringeStack",
+      "parent": "object"
+    },
+    {
+      "name": "PhaseField",
+      "parent": "object"
+    },
+    {
+      "name": "WavefrontModel",
+      "parent": "object"
+    },
+    {
+      "name": "ContrastAudit",
+      "parent": "dict"
+    },
+    {
+      "name": "LegacyBench",
+      "parent": "object"
+    },
+    {
+      "name": "CoarseEstimate",
+      "parent": "object"
+    },
+    {
+      "name": "BenchDraft",
+      "parent": "object"
+    }
   ],
+  "top_types": [],
   "typestates": {
     "domain": "aetheris",
     "states": [
-      { "name": "rack_id", "parent_state": null, "carrier_type": "str", "description": "Optical bench rack identifier.", "properties": {} },
-      { "name": "wavelength_nm", "parent_state": null, "carrier_type": "float", "description": "Reference laser wavelength in nanometers.", "properties": {} },
-      { "name": "bench_mounted", "parent_state": null, "carrier_type": "OpticalBench", "description": "Mounted active vibration-isolated optical bench.", "properties": {} },
-      { "name": "cavity_mode", "parent_state": null, "carrier_type": "str", "description": "Optical cavity transverse mode label.", "properties": {} },
-      { "name": "power_mw", "parent_state": null, "carrier_type": "float", "description": "Reference laser power in milliwatts.", "properties": {} },
-      { "name": "cavity_locked", "parent_state": null, "carrier_type": "LockedCavity", "description": "Phase-locked reference laser cavity handle.", "properties": {} },
-      { "name": "lane_count", "parent_state": null, "carrier_type": "int", "description": "Active electro-optic modulator channel count.", "properties": {} },
-      { "name": "vpi_volts", "parent_state": null, "carrier_type": "float", "description": "Half-wave voltage Vpi of phase modulator.", "properties": {} },
-      { "name": "modulator_armed", "parent_state": null, "carrier_type": "ModulatorBank", "description": "Armed electro-optic phase modulator bank.", "properties": {} },
-      { "name": "span_pm", "parent_state": null, "carrier_type": "float", "description": "Wavelength sweep span in picometers.", "properties": {} },
-      { "name": "frames", "parent_state": null, "carrier_type": "int", "description": "Interferogram sweep frame count.", "properties": {} },
-      { "name": "fringe_captured", "parent_state": null, "carrier_type": "FringeStack", "description": "Captured raw interferogram fringe stack.", "properties": {} },
-      { "name": "branch_cut", "parent_state": null, "carrier_type": "str", "description": "2D phase-unwrapping branch-cut solver name.", "properties": {} },
-      { "name": "residues_unwrapped", "parent_state": null, "carrier_type": "PhaseField", "description": "Unwrapped continuous optical phase field.", "properties": {} },
-      { "name": "zernike_order", "parent_state": null, "carrier_type": "int", "description": "Maximum Zernike radial polynomial order.", "properties": {} },
-      { "name": "wavefront_solved", "parent_state": null, "carrier_type": "WavefrontModel", "description": "Fitted Zernike wavefront aberration model.", "properties": {} },
-      { "name": "lut_path", "parent_state": null, "carrier_type": "str", "description": "Destination .ael phase LUT path.", "properties": {} },
-      { "name": "lut_exported", "parent_state": null, "carrier_type": "str", "description": "Exported .ael LUT file path.", "properties": {} },
-      { "name": "drift_readout", "parent_state": null, "carrier_type": "float", "description": "Optical bench thermal drift measurement in nm.", "properties": {} },
-      { "name": "contrast_audited", "parent_state": null, "carrier_type": "ContrastAudit", "description": "Michelson visibility and fringe SNR report.", "properties": {} },
-      { "name": "bench_parked", "parent_state": null, "carrier_type": "None", "description": "Safely parked optical bench lifecycle state.", "properties": {} }
+      {
+        "name": "rack_id",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Optical bench rack identifier.",
+        "properties": {}
+      },
+      {
+        "name": "wavelength_nm",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Reference laser wavelength in nanometers.",
+        "properties": {}
+      },
+      {
+        "name": "bench_mounted",
+        "parent_state": null,
+        "carrier_type": "OpticalBench",
+        "description": "Mounted active vibration-isolated optical bench.",
+        "properties": {}
+      },
+      {
+        "name": "cavity_mode",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Optical cavity transverse mode label.",
+        "properties": {}
+      },
+      {
+        "name": "power_mw",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Reference laser power in milliwatts.",
+        "properties": {}
+      },
+      {
+        "name": "cavity_locked",
+        "parent_state": null,
+        "carrier_type": "LockedCavity",
+        "description": "Phase-locked reference laser cavity handle.",
+        "properties": {}
+      },
+      {
+        "name": "lane_count",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "Active electro-optic modulator channel count.",
+        "properties": {}
+      },
+      {
+        "name": "vpi_volts",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Half-wave voltage Vpi of phase modulator.",
+        "properties": {}
+      },
+      {
+        "name": "modulator_armed",
+        "parent_state": null,
+        "carrier_type": "ModulatorBank",
+        "description": "Armed electro-optic phase modulator bank.",
+        "properties": {}
+      },
+      {
+        "name": "span_pm",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Wavelength sweep span in picometers.",
+        "properties": {}
+      },
+      {
+        "name": "frames",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "Interferogram sweep frame count.",
+        "properties": {}
+      },
+      {
+        "name": "fringe_captured",
+        "parent_state": null,
+        "carrier_type": "FringeStack",
+        "description": "Captured raw interferogram fringe stack.",
+        "properties": {}
+      },
+      {
+        "name": "branch_cut",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "2D phase-unwrapping branch-cut solver name.",
+        "properties": {}
+      },
+      {
+        "name": "residues_unwrapped",
+        "parent_state": null,
+        "carrier_type": "PhaseField",
+        "description": "Unwrapped continuous optical phase field.",
+        "properties": {}
+      },
+      {
+        "name": "zernike_order",
+        "parent_state": null,
+        "carrier_type": "int",
+        "description": "Maximum Zernike radial polynomial order.",
+        "properties": {}
+      },
+      {
+        "name": "wavefront_solved",
+        "parent_state": null,
+        "carrier_type": "WavefrontModel",
+        "description": "Fitted Zernike wavefront aberration model.",
+        "properties": {}
+      },
+      {
+        "name": "lut_path",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Destination .ael phase LUT path.",
+        "properties": {}
+      },
+      {
+        "name": "lut_exported",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Exported .ael LUT file path.",
+        "properties": {}
+      },
+      {
+        "name": "drift_readout",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Optical bench thermal drift measurement in nm.",
+        "properties": {}
+      },
+      {
+        "name": "contrast_audited",
+        "parent_state": null,
+        "carrier_type": "ContrastAudit",
+        "description": "Michelson visibility and fringe SNR report.",
+        "properties": {}
+      },
+      {
+        "name": "bench_parked",
+        "parent_state": null,
+        "carrier_type": "None",
+        "description": "Safely parked optical bench lifecycle state.",
+        "properties": {}
+      },
+      {
+        "name": "shroud_target_k",
+        "parent_state": null,
+        "carrier_type": "float",
+        "description": "Thermal shroud target temperature in Kelvin.",
+        "properties": {}
+      },
+      {
+        "name": "raw_csv_path",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Destination CSV path for raw detector fringe dump.",
+        "properties": {}
+      },
+      {
+        "name": "raw_csv_dumped",
+        "parent_state": null,
+        "carrier_type": "str",
+        "description": "Exported raw detector CSV file path.",
+        "properties": {}
+      },
+      {
+        "name": "legacy_bench_mounted",
+        "parent_state": null,
+        "carrier_type": "LegacyBench",
+        "description": "Deprecated v1.x pneumatic LegacyBench handle.",
+        "properties": {}
+      },
+      {
+        "name": "phase_preview",
+        "parent_state": null,
+        "carrier_type": "CoarseEstimate",
+        "description": "Wrapped preview CoarseEstimate unsuitable for Zernike solving.",
+        "properties": {}
+      },
+      {
+        "name": "laser_coarse_tuned",
+        "parent_state": null,
+        "carrier_type": "BenchDraft",
+        "description": "Open-loop BenchDraft alignment handle unsuitable for modulator arming.",
+        "properties": {}
+      }
     ],
     "transitions": [],
     "initial_state": null,
-    "terminal_states": ["lut_exported", "bench_parked"]
+    "terminal_states": [
+      "lut_exported",
+      "bench_parked",
+      "raw_csv_dumped"
+    ]
   },
   "cells": [
     {
       "cell_id": "AETHERIS_MOUNT_OPTICAL_TABLE",
-      "stage": 1,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "source",
-      "topology_type": "sequential",
       "docstring": "Mounts and levels a vibration-isolated OpticalBench handle at the given rack_id and reference wavelength_nm.",
-      "semantic_tags": ["mount_optical_table", "mount_table", "open_optical_bench", "optical_table", "initialize_bench"],
+      "code_template": "{bench} = aetheris.mount_optical_table(rack_id={rack_id}, wavelength_nm={wavelength_nm})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "rack_id": {
-          "type_name": "str",
-          "state": "rack_id",
-          "abstract_type": "scalar",
+          "carrier": "str",
+          "typestate": "aetheris::rack_id",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "config",
           "description": "Optical bench rack identifier string.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.rack_id",
-          "typestate": "aetheris::rack_id"
+          "port_role": "config"
         },
         "wavelength_nm": {
-          "type_name": "float",
-          "state": "wavelength_nm",
-          "abstract_type": "scalar",
+          "carrier": "float",
+          "typestate": "aetheris::wavelength_nm",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 1550.0,
-          "port_role": "config",
           "description": "Reference laser wavelength in nanometers.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.wavelength_nm",
-          "typestate": "aetheris::wavelength_nm"
+          "port_role": "config"
         }
       },
       "outputs": {
         "bench": {
-          "type_name": "OpticalBench",
-          "state": "bench_mounted",
-          "abstract_type": "handle",
-          "port_role": "data_output",
+          "carrier": "OpticalBench",
+          "typestate": "aetheris::bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "acquire",
+          "required": true,
           "description": "Mounted OpticalBench handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.bench_mounted",
-          "typestate": "aetheris::bench_mounted"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{bench} = aetheris.mount_optical_table(rack_id={rack_id}, wavelength_nm={wavelength_nm})",
-      "dependencies": ["import aetheris"],
       "primary_in": "rack_id",
       "primary_out": "bench",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_LOCK_REFERENCE_LASER",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "transformer",
-      "topology_type": "sequential",
       "docstring": "Locks a reference laser cavity mode onto a mounted OpticalBench and returns a LockedCavity.",
-      "semantic_tags": ["lock_reference_laser", "lock_cavity", "reference_cavity", "cavity_mode", "lock_laser"],
+      "code_template": "{cavity} = aetheris.lock_reference_laser({bench}, cavity_mode={cavity_mode}, power_mw={power_mw})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "bench": {
-          "type_name": "OpticalBench",
-          "state": "bench_mounted",
-          "abstract_type": "handle",
+          "carrier": "OpticalBench",
+          "typestate": "aetheris::bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
           "required": true,
-          "port_role": "data_input",
           "description": "Mounted OpticalBench handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.bench_mounted",
-          "typestate": "aetheris::bench_mounted"
+          "port_role": "data_input"
         },
         "cavity_mode": {
-          "type_name": "str",
-          "state": "cavity_mode",
-          "abstract_type": "scalar",
+          "carrier": "str",
+          "typestate": "aetheris::cavity_mode",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "config",
           "description": "Optical cavity transverse mode label.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.cavity_mode",
-          "typestate": "aetheris::cavity_mode"
+          "port_role": "config"
         },
         "power_mw": {
-          "type_name": "float",
-          "state": "power_mw",
-          "abstract_type": "scalar",
+          "carrier": "float",
+          "typestate": "aetheris::power_mw",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 12.0,
-          "port_role": "config",
           "description": "Reference laser power in milliwatts.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.power_mw",
-          "typestate": "aetheris::power_mw"
+          "port_role": "config"
         }
       },
       "outputs": {
         "cavity": {
-          "type_name": "LockedCavity",
-          "state": "cavity_locked",
-          "abstract_type": "handle",
-          "port_role": "data_output",
+          "carrier": "LockedCavity",
+          "typestate": "aetheris::cavity_locked",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
           "description": "Phase-locked LockedCavity handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.cavity_locked",
-          "typestate": "aetheris::cavity_locked"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{cavity} = aetheris.lock_reference_laser({bench}, cavity_mode={cavity_mode}, power_mw={power_mw})",
-      "dependencies": ["import aetheris"],
       "primary_in": "bench",
       "primary_out": "cavity",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_ARM_PHASE_MODULATOR",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "transformer",
-      "topology_type": "sequential",
       "docstring": "Arms the electro-optic phase modulator bank driven by a LockedCavity and returns a ModulatorBank.",
-      "semantic_tags": ["arm_phase_modulator", "arm_modulator", "phase_modulator", "modulator_bank"],
+      "code_template": "{modulator} = aetheris.arm_phase_modulator({cavity}, lane_count={lane_count}, vpi_volts={vpi_volts})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "cavity": {
-          "type_name": "LockedCavity",
-          "state": "cavity_locked",
-          "abstract_type": "handle",
+          "carrier": "LockedCavity",
+          "typestate": "aetheris::cavity_locked",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
           "required": true,
-          "port_role": "data_input",
           "description": "Phase-locked cavity handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.cavity_locked",
-          "typestate": "aetheris::cavity_locked"
+          "port_role": "data_input"
         },
         "lane_count": {
-          "type_name": "int",
-          "state": "lane_count",
-          "abstract_type": "scalar",
+          "carrier": "int",
+          "typestate": "aetheris::lane_count",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 8,
-          "port_role": "config",
           "description": "Modulator lane count.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.lane_count",
-          "typestate": "aetheris::lane_count"
+          "port_role": "config"
         },
         "vpi_volts": {
-          "type_name": "float",
-          "state": "vpi_volts",
-          "abstract_type": "scalar",
+          "carrier": "float",
+          "typestate": "aetheris::vpi_volts",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 3.2,
-          "port_role": "config",
           "description": "Half-wave Vpi voltage.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.vpi_volts",
-          "typestate": "aetheris::vpi_volts"
+          "port_role": "config"
         }
       },
       "outputs": {
         "modulator": {
-          "type_name": "ModulatorBank",
-          "state": "modulator_armed",
-          "abstract_type": "handle",
-          "port_role": "data_output",
+          "carrier": "ModulatorBank",
+          "typestate": "aetheris::modulator_armed",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
           "description": "Armed ModulatorBank handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.modulator_armed",
-          "typestate": "aetheris::modulator_armed"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{modulator} = aetheris.arm_phase_modulator({cavity}, lane_count={lane_count}, vpi_volts={vpi_volts})",
-      "dependencies": ["import aetheris"],
       "primary_in": "cavity",
       "primary_out": "modulator",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_SWEEP_FRINGE_INTERFEROGRAM",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "transformer",
-      "topology_type": "sequential",
       "docstring": "Sweeps the armed ModulatorBank over span_pm picometers to capture a raw FringeStack interferogram.",
-      "semantic_tags": ["sweep_fringe_interferogram", "capture_fringe_interferogram", "sweep_fringes", "fringe_interferogram"],
+      "code_template": "{fringes} = aetheris.sweep_fringe_interferogram({modulator}, span_pm={span_pm}, frames={frames})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "modulator": {
-          "type_name": "ModulatorBank",
-          "state": "modulator_armed",
-          "abstract_type": "handle",
+          "carrier": "ModulatorBank",
+          "typestate": "aetheris::modulator_armed",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
           "required": true,
-          "port_role": "data_input",
           "description": "Armed ModulatorBank handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.modulator_armed",
-          "typestate": "aetheris::modulator_armed"
+          "port_role": "data_input"
         },
         "span_pm": {
-          "type_name": "float",
-          "state": "span_pm",
-          "abstract_type": "scalar",
+          "carrier": "float",
+          "typestate": "aetheris::span_pm",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 40.0,
-          "port_role": "config",
           "description": "Wavelength sweep span in picometers.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.span_pm",
-          "typestate": "aetheris::span_pm"
+          "port_role": "config"
         },
         "frames": {
-          "type_name": "int",
-          "state": "frames",
-          "abstract_type": "scalar",
+          "carrier": "int",
+          "typestate": "aetheris::frames",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 512,
-          "port_role": "config",
           "description": "Captured frame count.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.frames",
-          "typestate": "aetheris::frames"
+          "port_role": "config"
         }
       },
       "outputs": {
         "fringes": {
-          "type_name": "FringeStack",
-          "state": "fringe_captured",
-          "abstract_type": "tensor",
-          "port_role": "data_output",
+          "carrier": "FringeStack",
+          "typestate": "aetheris::fringe_captured",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
           "description": "Captured FringeStack object.",
-          "structure_kind": "tensor",
-          "semantics": "aetheris.fringe_captured",
-          "typestate": "aetheris::fringe_captured"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{fringes} = aetheris.sweep_fringe_interferogram({modulator}, span_pm={span_pm}, frames={frames})",
-      "dependencies": ["import aetheris"],
       "primary_in": "modulator",
       "primary_out": "fringes",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_UNWRAP_PHASE_RESIDUES",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "transformer",
-      "topology_type": "sequential",
       "docstring": "Resolves 2pi phase discontinuities and branch-cut residues in a FringeStack, producing an unwrapped PhaseField.",
-      "semantic_tags": ["unwrap_phase_residues", "unwrap_phase", "branch_cut", "phase_residues"],
+      "code_template": "{phase} = aetheris.unwrap_phase_residues({fringes}, branch_cut={branch_cut})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "fringes": {
-          "type_name": "FringeStack",
-          "state": "fringe_captured",
-          "abstract_type": "tensor",
+          "carrier": "FringeStack",
+          "typestate": "aetheris::fringe_captured",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "data_input",
           "description": "Captured FringeStack object.",
-          "structure_kind": "tensor",
-          "semantics": "aetheris.fringe_captured",
-          "typestate": "aetheris::fringe_captured"
+          "port_role": "data_input"
         },
         "branch_cut": {
-          "type_name": "str",
-          "state": "branch_cut",
-          "abstract_type": "scalar",
+          "carrier": "str",
+          "typestate": "aetheris::branch_cut",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": "goldstein",
-          "port_role": "config",
           "description": "Branch-cut unwrapping solver name.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.branch_cut",
-          "typestate": "aetheris::branch_cut"
+          "port_role": "config"
         }
       },
       "outputs": {
         "phase": {
-          "type_name": "PhaseField",
-          "state": "residues_unwrapped",
-          "abstract_type": "tensor",
-          "port_role": "data_output",
+          "carrier": "PhaseField",
+          "typestate": "aetheris::residues_unwrapped",
+          "accepted_states": [],
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
           "description": "Unwrapped continuous PhaseField.",
-          "structure_kind": "tensor",
-          "semantics": "aetheris.residues_unwrapped",
-          "typestate": "aetheris::residues_unwrapped"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{phase} = aetheris.unwrap_phase_residues({fringes}, branch_cut={branch_cut})",
-      "dependencies": ["import aetheris"],
       "primary_in": "fringes",
       "primary_out": "phase",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_SOLVE_ZERNIKE_WAVEFRONT",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "transformer",
-      "topology_type": "sequential",
       "docstring": "Fits a Zernike polynomial wavefront aberration model onto an unwrapped PhaseField.",
-      "semantic_tags": ["solve_zernike_wavefront", "fit_zernike", "zernike_wavefront", "solve_wavefront"],
+      "code_template": "{model} = aetheris.solve_zernike_wavefront({phase}, order={order})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "phase": {
-          "type_name": "PhaseField",
-          "state": "residues_unwrapped",
-          "abstract_type": "tensor",
+          "carrier": "PhaseField",
+          "typestate": "aetheris::residues_unwrapped",
+          "accepted_states": [],
+          "layout": {
+            "rank": 2,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "data_input",
           "description": "Unwrapped PhaseField produced by unwrap_phase_residues.",
-          "structure_kind": "tensor",
-          "semantics": "aetheris.residues_unwrapped",
-          "typestate": "aetheris::residues_unwrapped"
+          "port_role": "data_input"
         },
         "order": {
-          "type_name": "int",
-          "state": "zernike_order",
-          "abstract_type": "scalar",
+          "carrier": "int",
+          "typestate": "aetheris::zernike_order",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "int64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
           "required": false,
           "default_value": 6,
-          "port_role": "config",
           "description": "Maximum Zernike radial polynomial order.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.zernike_order",
-          "typestate": "aetheris::zernike_order"
+          "port_role": "config"
         }
       },
       "outputs": {
         "model": {
-          "type_name": "WavefrontModel",
-          "state": "wavefront_solved",
-          "abstract_type": "model",
-          "port_role": "data_output",
+          "carrier": "WavefrontModel",
+          "typestate": "aetheris::wavefront_solved",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
           "description": "Fitted WavefrontModel.",
-          "structure_kind": "model",
-          "semantics": "aetheris.wavefront_solved",
-          "typestate": "aetheris::wavefront_solved"
+          "port_role": "data_output"
         }
       },
-      "code_template": "{model} = aetheris.solve_zernike_wavefront({phase}, order={order})",
-      "dependencies": ["import aetheris"],
       "primary_in": "phase",
       "primary_out": "model",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_EXPORT_PHASE_LUT",
-      "stage": 3,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "sink",
-      "topology_type": "terminal",
       "docstring": "Exports a calibrated WavefrontModel to a binary .ael phase lookup-table file on disk.",
-      "semantic_tags": ["export_phase_lut", "save_phase_lut", "write_ael", "export_lut"],
+      "code_template": "{lut_file} = aetheris.export_phase_lut({model}, out_path={out_path})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "model": {
-          "type_name": "WavefrontModel",
-          "state": "wavefront_solved",
-          "abstract_type": "model",
+          "carrier": "WavefrontModel",
+          "typestate": "aetheris::wavefront_solved",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "data_input",
           "description": "Fitted WavefrontModel.",
-          "structure_kind": "model",
-          "semantics": "aetheris.wavefront_solved",
-          "typestate": "aetheris::wavefront_solved"
+          "port_role": "data_input"
         },
         "out_path": {
-          "type_name": "str",
-          "state": "lut_path",
-          "abstract_type": "path",
+          "carrier": "str",
+          "typestate": "aetheris::lut_path",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "external_asset",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "destination",
           "description": "Destination .ael phase LUT path.",
-          "structure_kind": "path_spec",
-          "semantics": "aetheris.lut_path",
-          "typestate": "aetheris::lut_path"
+          "port_role": "destination"
         }
       },
       "outputs": {
         "lut_file": {
-          "type_name": "str",
-          "state": "lut_exported",
-          "abstract_type": "path",
-          "port_role": "terminal_output",
+          "carrier": "str",
+          "typestate": "aetheris::lut_exported",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "external_asset",
+          "resource_mode": "value",
+          "required": true,
           "description": "Written .ael LUT path.",
-          "structure_kind": "path_spec",
-          "semantics": "aetheris.lut_exported",
-          "typestate": "aetheris::lut_exported"
+          "port_role": "terminal_output"
         }
       },
-      "code_template": "{lut_file} = aetheris.export_phase_lut({model}, out_path={out_path})",
-      "dependencies": ["import aetheris"],
       "primary_in": "model",
       "primary_out": "lut_file",
-      "effects": ["io_write"],
-      "mutation_type": "sink"
+      "effects": [
+        "io_write"
+      ],
+      "mutation_type": "sink",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_MEASURE_BENCH_DRIFT",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "evaluator",
-      "topology_type": "sequential",
       "docstring": "Measures instantaneous mechanical thermal drift of a mounted OpticalBench in nanometers.",
-      "semantic_tags": ["measure_bench_drift", "bench_drift", "drift_telemetry"],
+      "code_template": "{drift_nm} = aetheris.measure_bench_drift({bench})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "bench": {
-          "type_name": "OpticalBench",
-          "state": "bench_mounted",
-          "abstract_type": "handle",
+          "carrier": "OpticalBench",
+          "typestate": "aetheris::bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
           "required": true,
-          "port_role": "data_input",
           "description": "Mounted OpticalBench handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.bench_mounted",
-          "typestate": "aetheris::bench_mounted"
+          "port_role": "data_input"
         }
       },
       "outputs": {
         "drift_nm": {
-          "type_name": "float",
-          "state": "drift_readout",
-          "abstract_type": "scalar",
-          "port_role": "metric_output",
+          "carrier": "float",
+          "typestate": "aetheris::drift_readout",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
           "description": "Thermal drift in nanometers.",
-          "structure_kind": "scalar",
-          "semantics": "aetheris.drift_readout",
-          "typestate": "aetheris::drift_readout"
+          "port_role": "metric_output"
         }
       },
-      "code_template": "{drift_nm} = aetheris.measure_bench_drift({bench})",
-      "dependencies": ["import aetheris"],
       "primary_in": "bench",
       "primary_out": "drift_nm",
-      "effects": ["sensor_read"],
-      "mutation_type": "pure"
+      "effects": [
+        "sensor_read"
+      ],
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_AUDIT_FRINGE_CONTRAST",
-      "stage": 2,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "evaluator",
-      "topology_type": "sequential",
       "docstring": "Computes Michelson visibility and SNR contrast metrics from a captured FringeStack.",
-      "semantic_tags": ["audit_fringe_contrast", "fringe_contrast", "contrast_audit", "visibility_snr"],
+      "code_template": "{audit} = aetheris.audit_fringe_contrast({fringes})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "fringes": {
-          "type_name": "FringeStack",
-          "state": "fringe_captured",
-          "abstract_type": "tensor",
+          "carrier": "FringeStack",
+          "typestate": "aetheris::fringe_captured",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
           "required": true,
-          "port_role": "data_input",
           "description": "Captured FringeStack.",
-          "structure_kind": "tensor",
-          "semantics": "aetheris.fringe_captured",
-          "typestate": "aetheris::fringe_captured"
+          "port_role": "data_input"
         }
       },
       "outputs": {
         "audit": {
-          "type_name": "ContrastAudit",
-          "state": "contrast_audited",
-          "abstract_type": "dict",
-          "port_role": "metric_output",
+          "carrier": "ContrastAudit",
+          "typestate": "aetheris::contrast_audited",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
           "description": "Fringe contrast diagnostic dict.",
-          "structure_kind": "dict",
-          "semantics": "aetheris.contrast_audited",
-          "typestate": "aetheris::contrast_audited"
+          "port_role": "metric_output"
         }
       },
-      "code_template": "{audit} = aetheris.audit_fringe_contrast({fringes})",
-      "dependencies": ["import aetheris"],
       "primary_in": "fringes",
       "primary_out": "audit",
       "effects": [],
-      "mutation_type": "pure"
+      "mutation_type": "pure",
+      "is_context_manager": false
     },
     {
       "cell_id": "AETHERIS_PARK_OPTICAL_TABLE",
-      "stage": 3,
       "domain_name": "aetheris",
-      "node_type": "function",
-      "node_role": "sink",
-      "topology_type": "terminal",
       "docstring": "Safely parks pneumatic isolators and shuts down a mounted OpticalBench.",
-      "semantic_tags": ["park_optical_table", "park_bench", "shutdown_table"],
+      "code_template": "aetheris.park_optical_table({bench})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
       "inputs": {
         "bench": {
-          "type_name": "OpticalBench",
-          "state": "bench_mounted",
-          "abstract_type": "handle",
+          "carrier": "OpticalBench",
+          "typestate": "aetheris::bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "release",
           "required": true,
-          "port_role": "data_input",
           "description": "Mounted OpticalBench handle.",
-          "structure_kind": "handle",
-          "semantics": "aetheris.bench_mounted",
-          "typestate": "aetheris::bench_mounted"
+          "port_role": "data_input"
         }
       },
       "outputs": {},
-      "code_template": "aetheris.park_optical_table({bench})",
-      "dependencies": ["import aetheris"],
       "primary_in": "bench",
       "primary_out": null,
-      "effects": ["hardware_shutdown"],
-      "mutation_type": "sink"
+      "effects": [
+        "hardware_shutdown"
+      ],
+      "mutation_type": "sink",
+      "is_context_manager": false
+    },
+    {
+      "cell_id": "AETHERIS_CALIBRATE_THERMAL_SHROUD",
+      "domain_name": "aetheris",
+      "docstring": "Re-stabilizes the shroud housing on a LockedCavity at target_k Kelvin.",
+      "code_template": "{stabilized_cavity} = aetheris.calibrate_thermal_shroud({cavity}, target_k={target_k})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
+      "inputs": {
+        "cavity": {
+          "carrier": "LockedCavity",
+          "typestate": "aetheris::cavity_locked",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
+          "description": "Phase-locked LockedCavity handle.",
+          "port_role": "data_input"
+        },
+        "target_k": {
+          "carrier": "float",
+          "typestate": "aetheris::shroud_target_k",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "gt:0"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
+          "required": false,
+          "default_value": 293.15,
+          "description": "Target shroud temperature in Kelvin.",
+          "port_role": "config"
+        }
+      },
+      "outputs": {
+        "stabilized_cavity": {
+          "carrier": "LockedCavity",
+          "typestate": "aetheris::cavity_locked",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
+          "description": "Thermally stabilized LockedCavity handle.",
+          "port_role": "data_output"
+        }
+      },
+      "primary_in": "cavity",
+      "primary_out": "stabilized_cavity",
+      "effects": [],
+      "mutation_type": "pure",
+      "is_context_manager": false
+    },
+    {
+      "cell_id": "AETHERIS_DUMP_RAW_FRINGES_CSV",
+      "domain_name": "aetheris",
+      "docstring": "Dumps raw uncalibrated FringeStack frames to a .csv text file (does not fit Zernike models or produce .ael LUTs).",
+      "code_template": "{csv_file} = aetheris.dump_raw_fringes_csv({fringes}, csv_path={csv_path})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
+      "inputs": {
+        "fringes": {
+          "carrier": "FringeStack",
+          "typestate": "aetheris::fringe_captured",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Captured raw FringeStack interferogram.",
+          "port_role": "data_input"
+        },
+        "csv_path": {
+          "carrier": "str",
+          "typestate": "aetheris::raw_csv_path",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "external_asset",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Destination .csv file path.",
+          "port_role": "destination"
+        }
+      },
+      "outputs": {
+        "csv_file": {
+          "carrier": "str",
+          "typestate": "aetheris::raw_csv_dumped",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "external_asset",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Exported raw fringe .csv file path.",
+          "port_role": "terminal_output"
+        }
+      },
+      "primary_in": "fringes",
+      "primary_out": "csv_file",
+      "effects": [
+        "io_write"
+      ],
+      "mutation_type": "sink",
+      "is_context_manager": false
+    },
+    {
+      "cell_id": "AETHERIS_LEGACY_MOUNT_BENCH",
+      "domain_name": "aetheris",
+      "docstring": "DEPRECATED v1.x pneumatic mount returning LegacyBench (incompatible with v2.x lock_reference_laser and measure_bench_drift).",
+      "code_template": "{legacy_bench} = aetheris.legacy_mount_bench(rack_id={rack_id})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
+      "inputs": {
+        "rack_id": {
+          "carrier": "str",
+          "typestate": "aetheris::rack_id",
+          "accepted_states": [],
+          "layout": {
+            "rank": 0,
+            "shape": null,
+            "dtype": "string",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [
+            "non_empty"
+          ],
+          "value_class": "literal",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Optical bench rack identifier string.",
+          "port_role": "config"
+        }
+      },
+      "outputs": {
+        "legacy_bench": {
+          "carrier": "LegacyBench",
+          "typestate": "aetheris::legacy_bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Deprecated v1.x LegacyBench handle.",
+          "port_role": "data_output"
+        }
+      },
+      "primary_in": "rack_id",
+      "primary_out": "legacy_bench",
+      "effects": [],
+      "mutation_type": "pure",
+      "is_context_manager": false
+    },
+    {
+      "cell_id": "AETHERIS_QUICK_PHASE_ESTIMATE",
+      "domain_name": "aetheris",
+      "docstring": "Computes wrapped preview CoarseEstimate directly from FringeStack without unwrapping residues (rejected by solve_zernike_wavefront).",
+      "code_template": "{estimate} = aetheris.quick_phase_estimate({fringes})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
+      "inputs": {
+        "fringes": {
+          "carrier": "FringeStack",
+          "typestate": "aetheris::fringe_captured",
+          "accepted_states": [],
+          "layout": {
+            "rank": 3,
+            "shape": null,
+            "dtype": "float64",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Captured FringeStack interferogram.",
+          "port_role": "data_input"
+        }
+      },
+      "outputs": {
+        "estimate": {
+          "carrier": "CoarseEstimate",
+          "typestate": "aetheris::phase_preview",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "value",
+          "required": true,
+          "description": "Wrapped preview CoarseEstimate object.",
+          "port_role": "data_output"
+        }
+      },
+      "primary_in": "fringes",
+      "primary_out": "estimate",
+      "effects": [],
+      "mutation_type": "pure",
+      "is_context_manager": false
+    },
+    {
+      "cell_id": "AETHERIS_TUNE_LASER_COARSE",
+      "domain_name": "aetheris",
+      "docstring": "Performs open-loop service alignment on an OpticalBench without locking cavity phase, returning BenchDraft (incompatible with arm_phase_modulator).",
+      "code_template": "{draft} = aetheris.tune_laser_coarse({bench})",
+      "code_templates": {},
+      "dependencies": [
+        "import aetheris"
+      ],
+      "inputs": {
+        "bench": {
+          "carrier": "OpticalBench",
+          "typestate": "aetheris::bench_mounted",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
+          "description": "Mounted OpticalBench handle.",
+          "port_role": "data_input"
+        }
+      },
+      "outputs": {
+        "draft": {
+          "carrier": "BenchDraft",
+          "typestate": "aetheris::laser_coarse_tuned",
+          "accepted_states": [],
+          "layout": {
+            "rank": null,
+            "shape": null,
+            "dtype": "opaque",
+            "rank_polymorphic": false,
+            "channel_count": null,
+            "channel_axis": null,
+            "length": null
+          },
+          "invariants": [],
+          "value_class": "data",
+          "resource_mode": "borrow",
+          "required": true,
+          "description": "Open-loop BenchDraft alignment handle.",
+          "port_role": "data_output"
+        }
+      },
+      "primary_in": "bench",
+      "primary_out": "draft",
+      "effects": [],
+      "mutation_type": "pure",
+      "is_context_manager": false
     }
   ]
 }

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-echo "Starting STRATA Engine on $(uname -s)..."
-python3 src/main.py
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+exec python3 strata_cli.py shell "$@"

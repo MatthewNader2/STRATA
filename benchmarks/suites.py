@@ -1,15 +1,24 @@
 """
-benchmarks/suites.py - Canonical benchmark task suites for STRATA vs Pure LLMs.
+benchmarks/suites.py - Canonical benchmark task suites for STRATA vs Pure / SKILL.md LLMs.
 
-Groups:
-  - core8:      Original 8 presets from test.py (sandbox-verified)
+Legacy Groups (preserved for backward compatibility):
+  - core8:      Original 8 presets (sandbox-verified)
   - cryopulse:  Unseen domain #1 (linear docs, 3 tasks)
-  - core9:      core8 + cryopulse (the 9 benchmark suites / 11 tasks)
+  - core9:      core8 + cryopulse (11 tasks)
   - aetheris:   Unseen domain #2 (alphabetical docs + deprecated/typestate traps, 3 tasks)
-  - user_real:  Realistic multi-library user workflows (3 tasks, sandbox-verified)
+  - user_real:  Realistic multi-library user workflows (3 tasks)
   - boundary:   Honest limitation controls (under-specified refusal + non-lattice algorithm)
   - stress:     aetheris + user_real + boundary (8 tasks)
   - all:        core9 + stress (19 tasks total)
+
+Expanded v2 Groups (aligned with expanded 34-case v2 test.py):
+  - v2_nl_core:      10 NL unvague-vs-vague tasks (6 synthesize + 4 clarify refusals)
+  - v2_unseen:       2 full-lifecycle blind SDK tasks (CryoPulse + Aetheris)
+  - v2_haystack:     2 needle-in-a-haystack blind SDK tasks inside 15-domain catalog
+  - v2_wrong_domain: 2 wrong/missing-domain refusal controls
+  - v2_domain_spec:  3 explicit library adherence & substitution-refusal tasks
+  - v2_expanded:     All 19 v2 comparative tasks above
+  - v2_full:         v2_expanded + cryo_implicit/diag + aetheris_implicit/diag + user_real + bound_custom_algo (27 tasks)
 """
 from __future__ import annotations
 
@@ -349,6 +358,13 @@ USER_REALISTIC_TASKS: List[Dict[str, Any]] = [
             "compute correlation matrix, and save the cleaned dataframe to sqlite database 'metrics.db' table 'clean_data'"
         ),
         "expected_literals": ["input.csv", "X", "metrics.db", "clean_data"],
+        "artifact_spec": {
+            "kind": "sqlite_clean_table",
+            "db_path": "metrics.db",
+            "table": "clean_data",
+            "source_csv": "input.csv",
+            "reject_square_identity_matrix": True,
+        },
     },
     {
         "id": "user_cv_contour",
@@ -400,6 +416,342 @@ HONEST_BOUNDARY_TASKS: List[Dict[str, Any]] = [
     },
 ]
 
+_V2_NL_CV2_PROMPT = (
+    'read image "input.png", convert to grayscale, apply Gaussian blur with kernel size 5 and sigma 1.5, '
+    'detect Canny edges with threshold1 50 and threshold2 150, and save to "edges.png"'
+)
+_V2_NL_PILLOW_SPEC_PROMPT = (
+    'using Pillow, read image "input.png", convert to grayscale, and save to "pil_gray.png"'
+)
+_V2_NL_CV2_SPEC_PROMPT = (
+    'using OpenCV (cv2), read image "input.png", convert to grayscale, and save to "cv2_gray.png"'
+)
+_V2_CRYO_NL_FULL_PROMPT = (
+    "open cryo vessel 'DR-BLUE-04' at 12.5 millikelvin, "
+    "energize flux coil on rail 'RAIL-X2' at 38.0 microamps, "
+    "sample squid flux for 512 ns with 2048 shots, "
+    "demodulate quadrature at 6.15 GHz, "
+    "quench tls defects with damping gamma 0.18, "
+    "compile pi schedule with target fidelity 0.998, "
+    "emit cryo manifest to 'calibration.cym', "
+    "and vent cryo vessel"
+)
+_V2_AETH_NL_FULL_PROMPT = (
+    "mount optical table 'OPT-NORTH-2' at wavelength 1550.0 nm, "
+    "lock reference laser on cavity mode 'TEM00' at 18.5 mW, "
+    "arm phase modulator with 16 lanes and vpi 3.6 volts, "
+    "sweep fringe interferogram over 65.0 pm with 1024 frames, "
+    "unwrap phase residues with 'goldstein' branch cut, "
+    "solve zernike wavefront at order 8, "
+    "export phase lut to 'zernike_n2.ael', "
+    "and park optical table"
+)
+
+V2_NL_CORE_TASKS: List[Dict[str, Any]] = [
+    {
+        "id": "v2_nl_cv2_params",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: Explicit OpenCV Canny Edge Pipeline",
+        "prompt": _V2_NL_CV2_PROMPT,
+        "input_assets": ["input.png"],
+        "egress_paths": ["edges.png"],
+        "required_imports": ["cv2"],
+        "expected_literals": ["input.png", 5, 1.5, 50, 150, "edges.png"],
+    },
+    {
+        "id": "v2_nl_sqlite_pandas",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: SQLite Query -> Pandas DataFrame -> Close",
+        "prompt": (
+            'open an in-memory sqlite database connection, run SQL query "SELECT 1 AS a, 2 AS b" '
+            "into a pandas dataframe, and close the sqlite connection"
+        ),
+        "required_imports": ["sqlite3", "pandas"],
+        "expected_literals": ["SELECT 1 AS a, 2 AS b"],
+    },
+    {
+        "id": "v2_nl_cv2_implicit_params",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: Implicit Slot Estimation for Canny Thresholds",
+        "prompt": 'read image "input.png", convert to grayscale, and detect Canny edges',
+        "input_assets": ["input.png"],
+        "required_imports": ["cv2"],
+        "required_calls_attr": ["Canny"],
+        "expected_literals": ["input.png"],
+    },
+    {
+        "id": "v2_nl_unvague_pillow",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: Unvague Pillow Grayscale Pipeline (Full Lattice)",
+        "prompt": _V2_NL_PILLOW_SPEC_PROMPT,
+        "input_assets": ["input.png"],
+        "egress_paths": ["pil_gray.png"],
+        "required_imports": ["PIL"],
+        "forbidden_imports": ["cv2"],
+        "expected_literals": ["input.png", "pil_gray.png"],
+    },
+    {
+        "id": "v2_nl_unvague_pygame",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: Unvague Pygame Display Lifecycle (640x480)",
+        "prompt": (
+            "initialize pygame, create a display window of size (640, 480), "
+            "flip the display surface, and quit pygame"
+        ),
+        "required_imports": ["pygame"],
+        "expected_literals": [640, 480],
+    },
+    {
+        "id": "v2_nl_unvague_pandas_etl",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "synthesize",
+        "name": "v2 NL: Unvague Pandas CSV Clean & Export",
+        "prompt": 'load csv file "input.csv", drop missing rows, and save the dataframe to "clean_out.csv"',
+        "input_assets": ["input.csv"],
+        "egress_paths": ["clean_out.csv"],
+        "required_imports": ["pandas"],
+        "expected_literals": ["input.csv", "clean_out.csv"],
+    },
+    {
+        "id": "v2_nl_vague_game",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "clarify",
+        "name": "v2 Refusal Control: Underspecified 2D Platformer Game",
+        "prompt": "make a 2d platformer game",
+        "expected_literals": [],
+    },
+    {
+        "id": "v2_nl_vague_ml",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "clarify",
+        "name": "v2 Refusal Control: Underspecified ML Dataset & Target",
+        "prompt": "load dataset and train a machine learning model to predict target",
+        "expected_literals": [],
+    },
+    {
+        "id": "v2_nl_audio_missing_file",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "clarify",
+        "name": "v2 Refusal Control: Audio Pipeline Missing External Assets",
+        "prompt": "load audio file, apply high-pass filter, compute spectrogram, and export filtered audio",
+        "expected_literals": [],
+    },
+    {
+        "id": "v2_nl_bound_ambiguous",
+        "group": "v2_nl_core",
+        "kind": "sandbox",
+        "domain_set": "default",
+        "expected": "clarify",
+        "name": "v2 Refusal Control: Underspecified Anomaly Microservice",
+        "prompt": "build an end-to-end anomaly detection microservice with alerts and automatic retraining",
+        "expected_literals": [],
+    },
+]
+
+V2_UNSEEN_TASKS: List[Dict[str, Any]] = [
+    {
+        "id": "v2_blind_cryopulse_nl",
+        "group": "v2_unseen",
+        "kind": "sdk",
+        "sdk": "cryopulse",
+        "domain_set": "cryopulse_only",
+        "strict_sdk_only": True,
+        "expected": "synthesize",
+        "name": "v2 Unseen: Full-Lifecycle CryoPulse Calibration + Vent",
+        "prompt": _V2_CRYO_NL_FULL_PROMPT,
+        "required_calls": [
+            "open_cryo_vessel",
+            "energize_flux_coil",
+            "sample_squid_flux",
+            "demodulate_quadrature",
+            "quench_tls_defects",
+            "compile_pi_schedule",
+            "emit_cryo_manifest",
+            "vent_cryo_vessel",
+        ],
+        "expected_literals": ["DR-BLUE-04", 12.5, "RAIL-X2", 38.0, 512, 2048, 6.15, 0.18, 0.998, "calibration.cym"],
+    },
+    {
+        "id": "v2_blind_aetheris_nl",
+        "group": "v2_unseen",
+        "kind": "sdk",
+        "sdk": "aetheris",
+        "domain_set": "aetheris_only",
+        "strict_sdk_only": True,
+        "expected": "synthesize",
+        "name": "v2 Unseen: Full-Lifecycle Aetheris Interferometry + Park",
+        "prompt": _V2_AETH_NL_FULL_PROMPT,
+        "required_calls": [
+            "mount_optical_table",
+            "lock_reference_laser",
+            "arm_phase_modulator",
+            "sweep_fringe_interferogram",
+            "unwrap_phase_residues",
+            "solve_zernike_wavefront",
+            "export_phase_lut",
+            "park_optical_table",
+        ],
+        "expected_literals": ["OPT-NORTH-2", 1550.0, "TEM00", 18.5, 16, 3.6, 65.0, 1024, "goldstein", 8, "zernike_n2.ael"],
+    },
+]
+
+V2_HAYSTACK_TASKS: List[Dict[str, Any]] = [
+    {
+        "id": "v2_haystack_cryopulse_1049_noise",
+        "group": "v2_haystack",
+        "kind": "sdk",
+        "sdk": "cryopulse",
+        "domain_set": "haystack_cryopulse",
+        "strict_sdk_only": True,
+        "expected": "synthesize",
+        "name": "v2 Haystack: CryoPulse (11 cells) Embedded in 1,038 Distractor Cells",
+        "prompt": _V2_CRYO_NL_FULL_PROMPT,
+        "required_calls": list(V2_UNSEEN_TASKS[0]["required_calls"]),
+        "expected_literals": list(V2_UNSEEN_TASKS[0]["expected_literals"]),
+    },
+    {
+        "id": "v2_haystack_aetheris_1049_noise",
+        "group": "v2_haystack",
+        "kind": "sdk",
+        "sdk": "aetheris",
+        "domain_set": "haystack_aetheris",
+        "strict_sdk_only": True,
+        "expected": "synthesize",
+        "name": "v2 Haystack: Aetheris (15 cells) Embedded in 1,038 Distractor Cells",
+        "prompt": _V2_AETH_NL_FULL_PROMPT,
+        "required_calls": list(V2_UNSEEN_TASKS[1]["required_calls"]),
+        "expected_literals": list(V2_UNSEEN_TASKS[1]["expected_literals"]),
+    },
+]
+
+V2_WRONG_DOMAIN_TASKS: List[Dict[str, Any]] = [
+    {
+        "id": "v2_wrong_domain_image_in_sqlite",
+        "group": "v2_wrong_domain",
+        "kind": "refusal",
+        "domain_set": "sqlite_only",
+        "expected": "refuse",
+        "name": "v2 Wrong-Domain: Image Edge Task on sqlite3-Only Environment",
+        "prompt": _V2_NL_CV2_PROMPT,
+        "available_libraries_note": (
+            "Environment restriction: ONLY python_core and sqlite3 are loaded/available. "
+            "Image processing libraries (cv2, PIL, etc.) are NOT available. "
+            "If the request requires unavailable libraries, refuse cleanly without writing code."
+        ),
+        "expected_literals": [],
+    },
+    {
+        "id": "v2_wrong_domain_cryo_not_loaded",
+        "group": "v2_wrong_domain",
+        "kind": "refusal",
+        "domain_set": "default",
+        "expected": "refuse",
+        "name": "v2 Wrong-Domain: CryoPulse Task When cryopulse Is Unloaded",
+        "prompt": _V2_CRYO_NL_FULL_PROMPT,
+        "available_libraries_note": (
+            "Environment restriction: ONLY standard Python data/vision/audio/web libraries "
+            "(audio, control_flow, cryptography, cv2, matplotlib, numpy, pandas, pathlib, "
+            "pillow, pygame, python_core, requests, seaborn, sklearn, sqlite3) are available. "
+            "'cryopulse' is NOT installed or available. If the request requires an unavailable "
+            "library, refuse cleanly without writing code."
+        ),
+        "expected_literals": [],
+    },
+]
+
+V2_DOMAIN_SPEC_TASKS: List[Dict[str, Any]] = [
+    {
+        "id": "v2_spec_pillow_only_cv2_nl",
+        "group": "v2_domain_spec",
+        "kind": "refusal",
+        "domain_set": "cv2_only",
+        "expected": "refuse",
+        "name": "v2 Domain-Spec: Pillow Requested When Only OpenCV (cv2) Is Loaded",
+        "prompt": _V2_NL_PILLOW_SPEC_PROMPT,
+        "available_libraries_note": (
+            "Environment restriction: ONLY python_core, numpy, and cv2 (OpenCV) are loaded/available. "
+            "Pillow (PIL) is NOT installed. Do NOT substitute OpenCV when the user explicitly requested "
+            "Pillow; refuse cleanly without writing code."
+        ),
+        "expected_literals": [],
+    },
+    {
+        "id": "v2_spec_pillow_both_loaded_nl",
+        "group": "v2_domain_spec",
+        "kind": "sandbox",
+        "domain_set": "cv2_and_pillow",
+        "expected": "synthesize",
+        "name": "v2 Domain-Spec: Strict Pillow Adherence When Both cv2 & Pillow Loaded",
+        "prompt": _V2_NL_PILLOW_SPEC_PROMPT,
+        "input_assets": ["input.png"],
+        "egress_paths": ["pil_gray.png"],
+        "required_imports": ["PIL"],
+        "forbidden_imports": ["cv2"],
+        "available_libraries_note": (
+            "Available libraries: python_core, numpy, cv2 (OpenCV), and pillow (PIL). "
+            "Strictly honor the library requested by the user."
+        ),
+        "expected_literals": ["input.png", "pil_gray.png"],
+    },
+    {
+        "id": "v2_spec_cv2_both_loaded_nl",
+        "group": "v2_domain_spec",
+        "kind": "sandbox",
+        "domain_set": "cv2_and_pillow",
+        "expected": "synthesize",
+        "name": "v2 Domain-Spec: Strict OpenCV Adherence When Both cv2 & Pillow Loaded",
+        "prompt": _V2_NL_CV2_SPEC_PROMPT,
+        "input_assets": ["input.png"],
+        "egress_paths": ["cv2_gray.png"],
+        "required_imports": ["cv2"],
+        "forbidden_imports": ["PIL"],
+        "available_libraries_note": (
+            "Available libraries: python_core, numpy, cv2 (OpenCV), and pillow (PIL). "
+            "Strictly honor the library requested by the user."
+        ),
+        "expected_literals": ["input.png", "cv2_gray.png"],
+    },
+]
+
+V2_EXPANDED_TASKS: List[Dict[str, Any]] = (
+    V2_NL_CORE_TASKS
+    + V2_UNSEEN_TASKS
+    + V2_HAYSTACK_TASKS
+    + V2_WRONG_DOMAIN_TASKS
+    + V2_DOMAIN_SPEC_TASKS
+)
+
+V2_FULL_TASKS: List[Dict[str, Any]] = (
+    V2_EXPANDED_TASKS
+    + [t for t in CRYOPULSE_TASKS if t["id"] != "cryo_explicit"]
+    + [t for t in AETHERIS_TASKS if t["id"] != "aetheris_explicit"]
+    + USER_REALISTIC_TASKS
+    + [t for t in HONEST_BOUNDARY_TASKS if t["id"] == "bound_custom_algo"]
+)
+
 SDK_SPECS: Dict[str, Dict[str, Any]] = {
     "cryopulse": CRYOPULSE_SPEC,
     "aetheris": AETHERIS_SPEC,
@@ -414,6 +766,13 @@ SUITE_GROUPS: Dict[str, List[Dict[str, Any]]] = {
     "boundary": HONEST_BOUNDARY_TASKS,
     "stress": AETHERIS_TASKS + USER_REALISTIC_TASKS + HONEST_BOUNDARY_TASKS,
     "all": CORE_8_TASKS + CRYOPULSE_TASKS + AETHERIS_TASKS + USER_REALISTIC_TASKS + HONEST_BOUNDARY_TASKS,
+    "v2_nl_core": V2_NL_CORE_TASKS,
+    "v2_unseen": V2_UNSEEN_TASKS,
+    "v2_haystack": V2_HAYSTACK_TASKS,
+    "v2_wrong_domain": V2_WRONG_DOMAIN_TASKS,
+    "v2_domain_spec": V2_DOMAIN_SPEC_TASKS,
+    "v2_expanded": V2_EXPANDED_TASKS,
+    "v2_full": V2_FULL_TASKS,
 }
 
 

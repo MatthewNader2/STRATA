@@ -1,48 +1,44 @@
 name: Bug Report
-description: Report a defect, unexpected error, or failed synthesis in STRATA
-title: "[BUG]: "
-labels: ["bug"]
+description: Report a synthesis defect, soundness violation, or runtime failure in STRATA v2
+title: "[Bug]: "
+labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting an issue in STRATA! Please provide as much detail as possible.
+        Thank you for reporting an issue with STRATA v2. Please include the exact profile (`0`, `A`..`O`), prompt or formal IR, and validation outputs.
+
   - type: textarea
     id: description
     attributes:
-      label: Bug Description
-      description: A clear and concise description of what the bug is.
+      label: Description
+      description: Clear summary of expected vs actual behavior (e.g. unexpected refusal, unsound coercion, sandbox failure).
     validations:
       required: true
+
+  - type: input
+    id: profile
+    attributes:
+      label: Profile & Method
+      description: e.g. `profile=0` or `profile=O`, `--use-reranker` on/off
+      placeholder: "profile=0 (Pure Symbolic)"
+    validations:
+      required: true
+
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction Steps
-      description: Prompt, CLI command, or code snippet that reproduces the issue.
-      placeholder: |
-        1. Run `python nstl_cli.py run "..."`
-        2. Observe error...
-    validations:
-      required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected Behavior
-      description: What did you expect to happen instead?
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Relevant Logs or Traceback
+      label: Prompt / Command to Reproduce
+      description: Exact `strata_cli.py run ...`, `test.py --profiles ... --cases ...`, or minimal pytest snippet.
       render: shell
-  - type: dropdown
+    validations:
+      required: true
+
+  - type: textarea
     id: environment
     attributes:
-      label: Environment
-      options:
-        - Linux (Ubuntu/Debian)
-        - Windows
-        - macOS
+      label: Environment & Static Audit Output
+      description: Python version, OS, local LLM/embedder names (if neural profile), and output of `python3 scripts/check_static.py`.
+      render: shell
     validations:
-      required: true
+      required: false

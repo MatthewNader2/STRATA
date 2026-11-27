@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use STRATA in academic research, benchmarks, or tooling, please cite it using the metadata below."
+title: "STRATA: Symbolic Topological Routing Architecture for Typed Automata"
+type: software
+version: "2.0.0"
+date-released: "2026-11-26"
+url: "https://github.com/MatthewNader2/STRATA"
+repository-code: "https://github.com/MatthewNader2/STRATA"
+license: "PolyForm-Noncommercial-1.0.0"
+authors:
+  - family-names: "Nader"
+    given-names: "Matthew"
+    email: "matthewnader2@gmail.com"
+keywords:
+  - program-synthesis
+  - neuro-symbolic
+  - type-theory
+  - symmetric-monoidal-categories
+  - typestate
+  - small-language-models
+preferred-citation:
+  type: software
+  title: "STRATA: Symbolic Topological Routing Architecture for Typed Automata"
+  authors:
+    - family-names: "Nader"
+      given-names: "Matthew"
+  year: 2026
+  url: "https://github.com/MatthewNader2/STRATA"

@@ -1,120 +1,90 @@
-# STRATA (Symbolic Topological Routing Architecture for Typed Automata) - Team Development Guide
+# STRATA v2 Development & Architecture Guide
 
-This guide outlines the development environment setup, coding conventions, testing protocols, and Git collaboration workflows for the STRATA project team.
+## Architecture Overview
 
----
+STRATA v2 executes end-to-end neuro-symbolic synthesis along a clean 6-stage pipeline with strict domain-kernel separation:
 
-## 1. Local Environment Setup
+1. **Prompt Compilation Frontend (`src/frontends/`)**:
+   - `formal_regex.py`: Deterministic parser for explicit formal STRATA syntax (`domain::CELL_ID(...)`, `loop ...`, `if ...`) producing `TypedIR`.
+   - `slm_compiler.py`: Natural-language compiler via constrained JSON-Schema GGUF decoding (`llama-cpp-python`), deterministic prompt literal grounding, and structured clause decomposition (`TypedIR`).
+2. **Compiled Lattice & Bounded Type Poset (`src/lattice_db.py`, `src/type_system.py`)**:
+   - `tools/compile_trees.py` / `strata_cli.py compile` compiles `trees/*.json` into SQLite v4 (`trees/lattice.db`).
+   - `BoundedPoset` manages multi-parent DAG carrier subtyping ($\tau$) and domain-qualified typestates ($\sigma$), while `RefinementSet` ($\varphi$) and `LayoutContract` ($\rho$) check decidable numeric intervals and symbolic/concrete array shapes (`unify_shapes`, `join_shapes`).
+3. **Subgoal Retrieval & Reranking (`src/subgoal_retrieval.py`, `src/reranker.py`)**:
+   - Combines structural carrier/lexical scoring with dense vector embeddings (`SentenceTransformer` on CUDA/CPU) and optional cross-encoder reranking (`LocalReranker`).
+   - Enforces explicit library domain scoping and structural noise rejection across all loaded trees.
+4. **Type-Directed Monoidal Planner & Bridge Graph (`src/typed_planner.py`, `src/bridge_graph.py`)**:
+   - Performs backward-chaining goal search and forward linear/substructural state threading over $(\mathcal{C}, \mathcal{S}, \mu, \varphi)$.
+   - Resolves multi-hop cross-domain coercions through explicit `bridge_profile` morphisms in `LiveBridgeGraph`, prioritizing Tier-1 zero-loss carriers before Tier-2 explicit conversions, while enforcing `acquire` / `borrow` / `release` resource lifetimes.
+5. **Symbolic Port Binding & Language Lowering (`src/port_binder.py`, `src/language_backend.py`)**:
+   - Binds quoted external assets (`input_assets`), egress targets (`egress_paths`), numeric/string literals, enums, and loop variables against `PortSchema`, emitting syntax-checked code cleanly via `LexicalLanguageBackend` / `PythonASTLanguageBackend`.
+6. **GEVR Isolated Sandbox (`src/gevr_sandbox.py`, `src/security_policy.py`)**:
+   - Runs generated programs in a fresh subprocess with AST security validation (`SecurityPolicy`), POSIX memory/CPU `RLIMIT_*`, disabled network sockets, declarative tree `runtime_setup` environment hooks, and an ephemeral scratch working directory seeded solely with validated `input_assets` (resolved from CWD or configured `asset_dirs`).
 
-### Prerequisites
-- Python 3.10+ (Python 3.11 recommended)
-- Git
-- Recommended: `venv` or `pyenv`
+## Project Directory Map
 
-### Quickstart Setup
+```
+├── strata_cli.py          # Unified CLI & interactive synthesis studio entrypoint
+├── test.py                # 178-cell theory-first matrix runner across Profiles 0, A..O
+├── pyproject.toml         # Package metadata, optional extras & pytest/ruff config
+├── requirements.txt       # Core + neural runtime dependencies
+├── .env.example           # NSTL_* environment variable reference matching src/config.py
+├── src/
+│   ├── config.py          # NSTLSettings & 7 orthogonal ProfileSpec definitions
+│   ├── schema.py          # Canonical Pydantic v2 TreeSchema / CellSchema / PortSchema
+│   ├── type_system.py     # 4-component type lattice (carrier, layout, typestate, refinement)
+│   ├── typed_ir.py        # TypedIR intermediate representation
+│   ├── typed_planner.py   # Resource-aware type-directed planner
+│   ├── bridge_graph.py    # Cross-domain live bridge graph (Tier-1 / Tier-2)
+│   ├── subgoal_retrieval.py
+│   ├── port_binder.py
+│   ├── language_backend.py
+│   ├── lattice_db.py
+│   ├── gevr_sandbox.py
+│   ├── security_policy.py
+│   ├── profile_adapters.py
+│   ├── strata_pipeline.py
+│   ├── inference.py
+│   ├── reranker.py
+│   ├── hardware.py
+│   ├── log_config.py
+│   ├── utils.py
+│   ├── cli.py
+│   └── frontends/
+├── trees/                 # 15 canonical domain manifests (blind SDK fixtures live under benchmarks/fixtures/)
+├── tools/                 # Lattice compiler, env sync check & v2 schema spec/prompt
+├── scripts/               # Static neutrality check, tree linter, 5-axis auditor, downloader
+├── tests/                 # Deterministic unit & Profile-0 integration pytest suite
+└── benchmarks/            # v2_expanded (19 tasks) / v2_full (27 tasks) multi-arm evaluation suite, Colab & AI Studio harnesses
+```
+
+## Verification & Quality Gates
+
+Always run these commands before pushing to `dev` or updating a PR:
+
 ```bash
-# 1. Clone repository
-git clone https://github.com/MatthewNader2/STRATA.git
-cd STRATA
+# 1. Architecture neutrality, AST hygiene, zero-re / zero-frozenset checks
+python3 scripts/check_static.py
 
-# 2. Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate    # On Windows: .venv\Scripts\activate
+# 2. Syntax and template placeholder lint across all trees (including blind SDK fixtures)
+python3 scripts/lint_trees.py --include-fixtures
 
-# 3. Install core and development dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+# 3. Strict 5-axis port contract & benchmark-leak neutrality audit
+python3 scripts/audit_trees.py --strict-five-axis --strict-neutral --include-fixtures
 
-# 4. Provision default lightweight models (~750 MB)
-python scripts/download_model.py --tier default
+# 4. Recompile SQLite v4 database, validate schemas, and audit live bridges
+python3 strata_cli.py compile --clean
+python3 strata_cli.py validate
+python3 strata_cli.py audit
 
-# 5. Compile canonical domain trees into the SQLite lattice
-python nstl_cli.py compile
-python nstl_cli.py validate
+# 5. Deterministic unit & integration pytest suite (zero neural models required)
+python3 -m pytest tests/
+
+# 6. Pure-symbolic theory verification (runs anywhere with zero neural models)
+python3 test.py --profiles 0 --early-stop
+
+# 6. Full 7-profile 178-cell verification matrix (requires local models)
+python3 test.py --early-stop
 ```
 
----
-
-## 2. Git & Branching Strategy
-
-Our team uses a **Protected `main` + `dev` + Feature Branches** workflow:
-
-```
-main (Stable Releases only)
-  ▲
-  │ (Release PR: Reviewed & Merged by Project Lead)
-dev (Team Integration & Testing)
-  ▲
-  ├── feat/semantic-routing-enhancement (PR by Dev 1)
-  ├── feat/pandas-tree-expansion (PR by Dev 2)
-  └── fix/port-unification-edge-case (PR by Dev 3)
-```
-
-### Branch Naming Conventions
-Always name branches after the **task/feature**, never after individuals:
-- `feat/<feature-name>` : New functionality or engine components (e.g. `feat/mcts-expansion`)
-- `fix/<bug-description>` : Bug fixes or edge-case resolutions (e.g. `fix/unification-null-leak`)
-- `docs/<topic>` : Documentation updates (e.g. `docs/api-reference`)
-- `tree/<domain>` : Domain tree additions or modifications (e.g. `tree/opencv-filters`)
-- `test/<suite>` : Test additions or benchmarks (e.g. `test/topology-coverage`)
-
-### Daily Workflow
-
-1. **Start from `dev`**:
-   ```bash
-   git switch dev
-   git pull --ff-only origin dev
-   git switch -c feat/my-new-feature
-   ```
-
-2. **Develop and commit in small, logical units**:
-   ```bash
-   git add src/router.py tests/
-   git commit -m "feat(router): improve candidate ranking for multi-clause queries"
-   ```
-
-3. **Pre-flight verification before pushing**:
-   Always verify locally before opening a PR:
-   ```bash
-   # Lint domain trees
-   python scripts/lint_trees.py
-
-   # Check undefined names
-   python scripts/check_static.py
-
-   # Validate compiled lattice
-   python nstl_cli.py compile
-   python nstl_cli.py validate
-   ```
-
-4. **Keep your branch rebased or synced with `dev`**:
-   ```bash
-   git fetch origin
-   git merge origin/dev
-   ```
-
-5. **Push and open a Pull Request**:
-   ```bash
-   git push -u origin feat/my-new-feature
-   ```
-   - Target base: **`dev`** (NOT `main`).
-   - Fill in the Pull Request template.
-   - Request review from at least one teammate.
-
-6. **Merging**:
-   - Feature branches are **Squash and merged** into `dev` after approval and CI passes.
-   - Delete the feature branch after merge.
-
----
-
-## 3. Releases (`dev` → `main`)
-
-Only release-ready milestones are merged from `dev` into `main`:
-1. Open a PR from `dev` into `main`.
-2. Full test suite and benchmarks are run and verified.
-3. Project Lead (@MatthewNader2) approves and merges using a **merge commit** (preserving branch history).
-4. Tag the release:
-   ```bash
-   git tag -a v0.1.0 -m "Release v0.1.0: Multi-domain topological routing and AST synthesis"
-   git push origin v0.1.0
-   ```
+Look at [STRATA_FORMAL_SPEC.md](STRATA_FORMAL_SPEC.md) for formal type rules, coercion theorems, and soundness proofs.
