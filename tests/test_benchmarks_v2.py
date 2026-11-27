@@ -741,8 +741,34 @@ def test_visualize_headline_and_ablation_layouts(tmp_path) -> None:
 
     for doc_rel in (
         "README.md",
+        "docs/BENCHMARKS.md",
         "docs/benchmarks/comparison_summary.md",
         "docs/benchmarks/frontier_ablations/comparison_summary.md",
     ):
         doc_path = ROOT_DIR / doc_rel
         _assert_valid_gfm_tables(doc_path.read_text(encoding="utf-8"), doc_rel)
+
+    import ast as _ast
+
+    readme_txt = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+    assert "<img" not in readme_txt
+    assert not _re.search(r"!\[[^\]]*\]\([^)]+\.png\)", readme_txt)
+
+    for doc_rel in ("README.md", "docs/BENCHMARKS.md"):
+        content = (ROOT_DIR / doc_rel).read_text(encoding="utf-8")
+        lines = content.splitlines()
+        for idx_ln, ln in enumerate(lines):
+            if "</summary>" in ln:
+                assert idx_ln + 1 < len(lines) and lines[idx_ln + 1].strip() == "", f"{doc_rel}:{idx_ln+1} missing blank after </summary>"
+            if "</details>" in ln:
+                assert idx_ln > 0 and lines[idx_ln - 1].strip() == "", f"{doc_rel}:{idx_ln+1} missing blank before </details>"
+        for blk in _re.findall(r"```mermaid\n(.*?)```", content, flags=_re.DOTALL):
+            assert "%%{init" not in blk, f"{doc_rel}: theme override breaks GitHub dark mode"
+            if "xychart-beta" in blk:
+                xm = _re.search(r"x-axis\s+(\[[^\]]+\])", blk)
+                bm = _re.search(r"bar\s+(\[[^\]]+\])", blk)
+                assert xm and bm, f"{doc_rel}: incomplete xychart-beta block"
+                assert "`" not in xm.group(1), f"{doc_rel}: backtick inside mermaid x-axis"
+                xs = _ast.literal_eval(xm.group(1))
+                bs = _ast.literal_eval(bm.group(1))
+                assert len(xs) == len(bs) >= 6, f"{doc_rel}: x-axis/bar length mismatch ({len(xs)} vs {len(bs)})"
